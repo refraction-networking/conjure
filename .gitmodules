@@ -1,0 +1,6 @@
+[submodule "forge_socket"]
+	path = forge_socket
+	url = git@github.com:ewust/forge_socket.git
+[submodule "PF_RING"]
+	path = PF_RING
+	url = https://github.com/ntop/PF_RING.git
