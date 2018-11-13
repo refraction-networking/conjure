@@ -26,7 +26,7 @@ use std::fs::File;
 pub mod logging;
 
 pub mod c_api;
-//pub mod elligator;
+pub mod elligator;
 pub mod flow_tracker;
 pub mod process_packet;
 pub mod util;

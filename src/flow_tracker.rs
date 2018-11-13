@@ -1,13 +1,9 @@
 use std::collections::{HashMap, VecDeque};
 use time::precise_time_ns;
 
-use pnet::packet::Packet;
-use pnet::packet::ipv4::Ipv4Packet;
 use std::net::IpAddr;
-use pnet::packet::tcp::{TcpOptionIterable, TcpOptionNumbers, TcpPacket};
+use pnet::packet::tcp::TcpPacket;
 
-use c_api;
-use util;
 use util::IpPacket;
 use std::fmt;
 

@@ -9,14 +9,12 @@ use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::{TcpPacket,TcpFlags};
-use errno::errno;
 
 //use elligator;
-use c_api;
 use flow_tracker::Flow;
 use PerCoreGlobal;
-use util;
 use util::IpPacket;
+use elligator;
 
 const TLS_TYPE_APPLICATION_DATA: u8 = 0x17;
 //const SQUID_PROXY_ADDR: &'static str = "127.0.0.1";
@@ -206,11 +204,22 @@ impl PerCoreGlobal
 
         if !self.flow_tracker.is_tagged(&flow) && is_tls_app_pkt(&tcp_pkt) {
             // Check for tag here...
-            //self.flow_tracker.mark_tagged(&flow);
+            if self.check_tagged(&flow, &tcp_pkt) {
+                debug!("Tagged! {}", flow);
+                self.flow_tracker.mark_tagged(&flow);
+            }
             self.flow_tracker.drop(&flow);
         }
-
-
     }
 
+    fn check_tagged(&mut self,
+                flow: &Flow,
+                tcp_pkt: &TcpPacket) -> bool
+    {
+        let tag_payload = elligator::extract_telex_tag(&self.priv_key,
+                                                       &tcp_pkt.payload());
+        self.stats.elligator_this_period += 1;
+
+        (tag_payload.len() != 0)
+    }
 } // impl PerCoreGlobal
