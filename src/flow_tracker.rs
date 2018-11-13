@@ -137,7 +137,7 @@ impl FlowTracker
         self.tracked_flows.remove(flow);
     }
 
-    fn process_scheduled_drop(&mut self, flow: &Flow, right_now: u64)
+    fn process_scheduled_drop(&mut self, flow: &Flow)
     {
         let do_drop = {
             if let Some(val) = self.tracked_flows.get(flow) {
@@ -162,7 +162,7 @@ impl FlowTracker
                self.stale_drops.front().unwrap().drop_time <= right_now
         {
             let cur = self.stale_drops.pop_front().unwrap();
-            self.process_scheduled_drop(&cur.flow, right_now);
+            self.process_scheduled_drop(&cur.flow);
         }
         let num_flows_after = self.tracked_flows.len();
 

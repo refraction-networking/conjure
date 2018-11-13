@@ -13,7 +13,7 @@ extern crate radix; // https://github.com/refraction-networking/radix
 
 
 use std::mem::transmute;
-use time::{get_time, precise_time_ns};
+use time::precise_time_ns;
 
 use radix::PrefixTree;
 use std::io::BufReader;
@@ -88,7 +88,6 @@ impl PerCoreGlobal
         PerCoreGlobal {
             priv_key: priv_key,
             lcore: the_lcore,
-            //events_buf: Events::with_capacity(4096),
             flow_tracker: FlowTracker::new(),
             stats: PerCoreStats::new(),
             ip_tree: PrefixTree::new(),
@@ -104,6 +103,7 @@ impl PerCoreGlobal
                 return;
             }
         };
+        #[allow(unused_mut)]
         let mut file = BufReader::new(&f);
         for line in file.lines() {
             let res = self.ip_tree.add_cidr(&line.unwrap());
@@ -148,10 +148,11 @@ impl PerCoreStats
         let user_microsecs: i64 = user_usecs + 1000000 * user_secs;
         let sys_microsecs: i64 = sys_usecs + 1000000 * sys_secs;
 
+        /*
         let measured_dur_ns = cur_measure_time - self.last_measure_time;
         let total_cpu_usec = (user_microsecs + sys_microsecs)
                      - (self.tot_usr_us + self.tot_sys_us);
-
+        */
         /*
         report!("status {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}",
                 0,
@@ -170,16 +171,17 @@ impl PerCoreStats
                 0,
                 0);
         */
-        report!("stats {} pkts ({} v4, {} v6) {} tls tree: {} out {} in, {} tracked flows",
+        report!("stats {} pkts ({} v4, {} v6) {} tls tree: {} out {} in, {} tracked flows {} tags checked",
             self.packets_this_period,
             self.ipv4_packets_this_period,
             self.ipv6_packets_this_period,
             self.tls_packets_this_period,
             self.not_in_tree_this_period,
             self.in_tree_this_period,
-            tracked);
+            tracked,
+            self.elligator_this_period);
 
-        //self.elligator_this_period = 0;
+        self.elligator_this_period = 0;
         self.packets_this_period = 0;
         self.ipv4_packets_this_period = 0;
         self.ipv6_packets_this_period = 0;
@@ -189,8 +191,6 @@ impl PerCoreStats
         //self.reconns_this_period = 0;
         self.tls_bytes_this_period = 0;
         self.port_443_syns_this_period = 0;
-        //self.cli2cov_raw_etherbytes_this_period = 0;
-        //c_api::c_reset_global_cli_download_count();
 
         self.tot_usr_us = user_microsecs;
         self.tot_sys_us = sys_microsecs;
@@ -205,16 +205,10 @@ impl PerCoreStats
 #[no_mangle]
 pub extern "C" fn rust_periodic_report(ptr: *mut PerCoreGlobal)
 {
+    #[allow(unused_mut)]
     let mut global = unsafe { &mut *ptr };
     global.stats.periodic_status_report(
         global.flow_tracker.count_tracked_flows(), 0);
-}
-
-fn get_rounded_time() -> i64
-{
-    let timespec = get_time();
-    if timespec.nsec >= 500000000 { timespec.sec + 1 }
-    else { timespec.sec }
 }
 
 #[repr(C)]
@@ -249,7 +243,7 @@ pub extern "C" fn rust_detect_init(lcore_id: i32, ckey: *const u8)
 
 // Called so we can tick the event loop forward. Must not block.
 #[no_mangle]
-pub extern "C" fn rust_event_loop_tick(ptr: *mut PerCoreGlobal)
+pub extern "C" fn rust_event_loop_tick(_ptr: *mut PerCoreGlobal)
 {
 
 }
@@ -260,6 +254,7 @@ pub extern "C" fn rust_event_loop_tick(ptr: *mut PerCoreGlobal)
 #[no_mangle]
 pub extern "C" fn rust_periodic_cleanup(ptr: *mut PerCoreGlobal)
 {
+    #[allow(unused_mut)]
     let mut global = unsafe { &mut *ptr };
     global.flow_tracker.drop_stale_flows();
 

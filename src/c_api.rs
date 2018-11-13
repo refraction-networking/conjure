@@ -1,7 +1,5 @@
 #![allow(non_snake_case)]
 
-use std::collections::HashMap;
-use std::os::raw::c_void;
 use libc::size_t;
 
 //#[cfg(not(test))]
@@ -49,8 +47,6 @@ extern {
     fn get_cpu_time(usr_secs: *mut i64, usr_micros: *mut i64,
                     sys_secs: *mut i64, sys_micros: *mut i64);
 
-    fn ugh_ssl_err();
-
     fn open_reporter(fname: *const u8); // const char *
     fn write_reporter(msg: *const u8, len: size_t);
 
@@ -59,13 +55,13 @@ extern {
     // saddr, daddr, sport, dport, seq must all be network order. HOWEVER,
     // note that c_tcp_send_rst_pkt() does to_be() on all of these, so
     // give c_tcp_send_rst_pkt() (but NOT this fn) host-order arguments!
-    fn tcp_send_rst_pkt(saddr: u32, daddr: u32,
-                        sport: u16, dport: u16, seq: u32);
-    fn get_global_cli_conf() -> *const c_void;
-    fn add_to_global_cli_download_count(input: u64);
-    fn reset_global_cli_download_count();
-    fn get_global_cli_download_count() -> u64;
-    fn get_mut_global_failure_map() -> *mut c_void;
+    //fn tcp_send_rst_pkt(saddr: u32, daddr: u32,
+    //                    sport: u16, dport: u16, seq: u32);
+    //fn get_global_cli_conf() -> *const c_void;
+    //fn add_to_global_cli_download_count(input: u64);
+    //fn reset_global_cli_download_count();
+    //fn get_global_cli_download_count() -> u64;
+    //fn get_mut_global_failure_map() -> *mut c_void;
 }
 
 pub fn c_get_payload_from_tag(station_privkey: &[u8],
@@ -122,15 +118,6 @@ pub fn c_write_reporter(msg: String)
 {
     //let n =
     unsafe { write_reporter(msg.as_ptr(), msg.len()); }
-}
-
-// Arguments should all be host-order: this function does the conversion.
-#[cfg(not(test))]
-pub fn c_tcp_send_rst_pkt(saddr: u32, daddr: u32,
-                          sport: u16, dport: u16, seq: u32)
-{
-    unsafe { tcp_send_rst_pkt(saddr.to_be(), daddr.to_be(),
-                              sport.to_be(), dport.to_be(), seq.to_be()) }
 }
 
 //HACKY_CFG_NO_TEST_END*/

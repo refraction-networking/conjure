@@ -1,9 +1,8 @@
-use std::{str,mem, panic};
+use std::{mem,panic};
 
 use c_api;
 
 extern crate crypto;
-extern crate base64;
 
 //pub mod rust_tapdance;
 

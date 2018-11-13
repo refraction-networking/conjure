@@ -67,6 +67,7 @@ pub extern "C" fn rust_process_packet(ptr: *mut PerCoreGlobal,
                                       raw_ethframe: *mut c_void,
                                       frame_len: size_t)
 {
+    #[allow(unused_mut)]
     let mut global = unsafe { &mut *ptr };
 
     let rust_view_len = frame_len as usize;
@@ -216,7 +217,7 @@ impl PerCoreGlobal
                 flow: &Flow,
                 tcp_pkt: &TcpPacket) -> bool
     {
-        let tag_payload = elligator::extract_telex_tag(&self.priv_key,
+        let (tag_payload, _) = elligator::extract_telex_tag(&self.priv_key,
                                                        &tcp_pkt.payload());
         self.stats.elligator_this_period += 1;
 
