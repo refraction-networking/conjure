@@ -9,8 +9,16 @@ extern crate rand;
 extern crate time;
 extern crate errno;
 
+extern crate radix; // https://github.com/refraction-networking/radix
+
+
 use std::mem::transmute;
 use time::{get_time, precise_time_ns};
+
+use radix::PrefixTree;
+use std::io::BufReader;
+use std::io::BufRead;
+use std::fs::File;
 
 
 // Must go before all other modules so that the report! macro will be visible.
@@ -37,6 +45,9 @@ pub struct PerCoreGlobal
     //events_buf: Events,
 
     pub stats: PerCoreStats,
+
+    // List of IP prefixes we'll respond to as dark decoys
+    pub ip_tree:   PrefixTree,
 }
 
 // Tracking of some pretty straightforward quantities
@@ -44,6 +55,8 @@ pub struct PerCoreStats
 {
     pub elligator_this_period: u64,
     pub packets_this_period: u64,
+    pub ipv4_packets_this_period: u64,
+    pub ipv6_packets_this_period: u64,
     pub tcp_packets_this_period: u64,
     pub tls_packets_this_period: u64,
     pub bytes_this_period: u64,
@@ -59,7 +72,13 @@ pub struct PerCoreStats
     // sec). Value is nanoseconds since an unspecified epoch. (It's a time,
     // not a duration).
     last_measure_time: u64,
+
+    pub not_in_tree_this_period: u64,
+    pub in_tree_this_period: u64,
 }
+
+const IP_LIST_PATH: &'static str = "/var/lib/dark-decoy.prefixes";
+
 
 impl PerCoreGlobal
 {
@@ -72,7 +91,28 @@ impl PerCoreGlobal
             //events_buf: Events::with_capacity(4096),
             flow_tracker: FlowTracker::new(),
             stats: PerCoreStats::new(),
+            ip_tree: PrefixTree::new(),
         }
+    }
+
+    fn read_ip_list(&mut self)
+    {
+        let f = match File::open(IP_LIST_PATH) {
+            Ok(f) => f,
+            Err(e) => {
+                error!("Failed to read {}: {:?}", IP_LIST_PATH, e);
+                return;
+            }
+        };
+        let mut file = BufReader::new(&f);
+        for line in file.lines() {
+            let res = self.ip_tree.add_cidr(&line.unwrap());
+            if res.is_err() {
+                error!("Bad IP list: {:?}", res);
+                return;
+            }
+        }
+
     }
 
 }
@@ -83,6 +123,8 @@ impl PerCoreStats
     {
         PerCoreStats { elligator_this_period: 0,
                        packets_this_period: 0,
+                       ipv4_packets_this_period: 0,
+                       ipv6_packets_this_period: 0,
                        tcp_packets_this_period: 0,
                        tls_packets_this_period: 0,
                        bytes_this_period: 0,
@@ -93,7 +135,10 @@ impl PerCoreStats
 
                        tot_usr_us: 0,
                        tot_sys_us: 0,
-                       last_measure_time: precise_time_ns() }
+                       last_measure_time: precise_time_ns(),
+
+                        not_in_tree_this_period: 0,
+                        in_tree_this_period: 0 }
     }
     fn periodic_status_report(&mut self, tracked: usize, sessions: usize)
     {
@@ -106,6 +151,8 @@ impl PerCoreStats
         let measured_dur_ns = cur_measure_time - self.last_measure_time;
         let total_cpu_usec = (user_microsecs + sys_microsecs)
                      - (self.tot_usr_us + self.tot_sys_us);
+
+        /*
         report!("status {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}",
                 0,
                 self.packets_this_period,
@@ -122,9 +169,20 @@ impl PerCoreStats
                 self.port_443_syns_this_period,
                 0,
                 0);
+        */
+        report!("stats {} pkts ({} v4, {} v6) {} tls tree: {} out {} in, {} tracked flows",
+            self.packets_this_period,
+            self.ipv4_packets_this_period,
+            self.ipv6_packets_this_period,
+            self.tls_packets_this_period,
+            self.not_in_tree_this_period,
+            self.in_tree_this_period,
+            tracked);
 
         //self.elligator_this_period = 0;
         self.packets_this_period = 0;
+        self.ipv4_packets_this_period = 0;
+        self.ipv6_packets_this_period = 0;
         self.tcp_packets_this_period = 0;
         self.tls_packets_this_period = 0;
         self.bytes_this_period = 0;
@@ -137,6 +195,9 @@ impl PerCoreStats
         self.tot_usr_us = user_microsecs;
         self.tot_sys_us = sys_microsecs;
         self.last_measure_time = cur_measure_time;
+
+        self.not_in_tree_this_period = 0;
+        self.in_tree_this_period = 0;
     }
 }
 
@@ -169,8 +230,6 @@ pub extern "C" fn rust_detect_init(lcore_id: i32, ckey: *const u8)
 
     logging::init(log::LogLevel::Debug, lcore_id);
 
-
-
     let key = *array_ref![unsafe{std::slice::from_raw_parts(ckey, 32 as usize)},
                             0, 32];
 
@@ -178,7 +237,8 @@ pub extern "C" fn rust_detect_init(lcore_id: i32, ckey: *const u8)
     c_api::c_open_reporter(s);
     report!("reset");
 
-    let global = PerCoreGlobal::new(key, lcore_id);
+    let mut global = PerCoreGlobal::new(key, lcore_id);
+    global.read_ip_list();
 
     debug!("Initialized rust core {}", lcore_id);
 
@@ -186,7 +246,6 @@ pub extern "C" fn rust_detect_init(lcore_id: i32, ckey: *const u8)
                         //fail_map: unsafe { transmute(Box::new(fail_map)) },
                         //cli_conf: unsafe { transmute(Box::new(cli_conf)) } }
 }
-
 
 // Called so we can tick the event loop forward. Must not block.
 #[no_mangle]
@@ -202,7 +261,7 @@ pub extern "C" fn rust_event_loop_tick(ptr: *mut PerCoreGlobal)
 pub extern "C" fn rust_periodic_cleanup(ptr: *mut PerCoreGlobal)
 {
     let mut global = unsafe { &mut *ptr };
-    //global.flow_tracker.drop_stale_flows_and_RST_FINd();
+    global.flow_tracker.drop_stale_flows();
 
     /*
     // Any session that hangs around for 30 seconds with a None cli stream
