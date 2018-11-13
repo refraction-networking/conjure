@@ -1,8 +1,9 @@
-use std::{mem, panic};
+use std::{str,mem, panic};
 
 use c_api;
 
 extern crate crypto;
+extern crate base64;
 
 //pub mod rust_tapdance;
 
@@ -58,14 +59,17 @@ fn extract_stego_bytes(in_buf: &[u8], out_buf: &mut [u8])
 }
 
 //out: &mut [u8; STEGO_DATA_LEN]) -> i32
-pub fn extract_telex_tag(secret_key: &[u8], tls_record: &[u8]) -> Vec<u8>
+// Returns the decrypted payload, and the 32-byte AES key as output.
+// (payload, aes_out)
+// TODO: makes this a return type...this is getting really hacky...
+pub fn extract_telex_tag(secret_key: &[u8], tls_record: &[u8]) -> (Vec<u8>, Vec<u8>)
 {
     if tls_record.len() < 272 // (conservatively) smaller than minimum request
     {
-        return vec![];
+        return (vec![], vec![]);
     }
     // This fn indexes a lot of slices with computed offsets; panics possible!
-    if let Ok(out_vec) = panic::catch_unwind(||
+    if let Ok((out_payload, out_aes)) = panic::catch_unwind(||
     {
         // TLS record: 1 byte of 'content type', 2 of 'version', 2 of 'length',
         //               and then [length] bytes of 'payload'
@@ -103,21 +107,75 @@ pub fn extract_telex_tag(secret_key: &[u8], tls_record: &[u8]) -> Vec<u8>
             //out_offset += output_bytes_left;
         }
 
-        //let stego_hex = stego_payload.iter().fold(String::from(""), |acc, b| { format!("{}{:02x}", acc, b) });
-
         // client should randomize first bit, here we set it back to 0
         stego_payload[31] &= 0x7f;
 
         let mut out : [u8; STEGO_DATA_LEN] = [0; STEGO_DATA_LEN];
+        let mut aes_out : [u8; 32] = [0; 32];
 
         let len = c_api::c_get_payload_from_tag(
-            secret_key, &mut stego_payload, &mut out, STEGO_DATA_LEN);
+            secret_key, &mut stego_payload, &mut out, STEGO_DATA_LEN,
+            &mut aes_out);
 
         let mut out_vec = out.to_vec();
         out_vec.truncate(len);
-        out_vec
-    }) {out_vec} else {vec![]}
+        (out_vec, aes_out.to_vec())
+    }) { (out_payload, out_aes) } else { (vec![], vec![]) }
 }
+
+
+// Given an incomplete request ("GET / HTTP/1.1\r\nHost: decoy\r\nX-Proto: 2JemawRAJqoTakwD\r\nX-Ignore: ######...")
+// and the aes block (from the c_get_payload_from_tag call that got this payload)
+// This function extracts the X-Proto: HTTP header line,
+// de-base64s it, breaks it up into IV and ciphertext,
+// decrypts it, and returns the Some(ClientToStation) containing the protobuf (or None)
+/*
+pub fn decrypt_protobuf(aes_block: &[u8], incomplete_req: &[u8]) -> Option<ClientToStation>
+{
+    let ascii_req = str::from_utf8(incomplete_req);
+    if ascii_req.is_err() {
+        return None;
+    }
+    let ascii_req_str = ascii_req.unwrap();
+    let search_x_proto = "\r\nX-Proto: ";
+    // get the HTTP header value for the X-Proto: key
+    // if not present, return None
+    let x_proto = match ascii_req_str.find(search_x_proto) {
+        Some(idx) => {
+            let s = &ascii_req_str[idx+search_x_proto.len()..];
+            match s.find("\r\n") {
+                Some(end_idx) => &s[..end_idx],
+                None          => s
+            }
+        },
+        None => { return None; },
+    };
+
+    match base64::decode(x_proto) {
+        Ok(bytes) => {
+            // Decrypt bytes using aes_block
+            let iv = &bytes[0..12];
+            let ctext = &bytes[12..];
+            let ptext = c_api::c_decrypt_aes_gcm(&aes_block[..16], &iv, ctext);
+
+            match protobuf::parse_from_bytes::<ClientToStation>
+                                              (&ptext) {
+                Ok(pb) => Some(pb),
+                Err(e) => {
+                    debug!("Error reading protobuf: {:?}", e);
+                    None
+                }
+            }
+        },
+        Err(e) => {
+            debug!("failed to decode base64: {:?}", e);
+            return None;
+        }
+    }
+}
+*/
+
+
 
 
 /*
@@ -187,4 +245,3 @@ fn elligator_extracts_telex_tag()
 }
 } // mod tests
 */
-
