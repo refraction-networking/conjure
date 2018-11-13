@@ -3,77 +3,56 @@ use time::precise_time_ns;
 
 use pnet::packet::Packet;
 use pnet::packet::ipv4::Ipv4Packet;
+use std::net::IpAddr;
 use pnet::packet::tcp::{TcpOptionIterable, TcpOptionNumbers, TcpPacket};
 
 use c_api;
 use util;
+use util::IpPacket;
+use std::fmt;
 
 // All members are stored in host-order, even src_ip and dst_ip.
 #[derive(PartialEq,Eq,Hash,Copy,Clone,Debug)]
 pub struct Flow
 {
-    pub src_ip: u32,
-    pub dst_ip: u32,
+    pub src_ip: IpAddr,
+    pub dst_ip: IpAddr,
     pub src_port: u16,
     pub dst_port: u16,
 }
 
+
+impl fmt::Display for Flow {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}:{} -> {}:{}", self.src_ip, self.src_port, self.dst_ip, self.dst_port)
+    }
+}
+
 impl Flow
 {
-    pub fn new(ip_pkt: &Ipv4Packet, tcp_pkt: &TcpPacket) -> Flow
+    pub fn new(ip_pkt: &IpPacket, tcp_pkt: &TcpPacket) -> Flow
     {
-        // Yes, these port getters return host-order values, even though the
-        // libpnet documentation does its best to make them sound big-endian.
-        Flow { src_ip: util::deser_be_u32(&ip_pkt.get_source().octets()),
-               dst_ip: util::deser_be_u32(&ip_pkt.get_destination().octets()),
-               src_port: tcp_pkt.get_source(),
-               dst_port: tcp_pkt.get_destination() }
-    }
-}
-
-#[derive(Clone,Copy)]
-pub struct WscaleAndMSS
-{
-    pub wscale: u8,
-    pub mss: u16, // stored host-order
-}
-
-impl WscaleAndMSS
-{
-    // MUST BE WRAPPED IN panic::catch_unwind().
-    pub fn extract_from(the_options: TcpOptionIterable) -> WscaleAndMSS
-    {
-        let mut ret = WscaleAndMSS::default();
-        let mut opts_so_far = 0;
-        for opt in the_options {
-            if opt.get_number() == TcpOptionNumbers::WSCALE {
-                ret.wscale = opt.payload()[0];
-            }
-            else if opt.get_number() == TcpOptionNumbers::MSS {
-                let payload = opt.payload();
-                ret.mss = ((payload[0] as u16) << 8) | (payload[1] as u16);
-            }
-            opts_so_far += 1;
-            if opts_so_far > 40 {
-                panic!("too many opts!"); // will be caught
-            }
+        match ip_pkt {
+            IpPacket::V4(pkt) => Flow {
+                src_ip: IpAddr::V4(pkt.get_source()),
+                dst_ip: IpAddr::V4(pkt.get_destination()),
+                src_port: tcp_pkt.get_source(),
+                dst_port: tcp_pkt.get_destination()
+            },
+            IpPacket::V6(pkt) => Flow {
+                src_ip: IpAddr::V6(pkt.get_source()),
+                dst_ip: IpAddr::V6(pkt.get_destination()),
+                src_port: tcp_pkt.get_source(),
+                dst_port: tcp_pkt.get_destination()
+            },
         }
-        ret
     }
-    pub fn default() -> WscaleAndMSS { WscaleAndMSS { wscale: 0, mss: 1460 } }
 }
 
-// "Definitely not TD" represented by absence from the tracked_flows map
 enum FlowState
 {
-    // The Vec<u8> is a copy of the entire TCP SYN.
-    InTLSHandshake(Vec<u8>),
-    // The u32s are the last ACK value the decoy ever sent (ACKing the tag-
-    // bearing AppData record): what our RST's seq# must be. Stored host-order.
-    ActiveTapDance(u8),     // ZMQ_ID
-    FinishingTapDance(u8,u64), // drop time
-    //PassiveTapDance(Rc<RefCell<TapdanceSession>>),
-    // DupOvert,
+    InTLSHandshake, // After SYN
+    ActiveTag,      // On first app packet, either this, or we drop the flow
 }
 
 pub struct SchedEvent
@@ -86,10 +65,10 @@ pub struct SchedEvent
 pub struct FlowTracker
 {
     // Keys present in this map are flows we have any interest in.
-    // Key not present in map => sure flow isn't TD. Ignore all non-SYN packets.
-    // Key present, value InTLSHandshake => don't yet know if it's TD.
-    tracked_flows: HashMap<Flow, FlowState>,
-    stale_drops: VecDeque<SchedEvent>,
+    // Key not present in map => sure flow isn't of interest. Ignore all non-SYN packets.
+    // Key present, value InTLSHandshake => don't yet know if it's of interest yet
+    tracked_flows:  HashMap<Flow, FlowState>,
+    stale_drops:    VecDeque<SchedEvent>,
 }
 
 // Amount of time that we timeout all flows
@@ -106,7 +85,7 @@ impl FlowTracker
             stale_drops: VecDeque::with_capacity(16384),
         }
     }
-    pub fn begin_tracking_flow(&mut self, flow: &Flow, syn: Vec<u8>)
+    pub fn begin_tracking_flow(&mut self, flow: &Flow)
     {
         // Always push back, even if the entry was already there. Doesn't hurt
         // to do a second check on overdueness, and this is simplest.
@@ -115,79 +94,19 @@ impl FlowTracker
                          flow: *flow });
         // Begin tracking as a potential TD flow (if not already in the map).
         self.tracked_flows.entry(*flow)
-                          .or_insert(FlowState::InTLSHandshake(syn));
+                          .or_insert(FlowState::InTLSHandshake);
     }
-    pub fn notice_fin(&mut self, flow: &Flow)
+    pub fn is_tagged(&self, flow: &Flow) -> bool
     {
-        // TODO: track seq#s and only treat in-order FINs as legit. (But... if
-        // the receiver buffers an out-of-order FIN, it could totally be that we
-        // only ever see one FIN, which is out-of-order,)
-        let mut drop_now = false;
-        if let Some(val) = self.tracked_flows.get_mut(flow) {
-            let maybe_update_to = match *val {
-                // It is extremely important that a value of InTLSHandshake
-                // here does not schedule a sched_rsts event, or else we RST
-                // every non-TD HTTPS flow we see.
-                FlowState::InTLSHandshake(_) => { drop_now = true;
-                                                  None },
-                FlowState::ActiveTapDance(zmq_id) => Some(zmq_id),
-                FlowState::FinishingTapDance(_,_) => return,
-                //FlowState::PassiveTapDance(_) => return,
-            };
-            if let Some(zmq_id) = maybe_update_to {
-                let drop_t = precise_time_ns() + TIMEOUT_NS;
-                self.stale_drops.push_back(
-                    SchedEvent { drop_time: drop_t, flow: *flow});
-                *val = FlowState::FinishingTapDance(zmq_id,drop_t);
-            }
-        } else {
-            warn!("notice_fin(): Flow {:?} is not tracked!", flow);
-            return;
-        }
-        if drop_now {
-            self.drop(flow);
+        match self.tracked_flows.get(&flow) {
+            None => false,
+            Some(to_check) => match *to_check {
+                FlowState::InTLSHandshake   => false,
+                FlowState::ActiveTag        => true,
+            },
         }
     }
-    // Returns false iff consume_tcp_pkt() returned false.
     /*
-    pub fn consume_tcp_pkt_if_passive(&self, flow: &Flow, pkt: &TcpPacket)
-    -> bool
-    {
-        if let Some(entry) = self.tracked_flows.get(&flow) {
-            if let &FlowState::PassiveTapDance(ref td_rc) = entry {
-                td_rc.borrow_mut().consume_tcp_pkt(pkt)
-            }
-            else {true}
-        }
-        else {true}
-    }
-    */
-    pub fn is_td(&self, flow: &Flow) -> bool
-    {
-        if let Some(to_check) = self.tracked_flows.get(&flow) {
-            match *to_check {
-                FlowState::InTLSHandshake(_) => false,
-                FlowState::ActiveTapDance(_) => true,
-                FlowState::FinishingTapDance(_,_) => true,
-                //FlowState::PassiveTapDance(_) => true,
-            }
-        }
-        else {false}
-    }
-
-    pub fn get_zmq_id(&self, flow: &Flow) -> Option<u8>
-    {
-        if let Some(to_check) = self.tracked_flows.get(&flow) {
-            match *to_check {
-                FlowState::InTLSHandshake(_)         => None,
-                FlowState::ActiveTapDance(zmq_id)    => Some(zmq_id),
-                FlowState::FinishingTapDance(zmq_id,_) => Some(zmq_id),
-            }
-        } else {
-            None
-        }
-    }
-
     pub fn forward_syn(&self, flow: &Flow, zmq_id: u8)
     {
         if let Some(to_check) = self.tracked_flows.get(&flow) {
@@ -195,7 +114,7 @@ impl FlowTracker
                 c_api::c_send_packet_to_proxy(zmq_id, &pkt);
             }
         }
-    }
+    }*/
 
     pub fn tracking_at_all(&self, flow: &Flow) -> bool
     {
@@ -204,64 +123,20 @@ impl FlowTracker
     // Returns the wscale and mss gotten from the TCP options in the SYN. After
     // this function, the FlowTracker no longer stores these values.
     // decoy_last_ack should be a host-order u32.
-    pub fn mark_tapdance_flow(&mut self, flow: &Flow, zmq_id: u8)
+    pub fn mark_tagged(&mut self, flow: &Flow)
     {
         if let Some(val) = self.tracked_flows.get_mut(flow) {
-            /*
-            let ret = match val {
-                &mut FlowState::InTLSHandshake(ref syn) => {
-                    let tcp_pkt = match TcpPacket::new(syn.as_slice()) {
-                        Some(pkt) => pkt,
-                        None => return WscaleAndMSS::default()
-                    };
-                    // pnet option processing can panic when packets are
-                    // malformed. We are happy to ignore malformed flows. We do
-                    // NOT want panics killing the whole station.
-                    if let Ok(wsc_and_mss) = panic::catch_unwind(||{
-                        WscaleAndMSS::extract_from(tcp_pkt.get_options_iter())})
-                    {
-                        wsc_and_mss
-                    } else {
-                        warn!("mark_yes_tapdance(): Malformed SYN!");
-                        WscaleAndMSS::default()
-                    }
-                },
-                _ => { warn!("mark_yes_tapdance {:?} not InTLSHandshake", flow);
-                       WscaleAndMSS::default() }
-            };
-            */
-            *val = FlowState::ActiveTapDance(zmq_id);
-            //ret
+            *val = FlowState::ActiveTag;
         } else {
-            error!("mark_tapdance_flow(): Flow {:?} is not tracked!", flow);
-            //WscaleAndMSS::default()
+            error!("flow_tracker::mark_tagged(): Flow {:?} is not tracked!", flow);
         }
     }
-
-    /*
-    pub fn mark_passive_td(&mut self, flow: &Flow,
-                           td_rc: Rc<RefCell<TapdanceSession>>)
-    {
-        if let Some(val) = self.tracked_flows.get_mut(flow) {
-            if let &mut FlowState::InTLSHandshake(ref mut _lol) = val {} // ok
-            else {
-                warn!("mark_passive_td(): Flow {:?} not InTLSHandshake!", flow);
-            }
-            *val = FlowState::PassiveTapDance(td_rc);
-            return;
-        }
-        warn!("mark_passive_td(): Flow {:?} is not tracked!", flow);
-        self.tracked_flows.insert(*flow, FlowState::PassiveTapDance(td_rc));
-    }
-    */
 
     pub fn drop(&mut self, flow: &Flow)
     {
-        if self.is_td(flow) {
-            let dst_str = util::inet_htoa(flow.dst_ip);
-            let src_str = util::inet_htoa(flow.src_ip);
+        if self.is_tagged(flow) {
             debug!("delflow {}:{} -> {}:{}",
-                    src_str, flow.src_port, dst_str, flow.dst_port);
+                    flow.src_ip, flow.src_port, flow.dst_ip, flow.dst_port);
         }
         self.tracked_flows.remove(flow);
     }
@@ -271,9 +146,8 @@ impl FlowTracker
         let do_drop = {
             if let Some(val) = self.tracked_flows.get(flow) {
                 match *val {
-                    FlowState::InTLSHandshake(_) => true,
-                    FlowState::ActiveTapDance(_) => false, // Don't timeout active tapdance flows
-                    FlowState::FinishingTapDance(_,drop_time) => (drop_time <= right_now),
+                    FlowState::InTLSHandshake => true,
+                    FlowState::ActiveTag => false, // Don't timeout active tapdance flows
                 }
             }
             else {false}
@@ -283,10 +157,8 @@ impl FlowTracker
         }
     }
     // This function returns the number of flows that it drops.
-    // It now also handles the RSTs... doesn't return that number; TODO should
-    // probably rearrange all of this.
     #[allow(non_snake_case)]
-    pub fn drop_stale_flows_and_RST_FINd(&mut self) -> usize
+    pub fn drop_stale_flows(&mut self) -> usize
     {
         let right_now = precise_time_ns();
         let num_flows_before = self.tracked_flows.len();
