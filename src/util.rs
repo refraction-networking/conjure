@@ -6,6 +6,24 @@ use std::io::BufReader;
 
 use pnet::packet::Packet;
 use pnet::packet::tcp::{TcpOptionNumbers, TcpPacket};
+use pnet::packet::ipv4::Ipv4Packet;
+use pnet::packet::ipv6::Ipv6Packet;
+
+pub enum IpPacket<'p> {
+    V4(Ipv4Packet<'p>),
+    V6(Ipv6Packet<'p>),
+}
+
+impl<'p> IpPacket<'p> {
+    pub fn tcp(&'p self) -> Option<TcpPacket<'p>> {
+        let payload = match self {
+            IpPacket::V4(v4) => v4.payload(),
+            IpPacket::V6(v6) => v6.payload(),
+        };
+        TcpPacket::new(payload)
+    }
+}
+
 
 // Pass in a host-order IPv4 addr, get a String.
 #[inline]
