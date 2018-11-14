@@ -13,6 +13,7 @@ extern crate radix; // https://github.com/refraction-networking/radix
 
 
 use std::mem::transmute;
+use std::collections::HashMap;
 use time::precise_time_ns;
 
 use radix::PrefixTree;
@@ -30,8 +31,11 @@ pub mod elligator;
 pub mod flow_tracker;
 pub mod process_packet;
 pub mod util;
+pub mod session;
 
-use flow_tracker::FlowTracker;
+use session::SessionState;
+
+use flow_tracker::{Flow,FlowTracker};
 
 // Global program state for one instance of a TapDance station process.
 pub struct PerCoreGlobal
@@ -41,6 +45,8 @@ pub struct PerCoreGlobal
     lcore: i32,
     pub flow_tracker: FlowTracker,
 
+    // Rc<RefCell<>> ??
+    pub sessions: HashMap<Flow, SessionState>,
     // Just some scratch space for mio.
     //events_buf: Events,
 
@@ -88,6 +94,7 @@ impl PerCoreGlobal
         PerCoreGlobal {
             priv_key: priv_key,
             lcore: the_lcore,
+            sessions: HashMap::new(),
             flow_tracker: FlowTracker::new(),
             stats: PerCoreStats::new(),
             ip_tree: PrefixTree::new(),

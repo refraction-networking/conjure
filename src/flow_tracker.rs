@@ -43,12 +43,19 @@ impl Flow
             },
         }
     }
+    pub fn from_parts(sip: IpAddr, dip: IpAddr, sport: u16, dport: u16) -> Flow
+    {
+        Flow { src_ip: sip, dst_ip: dip, src_port: sport, dst_port: dport }
+    }
 }
-
+#[derive(Copy,Clone)]
 enum FlowState
 {
-    InTLSHandshake, // After SYN
-    ActiveTag,      // On first app packet, either this, or we drop the flow
+    InTLSHandshake,     // After SYN, before first app packet (might signal us)
+    ActiveTag(u64),     // Upon a signal, we create the specified flow
+                        // client -> client-specified dark decoy
+                        // and tag it with this.
+                        // The u64 is the time (ns) that this times out.
 }
 
 pub struct SchedEvent
@@ -98,7 +105,7 @@ impl FlowTracker
             None => false,
             Some(to_check) => match *to_check {
                 FlowState::InTLSHandshake   => false,
-                FlowState::ActiveTag        => true,
+                FlowState::ActiveTag(_)     => true,
             },
         }
     }
@@ -116,16 +123,17 @@ impl FlowTracker
     {
         self.tracked_flows.contains_key(flow)
     }
-    // Returns the wscale and mss gotten from the TCP options in the SYN. After
-    // this function, the FlowTracker no longer stores these values.
-    // decoy_last_ack should be a host-order u32.
+    // Set this flow tagged
     pub fn mark_tagged(&mut self, flow: &Flow)
     {
-        if let Some(val) = self.tracked_flows.get_mut(flow) {
-            *val = FlowState::ActiveTag;
-        } else {
-            error!("flow_tracker::mark_tagged(): Flow {:?} is not tracked!", flow);
-        }
+        let expire_time = precise_time_ns() + TIMEOUT_NS;
+        self.stale_drops.push_back(
+            SchedEvent { drop_time: expire_time,
+                         flow: *flow});
+
+        let val = FlowState::ActiveTag(expire_time);
+
+        *self.tracked_flows.entry(*flow).or_insert(val) = val;
     }
 
     pub fn drop(&mut self, flow: &Flow)
@@ -137,13 +145,14 @@ impl FlowTracker
         self.tracked_flows.remove(flow);
     }
 
-    fn process_scheduled_drop(&mut self, flow: &Flow)
+    fn process_scheduled_drop(&mut self, flow: &Flow, right_now: u64)
     {
         let do_drop = {
             if let Some(val) = self.tracked_flows.get(flow) {
                 match *val {
                     FlowState::InTLSHandshake => true,
-                    FlowState::ActiveTag => false, // Don't timeout active tapdance flows
+                    FlowState::ActiveTag(drop_time) => (right_now > drop_time),
+                    // Don't timeout active tapdance flows
                 }
             }
             else {false}
@@ -162,7 +171,7 @@ impl FlowTracker
                self.stale_drops.front().unwrap().drop_time <= right_now
         {
             let cur = self.stale_drops.pop_front().unwrap();
-            self.process_scheduled_drop(&cur.flow);
+            self.process_scheduled_drop(&cur.flow, right_now);
         }
         let num_flows_after = self.tracked_flows.len();
 
