@@ -188,6 +188,22 @@ impl PerCoreGlobal
             return;
         }
 
+
+
+        if self.flow_tracker.is_tagged(&flow) {
+            // Tagged flow! Forward packet to whatever
+            debug!("Tagged flow packet {}", flow);
+
+            // Update expire time
+            self.flow_tracker.mark_tagged(&flow);
+
+            // Forward packet...
+            self.forward_pkt(&ip_pkt);
+
+            return;
+        }
+
+
         let tcp_flags = tcp_pkt.get_flags();
         if (tcp_flags & TcpFlags::SYN) != 0 && (tcp_flags & TcpFlags::ACK) == 0
         {
@@ -204,22 +220,34 @@ impl PerCoreGlobal
             return;
         }
 
-        if self.flow_tracker.is_tagged(&flow) {
-            // Tagged flow! Forward packet to whatever
-            debug!("Tagged flow packet {}", flow);
-
-            // Update expire time
-            self.flow_tracker.mark_tagged(&flow);
-
-            // Forward packet...
-
-        } else if is_tls_app_pkt(&tcp_pkt) {
+        if !self.flow_tracker.is_tagged(&flow) &&  is_tls_app_pkt(&tcp_pkt) {
             // Check for tag here...
             if self.check_tagged(&flow, &tcp_pkt) {
                 //self.flow_tracker.mark_tagged(&flow);
             }
             self.flow_tracker.drop(&flow);
         }
+    }
+
+    fn forward_pkt(&mut self, ip_pkt: &IpPacket)
+    {
+        let data = match ip_pkt {
+            IpPacket::V4(p) => p.packet(),
+            IpPacket::V6(p) => p.packet(),
+        };
+
+        let mut tun_pkt = Vec::with_capacity(data.len()+4);
+        // These mystery bytes are a link-layer header; the kernel "receives"
+        // tun packets as if they were really physically "received". Since they
+        // weren't physically received, they do not have an Ethernet header. It
+        // looks like the tun setup has its own type of header, rather than just
+        // making up a fake Ethernet header.
+        tun_pkt.extend_from_slice(&[0x00, 0x01, 0x08, 0x00]);
+        tun_pkt.extend_from_slice(data);
+
+        self.tun.send(tun_pkt).unwrap_or_else(|e|{
+            warn!("failed to send packet into tun: {}", e); 0});
+
     }
 
     fn check_tagged(&mut self,

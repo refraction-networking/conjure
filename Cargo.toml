@@ -19,4 +19,4 @@ log = "0.3.6"
 rand = "0.4.2"
 errno = "0.2.3"
 radix = { git = "https://github.com/refraction-networking/radix" }
-
+tuntap = { git = "https://github.com/ewust/tuntap.rs" }

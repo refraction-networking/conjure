@@ -10,6 +10,7 @@ extern crate time;
 extern crate errno;
 
 extern crate radix; // https://github.com/refraction-networking/radix
+extern crate tuntap; // https://github.com/ewust/tuntap.rs
 
 
 use std::mem::transmute;
@@ -21,6 +22,7 @@ use std::io::BufReader;
 use std::io::BufRead;
 use std::fs::File;
 
+use tuntap::{IFF_TUN,TunTap};
 
 // Must go before all other modules so that the report! macro will be visible.
 #[macro_use]
@@ -49,6 +51,8 @@ pub struct PerCoreGlobal
     pub sessions: HashMap<Flow, SessionState>,
     // Just some scratch space for mio.
     //events_buf: Events,
+
+    pub tun: TunTap,
 
     pub stats: PerCoreStats,
 
@@ -91,11 +95,15 @@ impl PerCoreGlobal
     fn new(priv_key: [u8; 32], the_lcore: i32) -> PerCoreGlobal
     {
 
+        let mut tun = TunTap::new(IFF_TUN, &format!("tun{}", the_lcore)).unwrap();
+        tun.set_up().unwrap();
+
         PerCoreGlobal {
             priv_key: priv_key,
             lcore: the_lcore,
             sessions: HashMap::new(),
             flow_tracker: FlowTracker::new(),
+            tun: tun,
             stats: PerCoreStats::new(),
             ip_tree: PrefixTree::new(),
         }
