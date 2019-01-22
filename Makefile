@@ -8,12 +8,15 @@ PFRING_LIBS=${PFRINGDIR}/userland/lib/libpfring.a ${PFRINGDIR}/userland/libpcap/
 RUST_LIB=./target/release/librust_dark_decoy.a
 TD_LIB=./libtapdance/libtapdance.a
 LIBS=${PFRING_LIBS} ${RUST_LIB} ${TD_LIB} -lcrypto -lpthread -lrt -lgmp -ldl -lm
-CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_RING_ZERO_COPY -O2 # -g
+CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_RING_ZERO_COPY -I${PFRINGDIR}/userland/lib/ -I${PFRINGDIR}/kernel -O2 # -g
 
 all: rust dark-decoy
 
 rust: ./src/*.rs
 	cargo build --${DEBUG_OR_RELEASE}
+
+test:
+	cargo test --${DEBUG_OR_RELEASE} 
 
 libtapdance:
 	cd ./libtapdance/ && make

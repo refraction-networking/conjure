@@ -155,7 +155,7 @@ impl PerCoreStats
                         not_in_tree_this_period: 0,
                         in_tree_this_period: 0 }
     }
-    fn periodic_status_report(&mut self, tracked: usize, sessions: usize)
+    fn periodic_status_report(&mut self, tracked: usize, dark_decoys: usize)
     {
         let cur_measure_time = precise_time_ns();
         let (user_secs, user_usecs, sys_secs, sys_usecs) =
@@ -186,13 +186,11 @@ impl PerCoreStats
                 0,
                 0);
         */
-        report!("stats {} pkts ({} v4, {} v6) {} tls tree: {} out {} in, {} tracked flows {} tags checked",
+        report!("stats {} pkts ({} v4, {} v6) dark decoy flows {} tracked flows {} tags checked {}",
             self.packets_this_period,
             self.ipv4_packets_this_period,
             self.ipv6_packets_this_period,
-            self.tls_packets_this_period,
-            self.not_in_tree_this_period,
-            self.in_tree_this_period,
+            dark_decoys,
             tracked,
             self.elligator_this_period);
 
@@ -223,7 +221,8 @@ pub extern "C" fn rust_periodic_report(ptr: *mut PerCoreGlobal)
     #[allow(unused_mut)]
     let mut global = unsafe { &mut *ptr };
     global.stats.periodic_status_report(
-        global.flow_tracker.count_tracked_flows(), 0);
+        global.flow_tracker.count_tracked_flows(),
+        global.flow_tracker.count_dark_decoy_flows());
 }
 
 #[repr(C)]
@@ -271,7 +270,7 @@ pub extern "C" fn rust_periodic_cleanup(ptr: *mut PerCoreGlobal)
 {
     #[allow(unused_mut)]
     let mut global = unsafe { &mut *ptr };
-    global.flow_tracker.drop_stale_flows();
+    global.flow_tracker.drop_all_stale_flows();
 
     /*
     // Any session that hangs around for 30 seconds with a None cli stream

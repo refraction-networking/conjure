@@ -1,13 +1,21 @@
 extern crate libc;
+extern crate hex;
+extern crate hkdf;
+extern crate sha2;
+extern crate ipnetwork;
 
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::collections::LinkedList;
 
 use pnet::packet::Packet;
 use pnet::packet::tcp::{TcpOptionNumbers, TcpPacket};
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
+
+use self::ipnetwork::{IpNetwork};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 pub enum IpPacket<'p> {
     V4(Ipv4Packet<'p>),
@@ -29,9 +37,9 @@ impl<'p> IpPacket<'p> {
 #[inline]
 pub fn inet_htoa(ip: u32) -> String {
     format!("{}.{}.{}.{}", (ip >> 24) & 0xff,
-                           (ip >> 16) & 0xff,
-                           (ip >>  8) & 0xff,
-                           (ip)       & 0xff)
+            (ip >> 16) & 0xff,
+            (ip >> 8) & 0xff,
+            (ip) & 0xff)
 }
 
 // Returns host-order u32.
@@ -44,29 +52,30 @@ pub fn deser_be_u32_slice(arr: &[u8]) -> u32
     }
 
     (arr[0] as u32) << 24 |
-    (arr[1] as u32) << 16 |
-    (arr[2] as u32) << 8 |
-    (arr[3] as u32)
+        (arr[1] as u32) << 16 |
+        (arr[2] as u32) << 8 |
+        (arr[3] as u32)
 }
+
 #[inline]
 pub fn deser_be_u32(arr: &[u8; 4]) -> u32
 {
     (arr[0] as u32) << 24 |
-    (arr[1] as u32) << 16 |
-    (arr[2] as u32) << 8 |
-    (arr[3] as u32)
+        (arr[1] as u32) << 16 |
+        (arr[2] as u32) << 8 |
+        (arr[3] as u32)
 }
 
 // Returns (tcp_ts, tcp_ts_ecr) in host order.
 pub fn get_tcp_timestamps(tcp_pkt: &TcpPacket) -> (u32, u32)
 {
     match tcp_pkt.get_options_iter()
-                 .find(|x| x.get_number() == TcpOptionNumbers::TIMESTAMPS)
-    {
-        Some(p) => (deser_be_u32_slice(&p.payload()[0..4]),  // timestamp
-                    deser_be_u32_slice(&p.payload()[4..8])), // echo reply
-        None => (0, 0),
-    }
+        .find(|x| x.get_number() == TcpOptionNumbers::TIMESTAMPS)
+        {
+            Some(p) => (deser_be_u32_slice(&p.payload()[0..4]),  // timestamp
+                        deser_be_u32_slice(&p.payload()[4..8])), // echo reply
+            None => (0, 0),
+        }
 }
 
 // Call on two TCP seq#s from reasonably nearby within the same TCP connection.
@@ -80,21 +89,18 @@ pub fn tcp_seq_is_wrapped(s1: u32, s2: u32) -> bool
 // a <= b, guessing about wraparound
 pub fn tcp_seq_lte(a: u32, b: u32) -> bool
 {
-    if a == b { true }
-    else {
+    if a == b { true } else {
         let res = a < b;
-        if tcp_seq_is_wrapped(a, b) { !res }
-        else                        { res }
+        if tcp_seq_is_wrapped(a, b) { !res } else { res }
     }
 }
+
 // a < b, guessing about wraparound
 pub fn tcp_seq_lt(a: u32, b: u32) -> bool
 {
-    if a == b { false }
-    else {
+    if a == b { false } else {
         let res = a < b;
-        if tcp_seq_is_wrapped(a, b) { !res }
-        else                        { res }
+        if tcp_seq_is_wrapped(a, b) { !res } else { res }
     }
 }
 
@@ -107,7 +113,8 @@ pub fn mem_used_kb() -> u64
         Ok(f) => f,
         Err(e) => {
             error!("Failed to open /proc/{}/status: {:?}", my_pid, e);
-            return 0; }
+            return 0;
+        }
     };
     let buf_f = BufReader::new(f);
     for l in buf_f.lines() {
@@ -132,13 +139,145 @@ pub fn mem_used_kb() -> u64
     return 0;
 }
 
-#[cfg(test)]
-mod tests {
-use util;
-#[test]
-fn mem_used_kb_parses_something()
+pub struct HKDFKeys
 {
-    assert!(util::mem_used_kb() > 0);
-}
+    pub fsp_key: [u8; 16],
+    pub fsp_iv: [u8; 12],
+    pub vsp_key: [u8; 16],
+    pub vsp_iv: [u8; 12],
+    pub dark_decoy_seed: [u8; 16],
 }
 
+impl HKDFKeys
+{
+    pub fn new(shared_secret: &[u8]) -> Result<HKDFKeys, Box<hkdf::InvalidLength>>
+    {
+        // const salt: &'static str = "tapdancetapdancetapdancetapdance";
+        let salt = "tapdancetapdancetapdancetapdance".as_bytes();
+        let kdf = hkdf::Hkdf::<sha2::Sha256>::extract(Some(salt), shared_secret);
+        let info = [0u8; 0];
+
+        let mut output = [0u8; 72];
+        kdf.expand(&info, &mut output)?;
+
+        let mut fsp_key = [0u8; 16];
+        let mut fsp_iv = [0u8; 12];
+        let mut vsp_key = [0u8; 16];
+        let mut vsp_iv = [0u8; 12];
+        let mut dark_decoy_seed = [0u8; 16];
+
+        fsp_key.copy_from_slice(&output[0..16]);
+        fsp_iv.copy_from_slice(&output[16..28]);
+        vsp_key.copy_from_slice(&output[28..44]);
+        vsp_iv.copy_from_slice(&output[44..56]);
+        dark_decoy_seed.copy_from_slice(&output[56..72]);
+
+        Ok(HKDFKeys { fsp_key, fsp_iv, vsp_key, vsp_iv, dark_decoy_seed }) // syntax is very edgy and not at all confusing
+    }
+}
+
+#[derive(Debug)]
+pub struct DDIpSelector {
+    pub networks: LinkedList<IpNetwork>,
+}
+
+impl DDIpSelector {
+    pub fn new(subnets: &Vec<String>) -> Result<DDIpSelector, self::ipnetwork::IpNetworkError> {
+        let mut net_list = LinkedList::new();
+        for str_net in subnets.iter() {
+            let net: IpNetwork = str_net.parse()?;
+            net_list.push_back(net.clone());
+        }
+        Ok(DDIpSelector { networks: net_list })
+    }
+
+    pub fn select(&self, seed: [u8; 16]) -> Option<IpAddr> {
+        // todo: move this to ::new() and keep static table
+        let mut addresses_total: u128 = 0;
+        let mut id_net = LinkedList::new(); // (min_id, max_id, subnet)
+        for net in self.networks.iter() {
+            match *net {
+                IpNetwork::V4(_) => {
+                    let old_addresses_total = addresses_total;
+                    addresses_total += 2u128.pow((32 - net.prefix()).into()) - 1;
+                    id_net.push_back((old_addresses_total, addresses_total, net));
+                }
+                IpNetwork::V6(_) => {
+                    let old_addresses_total = addresses_total;
+                    addresses_total += 2u128.pow((128 - net.prefix()).into()) - 1;
+                    id_net.push_back((old_addresses_total, addresses_total, net));
+                }
+            }
+        }
+
+        let mut id = array_as_u128_be(&seed);
+        if id >= addresses_total {
+            id = id % addresses_total;
+        }
+
+        for elem in id_net.iter() {
+            if elem.0 < id && elem.1 >= id {
+                match elem.2 {
+                    IpNetwork::V4(netv4) => {
+                        let min_ip_u32: u32 = array_as_u32_be(&netv4.ip().octets());
+                        let ip_u32 = min_ip_u32 + ((id - elem.0) as u32);
+                        return Some(IpAddr::from(Ipv4Addr::from(ip_u32)));
+                    }
+                    IpNetwork::V6(netv6) => {
+                        let min_ip_u128 = array_as_u128_be(&netv6.ip().octets());
+                        let ip_u128 = min_ip_u128 + (id - elem.0);
+                        return Some(IpAddr::from(Ipv6Addr::from(ip_u128)));
+                    }
+                }
+            }
+        }
+        error!("failed to pick dark decoy IP with seed={:?}, in {:?}", seed, id_net);
+        None
+    }
+}
+
+
+fn array_as_u128_be(a: &[u8; 16]) -> u128 {
+    ((a[0] as u128) << 120) +
+        ((a[1] as u128) << 112) +
+        ((a[2] as u128) << 104) +
+        ((a[3] as u128) << 96) +
+        ((a[4] as u128) << 88) +
+        ((a[5] as u128) << 80) +
+        ((a[6] as u128) << 72) +
+        ((a[7] as u128) << 64) +
+        ((a[8] as u128) << 56) +
+        ((a[9] as u128) << 48) +
+        ((a[10] as u128) << 40) +
+        ((a[11] as u128) << 32) +
+        ((a[12] as u128) << 24) +
+        ((a[13] as u128) << 16) +
+        ((a[14] as u128) << 8) +
+        ((a[15] as u128) << 0)
+}
+
+fn array_as_u32_be(a: &[u8; 4]) -> u32 {
+    ((a[0] as u32) << 24) +
+        ((a[1] as u32) << 16) +
+        ((a[2] as u32) << 8) +
+        ((a[3] as u32) << 0)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use util;
+    use util::DDIpSelector;
+
+    #[test]
+    fn mem_used_kb_parses_something()
+    {
+        assert!(util::mem_used_kb() > 0);
+    }
+
+    #[test]
+    fn test_dd_ip_selector() {
+        let s1 = DDIpSelector::new(&vec![String::from("2001:48a8:8000::/33"),
+                                         String::from("192.122.200.0/24")]);
+    }
+}

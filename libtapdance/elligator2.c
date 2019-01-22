@@ -91,6 +91,23 @@ out_free:
     return 0;
 }
 
+
+// shared_secret must already be allocated and be 32 bytes long
+size_t get_shared_secret_from_tag(const unsigned char *station_privkey,
+                            unsigned char *stego_payload, size_t stego_len,
+                            char *shared_secret) // 32 bytes
+{
+    // First 32 bytes is potentially an elligator-encoded point
+    unsigned char client_public[32];
+    if (stego_len < (sizeof(client_public) + 16)) {
+        // Not long enough for public key and gcm tag
+        return 0;
+    }
+    decode(client_public, &stego_payload[0]);
+
+    return (size_t)curve25519_donna(shared_secret, station_privkey, client_public);
+}
+
 // stego_len may be longer than the actual payload length (which we will return in
 // `out` assuming out_len signifies we have space)
 size_t get_payload_from_tag(const unsigned char *station_privkey,

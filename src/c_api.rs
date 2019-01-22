@@ -62,6 +62,10 @@ extern {
     //fn reset_global_cli_download_count();
     //fn get_global_cli_download_count() -> u64;
     //fn get_mut_global_failure_map() -> *mut c_void;
+
+    fn get_shared_secret_from_tag(station_privkey: *const u8,
+                                  stego_payload: *mut u8, stego_payload_len: size_t,
+                                  shared_secret_out: *mut u8) -> size_t;
 }
 
 pub fn c_get_payload_from_tag(station_privkey: &[u8],
@@ -73,11 +77,27 @@ pub fn c_get_payload_from_tag(station_privkey: &[u8],
         panic!("Need to provide a 32-byte buffer space for AES key/IV to get_payload_from_tag");
     }
 
-	unsafe {
+    unsafe {
         get_payload_from_tag(station_privkey.as_ptr(),
                              stego_payload.as_mut_ptr(), stego_payload.len(),
-						     out.as_mut_ptr(), out_len,
+                             out.as_mut_ptr(), out_len,
                              aes_out.as_mut_ptr()) }
+}
+
+
+pub fn c_get_shared_secret_from_tag(station_privkey: &[u8],
+                              stego_payload: &mut [u8],
+                              shared_secret_out: &mut [u8]) -> size_t
+{
+    if shared_secret_out.len() != 32 {
+        panic!("Need to provide a 32-byte buffer space for shared_secret_out");
+    }
+
+    unsafe {
+        get_shared_secret_from_tag(station_privkey.as_ptr(),
+                             stego_payload.as_mut_ptr(),
+                                   stego_payload.len(),
+                             shared_secret_out.as_mut_ptr()) }
 }
 
 pub fn c_decrypt_aes_gcm(key: &[u8], iv: &[u8],
