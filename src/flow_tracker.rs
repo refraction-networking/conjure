@@ -116,9 +116,9 @@ pub struct FlowTracker
     // stale_drops_tracked is used to periodically drop idle flows that are being tracked.
     stale_drops_tracked: VecDeque<SchedEvent>,
 
-    // Known dark decoy flows that should be picked up.
+    // Known dark decoy destination IPs that should be picked up.
     // Map values are timeouts, which are used to drop stale dark decoys
-    pub dark_decoy_flows: HashMap<FlowNoSrcPort, u64>,
+    pub dark_decoy_flows: HashMap<IpAddr, u64>,
 
 }
 
@@ -154,7 +154,7 @@ impl FlowTracker
 
     pub fn is_registered_dark_decoy(&self, flow: &FlowNoSrcPort) -> bool
     {
-        self.dark_decoy_flows.contains_key(&flow)
+        self.dark_decoy_flows.contains_key(&flow.dst_ip)
     }
 
     pub fn is_tracked_flow(&self, flow: &Flow) -> bool
@@ -165,7 +165,7 @@ impl FlowTracker
     pub fn mark_dark_decoy(&mut self, flow: &FlowNoSrcPort)
     {
         let expire_time = precise_time_ns() + TIMEOUT_DARK_DECOYS_NS;
-        *self.dark_decoy_flows.entry(*flow).or_insert(expire_time) = expire_time;
+        *self.dark_decoy_flows.entry(flow.dst_ip).or_insert(expire_time) = expire_time;
     }
 
     pub fn stop_tracking_flow(&mut self, flow: &Flow)

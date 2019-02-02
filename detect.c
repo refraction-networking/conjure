@@ -268,16 +268,17 @@ void set_affinity(int id)
 void startup_pfring_maybezc(unsigned int cluster_id, int proc_ind)
 {
     char cluster_iface_id[200];
-    sprintf(cluster_iface_id, "zc:%d@%d", cluster_id, proc_ind);
-    if(!(g_ring = pfring_zc_ipc_attach_queue(cluster_id, proc_ind, rx_only)))
+    int channel = proc_ind;
+    sprintf(cluster_iface_id, "zc:%d@%d", cluster_id, channel);
+    if(!(g_ring = pfring_zc_ipc_attach_queue(cluster_id, channel, rx_only)))
     {
         fprintf(stderr, "pfring_zc_ipc_attach_queue error [%s] opening %s "
                         "(%d, %d)\n",
-                strerror(errno), cluster_iface_id, cluster_id, proc_ind);
+                strerror(errno), cluster_iface_id, cluster_id, channel);
         exit(-1);
     }
 
-    if(!(g_pool = pfring_zc_ipc_attach_buffer_pool(cluster_id, proc_ind)))
+    if(!(g_pool = pfring_zc_ipc_attach_buffer_pool(cluster_id, channel)))
     {
         fprintf(stderr,
                 "pfring_zc_ipc_attach_buffer_pool error [%s] opening %s\n",

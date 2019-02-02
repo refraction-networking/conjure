@@ -262,8 +262,8 @@ impl PerCoreGlobal
         self.stats.elligator_this_period += 1;
         match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
             Ok(res) => {
-                    let dd_ip_selector = match DDIpSelector::new(&vec![String::from("192.122.190.0/24"),
-                                                                       String::from("2001:48a8:8000::/33")]) {
+                let dd_ip_selector = match DDIpSelector::new(&vec![String::from("192.122.190.0/24")]) {
+                                                                       //String::from("2001:48a8:687f:1::/64")]) {
                     // TODO: move this initialization up
                     Ok(dd) => dd,
                     Err(e) => {
@@ -279,8 +279,28 @@ impl PerCoreGlobal
                         return None;
                     }
                 };
-//                return Some(FlowNoSrcPort::from_parts(flow.src_ip, dst_ip, 443));
-                return Some(FlowNoSrcPort::from_parts(flow.src_ip, IpAddr::from([192u8, 122u8, 190u8, 106u8]), 443));
+
+                // Send dark_decoy_seed / dst_ip to ZMQ
+                //pub dark_decoy_seed: [u8; 16],
+                let mut msg = vec![0; 16+16];
+                msg[..16].clone_from_slice(&res.0.dark_decoy_seed);
+
+                let ip_as_bytes = match dst_ip {
+                    IpAddr::V6(ip) => ip.octets().to_vec(),
+                    IpAddr::V4(ip) => {
+                        // Convert to Ipv6-mapped v4 address
+                        let mut v6 = vec![0; 16];
+                        v6[10] = 0xff;
+                        v6[11] = 0xff;
+                        v6[12..].clone_from_slice(&ip.octets());
+                        v6
+                    },
+                };
+                msg[16..].clone_from_slice(&ip_as_bytes[..]);
+                self.zmq_sock.send(&msg, 0);
+
+                return Some(FlowNoSrcPort::from_parts(flow.src_ip, dst_ip, 443));
+                //return Some(FlowNoSrcPort::from_parts(flow.src_ip, IpAddr::from([192u8, 122u8, 190u8, 106u8]), 443));
             },
             Err(_e) => {
                 return None;

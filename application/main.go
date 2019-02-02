@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	zmq "github.com/pebbe/zmq4"
 	tls "github.com/refraction-networking/utls"
 )
 
@@ -410,7 +411,35 @@ func handleNewConn(clientConn *net.TCPConn) {
 	return
 }
 
+func get_zmq_updates() {
+
+	sub, err := zmq.NewSocket(zmq.SUB)
+	if err != nil {
+		fmt.Printf("Could not create new ZMQ socket: %v\n", err)
+		return
+	}
+	defer sub.Close()
+
+	sub.Bind("tcp://*:5591")
+	sub.SetSubscribe("")
+
+	fmt.Printf("[INFO] ZMQ listening on *:5591\n")
+	for {
+		msg, err := sub.Recv(0)
+		if err != nil {
+			fmt.Printf("Error reading from ZMQ socket: %v\n", err)
+		}
+		// First 16 bytes are the seed, second 16 are the dark decoy address (derived from the seed)
+		seed := []byte(msg)[0:16]
+		dst_ip := []byte(msg)[16:32]
+		fmt.Printf("Got ZMQ message: seed %v, dst_ip %v\n", seed, dst_ip)
+	}
+}
+
 func main() {
+
+	go get_zmq_updates()
+
 	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
 	ln, err := net.ListenTCP("tcp", listenAddr)
 	if err != nil {
@@ -423,7 +452,7 @@ func main() {
 	for {
 		newConn, err := ln.AcceptTCP()
 		if err != nil {
-			fmt.Printf("ERROR failed to AcceptTCP on %v: %v", ln.Addr(), err)
+			fmt.Printf("ERROR failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
 			return // continue?
 		}
 

@@ -11,7 +11,7 @@ extern crate errno;
 
 extern crate radix; // https://github.com/refraction-networking/radix
 extern crate tuntap; // https://github.com/ewust/tuntap.rs
-
+extern crate zmq;
 
 use std::mem::transmute;
 use std::collections::HashMap;
@@ -58,6 +58,8 @@ pub struct PerCoreGlobal
 
     // List of IP prefixes we'll respond to as dark decoys
     pub ip_tree:   PrefixTree,
+    // ZMQ socket for sending information to the dark decoy application
+    zmq_sock:      zmq::Socket,
 }
 
 // Tracking of some pretty straightforward quantities
@@ -98,6 +100,11 @@ impl PerCoreGlobal
         let mut tun = TunTap::new(IFF_TUN, &format!("tun{}", the_lcore)).unwrap();
         tun.set_up().unwrap();
 
+        // Setup ZMQ
+        let zmq_ctx = zmq::Context::new();
+        let zmq_sock = zmq_ctx.socket(zmq::PUB).unwrap();
+        zmq_sock.connect("tcp://localhost:5591").expect("failed connecting to ZMQ");
+
         PerCoreGlobal {
             priv_key: priv_key,
             lcore: the_lcore,
@@ -106,6 +113,7 @@ impl PerCoreGlobal
             tun: tun,
             stats: PerCoreStats::new(),
             ip_tree: PrefixTree::new(),
+            zmq_sock: zmq_sock,
         }
     }
 
