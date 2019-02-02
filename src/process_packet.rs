@@ -12,9 +12,9 @@ use pnet::packet::tcp::{TcpPacket,TcpFlags};
 use std::net::{IpAddr,Ipv6Addr,Ipv4Addr};
 
 //use elligator;
-use flow_tracker::Flow;
+use flow_tracker::{Flow, FlowNoSrcPort};
 use PerCoreGlobal;
-use util::IpPacket;
+use util::{IpPacket, DDIpSelector};
 use elligator;
 
 const TLS_TYPE_APPLICATION_DATA: u8 = 0x17;
@@ -98,7 +98,6 @@ fn is_tls_app_pkt(tcp_pkt: &TcpPacket) -> bool
 
 impl PerCoreGlobal
 {
-
     // frame_len is supposed to be the length of the whole Ethernet frame. We're
     // only passing it here for plumbing reasons, and just for stat reporting.
     fn process_ipv4_packet(&mut self, ip_pkt: Ipv4Packet, frame_len: usize)
@@ -188,21 +187,22 @@ impl PerCoreGlobal
             return;
         }
 
-
-
-        if self.flow_tracker.is_tagged(&flow) {
+        let dd_flow = FlowNoSrcPort::from_flow(&flow);
+        if flow.src_ip == IpAddr::from([128u8, 138u8, 244u8, 42u8]) {
+            debug!("dd_flow {} {:?}", dd_flow, self.flow_tracker.dark_decoy_flows);
+        }
+        if self.flow_tracker.is_registered_dark_decoy(&dd_flow) {
             // Tagged flow! Forward packet to whatever
             debug!("Tagged flow packet {}", flow);
 
             // Update expire time
-            self.flow_tracker.mark_tagged(&flow);
+            self.flow_tracker.mark_dark_decoy(&dd_flow);
 
             // Forward packet...
             self.forward_pkt(&ip_pkt);
-
+            // TODO: if it was RST or FIN, close things
             return;
         }
-
 
         let tcp_flags = tcp_pkt.get_flags();
         if (tcp_flags & TcpFlags::SYN) != 0 && (tcp_flags & TcpFlags::ACK) == 0
@@ -212,20 +212,25 @@ impl PerCoreGlobal
             self.flow_tracker.begin_tracking_flow(&flow);
             return;
         } else if (tcp_flags & TcpFlags::RST) != 0 || (tcp_flags & TcpFlags::FIN) != 0 {
-            self.flow_tracker.drop(&flow);
+            self.flow_tracker.stop_tracking_flow(&flow);
             return;
         }
 
-        if !self.flow_tracker.tracking_at_all(&flow) {
+        if !self.flow_tracker.is_tracked_flow(&flow) {
             return;
         }
 
-        if !self.flow_tracker.is_tagged(&flow) &&  is_tls_app_pkt(&tcp_pkt) {
-            // Check for tag here...
-            if self.check_tagged(&flow, &tcp_pkt) {
-                //self.flow_tracker.mark_tagged(&flow);
-            }
-            self.flow_tracker.drop(&flow);
+        if  is_tls_app_pkt(&tcp_pkt) {
+            match self.check_dark_decoy_tag(&flow, &tcp_pkt) {
+                Some(dd_flow) => {
+                    debug!("New Dark Decoy Flow {} negotiated in {},", dd_flow, flow);
+                    self.flow_tracker.mark_dark_decoy(&dd_flow);
+                    // not removing flow from stale_tracked_flows for optimization reasons:
+                    // it will be removed later
+                },
+                None => {}
+            };
+            self.flow_tracker.stop_tracking_flow(&flow);
         }
     }
 
@@ -250,37 +255,36 @@ impl PerCoreGlobal
 
     }
 
-    fn check_tagged(&mut self,
-                flow: &Flow,
-                tcp_pkt: &TcpPacket) -> bool
+    fn check_dark_decoy_tag(&mut self,
+                            flow: &Flow,
+                            tcp_pkt: &TcpPacket) -> Option<FlowNoSrcPort>
     {
-        let (tag_payload, _) = elligator::extract_telex_tag(&self.priv_key,
-                                                       &tcp_pkt.payload());
         self.stats.elligator_this_period += 1;
+        match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
+            Ok(res) => {
+                    let dd_ip_selector = match DDIpSelector::new(&vec![String::from("192.122.190.0/24"),
+                                                                       String::from("2001:48a8:8000::/33")]) {
+                    // TODO: move this initialization up
+                    Ok(dd) => dd,
+                    Err(e) => {
+                        error!("failed to make Dark Decoy IP selector: {}", e);
+                        return None;
+                    }
+                };
 
-        if tag_payload.len() > 0 {
-            let (new_flow, seed) = parse_tag_payload(&tag_payload);
-            debug!("New Tagged Flow parent: {}: new flow: {}, seed: {:?}", flow, new_flow, seed);
-            self.flow_tracker.mark_tagged(&new_flow);
+                let dst_ip = match dd_ip_selector.select(res.0.dark_decoy_seed){
+                    Some(ip) => ip,
+                    None => {
+                        error!("failed to select dark decoy IP address");
+                        return None;
+                    }
+                };
+//                return Some(FlowNoSrcPort::from_parts(flow.src_ip, dst_ip, 443));
+                return Some(FlowNoSrcPort::from_parts(flow.src_ip, IpAddr::from([192u8, 122u8, 190u8, 106u8]), 443));
+            },
+            Err(_e) => {
+                return None;
+            }
         }
-
-        (tag_payload.len() != 0)
     }
 } // impl PerCoreGlobal
-
-fn parse_tag_payload(payload: &[u8]) -> (Flow, Vec<u8>)
-{
-    // TODO: parse a protobuf out of payload
-    let src_ip = IpAddr::V4(Ipv4Addr::new(67,161,204,83));
-    let dst_ip = IpAddr::V4(Ipv4Addr::new(192,122,190,111));
-
-    //let src_ip = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 2));
-    let sport: u16 = 1111;
-    let dport: u16 = 443;
-
-    let flow = Flow::from_parts(src_ip, dst_ip, sport, dport);
-
-    let seed = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-
-    (flow, seed)
-}

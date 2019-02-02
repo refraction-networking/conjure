@@ -20,3 +20,9 @@ rand = "0.4.2"
 errno = "0.2.3"
 radix = { git = "https://github.com/refraction-networking/radix" }
 tuntap = { git = "https://github.com/ewust/tuntap.rs" }
+ipnetwork = "*"
+
+hkdf = "0.7"
+sha2 = "0.8.*"
+hex = "0.3.*"
+digest = "0.8"
