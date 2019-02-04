@@ -1,0 +1,193 @@
+\documentclass[letterpaper,twocolumn,10pt]{article}
+\usepackage{usenix2019_v3}
+
+% to be able to draw some self-contained figs
+\usepackage{tikz}
+\usepackage{amsmath}
+
+\begin{document}
+
+%don't print date
+\date{}
+
+% make title bold and 14 pt font (Latex default is non-bold, 16 pt)
+\title{\Large \bf Dark Decoys:
+  Conjuring Proxies from Unused Address Space}
+
+%for single author (just remove % characters)
+%\author{
+%{\rm Your N.\ Here}\\
+%Your Institution
+%\and
+%{\rm Second Name}\\
+%Second Institution
+%% copy the following lines to add more authors
+%% \and
+%% {\rm Name}\\
+%%Name Institution
+%} % end author
+
+\maketitle
+
+%-------------------------------------------------------------------------------
+\begin{abstract}
+%-------------------------------------------------------------------------------
+Refraction Networking (formerly ``Decoy Routing'') has emrged as a useful tool in circumventing
+        Internet censorship. By placing proxies in cooperating Internet Service
+        Providers (ISPs) and using connections to existing reachable
+        ``decoy'' sites for transport, censors cannot easily block access to
+        such proxies without also blocking legitimate sites.
+
+However, existing deployed Refraction Networking schemes such as TapDance suffer
+from several problems, including a limited number of decoy sites in realistic
+deployments, and an unfavorable tradeoff between performance and observability
+by the censor. These problems limit where such proxies can be deloyed, hamper
+their effectiveness, and may ultimately make them possible for censors to block.
+
+In this paper, we present Dark Decoys, a deployable Refraction Networking scheme that
+overcomes these issues. Dark Decoys leverages the (primarily) unused address
+space that is reachable through the deploying ISP. Rather than rely on existing
+sites as reachable decoy sites that must be involved in each proxy connection,
+Dark Decoys create seemingly legitimate hosts at new IP addresses. These
+invented hosts are indistinguishable from normal hosts to the censor, but can
+be used by clients as one-time proxies.
+
+We implement our scheme ... and it's just the bee's knees. TODO
+
+\end{abstract}
+
+
+%-------------------------------------------------------------------------------
+\section{Introduction}
+%-------------------------------------------------------------------------------
+% 1.5-2 pages
+
+Censorship circumvention still important
+-More countries blocking
+-Existing countries blocking more
+
+Existing circumvention strategies on shaky ground
+-domain fronting going away
+-active probing of existing proxies
+-Cenosrs fingerprinting known protocols
+
+Importance of Refraction Networking
+-what it is, how it solves many of the above problems
+-acknowledge challenge of ISP deployment, cite TapDance deployment as only refraction technology that has overcome this challenge so far
+
+Challenges remain in Tapdance:
+-Censor can fingerprint decoy sites
+-Decoys themselves are limited (e.g. a few dozen in many cases)
+-Can't have long-lived connections (performance and observability issue)
+-Other performance limits (upload limit, TCP window size)
+
+Dark decoys solve these issues
+-Create new decoys from ``dark'' (unused) address space
+-Clients register (via TapDance-like or other robust protocol (email, blockchain, whatever))
+-Connect to custom IP address, talk whatever protocol client/station agrees on
+
+One-time use address advantages:
+-Censor cannot actively probe ahead of time (especially in IPv6), making it hard to fingerprint
+-Decoys are now virtually unlimited (or limited only by address space)
+-Connection can live as long as we want
+-No pesky TCP/TapDance-y limits
+
+Requirements/Challenges
+-Censor can't be able to distinguish between dark decoy and legitimate hosts
+    (otherwise they block all dark decoys)
+    -Includes active probing: censor shouldn't be able to register existing IP
+-Disruption avoidence: Want to pickup even for used addresses
+    -Otherwise, censor probes to find truly unused address space and blocks
+    -But can't disrupt legitimate services
+    -Can overcome by limiting pickup to the registering client (but spoofing challenges...)
+    -Note: also likely solved by the client-sends-SNI in the Mask site application...
+
+
+
+\section{Background}
+% 1 page
+Background on TLS and Refraction Networking
+
+
+\section{Threat Model}
+% 0.5 page
+
+-Censor can block arbitrary addresses (or networks), but faces a cost in doing so (collateral damage)
+-Censor can know what network deploys the dark decoy station
+-Censor knows the dark decoy prefixes distributed in the client, but they contain legitimate hosts
+-Censor can use the client
+-Censor can active probe limited sets, but cannot enumerate the entire prefix (i.e. IPv6 /32)
+-Censor can active probe or (p)replay connections it suspects
+
+
+\section{Architecture}
+% 3 pages
+-Registration
+-Dark decoy selection (seed -> IP)
+-Connection to Dark Decoy Application (DD App)
+-IPv6 vs IPv4 dark decoys
+
+\subsection{Applications}
+
+Application choices:
+-obfs4  (could we test this?)
+-Masked sites (implemented)
+-TLS 1.3 eSNI
+
+-Takeover of masked site TLS connection (client/server random from masked site, master secret from registration)
+
+-Masked site slection: How do we get the list of masked sites? Alexa list? passive observation?
+
+\section{Implementation}
+% 1 page
+
+-ISP-scale implementation, able to handle 10+Gbps
+-Language choice (Rust, Go, minimal C)
+-Open source (client and station)
+
+\section{Evaluation}
+% 1 page
+
+Compare to TapDance performance:
+-Connection setup time
+-Connection/session lifetime
+-Throughput (especially upload vs download)
+-Security considerations
+
+\section{Attacks and Defenses}
+% 1 page
+
+-Fingerprinting Masked site vs Dark decoy application
+-Active probing TLS connection
+    -Block access unless from registering source IP
+        -cite GFW taking over client IPs for active probing of old obfs
+    -Verify knowledge of seed (but how to respond when verification fails?)
+
+\section{Related Work}
+% 0.5-0.75 page
+
+MultiFlow, The Waterfall of Liberty, Slitheen, Rebound, TapDance, Cirripede, Telex, Decoy Routing
+True Cost of RAD, Routing around Decoys
+ISP-scale TapDance
+
+
+\section{Future Work}
+% 0.5 page
+
+\section{Conclusion}
+%.25 page
+
+%%-------------------------------------------------------------------------------
+%\section*{Availability}
+%%-------------------------------------------------------------------------------
+%
+%USENIX program committees give extra points to submissions that are
+%backed by artifacts that are publicly available. If you made your code
+%or data available, it's worth mentioning this fact in a dedicated
+%section.
+
+%-------------------------------------------------------------------------------
+\bibliographystyle{plain}
+\bibliography{biblio}
+
+\end{document}
