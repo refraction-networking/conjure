@@ -222,8 +222,9 @@ func readConfigFromConnSnippet(c net.Conn) {
 func handleNewConn(clientConn *net.TCPConn) {
 	defer clientConn.Close()
 
+	fmt.Printf("new connection %v\n", clientConn.RemoteAddr())
 	// WIP: will get those placeholders from zmq:
-	maskHostPort := "microsoft.com:443"
+	maskHostPort := "google.com:443"
 	targetHostPort := "openrussia.org:443"
 	masterSecret := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
 		20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
@@ -335,7 +336,7 @@ func handleNewConn(clientConn *net.TCPConn) {
 			// then goes sessionIdLen(1), sessionId(sessionIdLen), cipherSuite(2)
 			// then compressionMethod(1), extensionsLen(2), extensions(extensionsLen)
 
-			_, err = io.CopyN(tcpMaskedConn, maskedConnBufReader, outerRecordHeaderLen+int64(outerRecordLength))
+			_, err = io.CopyN(clientConn, maskedConnBufReader, outerRecordHeaderLen+int64(outerRecordLength))
 			if err != nil {
 				return err
 			}
