@@ -13,6 +13,9 @@ extern crate radix; // https://github.com/refraction-networking/radix
 extern crate tuntap; // https://github.com/ewust/tuntap.rs
 extern crate zmq;
 
+#[macro_use]
+extern crate redis;
+
 use std::mem::transmute;
 use std::collections::HashMap;
 use time::precise_time_ns;
@@ -60,6 +63,7 @@ pub struct PerCoreGlobal
     pub ip_tree:   PrefixTree,
     // ZMQ socket for sending information to the dark decoy application
     zmq_sock:      zmq::Socket,
+
 }
 
 // Tracking of some pretty straightforward quantities
@@ -194,6 +198,7 @@ impl PerCoreStats
                 0,
                 0);
         */
+        /*
         report!("stats {} pkts ({} v4, {} v6) dark decoy flows {} tracked flows {} tags checked {}",
             self.packets_this_period,
             self.ipv4_packets_this_period,
@@ -201,6 +206,7 @@ impl PerCoreStats
             dark_decoys,
             tracked,
             self.elligator_this_period);
+        */
 
         self.elligator_this_period = 0;
         self.packets_this_period = 0;
