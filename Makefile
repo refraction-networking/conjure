@@ -18,6 +18,9 @@ rust: ./src/*.rs
 test:
 	cargo test --${DEBUG_OR_RELEASE} 
 
+application:
+	cd ./application/ && make
+
 libtapdance:
 	cd ./libtapdance/ && make
 

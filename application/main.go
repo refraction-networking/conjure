@@ -6,127 +6,62 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"net"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	zmq "github.com/pebbe/zmq4"
-	tls "github.com/refraction-networking/utls"
+	"github.com/refraction-networking/utls"
 )
 
-// replayableReaderConn could be replayed once by calling StartReplaying
-type replayableReaderConn struct {
+// bufferedReaderConn allows to combine *bufio.Reader(conn) and *conn into one struct.
+// Implements net.Conn
+type bufferedReaderConn struct {
 	net.Conn
-	R            *bufio.Reader
-	ReplayBuffer []byte
-	ReplayState  uint8
-	Replaying    bool
-	Recording    bool
+	R *bufio.Reader
 }
 
-func (bc *replayableReaderConn) Read(b []byte) (n int, err error) {
-	if bc.Replaying && len(bc.ReplayBuffer) > 0 {
-		n = copy(b, bc.ReplayBuffer)
-		bc.ReplayBuffer = bc.ReplayBuffer[n:]
-	} else {
-		n, err = bc.R.Read(b)
-		if bc.Recording {
-			bc.ReplayBuffer = append(bc.ReplayBuffer, b[:n]...)
-		}
-	}
-	return
+func (bc *bufferedReaderConn) Read(b []byte) (n int, err error) {
+	return bc.R.Read(b)
 }
 
-func (bc *replayableReaderConn) Peek(n int) ([]byte, error) {
+func (bc *bufferedReaderConn) Peek(n int) ([]byte, error) {
 	return bc.R.Peek(n)
 }
 
-func (bc *replayableReaderConn) StartReplaying() {
-	bc.Replaying = true
-	bc.Recording = false
-}
-
-func makeReplayableReaderConn(c net.Conn, r *bufio.Reader) *replayableReaderConn {
-	return &replayableReaderConn{
-		Conn:      c,
-		R:         r,
-		Recording: true,
+func (bc *bufferedReaderConn) CloseWrite() error {
+	if closeWriter, ok := bc.Conn.(interface {
+		CloseWrite() error
+	}); ok {
+		return closeWriter.CloseWrite()
+	} else {
+		return errors.New("not a CloseWriter")
 	}
 }
 
-func parseSNI(b []byte) (string, error) {
-	offset := 43
-	if offset >= len(b) {
-		return "", fmt.Errorf("short buf with length=%v", len(b))
+func (bc *bufferedReaderConn) CloseRead() error {
+	if closeReader, ok := bc.Conn.(interface {
+		CloseRead() error
+	}); ok {
+		return closeReader.CloseRead()
+	} else {
+		return errors.New("not a CloseReader")
 	}
-	sessionIdLen := int(b[offset])
-	offset += 1
-	offset += sessionIdLen
+}
 
-	if offset+1 >= len(b) {
-		return "", fmt.Errorf("short buf, sessionIdLen was %v", sessionIdLen)
-	}
-	cipherSuitesLen := (int(b[offset]) << 8) + int(b[offset+1])
-	offset += 2
-	offset += cipherSuitesLen
-
-	if offset >= len(b) {
-		return "", fmt.Errorf("short buf, cipherSuitesLen was %v", cipherSuitesLen)
-	}
-	compressionMethodsLen := int(b[offset])
-	offset += 1
-	offset += compressionMethodsLen
-
-	if offset > len(b) {
-		return "", fmt.Errorf("short buf, compressionMethodsLen was %v", compressionMethodsLen)
-	}
-
-	offset += 2
-
-	for {
-		if offset == len(b) {
-			return "", errors.New("no SNI extension found")
-		}
-		if offset+4 >= len(b) {
-			return "", errors.New("short buf for extension header")
-		}
-		extId := (int(b[offset]) << 8) + int(b[offset+1])
-		offset += 2
-
-		extLen := (int(b[offset]) << 8) + int(b[offset+1])
-		offset += 2
-
-		if extId == 0 {
-			if offset+extLen >= len(b) || offset+3 >= len(b) {
-				return "", errors.New("short buf for SNI extension")
-			}
-
-			offset += 2
-			nameType := b[offset]
-			if nameType != 0 {
-				return "", errors.New("type of SNI is not host_name")
-			}
-
-			offset += 1
-
-			if offset+1 >= len(b) {
-				return "", errors.New("short buf for host_name len")
-			}
-			nameLen := (int(b[offset]) << 8) + int(b[offset+1])
-
-			offset += 2
-			if offset+nameLen >= len(b) {
-				return "", errors.New("short buf for host_name")
-			}
-			return string(b[offset : offset+nameLen]), nil
-		}
-
-		offset += extLen
+func makeBufferedReaderConn(c net.Conn, r *bufio.Reader) *bufferedReaderConn {
+	return &bufferedReaderConn{
+		Conn: c,
+		R:    r,
 	}
 }
 
 func createBuffer() interface{} {
-	return make([]byte, 0, 32*1024)
+	return make([]byte, 32*1024)
 }
 
 var bufferPool = sync.Pool{New: createBuffer}
@@ -155,128 +90,93 @@ const (
 	TlsHandshakeTypeNextProtocol       = byte(67)
 )
 
-func readConfigFromConnSnippet(c net.Conn) {
-	var sniLen [1]byte
-	var sni []byte
-	var ipbuf [16]byte
-	var portbuf [2]byte
-	var sharedSecret [32]byte
+func getOriginalDst(fd uintptr) (string, error) {
+	const SO_ORIGINAL_DST = 80
+	fmt.Println("[DEBUG] getSockOpt variants:")
+	sockOpt, err := syscall.GetsockoptIPv6Mreq(int(fd), syscall.IPPROTO_IPV6, SO_ORIGINAL_DST)
+	fmt.Println("  ", sockOpt, fd, err)
+	sockOpt2, err := syscall.GetsockoptIPv6Mreq(int(fd), syscall.IPPROTO_IP, SO_ORIGINAL_DST)
+	fmt.Println("  ", sockOpt2, fd, err)
+	sockOpt3, err := syscall.GetsockoptIPMreq(int(fd), syscall.IPPROTO_IP, SO_ORIGINAL_DST)
+	fmt.Println("  ", sockOpt3, fd, err)
+	sockOpt4, err := syscall.GetsockoptIPMreq(int(fd), syscall.IPPROTO_IP, SO_ORIGINAL_DST)
+	fmt.Println("  ", sockOpt4, fd, err)
 
-	n, err := c.Read(sniLen[:])
-	if err != nil {
-		fmt.Printf("failed to read SNI Length: %v\n", err)
-		return
-	}
-	if n != cap(sniLen) {
-		fmt.Printf("failed to read SNI Length: got %v bytes, expected %v bytes\n", n, cap(sniLen))
-		return
-	}
-
-	sni = make([]byte, sniLen[0])
-	n, err = c.Read(sni[:])
-	if err != nil {
-		fmt.Printf("failed to read SNI: %v\n", err)
-		return
-	}
-	if n != cap(sni) {
-		fmt.Printf("failed to read SNI: got %v bytes, expected %v bytes\n", n, cap(sni))
-		return
-	}
-
-	n, err = c.Read(ipbuf[:])
-	if err != nil {
-		fmt.Printf("failed to read IP: %v\n", err)
-		return
-	}
-	if n != cap(ipbuf) {
-		fmt.Printf("failed to read IP: got %v bytes, expected %v bytes\n", n, cap(ipbuf))
-		return
-	}
-
-	n, err = c.Read(portbuf[:])
-	if err != nil {
-		fmt.Printf("failed to read port: %v\n", err)
-		return
-	}
-	if n != cap(portbuf) {
-		fmt.Printf("failed to read port: got %v bytes, expected %v bytes\n", n, cap(portbuf))
-		return
-	}
-
-	n, err = c.Read(sharedSecret[:])
-	if err != nil {
-		fmt.Printf("failed to read sharedSecret: %v\n", err)
-		return
-	}
-	if n != cap(sharedSecret) {
-		fmt.Printf("failed to read sharedSecret: got %v bytes, expected %v bytes\n", n, cap(sharedSecret))
-		return
-	}
-
-	targetTcpAddr := net.TCPAddr{IP: net.IP(ipbuf[:]),
-		Port: int(binary.BigEndian.Uint16(portbuf[:])),
-		Zone: ""}
-	fmt.Printf("DEBUG Incoming connection to %v(%v)\n", sni, targetTcpAddr.String())
+	// TODO: parse the original dst and return
+	return "", err
 }
 
 func handleNewConn(clientConn *net.TCPConn) {
 	defer clientConn.Close()
 
-	fmt.Printf("new connection %v\n", clientConn.RemoteAddr())
+	fd, err := clientConn.File()
+	if err != nil {
+		fmt.Printf("failed to get file descriptor on clientConn: %v\n", err)
+		return
+	}
+
 	// WIP: will get those placeholders from zmq:
 	maskHostPort := "google.com:443"
-	targetHostPort := "openrussia.org:443"
+	targetHostPort := "twitter.com:443"
 	masterSecret := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
 		20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
 		40, 41, 42, 43, 44, 45, 46, 47}
+	// TODO: get the targetHostPort, maskHostPort, and masterSecret from ZMQ, depending on originalAddr
+	// TODO: if NOT port 443: just forward things and return
 
-	// do the getsockopt
-	// and check!
+	_ = fd
+	// getOriginalDst(fd.Fd())
+	// TODO: fill in actual original dst and src, those are placeholders
+	originalDst := clientConn.RemoteAddr().String()
+	originalSrc := clientConn.LocalAddr().String()
+
+	flowDescription := fmt.Sprintf("[%s -> %s(%v) -> %s] ",
+		originalSrc, originalDst, maskHostPort, targetHostPort)
+	logger := log.New(os.Stdout, flowDescription, log.Lmicroseconds)
+	logger.Println("new flow")
 
 	maskedConn, err := net.DialTimeout("tcp", maskHostPort, time.Second*10)
 	if err != nil {
-		fmt.Printf("failed to dial %v: %v", maskHostPort, err)
+		logger.Printf("failed to dial masked host: %v", err)
 		return
 	}
 	defer maskedConn.Close()
-	tcpMaskedConn, ok := maskedConn.(*net.TCPConn)
-	if !ok {
-		fmt.Printf("failed to cast maskedConn %#v to TCPConn\n", maskedConn)
-		return
-	}
 
 	// TODO: set timeouts
 
 	var clientRandom, serverRandom [32]byte
 	var cipherSuite uint16
 
-	clientReplayableConn := makeReplayableReaderConn(clientConn, bufio.NewReader(clientConn))
-	maskedConnBufReader := bufio.NewReader(tcpMaskedConn)
+	clientBufConn := makeBufferedReaderConn(clientConn, bufio.NewReader(clientConn))
+	serverBufConn := makeBufferedReaderConn(maskedConn, bufio.NewReader(maskedConn))
 
 	// readFromClientAndParse returns when handshake is over
 	// returned error signals if there were any errors reading/writing
-	// may set clientRandom
+	// If readFromClientAndParse returns successfully, following variables will be set:
+	//    clientRandom: Client Random
+	//    clientBufferedRecordSize: size of TLS record(+header) that will be sitting in clientBufConn
+	clientBufferedRecordSize := 0
 	readFromClientAndParse := func() error {
-		var clientRandomParsed, seenClientNonHandshakeMsg bool
-		for !seenClientNonHandshakeMsg {
-			const outerRecordHeaderLen = 5
+		var clientRandomParsed bool
+		for {
+			const outerRecordHeaderLen = int(5)
 			var outerTlsHeader []byte
-			outerTlsHeader, err := clientReplayableConn.Peek(outerRecordHeaderLen)
+			outerTlsHeader, err := clientBufConn.Peek(outerRecordHeaderLen)
 			if err != nil {
 				return err
 			}
 			outerRecordType := uint8(outerTlsHeader[0])
 			// outerRecordTlsVersion := binary.BigEndian.Uint16(outerTlsHeader[1:3])
-			outerRecordLength := binary.BigEndian.Uint16(outerTlsHeader[3:5])
+			outerRecordLength := int(binary.BigEndian.Uint16(outerTlsHeader[3:5]))
 
-			if outerRecordType == tlsRecordTypeApplicationData {
-
+			if outerRecordType != tlsRecordTypeHandshake && outerRecordType != tlsRecordTypeChangeCipherSpec {
+				clientBufferedRecordSize = outerRecordHeaderLen + outerRecordLength
 				return nil
 			}
 
 			if outerRecordType == tlsRecordTypeHandshake && !clientRandomParsed {
 				// next 38 bytes include type(1), length(3), version(2), clientRandom(32)
-				innerTlsHeader, err := clientReplayableConn.Peek(outerRecordHeaderLen + 38)
+				innerTlsHeader, err := clientBufConn.Peek(outerRecordHeaderLen + 38)
 				if err != nil {
 					return err
 				}
@@ -285,15 +185,13 @@ func handleNewConn(clientConn *net.TCPConn) {
 				// innerRecordVersion := binary.BigEndian.Uint16(innerTlsHeader[10:11])
 				copy(clientRandom[:], innerTlsHeader[11:])
 				clientRandomParsed = true
-			} else {
-				seenClientNonHandshakeMsg = true
 			}
-			_, err = io.CopyN(tcpMaskedConn, clientReplayableConn, outerRecordHeaderLen+int64(outerRecordLength))
+
+			_, err = io.CopyN(serverBufConn, clientBufConn, int64(outerRecordHeaderLen+outerRecordLength))
 			if err != nil {
 				return err
 			}
 		}
-		return nil
 	}
 
 	// readFromServerAndParse returns when handshake is over
@@ -302,7 +200,7 @@ func handleNewConn(clientConn *net.TCPConn) {
 	readFromServerAndParse := func() error {
 		for {
 			const outerRecordHeaderLen = 5
-			tlsHeader, err := maskedConnBufReader.Peek(outerRecordHeaderLen)
+			tlsHeader, err := serverBufConn.Peek(outerRecordHeaderLen)
 			if err != nil {
 				return err
 			}
@@ -310,135 +208,182 @@ func handleNewConn(clientConn *net.TCPConn) {
 			// outerRecordTlsVersion := binary.BigEndian.Uint16(tlsHeader[1:3])
 			outerRecordLength := binary.BigEndian.Uint16(tlsHeader[3:5])
 
-			if outerRecordType != tlsRecordTypeHandshake {
+			if outerRecordType != tlsRecordTypeHandshake && outerRecordType != tlsRecordTypeChangeCipherSpec {
 				return nil
 			}
 
-			// next 38 bytes are type(1), length(3), version(2), then serverRandom(32)
-			tlsHeader, err = maskedConnBufReader.Peek(outerRecordHeaderLen + 39)
-			if err != nil {
-				return err
-			}
-			innerRecordType := uint8(tlsHeader[5])
-			// innerRecordTlsLength := binary.BigEndian.Uint24(tlsHeader[6:9])
-			// innerRecordVersion := binary.BigEndian.Uint16(tlsHeader[10:11])
-
-			if innerRecordType == TlsHandshakeTypeServerHello {
-				copy(serverRandom[:], tlsHeader[11:43])
-				sessionIdLen := int(tlsHeader[43])
-				tlsHeader, err = maskedConnBufReader.Peek(outerRecordHeaderLen + 39 + sessionIdLen + 2)
+			if outerRecordLength >= 39 {
+				// next 38 bytes are type(1), length(3), version(2), then serverRandom(32)
+				tlsHeader, err = serverBufConn.Peek(outerRecordHeaderLen + 39)
 				if err != nil {
 					return err
 				}
-				cipherSuite = binary.BigEndian.Uint16(tlsHeader[outerRecordHeaderLen+39+sessionIdLen : outerRecordHeaderLen+39+sessionIdLen+2])
+				innerRecordType := uint8(tlsHeader[5])
+				// innerRecordTlsLength := binary.BigEndian.Uint24(tlsHeader[6:9])
+				// innerRecordVersion := binary.BigEndian.Uint16(tlsHeader[10:11])
+
+				if innerRecordType == TlsHandshakeTypeServerHello {
+					copy(serverRandom[:], tlsHeader[11:43])
+					sessionIdLen := int(tlsHeader[43])
+					tlsHeader, err = serverBufConn.Peek(outerRecordHeaderLen + 39 + sessionIdLen + 2)
+					if err != nil {
+						return err
+					}
+					cipherSuite = binary.BigEndian.Uint16(tlsHeader[outerRecordHeaderLen+39+sessionIdLen : outerRecordHeaderLen+39+sessionIdLen+2])
+				}
+				// then goes compressionMethod(1), extensionsLen(2), extensions(extensionsLen)
 			}
 
-			// then goes sessionIdLen(1), sessionId(sessionIdLen), cipherSuite(2)
-			// then compressionMethod(1), extensionsLen(2), extensions(extensionsLen)
-
-			_, err = io.CopyN(clientConn, maskedConnBufReader, outerRecordHeaderLen+int64(outerRecordLength))
+			_, err = io.CopyN(clientBufConn, serverBufConn, outerRecordHeaderLen+int64(outerRecordLength))
 			if err != nil {
 				return err
 			}
 		}
 	}
 
-	go readFromClientAndParse()
-	err = readFromServerAndParse()
+	serverErrChan := make(chan error)
+	go func() {
+		_err := readFromServerAndParse()
+		serverErrChan <- _err
+	}()
+
+	err = readFromClientAndParse()
 	if err != nil {
-		// TODO: well-formated error failed to read from masked server [from->to] err
-		fmt.Println(err)
+		logger.Printf("failed to readFromClientAndParse: %v", err)
 		return
 	}
+
+	// at this point:
+	//   readFromClientAndParse exited and there's unread non-handshake data in the conn
+	//   readFromServerAndParse is still in Peek()
+	firstAppData, err := clientBufConn.Peek(clientBufferedRecordSize)
+	if err != nil {
+		logger.Printf("failed to peek into first app data: %v", err)
+		return
+	}
+
+	p1, p2 := net.Pipe()
+
+	inMemTlsConn := tls.MakeConnWithCompleteHandshake(
+		p1, tls.VersionTLS12, // TODO: parse version!
+		cipherSuite, masterSecret, clientRandom[:], serverRandom[:], false)
+
+	go func() {
+		p2.Write(firstAppData)
+		p2.Close()
+	}()
 
 	var finalTargetConn net.Conn // either connection to the masked site or to real requested target
 	var finalClientConn net.Conn // original conn or forgedTlsConn
 
-	finalTargetConn = tcpMaskedConn
-	finalClientConn = clientReplayableConn
+	finalTargetConn = serverBufConn
+	finalClientConn = clientBufConn
 
-	// check if we can forge a tls connection
-	forgedTlsConn := tls.MakeConnWithCompleteHandshake(
-		clientReplayableConn, tls.VersionTLS12,
-		cipherSuite, masterSecret, clientRandom[:], serverRandom[:], false)
-	buf := bufferPool.Get().([]byte)
-	_, err = forgedTlsConn.Read(buf)
-	if err != nil {
-		// TODO: well-formated error failed to read from forged conn [from->to] err
-		fmt.Println(err)
-		clientReplayableConn.StartReplaying()
+	switchToForgedConnSuccess := false
+
+	decryptedFirstAppData, err := ioutil.ReadAll(inMemTlsConn)
+	if err != nil || len(decryptedFirstAppData) == 0 {
+		logger.Printf("not tagged: %s", err)
 	} else {
-		// success!
+		// almost success! now need to dial targetHostPort (TODO: do it in advance!)
 		targetConn, err := net.Dial("tcp", targetHostPort)
 		if err != nil {
-			// TODO: well-formated error failed to dial forget conn [from->to] err
-			fmt.Println(err)
-			clientReplayableConn.StartReplaying()
+			logger.Printf("failed to dial target: %s", err)
 		} else {
+			logger.Printf("flow is tagged")
 			defer targetConn.Close()
+			switchToForgedConnSuccess = true
+			forgedTlsConn := tls.MakeConnWithCompleteHandshake(
+				clientBufConn, tls.VersionTLS12,
+				cipherSuite, masterSecret, clientRandom[:], serverRandom[:], false)
 			finalClientConn = forgedTlsConn
 			finalTargetConn = targetConn
+		}
+	}
+
+	if switchToForgedConnSuccess {
+		serverBufConn.Close()
+	} else {
+		// send first appdata we read from client to the mask site
+		_, err = serverBufConn.Write(firstAppData)
+		if err != nil {
+			logger.Printf("failed to send appdata to masked host: %v", err)
+			return
 		}
 	}
 
 	wg := sync.WaitGroup{}
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
-	halfProxy := func(in, out net.Conn) {
+	halfProxy := func(src, dst net.Conn) {
 		buf := bufferPool.Get().([]byte)
-		_, err := io.CopyBuffer(out, in, buf)
+		_, err = io.CopyBuffer(dst, src, buf)
 		oncePrintErr.Do(
 			func() {
-				fmt.Printf("[INFO] stopping forwarding [%v] -> [%v]: %v\n",
-					in.RemoteAddr(), out.RemoteAddr(), err)
+				if err == nil {
+					logger.Printf("gracefully stopping forwarding from %v", src.RemoteAddr())
+				} else {
+					logger.Printf("stopping forwarding from %v due to error: %v", src.RemoteAddr(), err)
+				}
 			})
-		if closeWriter, ok := out.(interface {
-			CloseWrite() error
-		}); ok {
-			closeWriter.CloseWrite()
-		}
-		if closeReader, ok := in.(interface {
-			CloseRead() error
-		}); ok {
-			closeReader.CloseRead()
-		}
+		//if closeWriter, ok := dst.(interface {
+		//	CloseWrite() error
+		//}); ok {
+		//	closeWriter.CloseWrite()
+		//}
+		//
+		//if closeReader, ok := src.(interface {
+		//	CloseRead() error
+		//}); ok {
+		//	closeReader.CloseRead()
+		//}
 		wg.Done()
 	}
 
-	go halfProxy(finalTargetConn, finalClientConn)
 	go halfProxy(finalClientConn, finalTargetConn)
+
+	go func() {
+		// wait for readFromServerAndParse to exit first, as it probably haven't seen appdata yet
+		select {
+		case _ = <-serverErrChan:
+			halfProxy(finalTargetConn, finalClientConn)
+		case <-time.After(10 * time.Second):
+			finalClientConn.Close()
+			wg.Done()
+		}
+	}()
 	wg.Wait()
 	// closes for all the things are deferred
 	return
 }
 
 func get_zmq_updates() {
-
+	logger := log.New(os.Stdout, "[ZMQ] ", log.Lmicroseconds)
 	sub, err := zmq.NewSocket(zmq.SUB)
 	if err != nil {
-		fmt.Printf("Could not create new ZMQ socket: %v\n", err)
+		logger.Printf("could not create new ZMQ socket: %v\n", err)
 		return
 	}
 	defer sub.Close()
 
-	sub.Bind("tcp://*:5591")
+	bindAddr := "tcp://*:5591"
+	sub.Bind(bindAddr)
 	sub.SetSubscribe("")
 
-	fmt.Printf("[INFO] ZMQ listening on *:5591\n")
+	logger.Printf("listening on %v\n", bindAddr)
 	for {
 		msg, err := sub.Recv(0)
 		if err != nil {
-			fmt.Printf("Error reading from ZMQ socket: %v\n", err)
+			logger.Printf("error reading from ZMQ socket: %v\n", err)
 		}
 		// First 16 bytes are the seed, second 16 are the dark decoy address (derived from the seed)
 		seed := []byte(msg)[0:16]
 		dst_ip := []byte(msg)[16:32]
-		fmt.Printf("Got ZMQ message: seed %v, dst_ip %v\n", seed, dst_ip)
+		logger.Printf("new registration: seed %v, dst_ip %v\n", seed, dst_ip)
 	}
 }
 
 func main() {
-
 	go get_zmq_updates()
 
 	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
@@ -448,12 +393,12 @@ func main() {
 		return
 	}
 	defer ln.Close()
-	fmt.Printf("[INFO] Listening on %v\n", ln.Addr())
+	fmt.Printf("[STARTUP] Listening on %v\n", ln.Addr())
 
 	for {
 		newConn, err := ln.AcceptTCP()
 		if err != nil {
-			fmt.Printf("ERROR failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
+			fmt.Printf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
 			return // continue?
 		}
 
