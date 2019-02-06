@@ -1,0 +1,347 @@
+\documentclass[letterpaper,twocolumn,10pt]{article}
+\usepackage{usenix2019_v3}
+
+% to be able to draw some self-contained figs
+\usepackage{tikz}
+\usepackage{amsmath}
+\include{figures}
+
+\begin{document}
+
+%don't print date
+\date{}
+
+% make title bold and 14 pt font (Latex default is non-bold, 16 pt)
+\title{\Large \bf Dark Decoys:
+  Conjuring Proxies from Unused Address Space}
+
+%for single author (just remove % characters)
+%\author{
+%{\rm Your N.\ Here}\\
+%Your Institution
+%\and
+%{\rm Second Name}\\
+%Second Institution
+%% copy the following lines to add more authors
+%% \and
+%% {\rm Name}\\
+%%Name Institution
+%} % end author
+
+\maketitle
+
+%-------------------------------------------------------------------------------
+\begin{abstract}
+%-------------------------------------------------------------------------------
+Refraction Networking (formerly ``Decoy Routing'') has emrged as a useful tool in circumventing
+        Internet censorship. By placing proxies in cooperating Internet Service
+        Providers (ISPs) and using connections to existing reachable
+        ``decoy'' sites for transport, censors cannot easily block access to
+        such proxies without also blocking legitimate sites.
+
+However, existing deployed Refraction Networking schemes such as TapDance suffer
+from several problems, including a limited number of decoy sites in realistic
+deployments, and an unfavorable tradeoff between performance and observability
+by the censor. These problems limit where such proxies can be deloyed, hamper
+their effectiveness, and may ultimately make them possible for censors to block.
+
+In this paper, we present Dark Decoys, a deployable Refraction Networking scheme that
+overcomes the limits on decoys and performance. Dark Decoys leverages the (primarily) unused address
+space that is reachable through the deploying ISP. Rather than rely on existing
+sites as reachable decoy sites that must be involved in each proxy connection,
+Dark Decoys create seemingly legitimate hosts at new IP addresses. These
+invented hosts are indistinguishable from normal hosts to the censor, but can
+be used by clients as one-time proxies.
+
+We implement our scheme ... and it's just the bee's knees. TODO
+
+\end{abstract}
+
+
+%-------------------------------------------------------------------------------
+\section{Introduction}
+%-------------------------------------------------------------------------------
+% 1.5-2 pages
+
+Censorship circumvention still important
+-More countries blocking
+-Existing countries blocking more
+
+Existing circumvention strategies on shaky ground
+-domain fronting going away
+-active probing of existing proxies
+-Cenosrs fingerprinting known protocols
+
+Importance of Refraction Networking
+-what it is, how it solves many of the above problems
+-acknowledge challenge of ISP deployment, cite TapDance deployment as only refraction technology that has overcome this challenge so far
+
+Challenges remain in Tapdance:
+-Censor can fingerprint decoy sites
+-Decoys themselves are limited (e.g. a few dozen in many cases)
+-Can't have long-lived connections (performance and observability issue)
+-Other performance limits (upload limit, TCP window size)
+
+Dark decoys solve these issues
+-Create new decoys from ``dark'' (unused) address space
+-Clients register (via TapDance-like or other robust protocol (email, blockchain, whatever))
+-Connect to custom IP address, talk whatever protocol client/station agrees on
+
+One-time use address advantages:
+-Censor cannot actively probe ahead of time (especially in IPv6), making it hard to fingerprint
+-Decoys are now virtually unlimited (or limited only by address space)
+-Connection can live as long as we want
+-No pesky TCP/TapDance-y limits
+
+Requirements/Challenges
+-Censor can't be able to distinguish between dark decoy and legitimate hosts
+    (otherwise they block all dark decoys)
+    -Includes active probing: censor shouldn't be able to register existing IP
+-Disruption avoidence: Want to pickup even for used addresses
+    -Otherwise, censor probes to find truly unused address space and blocks
+    -But can't disrupt legitimate services
+    -Can overcome by limiting pickup to the registering client (but spoofing challenges...)
+    -Note: also likely solved by the client-sends-SNI in the Mask site application...
+
+
+
+\section{Background}
+% 1 page
+Background on TLS and Refraction Networking
+
+
+\section{Threat Model}
+% 0.5 page
+
+-Censor can block arbitrary addresses (or networks), but faces a cost in doing so (collateral damage)
+-Censor can know what network deploys the dark decoy station
+-Censor knows the dark decoy prefixes distributed in the client, but they contain legitimate hosts
+-Censor can use the client
+-Censor can active probe limited sets, but cannot enumerate the entire prefix (i.e. IPv6 /32)
+-Censor can active probe or (p)replay connections it suspects
+
+
+\section{Architecture}
+% 3 pages
+
+Dark Decoys involve three main steps. First, clients \textbf{register} with the
+ISP station,
+and agree on the dark decoy IP address that will be used. Next, the client
+connects to the agreed upon address, which is terminated by an
+\textbf{application} running on the station. Finally, the client \textbf{proves}
+to the application that it was the same entity that registered (and not a censor
+attempting to probe), and is able to use the application as a proxy.
+
+Similar to previous schemes, our design does not require expensive in-line
+flow blocking, and can be accomplished with only a passive tap at the ISP.
+Our architecture is also modular, in that the registration and application steps operate
+independently, allowing a wide range of flexibility to evade censors. We
+describe each of these components.
+
+\subsection{Registration}
+
+Clients can register intent to use the proxy in several covert ways. For
+instance, they could use email or other existing intermitently available proxies
+to register. In this section, we use a form of Refraction Networking similar to
+TapDance to register directly with the station.
+
+Registration is unidirectional (client to server) and does not require any
+acknowledgement of receipt. To ensure receipt, clients can attempt to register
+multiple times (possibly via multiple methods) with the same information, and expect
+that one gets through.
+
+\medskip
+
+To register, clients connect to a \textbf{decoy} site that supports TLS. They
+complete the handshake, and send a normal HTTPS request. In TLS, requests (and
+responses) are encrypted and sent in an \texttt{Application Data} record. During
+registration, the client alters the ciphertext of the \texttt{Application Data} record to
+convey a short \textbf{tag} to the ISP station, on path between the client and
+decoy site.
+
+The tag contains a public key (encoded to be indistinguishable from random using
+Elligator~\cite{elligator}), and a message encrypted under the shared secret
+derived from a key exchange with the station's long-term public key hard-coded
+in the client software. The station uses its private key to compute the same
+shared secret from the (decoded) public key, and decrypts the message in the
+tag. The censor, without knowledge of either the station or client's private
+key, cannot derive the shared secret, preventing it from being able to decrypt
+the message.
+
+
+Inside the message, the client communicates a random \textbf{seed}, and other
+configuration-specific information, such as flags to signify version, feature
+support, and which set of dark decoy network prefixes the client knows of. The
+client and server use a hash of the provided seed to determine which specific
+dark decoy IP address to register. It may seem intuitive to instead have the client
+send the specific IP address to register, but allowing the client arbitrary
+choice also allows censors to register suspected dark decoys and block them if
+they pick up. By using a hash, the censor would have to pre-image the hash to
+obtain a seed it could use to register for a desired IP address. It also gives a
+secret (the seed) that only the client and station know, even after the client
+connects to the dark decoy address.
+
+% Note on IPv6 space? /32 of IPv6 is 96-bits to select...
+We note that IP addresses are selected from unused but still routed address
+space that passes by the ISP. Traffic to unrouted addresses would produce ICMP
+responses that a censor could observe, and are also easily blocked with knowledge
+of a routing table. Because we support the use of IPv6 addresses, censors will
+also be unable to scan ahead of time to determine if the host has been there
+previously, or what was there before. While they can probe suspected dark decoy
+addresses after clients connect to them, at that point the address has already been
+registered, preventing the censor from identifying differences in behavior
+before and after registration.
+
+Once the dark decoy IP address has been selected, the station watches for
+packets destined to that address, and forwards them onto the dark decoy
+\textbf{application}. The station can also optionally ignore packets not from
+the source IP address of the registering client, so that to a probing censor,
+the dark decoy appears to be firewalled off from all but the client.
+
+\subsection{Applications}
+
+
+Once the client has registered, packets sent to the dark decoy IP address are
+passed to the \textbf{application} running on the station. The application has
+two main jobs: first, it must look like an innocuous legitimate service to the
+censor, and second must allow the client to use it as a proxy.
+
+Any protocol that satisfies these criteria can be used as an application. For
+instance, \texttt{obfs4}~\cite{obfs4} is a pluggable transport used by
+Tor~\cite{tor} that could be
+modified to meet these needs: it requires each endpoint to have knowledge of a
+shared secret (which we can derive from the seed shared by the client and
+station during registration), and attempts to be a protocol with no discernible
+fingerprint. Probing censors that do not have the shared secret receive no
+response, while clients that have the secret can communicate with the proxy.
+
+However, even though \texttt{obfs4} is indistinguishable from random, there are
+still known attacks that can differentiate it from other
+traffic~\cite{wang2015seeing}. While we have yet to see evidence of such attacks
+employed in practice by censors, we consider two alternatives built on TLS.
+
+\subsubsection{Mask Sites}
+
+\FigOverview
+
+TLS is a natural protocol for dark decoy applications, because it is ubiquitous on
+the Internet (making it difficult for censors to block), while also providing
+strong cryptographic protection against passive and active network adversaries.
+However, there are several challenges to make it robust against censors that
+wish to block a particular service.
+
+This is because TLS sends important server-identifying content in plaintext
+during the TLS handshake. This includes the Server Name Indication (SNI) in the
+Client Hello message that sends the domain name of the server, and the
+X.509 Certificate sent by the server.
+
+To evade censors, we must send a plausible SNI value (sending no SNI is
+uncommon and easily blocked---only 1\% of TLS connections do not carry the
+SNI extension~\cite{tls-fingerprint}), and we must have the server respond with
+a plausible (and corresponding) certificate. Even if we manage to avoid sending
+either in the clear, censors could actively probe the server in a
+way that would normally elicit a certificate.
+
+
+We therefore attempt to mimic an existing \textbf{mask site}, by relaying
+traffic between the client and a selected mask website. To a censor, this site
+will be indistinguishable from the legitimate mask site, making it difficult for
+them to block without potentially blocking the actual site. TLS connections to the
+application will terminate exactly as connections to the mask site would, with the
+application acting as a transparent proxy between the client and mask site.
+However, this leaves the application unable to introspect on the contents of the
+TLS connection to the mask site, as it does not have the client-site shared
+secrets, and it cannot overtly man-in-the-middle the connection before knowing
+it is communicating with the legitimate client (and not the censor).
+
+
+To accomplish this, the client changes the shared secret it derives with the
+mask site to something that the application can also derive. The client's first
+\texttt{Application Data} packet is thus encrypted under a different secret than
+the client/mask site secret. Specifically, the client uses the \textbf{seed}
+sent during registration to derive the pre-master secret for the connection.
+This is hashed along with the client and server randoms of the current (mask
+site) TLS connection to obtain the master secret that determines
+encryption/decryption/authentication keys.
+
+The application can determine if the client did this by trial decryption with
+the master secret derived from the known \textbf{seed}. If it succeeds, the
+client has proved knowledge of the \textbf{seed}, and the application can
+respond as a proxy. If not, the application simply continues to forward data
+between the client and the mask site. As the censor does not have knowledge of
+the \textbf{seed} used in registration, it cannot coerce the application to
+appear as anything besides the mask site.
+
+
+\paragraph{Mask Site Selection}
+How do we get the list of masked sites? Alexa list? passive observation?
+
+
+
+\subsubsection{Encrypted SNI}
+
+TLS~1.3....
+
+
+
+
+%-Registration
+%-Dark decoy selection (seed -> IP)
+%-Connection to Dark Decoy Application (DD App)
+%-IPv6 vs IPv4 dark decoys
+
+
+
+\section{Implementation}
+% 1 page
+
+-ISP-scale implementation, able to handle 10+Gbps
+-Language choice (Rust, Go, minimal C)
+-Open source (client and station)
+
+\section{Evaluation}
+% 1 page
+
+Compare to TapDance performance:
+-Connection setup time
+-Connection/session lifetime
+-Throughput (especially upload vs download)
+-Security considerations
+
+\section{Attacks and Defenses}
+% 1 page
+
+-Fingerprinting Masked site vs Dark decoy application
+-Active probing TLS connection
+    -Block access unless from registering source IP
+        -cite GFW taking over client IPs for active probing of old obfs
+    -Verify knowledge of seed (but how to respond when verification fails?)
+
+\section{Related Work}
+% 0.5-0.75 page
+
+MultiFlow, The Waterfall of Liberty, Slitheen, Rebound, TapDance, Cirripede, Telex, Decoy Routing
+True Cost of RAD, Routing around Decoys
+ISP-scale TapDance
+
+
+\section{Future Work}
+% 0.5 page
+
+\section{Conclusion}
+%.25 page
+
+%%-------------------------------------------------------------------------------
+%\section*{Availability}
+%%-------------------------------------------------------------------------------
+%
+%USENIX program committees give extra points to submissions that are
+%backed by artifacts that are publicly available. If you made your code
+%or data available, it's worth mentioning this fact in a dedicated
+%section.
+
+%-------------------------------------------------------------------------------
+\bibliographystyle{plain}
+\bibliography{biblio}
+
+\end{document}

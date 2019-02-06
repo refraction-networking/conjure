@@ -247,7 +247,11 @@ impl PerCoreGlobal
         // weren't physically received, they do not have an Ethernet header. It
         // looks like the tun setup has its own type of header, rather than just
         // making up a fake Ethernet header.
-        tun_pkt.extend_from_slice(&[0x00, 0x01, 0x08, 0x00]);
+        let raw_hdr = match ip_pkt {
+            IpPacket::V4(p) => [0x00, 0x01, 0x08, 0x00],
+            IpPacket::V6(p) => [0x00, 0x01, 0x86, 0xdd],
+        };
+        tun_pkt.extend_from_slice(&raw_hdr);
         tun_pkt.extend_from_slice(data);
 
         self.tun.send(tun_pkt).unwrap_or_else(|e|{
@@ -262,8 +266,8 @@ impl PerCoreGlobal
         self.stats.elligator_this_period += 1;
         match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
             Ok(res) => {
-                let dd_ip_selector = match DDIpSelector::new(&vec![String::from("192.122.190.0/24")]) {
-                                                                       //String::from("2001:48a8:687f:1::/64")]) {
+                let dd_ip_selector = match DDIpSelector::new(&vec![String::from("192.122.190.0/24"),
+                                                                String::from("2001:48a8:687f:1::/64")]) {
                     // TODO: move this initialization up
                     Ok(dd) => dd,
                     Err(e) => {

@@ -1,5 +1,8 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::{RwLock, Arc};
+use std::thread;
 use time::precise_time_ns;
+use redis;
 
 use std::net::IpAddr;
 use pnet::packet::tcp::TcpPacket;
@@ -118,7 +121,9 @@ pub struct FlowTracker
 
     // Known dark decoy destination IPs that should be picked up.
     // Map values are timeouts, which are used to drop stale dark decoys
-    pub dark_decoy_flows: HashMap<IpAddr, u64>,
+    pub dark_decoy_flows: Arc<RwLock<HashMap<IpAddr, u64>>>,
+
+    redis_conn: redis::Connection,
 
 }
 
@@ -127,17 +132,68 @@ const TIMEOUT_TRACKED_NS: u64 = 30 * 1000 * 1000 * 1000;
 const TIMEOUT_DARK_DECOYS_NS: u64 = 30 * 1000 * 1000 * 1000;
 //const FIN_TIMEOUT_NS: u64 = 2*1000*1000*1000;
 
+fn get_redis_conn() -> redis::Connection
+{
+    let client = redis::Client::open("redis://127.0.0.1/").expect("Can't open Redis");
+    let mut con = client.get_connection().expect("Can't get Redis connection");;
+    con
+}
+
+fn update_pubsub_map(map: Arc<RwLock<HashMap<IpAddr, u64>>>)
+{
+
+    let mut con = get_redis_conn();
+    let mut pubsub = con.as_pubsub();
+    pubsub.subscribe("dark_decoy_map").expect("Can't subscribe to Redis");
+
+    loop {
+        let msg = pubsub.get_message().unwrap();
+        let payload : Vec<u8> = msg.get_payload().unwrap();
+
+        //let ip_addr = IpAddr::from([128u8, 138u8, 244u8, 42u8]);
+        let ip_addr = match payload.len() {
+            4 => {  let mut a: [u8; 4] = [0; 4];
+                    a.copy_from_slice(&payload[0..4]);
+                    Some(IpAddr::from(a)) },
+            16 => { let mut a: [u8; 16] = [0; 16];
+                    a.copy_from_slice(&payload[0..16]);
+                    Some(IpAddr::from(a)) },
+            _ => None,
+        };
+
+        if let Some(ip) = ip_addr {
+            // Get writable map
+            let mut mmap = map.write().expect("RwLock broken");
+
+            // Insert
+            let expire_time = precise_time_ns() + TIMEOUT_DARK_DECOYS_NS;
+            *mmap.entry(ip).or_insert(expire_time) = expire_time;
+
+            // Get rid of it
+            drop(mmap);
+
+            debug!("Added ip {}", ip);
+        }
+    }
+}
+
 impl FlowTracker
 {
     pub fn new() -> FlowTracker
     {
-        FlowTracker
+
+        let ret = FlowTracker
             {
                 tracked_flows: HashSet::new(),
-                dark_decoy_flows: HashMap::new(),
-
+                dark_decoy_flows: Arc::new(RwLock::new(HashMap::new())),
+                redis_conn: get_redis_conn(),
                 stale_drops_tracked: VecDeque::with_capacity(16384),
-            }
+            };
+
+        let write_map = Arc::clone(&ret.dark_decoy_flows);
+        thread::spawn(move || { update_pubsub_map(write_map) });
+
+        ret
     }
     pub fn begin_tracking_flow(&mut self, flow: &Flow)
     {
@@ -154,7 +210,8 @@ impl FlowTracker
 
     pub fn is_registered_dark_decoy(&self, flow: &FlowNoSrcPort) -> bool
     {
-        self.dark_decoy_flows.contains_key(&flow.dst_ip)
+        let map = self.dark_decoy_flows.read().expect("RwLock broken");
+        map.contains_key(&flow.dst_ip)
     }
 
     pub fn is_tracked_flow(&self, flow: &Flow) -> bool
@@ -164,8 +221,21 @@ impl FlowTracker
 
     pub fn mark_dark_decoy(&mut self, flow: &FlowNoSrcPort)
     {
+
+        let already_known = self.is_registered_dark_decoy(flow);
+
         let expire_time = precise_time_ns() + TIMEOUT_DARK_DECOYS_NS;
-        *self.dark_decoy_flows.entry(flow.dst_ip).or_insert(expire_time) = expire_time;
+        let mut map = self.dark_decoy_flows.write().expect("RwLock Broken");
+        *map.entry(flow.dst_ip).or_insert(expire_time) = expire_time;
+
+        if !already_known {
+            // Publish to redis
+            let octs = match flow.dst_ip {
+                IpAddr::V4(a) => a.octets().to_vec(),
+                IpAddr::V6(a) => a.octets().to_vec(),
+            };
+            redis::cmd("PUBLISH").arg("dark_decoy_map").arg(octs).execute(&self.redis_conn);
+        }
     }
 
     pub fn stop_tracking_flow(&mut self, flow: &Flow)
@@ -207,10 +277,11 @@ impl FlowTracker
     fn drop_stale_dark_decoy_flows(&mut self) -> usize {
         let right_now = precise_time_ns();
 
-        let num_dark_decoys_before = self.dark_decoy_flows.len();
+        let mut map = self.dark_decoy_flows.write().expect("RwLock Broken");
+        let num_dark_decoys_before = map.len();
         // Dark Decoys Map is not sorted by timeout, so need to check all
-        self.dark_decoy_flows.retain(|_, v| ( *v > right_now));
-        let num_dark_decoys_after = self.dark_decoy_flows.len();
+        map.retain(|_, v| ( *v > right_now));
+        let num_dark_decoys_after = map.len();
         if num_dark_decoys_before != num_dark_decoys_after {
             debug!("Dark Decoys drops: {} - > {}", num_dark_decoys_before, num_dark_decoys_after);
         }
@@ -230,6 +301,7 @@ impl FlowTracker
     }
     pub fn count_dark_decoy_flows(&self) -> usize
     {
-        self.dark_decoy_flows.len()
+        let map = self.dark_decoy_flows.read().expect("RwLock Broken");
+        map.len()
     }
 }
