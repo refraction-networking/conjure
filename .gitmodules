@@ -2,5 +2,6 @@
 	path = forge_socket
 	url = git@github.com:ewust/forge_socket.git
 [submodule "PF_RING"]
+	branch = 6.4.0-stable
 	path = PF_RING
 	url = https://github.com/ntop/PF_RING.git
