@@ -3,7 +3,10 @@
 
 % to be able to draw some self-contained figs
 \usepackage{tikz}
+%\usepackage{parskip}
 \usepackage{amsmath}
+%\setlength{\parskip}{1pt} % 1ex plus 0.5ex minus 0.2ex}
+\setlength\parskip{1pt}
 \include{figures}
 
 \begin{document}
@@ -175,14 +178,24 @@ support, and which set of dark decoy network prefixes the client knows of. The
 client and server use a hash of the provided seed to determine which specific
 dark decoy IP address to register. It may seem intuitive to instead have the client
 send the specific IP address to register, but allowing the client arbitrary
-choice also allows censors to register suspected dark decoys and block them if
+choice also allows the censor to register suspected dark decoys and block them if
 they pick up. By using a hash, the censor would have to pre-image the hash to
 obtain a seed it could use to register for a desired IP address. It also gives a
 secret (the seed) that only the client and station know, even after the client
 connects to the dark decoy address.
 
+Once the dark decoy IP address has been selected, the station watches for
+packets destined to that address, and forwards them onto the dark decoy
+\textbf{application}. The station can also optionally ignore packets not from
+the source IP address of the registering client, so that to a probing censor,
+the dark decoy appears to be firewalled off from all but the client.
+
+%-IPv6 vs IPv4 dark decoys subsection?
+
+\subsection{Address utilization}
+
 % Note on IPv6 space? /32 of IPv6 is 96-bits to select...
-We note that IP addresses are selected from unused but still routed address
+Dark decoy IP addresses are selected from unused but still routed address
 space that passes by the ISP. Traffic to unrouted addresses would produce ICMP
 responses that a censor could observe, and are also easily blocked with knowledge
 of a routing table. Because we support the use of IPv6 addresses, censors will
@@ -192,11 +205,18 @@ addresses after clients connect to them, at that point the address has already b
 registered, preventing the censor from identifying differences in behavior
 before and after registration.
 
-Once the dark decoy IP address has been selected, the station watches for
-packets destined to that address, and forwards them onto the dark decoy
-\textbf{application}. The station can also optionally ignore packets not from
-the source IP address of the registering client, so that to a probing censor,
-the dark decoy appears to be firewalled off from all but the client.
+While address utilization in IPv4 is quite high (all blocks have been allocated
+at the RIR level), the fraction of addresses that respond to TCP connections on
+a given port is quite low: even popular ports like 443 (use by TLS) have less
+than 2\% of IPv4 hosts respond to connection requests. This leaves a large
+number of hosts available to use as dark decoys. However, if a client registers
+a dark decoy address that is already happens to be used by an existing host,
+there will be multiple responses when the client tries to connect, and the
+connection will fail. However, this failure is still limited to the registering
+client, as the application only responds to the IP of the client that
+registered. In IPv6, the odds of picking a legitimate host are negligible: with
+a /32 prefix of IPv6, there are $2^{96}$ addresses to choose from.
+
 
 \subsection{Applications}
 
@@ -220,9 +240,10 @@ still known attacks that can differentiate it from other
 traffic~\cite{wang2015seeing}. While we have yet to see evidence of such attacks
 employed in practice by censors, we consider two alternatives built on TLS.
 
-\subsubsection{Mask Sites}
 
 \FigOverview
+
+\subsubsection{Mask Sites}
 
 TLS is a natural protocol for dark decoy applications, because it is ubiquitous on
 the Internet (making it difficult for censors to block), while also providing
@@ -274,23 +295,67 @@ appear as anything besides the mask site.
 
 
 \paragraph{Mask Site Selection}
-How do we get the list of masked sites? Alexa list? passive observation?
 
+Selecting which sites to masquerade as must be done carefully to avoid censors
+being able to detect obvious choices. For example, if a small university network
+has a dark decoy in their network that appears to be \texttt{apple.com}, it
+would be easy for a censor to block as a likely non-legitimate host. Likewise,
+if a dark decoy at an IP address pretends to be a domain (\texttt{example.com}) that
+globally resolves to a single different IP address, the censor could also
+identify and block the dark decoy.
 
+\smallskip
+\noindent
+\emph{Nearby sites} - One strategy for selecting mask sites to mimic is to pick websites that are
+legitimately hosted in or near the network of the dark decoy addresses. This
+effectively creates copies of legitimate sites, with the censor unable to
+determine which copies are real and which are the dark decoys. However, as
+mentioned, other signals such as DNS may reveal the true mask site.
+
+\smallskip
+\noindent
+\emph{Alexa sites} -
+An alternative strategy is to use popular sites, such as those from the Alexa
+top million~\cite{alexa} list. As mentioned previously, it may be wise to avoid
+sites that are obviously not hosted in the dark decoy address range, such as
+large companies that run their own datacenters and own their own ASN.
+The list could also be filtered to domains that resolve to different IP
+addresses from different vantage points, making it harder for a censor to know
+if a dark decoy corresponds to a domain's IP.
+
+\smallskip
+\noindent
+\emph{Passive observation} -
+The ISP tap could also collect sites by passively observing DNS requests, TLS
+SNI, or certificates that pass by. This would allow for building a realistic set
+of sites that are plausibly in the vicinity of the dark decoy addresses
+that pass by the tap. It also has the added bonus of being able to discover
+IPv6 addresses that could be used as decoys (for registration), where active
+scanning would be infeasible.
+
+In practice, clients can often try multiple dark decoys/mask sites over
+several attempts, as blocking the client outright may negatively impact other
+unrelated users behind the same network (e.g. in the case of NAT). Thus, even a
+censor that can block most (but not all) mask site only delays access, and
+doesn't prevent it outright.
 
 \subsubsection{Encrypted SNI}
 
-TLS~1.3....
+TLS~1.3~\cite{tls13} offers several features that may greatly simplify dark
+decoy application design. For instance, TLS~1.3 handshakes include encrypted
+certificates, potentially obviating the need to impersonate mask sites.
+Unfortunately, TLS~1.3 currently still sends the SNI in the (plaintext) Client
+Hello, meaning we would still have to choose a realistic domain to fool a
+censor.
 
-
-
-
-%-Registration
-%-Dark decoy selection (seed -> IP)
-%-Connection to Dark Decoy Application (DD App)
-%-IPv6 vs IPv4 dark decoys
-
-
+However, there are proposals to encrypt the SNI in the Client Hello~\cite{esni},
+though none have been implemented or deployed as of early 2019. Nonetheless,
+if widely adopted, Encrypted SNI (ESNI) would offer a powerful solution for dark
+decoy applications by allowing the domain to remain hidden from the censor.
+While the censor could still try to actively probe with guesses for the SNI,
+servers could respond with generic ``Unknown SNI'' errors. If such responses
+were common for incorrect SNI, the censor's efforts to identify dark decoys
+would be frustrated.
 
 \section{Implementation}
 % 1 page
