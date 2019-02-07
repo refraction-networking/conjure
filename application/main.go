@@ -279,8 +279,6 @@ func handleNewConn(clientConn *net.TCPConn) {
 	finalTargetConn = serverBufConn
 	finalClientConn = clientBufConn
 
-	switchToForgedConnSuccess := false
-
 	decryptedFirstAppData, err := ioutil.ReadAll(inMemTlsConn)
 	if err != nil || len(decryptedFirstAppData) == 0 {
 		logger.Printf("not tagged: %s", err)
@@ -292,23 +290,12 @@ func handleNewConn(clientConn *net.TCPConn) {
 		} else {
 			logger.Printf("flow is tagged")
 			defer targetConn.Close()
-			switchToForgedConnSuccess = true
+			serverBufConn.Close()
 			forgedTlsConn := tls.MakeConnWithCompleteHandshake(
 				clientBufConn, tls.VersionTLS12,
 				cipherSuite, masterSecret, clientRandom[:], serverRandom[:], false)
 			finalClientConn = forgedTlsConn
 			finalTargetConn = targetConn
-		}
-	}
-
-	if switchToForgedConnSuccess {
-		serverBufConn.Close()
-	} else {
-		// send first appdata we read from client to the mask site
-		_, err = serverBufConn.Write(firstAppData)
-		if err != nil {
-			logger.Printf("failed to send appdata to masked host: %v", err)
-			return
 		}
 	}
 
