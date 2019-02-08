@@ -9,8 +9,10 @@ RUST_LIB=./target/release/librust_dark_decoy.a
 TD_LIB=./libtapdance/libtapdance.a
 LIBS=${PFRING_LIBS} ${RUST_LIB} ${TD_LIB} -L/usr/local/lib -lzmq -lcrypto -lpthread -lrt -lgmp -ldl -lm
 CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_RING_ZERO_COPY -I${PFRINGDIR}/userland/lib/ -I${PFRINGDIR}/kernel -O2 # -g
+PROTO_RS_PATH=src/signalling.rs
 
-all: rust dark-decoy
+
+all: rust dark-decoy libtd app ${PROTO_RS_PATH}
 
 rust: ./src/*.rs
 	cargo build --${DEBUG_OR_RELEASE}
@@ -18,10 +20,10 @@ rust: ./src/*.rs
 test:
 	cargo test --${DEBUG_OR_RELEASE} 
 
-application:
+app:
 	cd ./application/ && make
 
-libtapdance:
+libtd:
 	cd ./libtapdance/ && make
 
 dark-decoy: detect.c loadkey.c rust_util.c rust libtapdance
@@ -30,4 +32,7 @@ dark-decoy: detect.c loadkey.c rust_util.c rust libtapdance
 clean:
 	cargo clean
 	rm -f ${TARGETS} *.o *~
+
+${PROTO_RS_PATH}:
+	cd ./proto/ && make
 

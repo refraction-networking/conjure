@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -90,20 +91,17 @@ const (
 	TlsHandshakeTypeNextProtocol       = byte(67)
 )
 
-func getOriginalDst(fd uintptr) (string, error) {
+func getOriginalDst(fd uintptr) (net.IP, error) {
 	const SO_ORIGINAL_DST = 80
-	fmt.Println("[DEBUG] getSockOpt variants:")
-	sockOpt, err := syscall.GetsockoptIPv6Mreq(int(fd), syscall.IPPROTO_IPV6, SO_ORIGINAL_DST)
-	fmt.Println("  ", sockOpt, fd, err)
-	sockOpt2, err := syscall.GetsockoptIPv6Mreq(int(fd), syscall.IPPROTO_IP, SO_ORIGINAL_DST)
-	fmt.Println("  ", sockOpt2, fd, err)
-	sockOpt3, err := syscall.GetsockoptIPMreq(int(fd), syscall.IPPROTO_IP, SO_ORIGINAL_DST)
-	fmt.Println("  ", sockOpt3, fd, err)
-	sockOpt4, err := syscall.GetsockoptIPMreq(int(fd), syscall.IPPROTO_IP, SO_ORIGINAL_DST)
-	fmt.Println("  ", sockOpt4, fd, err)
-
-	// TODO: parse the original dst and return
-	return "", err
+	if sockOpt, err := syscall.GetsockoptIPv6Mreq(int(fd), syscall.IPPROTO_IP, SO_ORIGINAL_DST); err == nil {
+		// parse ipv4
+		return net.IPv4(sockOpt.Multiaddr[4], sockOpt.Multiaddr[5], sockOpt.Multiaddr[6], sockOpt.Multiaddr[7]), nil
+	} else if mtuinfo, err := syscall.GetsockoptIPv6MTUInfo(int(fd), syscall.IPPROTO_IPV6, SO_ORIGINAL_DST); err == nil {
+		// parse ipv6
+		return net.IP(mtuinfo.Addr.Addr[:]), nil
+	} else {
+		return nil, err
+	}
 }
 
 func handleNewConn(clientConn *net.TCPConn) {
@@ -111,27 +109,39 @@ func handleNewConn(clientConn *net.TCPConn) {
 
 	fd, err := clientConn.File()
 	if err != nil {
-		fmt.Printf("failed to get file descriptor on clientConn: %v\n", err)
+		logger.Printf("failed to get file descriptor on clientConn: %v\n", err)
 		return
 	}
 
-	// WIP: will get those placeholders from zmq:
-	maskHostPort := "google.com:443"
-	targetHostPort := "twitter.com:443"
-	masterSecret := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-		20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
-		40, 41, 42, 43, 44, 45, 46, 47}
-	// TODO: get the targetHostPort, maskHostPort, and masterSecret from ZMQ, depending on originalAddr
-	// TODO: if NOT port 443: just forward things and return
+	// TODO: if NOT mPort 443: just forward things and return
 
-	_ = fd
-	// getOriginalDst(fd.Fd())
-	// TODO: fill in actual original dst and src, those are placeholders
-	originalDst := clientConn.RemoteAddr().String()
-	originalSrc := clientConn.LocalAddr().String()
+	originalDstIP, err := getOriginalDst(fd.Fd())
+	if err != nil {
+		logger.Println("failed to getOriginalDst from fd:", err)
+		return
+	}
+
+	reg := registeredDecoys.CheckRegistration(originalDstIP)
+	if reg == nil {
+		logger.Printf("registration for %v not found", originalDstIP)
+		return
+	}
+	maskHostPort := reg.mask
+	if _, mPort, err := net.SplitHostPort(maskHostPort); err != nil {
+		maskHostPort = net.JoinHostPort(maskHostPort, "443")
+	} else {
+		if mPort != "443" {
+			logger.Printf("port %v is not allowed in masked host", mPort)
+			return
+		}
+	}
+	targetHostPort := reg.covert
+	masterSecret := reg.masterSecret[:]
+	originalDst := originalDstIP.String()
+	notReallyOriginalSrc := clientConn.LocalAddr().String()
 
 	flowDescription := fmt.Sprintf("[%s -> %s(%v) -> %s] ",
-		originalSrc, originalDst, maskHostPort, targetHostPort)
+		notReallyOriginalSrc, originalDst, maskHostPort, targetHostPort)
 	logger := log.New(os.Stdout, flowDescription, log.Lmicroseconds)
 	logger.Println("new flow")
 
@@ -358,34 +368,132 @@ func get_zmq_updates() {
 	sub.SetSubscribe("")
 
 	logger.Printf("listening on %v\n", bindAddr)
+
+	var masterSecret [48]byte
+	var ipAddr [16]byte
+	var covertAddrLen, maskedAddrLen [1]byte
+
 	for {
-		msg, err := sub.Recv(0)
+		msg, err := sub.RecvBytes(0)
 		if err != nil {
 			logger.Printf("error reading from ZMQ socket: %v\n", err)
+			continue
 		}
-		// First 16 bytes are the seed, second 16 are the dark decoy address (derived from the seed)
-		seed := []byte(msg)[0:16]
-		dst_ip := []byte(msg)[16:32]
-		logger.Printf("new registration: seed %v, dst_ip %v\n", seed, dst_ip)
+		if len(msg) < 48+22 {
+			logger.Printf("short message of size %v\n", len(msg))
+			continue
+		}
+
+		msgReader := bytes.NewReader(msg)
+
+		msgReader.Read(masterSecret[:])
+		msgReader.Read(ipAddr[:])
+		msgReader.Read(covertAddrLen[:])
+		covertAddr := make([]byte, covertAddrLen[0])
+		_, err = msgReader.Read(covertAddr)
+		if err != nil {
+			logger.Printf("short message with size %v didn't fit covert addr with length %v\n",
+				len(msg), covertAddrLen[0])
+			continue
+		}
+		msgReader.Read(maskedAddrLen[:])
+		maskedAddr := make([]byte, maskedAddrLen[0])
+		_, err = msgReader.Read(maskedAddr)
+		if err != nil {
+			logger.Printf("short message with size %v didn't fit masked addr with length %v\n",
+				len(msg), maskedAddrLen[0])
+			continue
+		}
+
+		reg := &decoyRegistration{
+			masterSecret: masterSecret,
+			covert:       string(covertAddr),
+			mask:         string(maskedAddr),
+		}
+		registeredDecoys.Register(ipAddr, reg)
+		logger.Printf("new registration: {dark decoy address=%v, covert=%v, mask=%v}\n",
+			net.IP(ipAddr[:]).String(), reg.covert, reg.mask)
 	}
 }
 
+type decoyRegistration struct {
+	masterSecret [48]byte
+	covert, mask string
+}
+
+type RegisteredDecoys struct {
+	decoys         map[[16]byte]*decoyRegistration
+	decoysTimeouts []struct {
+		decoy            [16]byte
+		registrationTime time.Time
+	}
+	m sync.RWMutex
+}
+
+func NewRegisteredDecoys() *RegisteredDecoys {
+	return &RegisteredDecoys{
+		decoys: make(map[[16]byte]*decoyRegistration),
+	}
+}
+
+func (r *RegisteredDecoys) Register(darkDecoyAddr [16]byte, d *decoyRegistration) {
+	r.m.Lock()
+	if d != nil {
+		r.decoys[darkDecoyAddr] = d
+		r.decoysTimeouts = append(r.decoysTimeouts, struct {
+			decoy            [16]byte
+			registrationTime time.Time
+		}{decoy: darkDecoyAddr, registrationTime: time.Now()})
+	}
+	r.m.Unlock()
+}
+
+func (r *RegisteredDecoys) CheckRegistration(darkDecoyAddr net.IP) *decoyRegistration {
+	var darkDecoyAddrStatic [16]byte
+	copy(darkDecoyAddrStatic[:], darkDecoyAddr)
+	r.m.RLock()
+	d := r.decoys[darkDecoyAddrStatic]
+	r.m.RUnlock()
+	return d
+}
+
+func (r *RegisteredDecoys) RemoveOldRegistrations() {
+	const timeout = -time.Minute * 5
+	cutoff := time.Now().Add(timeout)
+	idx := 0
+	r.m.Lock()
+	for idx < len(r.decoysTimeouts) {
+		if cutoff.After(r.decoysTimeouts[idx].registrationTime) {
+			break
+		}
+		delete(r.decoys, r.decoysTimeouts[idx].decoy)
+		idx += 1
+	}
+	r.decoysTimeouts = r.decoysTimeouts[idx:]
+	r.m.Unlock()
+}
+
+var registeredDecoys *RegisteredDecoys
+var logger *log.Logger
+
 func main() {
+	logger = log.New(os.Stdout, "", log.Lmicroseconds)
+	registeredDecoys = NewRegisteredDecoys()
 	go get_zmq_updates()
 
 	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
 	ln, err := net.ListenTCP("tcp", listenAddr)
 	if err != nil {
-		fmt.Printf("failed to listen on %v: %v\n", listenAddr, err)
+		logger.Printf("failed to listen on %v: %v\n", listenAddr, err)
 		return
 	}
 	defer ln.Close()
-	fmt.Printf("[STARTUP] Listening on %v\n", ln.Addr())
+	logger.Printf("[STARTUP] Listening on %v\n", ln.Addr())
 
 	for {
 		newConn, err := ln.AcceptTCP()
 		if err != nil {
-			fmt.Printf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
+			logger.Printf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
 			return // continue?
 		}
 

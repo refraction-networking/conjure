@@ -12,7 +12,7 @@ extern crate errno;
 extern crate radix; // https://github.com/refraction-networking/radix
 extern crate tuntap; // https://github.com/ewust/tuntap.rs
 extern crate zmq;
-
+extern crate protobuf;
 #[macro_use]
 extern crate redis;
 
@@ -37,6 +37,7 @@ pub mod flow_tracker;
 pub mod process_packet;
 pub mod util;
 pub mod session;
+pub mod signalling;
 
 use session::SessionState;
 

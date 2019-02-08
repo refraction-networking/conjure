@@ -1,2 +1,2 @@
 all:
-	go build .
+	/usr/local/go/bin/go build .

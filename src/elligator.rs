@@ -1,16 +1,14 @@
-use std::{mem,panic};
+use std::panic;
 
 use c_api;
 
 extern crate crypto;
 
-use std::error;
 use std::error::Error;
 use util::HKDFKeys;
 use elligator::crypto::aes_gcm::AesGcm;
 use elligator::crypto::aead::AeadDecryptor;
 use elligator::crypto::aes;
-use std::fmt::Debug;
 
 //pub mod rust_tapdance;
 
@@ -29,14 +27,14 @@ fn extract_stego_bytes(in_buf: &[u8], out_buf: &mut [u8])
     assert!(in_buf.len() == 4);
     assert!(out_buf.len() == 3);
 
-    let x = ((in_buf[0] & 0x3f) as u32) * (64*64*64) +
-            ((in_buf[1] & 0x3f) as u32) * (64*64) +
-            ((in_buf[2] & 0x3f) as u32) * (64) +
-            ((in_buf[3] & 0x3f) as u32);
+    let x = ((in_buf[0] & 0x3f) as u32) * (64 * 64 * 64) +
+        ((in_buf[1] & 0x3f) as u32) * (64 * 64) +
+        ((in_buf[2] & 0x3f) as u32) * (64) +
+        ((in_buf[3] & 0x3f) as u32);
 
     out_buf[0] = ((x >> 16) & 0xff) as u8;
-    out_buf[1] = ((x >> 8 ) & 0xff) as u8;
-    out_buf[2] = ((x      ) & 0xff) as u8;
+    out_buf[1] = ((x >> 8) & 0xff) as u8;
+    out_buf[2] = ((x) & 0xff) as u8;
 }
 
 //out: &mut [u8; STEGO_DATA_LEN]) -> i32
@@ -51,66 +49,96 @@ pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> (Result<(HKDFKe
 
     // This fn indexes a lot of slices with computed offsets; panics possible!
     let result = panic::catch_unwind(||
-    {
-        // TLS record: 1 byte of 'content type', 2 of 'version', 2 of 'length',
-        //               and then [length] bytes of 'payload'
-        //======================================================================
-        //let content_type = tls_record[0];
-        //let tls_version = u8u8_to_u16(tls_record[1], tls_record[2]);
-
-        let tls_payload = &tls_record[5..tls_record.len()];
-        //======================================================================
-        // Starting from 92 byte from the end of the TLS payload extract
-        // stego'd data from each block of 4 bytes (if the payload length isn't
-        // a multiple of 4, just ignore the tail). Continue until we have run
-        // out of input data, or room in the output buffer.
-        let mut stego_repr_and_fsp: [u8; REPRESENTATIVE_AND_FSP_LEN] = [0; REPRESENTATIVE_AND_FSP_LEN];
-        let mut in_offset: usize = tls_payload.len() as usize - 92;
-        let mut out_offset: usize = 0;
-        while in_offset < (tls_payload.len() - 3) as usize &&
-              out_offset < (REPRESENTATIVE_AND_FSP_LEN - 2) as usize
         {
-            extract_stego_bytes(&tls_payload[in_offset .. in_offset+4],
-                                &mut stego_repr_and_fsp[out_offset .. out_offset+3]);
-            in_offset += 4;
-            out_offset += 3;
-        }
+            // TLS record: 1 byte of 'content type', 2 of 'version', 2 of 'length',
+            //               and then [length] bytes of 'payload'
+            //======================================================================
+            //let content_type = tls_record[0];
+            //let tls_version = u8u8_to_u16(tls_record[1], tls_record[2]);
 
-        // client should randomize first bit, here we set it back to 0
-        stego_repr_and_fsp[31] &= 0x7f;
+            let tls_payload = &tls_record[5..tls_record.len()];
+            //======================================================================
+            // Starting from 92 byte from the end of the TLS payload extract
+            // stego'd data from each block of 4 bytes (if the payload length isn't
+            // a multiple of 4, just ignore the tail). Continue until we have run
+            // out of input data, or room in the output buffer.
+            let mut stego_repr_and_fsp: [u8; REPRESENTATIVE_AND_FSP_LEN] = [0; REPRESENTATIVE_AND_FSP_LEN];
+            let mut in_offset: usize = tls_payload.len() as usize - 92;
+            let mut out_offset: usize = 0;
+            while in_offset < (tls_payload.len() - 3) as usize &&
+                out_offset < (REPRESENTATIVE_AND_FSP_LEN - 2) as usize
+                {
+                    extract_stego_bytes(&tls_payload[in_offset..in_offset + 4],
+                                        &mut stego_repr_and_fsp[out_offset..out_offset + 3]);
+                    in_offset += 4;
+                    out_offset += 3;
+                }
 
-        let mut shared_secret : [u8; 32] = [0; 32];
-        c_api::c_get_shared_secret_from_tag(secret_key, &mut stego_repr_and_fsp, &mut shared_secret);
+            // client should randomize first bit, here we set it back to 0
+            stego_repr_and_fsp[31] &= 0x7f;
 
-        let keys = match HKDFKeys::new(shared_secret.as_ref()) {
-            Ok(keys) => keys,
-            Err(e) => {
-                println!("failed to derive hkdf keys: {}", e);
-                let err: Box<Error> = From::from(e.to_string());
+            let mut shared_secret: [u8; 32] = [0; 32];
+            c_api::c_get_shared_secret_from_tag(secret_key, &mut stego_repr_and_fsp, &mut shared_secret);
+
+            let keys = match HKDFKeys::new(shared_secret.as_ref()) {
+                Ok(keys) => keys,
+                Err(e) => {
+                    let err: Box<Error> = From::from(e.to_string());
+                    return Err(err);
+                }
+            };
+
+            let mut fixed_size_payload: [u8; 6] = [0; 6];
+            let mut fsp_aes_gcm = AesGcm::new(aes::KeySize::KeySize128, &keys.fsp_key, &keys.fsp_iv, &[0u8; 0]);
+            if !fsp_aes_gcm.decrypt(&stego_repr_and_fsp[32..38], fixed_size_payload.as_mut(), &stego_repr_and_fsp[38..54]) {
+                let err: Box<Error> = From::from("fsp_aes_gcm.decrypt failed".to_string());
                 return Err(err);
-
             }
-        };
 
-        let mut fixed_size_payload: [u8; 6] = [0; 6];
-        let mut fsp_aes_gcm  = AesGcm::new(aes::KeySize::KeySize128, &keys.fsp_key, &keys.fsp_iv, &[0u8; 0]);
-        if !fsp_aes_gcm.decrypt(&stego_repr_and_fsp[32..38], fixed_size_payload.as_mut(), &stego_repr_and_fsp[38..54]) {
-            let err: Box<Error> = From::from("fsp_aes_gcm.decrypt failed".to_string());
+            let vsp_size = ((fixed_size_payload[0] as u16) << 8) + (fixed_size_payload[1] as u16); // includes aes gcm tag
+            if vsp_size <= 16 {
+                return Ok((keys, fixed_size_payload.to_vec(), vec![]));
+            }
+            if vsp_size % 3 != 0 {
+                let err: Box<Error> = From::from(format!("Variable Stego Payload Size {} non-divisible by 3", vsp_size));
+                return Err(err);
+            }
+            let vsp_stego_size = vsp_size / 3 * 4;
+            let mut encrypted_variable_size_payload = vec![0; vsp_size as usize];
+            if (tls_payload.len() as i64) - (92 as i64) - (vsp_stego_size as i64) < 0 {
+                let err: Box<Error> = From::from(format!("Stego Payload Size {} does not fit into TLS record of size {}",
+                                                         vsp_size, tls_payload.len()));
+                return Err(err);
+            }
+            in_offset = tls_payload.len() as usize - 92 - vsp_stego_size as usize;
+            out_offset = 0;
+            while in_offset < (tls_payload.len() - 3) as usize &&
+                out_offset < (vsp_size - 2) as usize
+                {
+                    extract_stego_bytes(&tls_payload[in_offset..in_offset + 4],
+                                        &mut encrypted_variable_size_payload[out_offset..out_offset + 3]);
+                    in_offset += 4;
+                    out_offset += 3;
+                }
+
+            let mut variable_size_payload = vec![0; (vsp_size - 16) as usize];
+            let mut vsp_aes_gcm = AesGcm::new(aes::KeySize::KeySize128, &keys.vsp_key, &keys.vsp_iv, &[0u8; 0]);
+            if !vsp_aes_gcm.decrypt(&encrypted_variable_size_payload[0..(vsp_size - 16) as usize],
+                                    variable_size_payload.as_mut(),
+                                    &encrypted_variable_size_payload[(vsp_size-16) as usize..vsp_size as usize]) {
+                let err: Box<Error> = From::from("fsp_aes_gcm.decrypt failed".to_string());
+                return Err(err);
+            }
+
+            Ok((keys, fixed_size_payload.to_vec(), variable_size_payload.to_vec()))
+        });
+    match result {
+        Ok(res) => return res,
+        Err(e) => {
+            let err: Box<Error> = From::from(format!("{:?}", e));
             return Err(err);
         }
-
-        let mut variable_size_payload: Vec<u8> = Vec::new();
-        // TODO: decrypt VSP
-
-        Ok((keys, fixed_size_payload.to_vec(), variable_size_payload))
-    });
-        match result {
-            Ok(res) => return res,
-            Err(e) => {
-                let err: Box<Error> = From::from(format!("{:?}", e));
-                return Err(err);
-            },
-        }
+    }
 }
 
 

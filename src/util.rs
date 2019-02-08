@@ -145,6 +145,7 @@ pub struct HKDFKeys
     pub fsp_iv: [u8; 12],
     pub vsp_key: [u8; 16],
     pub vsp_iv: [u8; 12],
+    pub new_master_secret: [u8; 48],
     pub dark_decoy_seed: [u8; 16],
 }
 
@@ -157,22 +158,24 @@ impl HKDFKeys
         let kdf = hkdf::Hkdf::<sha2::Sha256>::extract(Some(salt), shared_secret);
         let info = [0u8; 0];
 
-        let mut output = [0u8; 72];
+        let mut output = [0u8; 120];
         kdf.expand(&info, &mut output)?;
 
         let mut fsp_key = [0u8; 16];
         let mut fsp_iv = [0u8; 12];
         let mut vsp_key = [0u8; 16];
         let mut vsp_iv = [0u8; 12];
+        let mut new_master_secret = [0u8; 48];
         let mut dark_decoy_seed = [0u8; 16];
 
         fsp_key.copy_from_slice(&output[0..16]);
         fsp_iv.copy_from_slice(&output[16..28]);
         vsp_key.copy_from_slice(&output[28..44]);
         vsp_iv.copy_from_slice(&output[44..56]);
-        dark_decoy_seed.copy_from_slice(&output[56..72]);
+        new_master_secret.copy_from_slice(&output[56..104]);
+        dark_decoy_seed.copy_from_slice(&output[104..120]);
 
-        Ok(HKDFKeys { fsp_key, fsp_iv, vsp_key, vsp_iv, dark_decoy_seed }) // syntax is very edgy and not at all confusing
+        Ok(HKDFKeys { fsp_key, fsp_iv, vsp_key, vsp_iv, new_master_secret, dark_decoy_seed }) // syntax is very edgy and not at all confusing
     }
 }
 

@@ -91,17 +91,6 @@ impl FlowNoSrcPort {
     pub fn from_flow(f: &Flow) -> FlowNoSrcPort {FlowNoSrcPort{src_ip: f.src_ip, dst_ip: f.dst_ip, dst_port: f.dst_port}}
 }
 
-#[derive(Copy, Clone)]
-enum FlowState
-{
-    InTLSHandshake,
-    // After SYN, before first app packet (might signal us)
-    ActiveTag(u64),     // Upon a signal, we create the specified flow
-    // client -> client-specified dark decoy
-    // and tag it with this.
-    // The u64 is the time (ns) that this times out.
-}
-
 pub struct SchedEvent
 {
     // Nanoseconds since an unspecified epoch (precise_time_ns()).

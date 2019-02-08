@@ -9,13 +9,17 @@ use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::{TcpPacket,TcpFlags};
-use std::net::{IpAddr,Ipv6Addr,Ipv4Addr};
+use std::net::IpAddr;
 
+use std::u8;
 //use elligator;
 use flow_tracker::{Flow, FlowNoSrcPort};
 use PerCoreGlobal;
 use util::{IpPacket, DDIpSelector};
 use elligator;
+use protobuf;
+use signalling::ClientToStation;
+
 
 const TLS_TYPE_APPLICATION_DATA: u8 = 0x17;
 //const SQUID_PROXY_ADDR: &'static str = "127.0.0.1";
@@ -188,9 +192,6 @@ impl PerCoreGlobal
         }
 
         let dd_flow = FlowNoSrcPort::from_flow(&flow);
-        if flow.src_ip == IpAddr::from([128u8, 138u8, 244u8, 42u8]) {
-            debug!("dd_flow {} {:?}", dd_flow, self.flow_tracker.dark_decoy_flows);
-        }
         if self.flow_tracker.is_registered_dark_decoy(&dd_flow) {
             // Tagged flow! Forward packet to whatever
             debug!("Tagged flow packet {}", flow);
@@ -267,7 +268,7 @@ impl PerCoreGlobal
         match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
             Ok(res) => {
                 let dd_ip_selector = match DDIpSelector::new(&vec![String::from("192.122.190.0/24"),
-                                                                String::from("2001:48a8:687f:1::/64")]) {
+                                                                   String::from("2001:48a8:687f:1::/64")]) {
                     // TODO: move this initialization up
                     Ok(dd) => dd,
                     Err(e) => {
@@ -284,12 +285,32 @@ impl PerCoreGlobal
                     }
                 };
 
-                // Send dark_decoy_seed / dst_ip to ZMQ
-                //pub dark_decoy_seed: [u8; 16],
-                let mut msg = vec![0; 16+16];
-                msg[..16].clone_from_slice(&res.0.dark_decoy_seed);
+                let mut c2s = match protobuf::parse_from_bytes::<ClientToStation>
+                    (&res.2) {
+                    Ok(pb) => pb,
+                    Err(e) => {
+                        error!("Error parsing protobuf from VSP: {:?}", e);
+                        return None;
+                    }
+                };
+                if !c2s.has_covert_address() {
+                    error!("ClientToStation has no covert: {:?}", c2s);
+                    return None;
+                }
+                if !c2s.has_masked_decoy_server_name() {
+                    error!("ClientToStation has no masked decoy: {:?}", c2s);
+                    return None;
+                }
 
-                let ip_as_bytes = match dst_ip {
+                let covert_bytes = c2s.get_covert_address().as_bytes();
+                let masked_decoy_bytes = c2s.get_masked_decoy_server_name().as_bytes();
+
+                // form message for zmq
+                let mut zmq_msg: Vec<u8> = Vec::new();
+
+                zmq_msg.append(&mut res.0.new_master_secret.to_vec());
+
+                let mut ip_as_bytes = match dst_ip {
                     IpAddr::V6(ip) => ip.octets().to_vec(),
                     IpAddr::V4(ip) => {
                         // Convert to Ipv6-mapped v4 address
@@ -300,11 +321,31 @@ impl PerCoreGlobal
                         v6
                     },
                 };
-                msg[16..].clone_from_slice(&ip_as_bytes[..]);
-                self.zmq_sock.send(&msg, 0);
+                zmq_msg.append(&mut ip_as_bytes);
+
+                let covert_bytes_len: u8 = match usize_to_u8(covert_bytes.len()) {
+                    Some(len) => len,
+                    None => {
+                        error!("covert address too long");
+                        return None;
+                    }
+                };
+                zmq_msg.push(covert_bytes_len);
+                zmq_msg.append(&mut covert_bytes.to_vec());
+
+                let masked_decoy_bytes_len: u8 = match usize_to_u8(masked_decoy_bytes.len()) {
+                    Some(len) => len,
+                    None => {
+                        error!("covert address too long");
+                        return None;
+                    }
+                };
+                zmq_msg.push(masked_decoy_bytes_len);
+                zmq_msg.append(&mut masked_decoy_bytes.to_vec());
+
+                self.zmq_sock.send(&zmq_msg, 0);
 
                 return Some(FlowNoSrcPort::from_parts(flow.src_ip, dst_ip, 443));
-                //return Some(FlowNoSrcPort::from_parts(flow.src_ip, IpAddr::from([192u8, 122u8, 190u8, 106u8]), 443));
             },
             Err(_e) => {
                 return None;
@@ -312,3 +353,11 @@ impl PerCoreGlobal
         }
     }
 } // impl PerCoreGlobal
+
+fn usize_to_u8(a: usize) -> Option<u8> {
+    if a > u8::MAX as usize {
+        None
+    } else {
+        Some(a as u8)
+    }
+}
