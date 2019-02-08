@@ -118,7 +118,7 @@ pub struct FlowTracker
 
 // Amount of time that we timeout all flows
 const TIMEOUT_TRACKED_NS: u64 = 30 * 1000 * 1000 * 1000;
-const TIMEOUT_DARK_DECOYS_NS: u64 = 30 * 1000 * 1000 * 1000;
+const TIMEOUT_DARK_DECOYS_NS: u64 = 300 * 1000 * 1000 * 1000;
 //const FIN_TIMEOUT_NS: u64 = 2*1000*1000*1000;
 
 fn get_redis_conn() -> redis::Connection
