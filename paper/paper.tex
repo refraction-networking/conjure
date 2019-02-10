@@ -204,14 +204,53 @@ Background on TLS and Refraction Networking
 
 
 \section{Threat Model}
-% 0.5 page
+% 0.25 page
 
--Censor can block arbitrary addresses (or networks), but faces a cost in doing so (collateral damage)
--Censor can know what network deploys the dark decoy station
--Censor knows the dark decoy prefixes distributed in the client, but they contain legitimate hosts
--Censor can use the client
--Censor can active probe limited sets, but cannot enumerate the entire prefix (i.e. IPv6 /32)
--Censor can active probe or (p)replay connections it suspects
+
+Our deployment model is identical to that of TapDance: we only require a passive
+tap at the deploying ISP, and the ability to inject (spoofed) traffic from dark
+decoy sites. However, we assume a stronger threat model for the adversary than
+TapDance, as our design resists active attacks.
+
+
+We assume the censor can block arbitrary IP addresses and networks, but faces a
+cost in doing so if it blocks potentially useful resources. In particular, we
+assume it is difficult for the censor to have complete knowledge of legitimate
+addresses used, and so instead resorts to a blacklist approach to blocking
+proxies and objectionable content.
+Whitelists are expensive for censors to maintain and can stifle
+innovation, and are rarely employed by censors.
+
+
+We assume that the censor can know what network the dark decoy station(s) are
+deployed in and the prefixes dark decoys are selected from, but that blocking those
+networks outright brings a collateral
+damage the censor is unwilling to suffer. Instead, the censor aims to identify
+the addresses that are dark decoys, and block only those.
+
+We assume the censor can use the client to register and access its own dark
+decoys, but that these will not reveal the dark decoys of other users. The
+censor can also actively probe addresses that it sees users accessing, but can
+not enumerate the entire dark decoy prefix (e.g. a /32 IPv6 prefix contains
+$2^{96} addresses$).
+
+Finally, we assume the censor can replay or preplay any connections that it
+suspects involve dark decoys (or their registration) in an attempt to confirm.
+However, the censor wishes to avoid disrupting any connections before it
+knows for certain they are dark decoy ones, lest they disrupt legitimate
+connections. This means that injecting false data or corrupting TLS sessions is
+outside the scope of the censor, but that the censor can send non-disruptive
+probes (such as stale TCP acknowledgements or other packets that would normally
+be ignored). We emphasize that TapDance is observable by censors that can send
+TCP packets in suspected connections, but that our protocol is robust against
+this class of censor.
+
+%-Censor can block arbitrary addresses (or networks), but faces a cost in doing so (collateral damage)
+%-Censor can know what network deploys the dark decoy station
+%-Censor knows the dark decoy prefixes distributed in the client, but they contain legitimate hosts
+%-Censor can use the client
+%-Censor can active probe limited sets, but cannot enumerate the entire prefix (i.e. IPv6 /32)
+%-Censor can active probe or (p)replay connections it suspects
 
 
 \section{Architecture}
