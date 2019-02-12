@@ -1,6 +1,10 @@
 \documentclass[letterpaper,twocolumn,10pt]{article}
 \usepackage{usenix2019_v3}
 
+% For submission make this a noop
+\newcommand{\note}[2]{\textit{[#1: #2]}}
+\newcommand{\nikita}[1]{\note{nikita}{#1}}
+
 % to be able to draw some self-contained figs
 \usepackage{tikz}
 %\usepackage{parskip}
@@ -169,7 +173,7 @@ in the client software. The station uses its private key to compute the same
 shared secret from the (decoded) public key, and decrypts the message in the
 tag. The censor, without knowledge of either the station or client's private
 key, cannot derive the shared secret, preventing it from being able to decrypt
-the message.
+the message, or learn of its existence.
 
 
 Inside the message, the client communicates a random \textbf{seed}, and other
@@ -180,7 +184,7 @@ dark decoy IP address to register. It may seem intuitive to instead have the cli
 send the specific IP address to register, but allowing the client arbitrary
 choice also allows the censor to register suspected dark decoys and block them if
 they pick up. By using a hash, the censor would have to pre-image the hash to
-obtain a seed it could use to register for a desired IP address. It also gives a
+obtain a seed it could use to register for a desired IP address. \nikita{Are we claiming that this kind of enumeration is hard to do in IPv4?} It also gives a
 secret (the seed) that only the client and station know, even after the client
 connects to the dark decoy address.
 
@@ -216,6 +220,7 @@ connection will fail. However, this failure is still limited to the registering
 client, as the application only responds to the IP of the client that
 registered. In IPv6, the odds of picking a legitimate host are negligible: with
 a /32 prefix of IPv6, there are $2^{96}$ addresses to choose from.
+\nikita{/32 is pretty big, e.g. UIUC only has a /48}
 
 
 \subsection{Applications}
@@ -257,7 +262,7 @@ Client Hello message that sends the domain name of the server, and the
 X.509 Certificate sent by the server.
 
 To evade censors, we must send a plausible SNI value (sending no SNI is
-uncommon and easily blocked---only 1\% of TLS connections do not carry the
+uncommon and easily blocked---only 1\% of TLS connections\nikita{qualify this as being true in a particular sample} do not carry the
 SNI extension~\cite{tls-fingerprint}), and we must have the server respond with
 a plausible (and corresponding) certificate. Even if we manage to avoid sending
 either in the clear, censors could actively probe the server in a
