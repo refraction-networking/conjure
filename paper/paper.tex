@@ -487,6 +487,7 @@ censor that can block most (but not all) mask site only delays access, and
 doesn't prevent it outright.
 
 \subsubsection{Encrypted SNI}
+\label{esni}
 
 TLS~1.3~\cite{tls13} offers several features that may greatly simplify dark
 decoy application design. For instance, TLS~1.3 handshakes include encrypted
@@ -517,11 +518,94 @@ Snowflake~\cite{snowflake}. Dark decoy applications could also use WebRTC as the
 application protocol, convincing the censor that two clients are communicating.
 
 \section{Implementation}
-% 1 page
+In order to scale up to 10Gbps and beyond,
+one has to utilize multiple cores and employ load balancing.
+We use PF\_RING built-in load balancer \it{zbalance} to efficiently
+distribute load between 4 cores.
+Our timeout is based on last IP address usage time, which prevents us from
+balancing load based on source IP address,
+as censor would be able to observe
+same destination IP address picking or not picking up
+depending on source IP address.
+To avoid such unusual behavior we balance on destination IP.
+Since PF\_RING does not feature load balancing based only on destination
+IP address, we made a custom implementation of this zbalance policy.
 
--ISP-scale implementation, able to handle 10+Gbps
+TODO: say it's tested on 10 Gbps
+
+Implementation of the protocol includes 3 components:
+dark decoy detector, proxy application, and client.
+Dark decoy detector will parse the traffic, searching for registrations in
+tagged messages. After detector observes a registration, and negotiates with client
+a dark decoy IP,
+all packets, that are sent to that dark decoy IP,
+will be forwarded into a proxy application.
+
+\subsection{Registration phase}
+
+Each Dark Decoy connection has 2 phases: registration, and usage of a dark decoy.
+Registration starts with a handshake that is similar to a TapDance handshake,
+but initial HTTP request is complete.
+This allows a reachable site to provide a genuine response
+to a HTTP GET request of its index page.
+Since station does not need to produce a response,
+which significantly reduces complexity of a detector,
+that does not need to decrypt and inject packets into a TLS connection between
+client and a reachable site, as opposed to original TapDance.
+
+Client begins registation by establishing TLS connection
+to one of the reachable websites,
+path to which passes by our tap.
+Client uses a Chosen-Ciphertext Steganography technique~\cite{tapdance} to manupulate
+plaintext of a first application data HTTP request
+to get desired ciphertext,
+and exchange keys with the station.
+After client writes Elligator-encoded~\cite{elligator} representative into the ciphertext at a static offset of 92 bytes from the end,
+that could be decoded using station's private key,
+to negotiate a 32 byte Eligator-encoded~\cite{elligator} shared secret between the client and the station.
+That shared secret is used as a seed of SHA-256 based key derivation function (HKDF),
+allowing station and client to derive an unlimited amount of shared secrets.
+
+Elligator representative on the wire is immidiately followed by a 6 bytes long AES-GCM-encrypted
+fixed size payload(FSP), that holds flags and the size of the variable size payload(VSP).
+IV and key for encrypted of both FSP and VSP will be derived from HKDF.
+Once FSP is decrypted and the size of VSP is known, station can decrypt the VSP as well.
+VSP itself is a protobuf, which allows us to easily change the contents of VSP without risk of version mismatch, and currently contains 3 fields: version of configuration(which includes list of decoys), SNI of mask site, and a presumably blocked target host that client would like to get connected to.
+
+Client will sleep a short randomized period of time before attempting to establish connection to dark decoy.
+This is done for 2 reasons: to break potentially observable interflow dependency with a dark decoy connection being established right after a first application layer data packet sent to decoy,
+and to give station time.
+TODO: why does it need time?
+
+\subsection{Application phase}
+Client and station will use HKDF to derive 16 random bytes and use them to
+agree on a dark decoy IP address, by applying a simple selection algorithm.
+Algorithm is as follows: first, flatten a list of pre-shared avaliable IP
+addresses in various subnets into a single indexed list, then make a 128-bit
+integer out of 16 random bytes and divide it by the length
+of the flattened list, and use the remainder of this division as an index
+of the list to pick an IP address.
+
+To thwart active probing attacks, this application will then confirm
+that connecting client knows a secret, negotiated during the registration.
+If connecting client does know that secret, application will set up proxying,
+otherwise it may give censor a response, that acts like that this IP address
+is not an open proxy.
+
+TODO: describe MakeConnWithCompleteHandshake?
+
+Note that dark decoy detector and proxy application are only loosely coupled with each other,
+making it simple to replace one of them.
+We plan to take advantage of encrypted SNI, when it gets widely adopted,
+and replace our current proxy implementation with one that uses encrypted SNI
+and achieve improved unobservability properties, described in section~\ref{esni}.
+
+\subsection{Languages and LOC counts} % TODO: rename/restructure and complete section
+Client is written in Golang and follows the same API as standard TapDance does,
+which allows us to reuse existing TapDance CLI wrapper and Android application.
+
 -Language choice (Rust, Go, minimal C)
--Open source (client and station)
+-Open source (client, station and application)
 
 \section{Evaluation}
 % 1 page
