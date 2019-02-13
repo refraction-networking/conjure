@@ -17,6 +17,8 @@
 \usepackage{xparse}   % http://ctan.org/pkg/xparse%don't print date
 \NewDocumentCommand{\rot}{O{45} O{1em} m}{\makebox[#2][l]{\rotatebox{#1}{#3}}}%
 \include{figures}
+\usepackage{subcaption}
+\usepackage{cleveref}
 
 \begin{document}
 
@@ -138,7 +140,7 @@ does not resist active probing attacks, where the censor can send packets that
 confirm whether or not a suspected connection is indeed a TapDance connection.
 The use of real-world decoy sites also presents practical problems: If
 decoys are limited or not particularly important, it may be easy for a
-censor to block them altogether without much collateral damage. In addition, 
+censor to block them altogether without much collateral damage. In addition,
 TapDance has several performance limitations due to its interaction with
 real decoys. For example, TapDance clients' individual connection duration and upload
 capacities are limited due to the interaction with the decoy's TCP and TLS stack
@@ -210,6 +212,8 @@ observability compared to TapDance.
 
 
 \section{Background}
+
+\input{background.tex}
 % 1 page
 Background on TLS and Refraction Networking
 
