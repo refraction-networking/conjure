@@ -337,6 +337,8 @@ the dark decoy appears to be firewalled off from all but the client.
 %-IPv6 vs IPv4 dark decoys subsection?
 
 \subsection{Address utilization}
+% TODO:Can be better: story for v4, these are some problems, here's what it
+% looks like in v6
 
 % Note on IPv6 space? /32 of IPv6 is 96-bits to select...
 Dark decoy IP addresses are selected from unused but still routed address
@@ -590,12 +592,89 @@ their features, as compared to Dark Decoys.
 \subsection{Attacks and Defenses}
 % 1 page
 
--Fingerprinting Masked site vs Dark decoy application
--Active probing TLS connection
-    -Block access unless from registering source IP
-        -cite GFW taking over client IPs for active probing of old obfs
-    -Verify knowledge of seed (but how to respond when verification fails?)
--ICMP
+There are many attacks a censor might attempt to either prevent dark decoys from
+being registered or used.
+
+\paragraph{Blocking registration}
+To make registration more difficult, censors could block TLS connections to all of the
+limited decoys available in a deployment. Using TapDance's current deployment,
+this would involve blocking over 1500 sites. We note that such an attack would
+completely disable all existing Refraction Networking schemes, as none work
+without being able to access legitimate decoys past the station. In dark decoys,
+this would only block new registrations, and would not impact users that
+previously registered. Furthermore, registrations could also occur over email,
+or over lower-bandwidth covert channels, such as port (or even IP) knocking past
+the station, that would be more difficult for the censor to block.
+%Cirripede previously used a registration protocol that sent covert information via initial
+%sequence numbers in arbitrary TCP connections, though we note this solution
+%generally requires clients to have root access to their device to control the
+%initial sequence numbers. Since most mobile users do not have such control, we
+%suggest other methods be used instead.
+
+\paragraph{Scanning masked sites}
+The censor could also attempt to fingerprint the masked site and compare it to a
+suspected dark decoy application. For instance, if a dark decoy IP responds as
+pretending to be \texttt{example.com}, the censor could scan or probe real instances
+of \texttt{example.com} on different ports and see how it responds. Then, the
+censor can probe the dark decoy IP, and see if it responds similarly (e.g. with
+the same set of open ports and payloads for certain kinds of probes). To defend
+against this, we forward \emph{all} traffic destined to the dark decoy to the
+masked site, including ports that are not relevant to the proxy application
+(e.g. non 443). This ensures that above the TCP layer, we appear to be the mask
+site. However, there may be differences in TCP/IP implementations, for instance,
+how IP IDs are incremented, or how TCP timestamps are incremented (or supported
+at all) that may be different from the mask site. To combat this, we can filter
+mask sites by those that have identical TCP/IP stacks to ours, as we use a
+common Linux implementation. We also note that this attack only applies when we
+use the mask site as an application, and that Dark Decoys can support other
+applications (e.g. obfsproxy, WebRTC, etc) that do not have this issue.
+
+
+
+\paragraph{Website Fingerprinting}
+Dark Decoy applications that mimic websites (e.g. mask sites) may be vulnerable
+to website fingerprinting, where the censor observes that clients accessing
+suspected dark decoy IPs are receiving payloads or packet timings that differ
+from legitimate connections to the mask site. This attack is difficult for
+censors to carry out because it has high uncertainty: even a small false
+positive rate means blocking mostly legitimate connections (due to the base rate
+of normal traffic), and false negatives could allow clients to retry until they
+gain access. More importantly, unlike previous Refraction Networking protocols,
+Dark Decoy applications are not limited to mimicking websites, and can support
+any (or even a combination of) protocols.
+
+
+
+%\paragraph{Probing Dark Decoys}
+%-Active probing TLS connection
+%    -Block access unless from registering source IP
+%        -cite GFW taking over client IPs for active probing of old obfs
+%    -Verify knowledge of seed (but how to respond when verification fails?)
+
+\paragraph{ICMP}
+Censors can use ping or traceroute utilities (via ICMP) to probe potential dark
+decoys. Because there is (usually) no host at the dark decoy address, these
+probes will timeout and produce no response. They might also produce
+``Destination Unreachable'' responses from routers depending on how they are
+configured. We performed a scan of 10~million IPv6 addresses in a routable /32
+prefix to see if it is common to respond with such tell-tale ICMP messages for
+unused messages. We found only 0.016\% of addresses responded with any ICMP
+messages (a combination of ``Time Exceeded'' and ``Destination Unreachable'').
+
+Many legitimate hosts and routers do not respond to or forward ICMP packets, and
+it is common for firewalls to block traceroutes from penetrating inside
+networks. Thus, simply ignoring ICMP messages (or low TTL packets that might be
+used by traceroute) may be a viable strategy. % We should evaluate this claim...
+Alternatively, we could spoof responses to convince an adversary that a dark
+decoy is part of a particular network. However, this strategy requires careful
+consideration of what network makes sense for a mask site to be in. Also, the
+censor may try to probe for addresses around the dark decoy (but still likely to
+be in the same network), which must also be responded to.
+
+
+
+%-Fingerprinting Masked site vs Dark decoy application
+%-ICMP
 
 
 
