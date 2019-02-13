@@ -647,9 +647,11 @@ Censors can use ping or traceroute utilities (via ICMP) to probe potential dark
 decoys. Because there is (usually) no host at the dark decoy address, these
 probes will timeout and produce no response. They might also produce
 ``Destination Unreachable'' responses from routers depending on how they are
-configured.
-% we scanned a random sample of v6 addresses and found...x%
-% responded with ICMP dest unreach
+configured. We performed a scan of 10~million IPv6 addresses in a routable /32
+prefix to see if it is common to respond with such tell-tale ICMP messages for
+unused messages. We found only 0.016\% of addresses responded with any ICMP
+messages (a combination of ``Time Exceeded'' and ``Destination Unreachable'').
+
 Many legitimate hosts and routers do not respond to or forward ICMP packets, and
 it is common for firewalls to block traceroutes from penetrating inside
 networks. Thus, simply ignoring ICMP messages (or low TTL packets that might be
