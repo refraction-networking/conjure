@@ -512,9 +512,109 @@ Snowflake~\cite{snowflake}. Dark decoy applications could also use WebRTC as the
 application protocol, convincing the censor that two clients are communicating.
 
 \section{Implementation}
+
+We implemented the Dark Decoy protocol and tested it in a 10~Gbps ISP testbed
+with real traffic. Similar to TapDance~\cite{tapdance}, we used PF\_RING to
+consume the 10~Gbps link, and feed it to a custom \textbf{detector} written in Rust. The
+detector processes all packets and watches for new registrations. It also
+forwards all packets sent to a (registered) dark decoy's address to the local
+\textbf{application} via an \texttt{iptables} DNAT rule that rewrites the destination IP,
+allowing the application to accept and respond to connections using the native
+operating system's interface. Figure~\ref{fig:implementation} shows the overall
+architecture of our implementation, which we describe next.
+% Along with the client?
+
+\FigImplementation
+
+\subsection{Detector}
+
+Our detector is a modified fork of the open source TapDance
+implementation~\cite{tapdance-source}.
+We implemented our detector in approximately 1,800 lines of Rust (compared to
+over 5,000 lines for TapDance)\footnote{excluding (from both) about 3,000 lines
+of auto-generated protobuf code}.
+
+We used PF\_RING to load balance the 10~Gbps link over 4~CPU cores. PF\_RING
+supports balancing across cores based on flow (5-tuple) or source and
+destination IPs. However, both of these options present challenges for our Dark
+Decoy detector. One issue is that registrations could be processed on a
+different core than the packets sent to that specific dark decoy address. For
+instance, a client could have its registration handled by Core 1, while its
+packets to the dark decoy address end up on Core 3, which doesn't know about the
+original registration.
+
+To address this, we used Redis~\cite{redis} to allow each process to announce
+(publish) newly registered decoys to the other cores so they can
+add them to their local list of registered dark decoy addresses.
+However, this introduces two new problems. First, a core might add a
+registration \emph{after} it has already received and processed packets destined
+for the specified dark decoy. This typically isn't a problem when running on a
+single core, as packets are processed sequentially. Second, each core may
+timeout each dark decoy at different times, potentially leading to differing
+behavior that is visible to a censor. For instance, if we used the
+source/destination IPs to load balance, a censor's packets to a dark decoy could
+be processed by a different core than the client. If the censor waits for the
+known timeout before sending a probe, its core may have timed out that dark
+decoy, while the client's core has refreshed the timeout of the dark decoy due
+to active use.
+
+To address the first issue, we force the client to delay sending its connection
+to the dark decoy until a short time after registration. In practice, we force
+the client to wait until the registration decoy responds before starting a
+connection with the registered dark decoy.
+
+To address the second issue, we implemented a new load-balancing algorithm in
+PF\_RING to select the core based solely on the destination IP address of the
+packet. This still means we must use Redis to tell all of the cores of new
+registrations, but that only one core will be responsible for processing all of
+the packets sent to a given dark decoy, regardless of who or when it is sent.
+
+
+\subsection{Application}
+
+We implemented our application in about 500~lines of Golang. Though we note
+other protocols (e.g. obfsproxy or WebRTC) could be used as the application, we
+implemented a mask site mimicking application, that pretends to be a mask site
+when actively probed by the censor.
+
+The application accepts connections to dark decoy addresses forwarded by the
+detector and rewritten to the local address using \texttt{iptables}.
+The application also receives out-of-band information about registrations from the
+detector via a ZMQ~\cite{zmq} connection, which informs the application of the
+registering client's IP address, the secret seed, and other configuration
+information passed by the client.
+
+Once the application accepts a connection, it initially acts as a transparent
+proxy to the mask site specified by the client during registration. The
+application parses the handshake, forwarding packets back and forth between
+client and mask site without modification, and extracting the server and client
+randoms. The application attempts to decrypt the first application data record
+from the client using a key derived from the secret seed, and client and server
+randoms. We use the uTLS library~\cite{utls} on both the application and client
+to allow us to change the TLS secrets being used after the handshake.
+
+If the decryption is successful, the application switches to forwarding
+(decrypted) data back and forth with a client-specified endpoint, such as a
+SOCKS proxy, which can multiplex multiple client connections over the single
+connection to the dark decoy.
+
+\subsection{Client}
+
+Our client is also written in Golang, and uses a TapDance-like protocol for
+registration. We note that this protocol should be harder for censors to observe
+because it consists of only a single (complete) request, and the station does
+not have to spoof packets as the decoy used during registration, only passively
+observe them.
+
+After registering, the client connects to the derived dark decoy address, and
+switches secrets after the handshake. At this point, a local application (e.g.
+SOCKS client) can connect to the client, and it will transparently be connected to
+the remote end via the encrypted dark decoy connection.
+
+\if0
 In order to scale up to 10Gbps and beyond,
 one has to utilize multiple cores and employ load balancing.
-We use PF\_RING built-in load balancer \it{zbalance} to efficiently
+We use PF\_RING built-in load balancer \emph{zbalance} to efficiently
 distribute load between 4 cores.
 Our timeout is based on last IP address usage time, which prevents us from
 balancing load based on source IP address,
@@ -600,6 +700,8 @@ which allows us to reuse existing TapDance CLI wrapper and Android application.
 
 -Language choice (Rust, Go, minimal C)
 -Open source (client, station and application)
+\fi
+
 
 \section{Evaluation}
 % 1 page
