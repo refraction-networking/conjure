@@ -2,8 +2,6 @@
 \usepackage{usenix2019_v3}
 
 % For submission make this a noop
-\newcommand{\note}[2]{\textit{[#1: #2]}}
-\newcommand{\nikita}[1]{\note{nikita}{#1}}
 
 % to be able to draw some self-contained figs
 \usepackage{tikz}
@@ -20,6 +18,11 @@
 \usepackage{subcaption}
 \usepackage{cleveref}
 \usepackage{microtype}
+
+\usepackage{xspace}
+\usepackage{soul}
+\newcommand{\note}[2]{\hl{[\textbf{#1:} #2]}\xspace}
+\newcommand{\nikita}[1]{\note{nikita}{#1}}
 
 % Slight JAH fix to stop URLs from breaking after ``http:''
 \def\UrlBreaks{\do-\do\.\do\@\do\\\do\!\do\_\do\|\do\;\do\>\do\]%
@@ -53,27 +56,33 @@
 %-------------------------------------------------------------------------------
 \begin{abstract}
 %-------------------------------------------------------------------------------
-Refraction Networking (formerly ``Decoy Routing'') has emrged as a useful tool in circumventing
-        Internet censorship. By placing proxies in cooperating Internet Service
-        Providers (ISPs) and using connections to existing reachable
-        ``decoy'' sites for transport, censors cannot easily block access to
-        such proxies without also blocking legitimate sites.
+Refraction Networking (formerly known as ``Decoy Routing'') has
+emerged as a promising next-generation approach for circumventing
+Internet censorship. Rather than trying to hide individual
+circumvention proxy servers from censors, proxy functionality is
+implemented in the core of the network, at cooperating ISPs in
+friendly countries.  Any connection that traverses these ISPs could be
+a conduit for the free flow of information, so censors cannot easily
+block access without also blocking many legitimate sites.  While one
+Refraction scheme, TapDance, has recently been deployed at ISP-scale,
+it suffers from several problems: a limited number of ``decoy'' sites
+in realistic deployments, high technical complexity, and undesirable
+tradeoffs between performance and observability by the censor. These
+problems may impede broader deployment and ultimately allow censors to
+block such techniques.
 
-However, existing deployed Refraction Networking schemes such as TapDance suffer
-from several problems, including a limited number of decoy sites in realistic
-deployments, and an unfavorable tradeoff between performance and observability
-by the censor. These problems limit where such proxies can be deloyed, hamper
-their effectiveness, and may ultimately make them possible for censors to block.
-
-In this paper, we present Dark Decoys, a deployable Refraction Networking scheme that
-overcomes the limits on decoys and performance. Dark Decoys leverages the (primarily) unused address
-space that is reachable through the deploying ISP. Rather than rely on existing
-sites as reachable decoy sites that must be involved in each proxy connection,
-Dark Decoys create seemingly legitimate hosts at new IP addresses. These
-invented hosts are indistinguishable from normal hosts to the censor, but can
-be used by clients as one-time proxies.
-
-We implement our scheme ... and it's just the bee's knees. TODO
+We present Dark Decoys, an improved Refraction Networking approach
+that overcomes these limitations by leveraging unused address space at
+deploying ISPs. Instead of using real websites as the decoy destinations
+for proxy connections, our scheme creates seemingly legitimate hosts
+on demand, at IP addresses where no web server exists.
+These phantom hosts are difficult for a censor to distinguish from
+ones, but can be used by clients as proxies.  We define the
+Dark Decoys protocol, analyze its security, and evaluate a
+prototype on IPv4 and IPv6 networks.
+Our results suggest that Dark Decoys can be as difficult to block
+as TapDance, is simpler to maintain and deploy,
+and offers substantially better network performance.
 
 \end{abstract}
 
