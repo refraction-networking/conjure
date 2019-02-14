@@ -19,6 +19,13 @@
 \include{figures}
 \usepackage{subcaption}
 \usepackage{cleveref}
+\usepackage{microtype}
+
+% Slight JAH fix to stop URLs from breaking after ``http:''
+\def\UrlBreaks{\do-\do\.\do\@\do\\\do\!\do\_\do\|\do\;\do\>\do\]%
+ \do\)\do\,\do\?\do\'\do+\do\=\do\#}
+\def\UrlBigBreaks{\do\:\do\/}%
+\urlstyle{rm}
 
 \begin{document}
 
@@ -883,7 +890,9 @@ ISP-scale TapDance
 %section.
 
 %-------------------------------------------------------------------------------
+
 \bibliographystyle{plain}
+\small
 \bibliography{biblio}
 
 \end{document}
