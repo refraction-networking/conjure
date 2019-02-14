@@ -1,12 +1,12 @@
 
 \newcommand{\FigOverview}{
-\begin{figure}[ht]
+\begin{figure*}[t]
     \centering
-    \includegraphics[width=0.9\linewidth,clip]{figures/dark-decoy-overview.png}
+    \includegraphics[width=0.60\linewidth,clip]{figures/dark-decoy-overview.png}
     \caption{\textbf{Dark Decoy Overview}\,---\, %
     }
     \label{fig:overview}
-\end{figure}
+\end{figure*}
 }
 
 \newcommand{\FigHighLevel}{
@@ -45,7 +45,7 @@
             Traffic analysis resitant &\no  & \no  & \no  & \no  &\maybe& \yes &\maybe& \no \\
             Uses unused addresses     & \no & \no  & \no  & \no  & \no  & \no  & \no  & \yes \\
     \end{tabular}
-    %\caption{\textbf{Refraction Networking schemes}\,---\,}
+    \caption{\textbf{Comparing Refraction Networking schemes}\,---\,}
     \label{tab:compare}
 \end{table*}
 }
@@ -62,4 +62,34 @@
 \end{figure}
 }
 
-
+\newcommand{\FigEvolution}{
+\begin{figure}
+  \centering
+  \begin{subfigure}{\columnwidth}
+    \includegraphics[width=\columnwidth]{figures/refraction-v1}
+    \vspace{-7pt}
+    
+    \caption{\textbf{First generation systems} for Refraction Networking, such as Telex and Cirrepede, operated as inline network elements, with the ability to observe traffic and block specific flows. ISPs worried that if the inline element failed, it could bring down the network.\looseness=-1}
+    \label{fig:refraction-v1}
+  \end{subfigure}
+  \vspace{12pt}
+  
+  \begin{subfigure}{\columnwidth}
+    \includegraphics[width=\columnwidth]{figures/tapdance}
+    \vspace{-7pt}
+    
+    \caption{\textbf{TapDance} is a second-generation Refraction Network scheme that operates without flow blocking, needing only to passively observe traffic and inject packets. TapDance has recently been deployed at a mid-size ISP, but the techniques used to silence the decoy site and participate in the client--decoy TCP connection mid-stream add significant complexity, performance bottlenecks, and detection risk.}
+    \label{fig:tapdance}
+  \end{subfigure}
+  \vspace{12pt}
+  
+  \begin{subfigure}{\columnwidth}
+    \includegraphics[width=\columnwidth]{figures/dark-decoys}
+    \vspace{-7pt}
+    
+    \caption{\textbf{\scheme}, our third-generation Refraction Networking design, overcomes these limitations.  It uses two sessions. First, the client connects to a decoy site and embeds a steganographic registration message, which the station receives using only a passive tap.  Second, the client connects to a ``dark address'' where there is no running server, and the station proxies the connection in its entirety.}
+    \label{fig:dark-decoys}
+  \end{subfigure}
+  \caption{\textbf{Evolution of Refraction Networking Approaches}}
+\end{figure}
+}

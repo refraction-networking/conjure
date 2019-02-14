@@ -12,24 +12,7 @@ Upon seeing the signal, the RS will take over the HTTPS session,
 and establish a proxy session with the client that can then be used for covert
 communication.
 
-\begin{figure}
-    \includegraphics[width=\columnwidth]{figures/refraction-v1}
-    \caption{First generation refraction networking designs operated as an inline transparent proxy.}
-    \label{fig:refraction-v1}
-\end{figure}
-
-\begin{figure}
-    \includegraphics[width=\columnwidth]{figures/tapdance}
-    \caption{TapDance operates without flow blocking by using a mirror
-    port to receive a copy of traffic.}
-    \label{fig:tapdance}
-  \end{figure}
-
-  \begin{figure}
-    \includegraphics[width=\columnwidth]{figures/dark-decoys}
-    \caption{Dark decoys uses two sessions: a registration one which is passively observed by the refraction station, and a dark session which is proxied by the RS in its entirety.}
-    \label{fig:dark-decoys}
-\end{figure}
+\FigEvolution
 
 One of the key challenges for refraction networking is in taking over a session. The RS must start responding to the client's traffic as if it were the decoy destination, and at the same time prevent the destination from sending its own responses back to the client. A simple approach is to have the refraction station act as an inline transparent proxy (\cref{fig:refraction-v1}) that forwards the traffic between the client and the decoy site. After a TLS handshake has been completed, the RS terminates the connection with the decoy site by sending a TCP reset and takes over the session with the client.
 
