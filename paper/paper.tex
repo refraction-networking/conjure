@@ -126,7 +126,7 @@ or because they rely on temperamental
 infrastructure. For example, domain fronting was a popular circumvention
 strategy used by meek (in Tor), as well as the Signal secure messaging app to
 get around censorship in countries it was
-blocked~\cite{domain-fronting,signal,signal-domain-fronting}.
+blocked~\cite{meek,signal,signal-domain-fronting}.
 But in May~2018, Google and Amazon made both technical and policy changes to
 their cloud infrastructures that removed support for domain
 fronting~\cite{aws-front}. While meek
@@ -150,7 +150,7 @@ However, deploying such schemes in practice is more difficult than existing prox
 convincing ISPs to deploy proxies in their production network is a significant
 operational hurdle. To date, only one of six Refraction
 Networking schemes has been deployed in practice by a large ISP:
-TapDance~\cite{tadance}, a
+TapDance~\cite{tadance14}, a
 Refraction Networking protocol that removes the need for inline
 flow-blocking~\cite{frolov2017isp}.
 
@@ -743,8 +743,8 @@ Compare to TapDance performance:
 \subsection{Comparison to Prior Schemes}
 
 Since 2011, there have been several proposed Refraction Networking schemes.
-Telex~\cite{telex}, Cirripede~\cite{cirripede} and Decoy
-Routing~\cite{curveball} are ``first generation'' protocols with nearly
+Telex~\cite{telex11}, Cirripede~\cite{cirripede11} and Decoy
+Routing~\cite{curveball11} are ``first generation'' protocols with nearly
 identical features. These designs require inline flow blocking at the ISP to
 allow the station to intercept flows with detected tags and act as the decoy
 host for them. However, inline-blocking is difficult for ISPs to deploy, as it
@@ -752,7 +752,7 @@ requires special-purpose hardware to be placed inline with production traffic,
 introducing risk of failures and outages that may be expensive for the ISP
 and potentially violate their contractual obligations (SLAs).
 
-TapDance~\cite{tapdance} solves the issue of inline-blocking by coercing the
+TapDance~\cite{tapdance14} solves the issue of inline-blocking by coercing the
 decoy into staying silent, and allowing the station to respond instead. However,
 as previously described, this trick comes at a cost: the decoy only stays silent
 for a short timeout (typically 30-120 seconds), and limits the amount of data
@@ -761,7 +761,7 @@ short and repeatedly reconnect to decoys, increasing overhead and potentially
 alerting censors with this pattern. Dark Decoys addresses this issue and allows
 clients to maintain long-lived connections to the dark decoy.
 
-Rebound~\cite{rebound} and Waterfall~\cite{waterfall} both focus on routing
+Rebound~\cite{rebound15} and Waterfall~\cite{waterfall} both focus on routing
 asymmetries and routing attacks by the censor. Rebound modifies the client's
 packets on the way to the decoy, and uses error pages on the decoy site to
 reflect data back to the client. Waterfall only observes and modifies the
@@ -773,7 +773,7 @@ that of a legitimate decoy connection. However, latency and other packet-timing
 characteristics may be observable, and both schemes require some form of inline
 flow blocking.
 
-Slitheen~\cite{slitheen} focuses on addressing observability by replacing
+Slitheen~\cite{slitheen16} focuses on addressing observability by replacing
 data in packets sent by the legitimate decoy. Thus, even the packet timings and
 sizes of a Slitheen connection match that of a legitimate decoy connection.
 However, Slitheen also requires inline-blocking, and introduces a large overhead
