@@ -863,7 +863,15 @@ be in the same network), which must also be responded to.
 %-Fingerprinting Masked site vs Dark decoy application
 %-ICMP
 
-
+\if0
+\paragraph{Address entropy}
+Addresses in IPv6 are commonly shortened, as many of the 128-bits in the address are set to 0.
+For instance, google.com has the address
+\texttt{2607:f8b0:400f:0806:0000:0000:0000:2004} (which can be shortened to
+\texttt{2607:f8b0:400f:806::2004}). Only 24 bits are set to 1 in this address,
+giving censors a possible feature to filter on: addresses that have too much
+entropy could be suspicious as servers.
+\fi
 
 
 \section{Related Work}
