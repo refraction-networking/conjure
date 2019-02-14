@@ -6,10 +6,11 @@
 % to be able to draw some self-contained figs
 \usepackage{tikz}
 %\usepackage{parskip}
+\usepackage{mathptmx}\renewcommand{\ttdefault}{cmtt}
 \usepackage{amsmath}
 \usepackage{wasysym}
 %\setlength{\parskip}{1pt} % 1ex plus 0.5ex minus 0.2ex}
-\setlength\parskip{1pt}
+%\setlength\parskip{1pt}
 \usepackage{graphicx} % http://ctan.org/pkg/graphicx
 \usepackage{booktabs} % http://ctan.org/pkg/booktabs
 \usepackage{xparse}   % http://ctan.org/pkg/xparse%don't print date
@@ -18,7 +19,9 @@
 \usepackage{subcaption}
 \usepackage{cleveref}
 \usepackage{microtype}
-
+\SetExtraKerning{encoding=*,font=*}{\textemdash={120,120}} % Add space around emdashes
+\usepackage[font=small]{caption}
+\microtypecontext{spacing=nonfrench}
 \usepackage{xspace}
 \usepackage{soul}
 \newcommand{\note}[2]{\hl{[\textbf{#1:} #2]}\xspace}
@@ -29,6 +32,8 @@
  \do\)\do\,\do\?\do\'\do+\do\=\do\#}
 \def\UrlBigBreaks{\do\:\do\/}%
 \urlstyle{rm}
+
+\renewcommand{\paragraph}[1]{\smallskip\noindent\textbf{#1\quad}}
 
 \begin{document}
 
@@ -53,6 +58,9 @@
 
 \maketitle
 
+%\newcommand{\scheme}{Conjure\xspace}
+\newcommand{\scheme}{Dark Decoys\xspace}
+
 %-------------------------------------------------------------------------------
 \begin{abstract}
 %-------------------------------------------------------------------------------
@@ -71,21 +79,23 @@ tradeoffs between performance and observability by the censor. These
 problems may impede broader deployment and ultimately allow censors to
 block such techniques.
 
-We present Dark Decoys, an improved Refraction Networking approach
+We present \scheme, an improved Refraction Networking approach
 that overcomes these limitations by leveraging unused address space at
 deploying ISPs. Instead of using real websites as the decoy destinations
 for proxy connections, our scheme creates seemingly legitimate hosts
 on demand, at IP addresses where no web server exists.
 These phantom hosts are difficult for a censor to distinguish from
 ones, but can be used by clients as proxies.  We define the
-Dark Decoys protocol, analyze its security, and evaluate a
-prototype on IPv4 and IPv6 networks.
-Our results suggest that Dark Decoys can be as difficult to block
+\scheme protocol, analyze its security, and evaluate a
+prototype using an ISP testbed.
+Our results suggest that \scheme can be as difficult to block
 as TapDance, is simpler to maintain and deploy,
 and offers substantially better network performance.
 
 \end{abstract}
 
+
+\FigHighLevel
 
 %-------------------------------------------------------------------------------
 \section{Introduction}
@@ -164,8 +174,6 @@ behavior. This forces TapDance to multiplex long-lived proxy connections over
 several repeated shorter-duration decoy connections, which increases overhead and may
 produce a connection pattern that is visible to censors.
 
-
-\FigHighLevel
 
 \medskip
 

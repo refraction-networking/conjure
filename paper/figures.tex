@@ -12,13 +12,11 @@
 \newcommand{\FigHighLevel}{
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.9\linewidth,clip]{figures/high-level.png}
-    \caption{\textbf{Dark Decoys}\,---\, %
-    After registration, clients connect to unused (``dark'') addresses that pass
-        by a cooperating ISP proxy station. The station communicates with the client
-        as if it were the host at that address. To the censor, this
-        connection appears to be with a legitimate one to a real host,
-        making it difficult to distinguish from real hosts and block.
+    \includegraphics[width=\linewidth,clip]{figures/high-level.png}
+    \caption{\textbf{Overview}---%
+      When deployed at an ISP, \scheme observes a mirror of inbound and outbound traffic.
+      Users request service by embedding a steganographic registration message in a TLS handshake with any reachable site at the ISP\@. Then, the client connects to a random unused (``dark'')
+      address in the ISP's AS, and \scheme communicates with the client as if it were that host.
     }
     \label{fig:overview}
 \end{figure}
