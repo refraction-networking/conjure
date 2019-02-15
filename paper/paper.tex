@@ -46,13 +46,13 @@
 %-------------------------------------------------------------------------------
 \begin{abstract}
 %-------------------------------------------------------------------------------
-Refraction Networking (formerly ``Decoy Routing'') has emrged as a useful tool in circumventing
+Refraction Networking (formerly ``Decoy Routing'') has emerged as a useful tool in circumventing
         Internet censorship. By placing proxies in cooperating Internet Service
         Providers (ISPs) and using connections to existing reachable
         ``decoy'' sites for transport, censors cannot easily block access to
         such proxies without also blocking legitimate sites.
 
-However, existing deployed Refraction Networking schemes such as TapDance suffer
+However, existing deployed Refraction Networking schemes such as TapDance \nikita{TapDance is the only deployed scheme} suffer
 from several problems, including a limited number of decoy sites in realistic
 deployments, and an unfavorable tradeoff between performance and observability
 by the censor. These problems limit where such proxies can be deloyed, hamper
@@ -514,7 +514,7 @@ application protocol, convincing the censor that two clients are communicating.
 \section{Implementation}
 In order to scale up to 10Gbps and beyond,
 one has to utilize multiple cores and employ load balancing.
-We use PF\_RING built-in load balancer \it{zbalance} to efficiently
+We use PF\_RING built-in load balancer \textit{zbalance} to efficiently
 distribute load between 4 cores.
 Our timeout is based on last IP address usage time, which prevents us from
 balancing load based on source IP address,
