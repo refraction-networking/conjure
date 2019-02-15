@@ -882,15 +882,22 @@ be in the same network), which must also be responded to.
 %-Fingerprinting Masked site vs Dark decoy application
 %-ICMP
 
-\if0
+\FigIpBits
+
 \paragraph{Address entropy}
 Addresses in IPv6 are commonly shortened, as many of the 128-bits in the address are set to 0.
 For instance, google.com has the address
 \texttt{2607:f8b0:400f:0806:0000:0000:0000:2004} (which can be shortened to
 \texttt{2607:f8b0:400f:806::2004}). Only 24 bits are set to 1 in this address,
 giving censors a possible feature to filter on: addresses that have too much
-entropy could be suspicious as servers.
-\fi
+entropy (or even simply bits set) could be suspicious as dark decoys. To demonstrate and quantify
+this problem, we measured 30 minutes of IPv6 traffic to our ISP's /32 network prefix.
+Figure~\ref{fig:ipbits} shows a histogram of bits set in the addresses we observed, which are
+notably skewed to less than expected if addresses were randomly generated. However, there
+are still a significant number of networks that appear to have random-looking addresses,
+making it difficult for censors to block these addresses outright. For a specific deployment,
+operators should be careful to observe the distribution of addresses in the subnets they use,
+and possibly limit to randomizing ``realistic'' bits (e.g. the middle and/or last 32 bits).
 
 
 \section{Related Work}

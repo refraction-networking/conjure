@@ -24,6 +24,28 @@
 }
 
 
+\newcommand{\FigIpBits}{
+\begin{figure}[t]
+    \centering
+    \vspace{-0.5in}
+    \includegraphics[width=\linewidth,clip]{figures/ip-bits-set-pdf.pdf}
+    \caption{\textbf{IPv6 Entropy}---%
+        We observed 30 minutes of IPv6 traffic on our tap to the /32 of the ISP's network.
+        In each address observed, we counted the number of bits set, and compared this to
+        randomly generated addresses. If the 96 non-network bits
+        of each address were chosen randomly, we would expect to see a normal distribution
+        (shown as Random). In practice, the distribution of observed IP addresses has much fewer
+        bits set, suggesting that censors might be able to distinguish between dark decoy addresses
+        and legitimate ones.
+        %We note there are several /64 subnets that had many
+        %addresses that appeared random (visibly overlapping the random distribution).
+    }
+    \label{fig:ipbits}
+\end{figure}
+}
+
+
+
 \newcommand{\yes}{\CIRCLE}
 \newcommand{\no}{\Circle}
 \newcommand{\maybe}{\LEFTcircle}
