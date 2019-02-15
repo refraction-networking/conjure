@@ -762,18 +762,52 @@ which allows us to reuse existing TapDance CLI wrapper and Android application.
 \label{sec:evaluation}
 % 1 page
 
-\TODO{Write (1 page)}
+%\TODO{Write (1 page)}
 
+
+\FigTapBandwidth
 
 \FigUpload
 
 \FigDownload
 
-Compare to TapDance performance:
--Connection setup time
--Connection/session lifetime
--Throughput (especially upload vs download)
--Security considerations
+To evaluate our \scheme implementation, we compare its bandwidth
+to that of TapDance in a realistic ISP setting. We used a full duplex 10~Gbps
+network tap at a mid-sized ISP and run both implementations on a 1U server with
+an 8-core Intel Xeon E5-2640 CPU, 64GB of RAM, and a dual-port Intel X710 10GbE SFP+
+network interface. A typical week of bandwidth seen on the tap is
+shown in Figure~\ref{fig:tap-bandwidth}, ranging from 2.4~Gbps to peaks above
+17~Gbps.
+
+
+We evaluated the performance of a client from a Singapore-based VPS,
+Figures~\ref{fig:upload} and~\ref{fig:download} show the upload and download as
+measured by iperf for TapDance, our \scheme implementation, and a direct
+connection to our iperf server in the ISP's network.
+
+TapDance must reconnect if the amount of data sent by the client
+exceeds a short TCP window (typically on the order of 32~KBytes) or the
+connection persists until a timeout (18-120 seconds). At each reconnect, the
+TapDance client naively blocks until a new TLS connection to the decoy and
+station has been established. Thus, when uploading files, TapDance has to create
+a new TLS connection for every 32~KBytes of data it sends, limiting its average
+upload bandwidth to less than 1~Mbps due to the high overhead. In contrast,
+our \scheme implementation is
+able to maintain the same connection during large uploads, and achieves
+performance inline with the direct connection.
+
+During download-only workloads, TapDance is able to better utilize the network,
+but must still reconnect before the decoy times out. In our tests, we see
+TapDance reconnect every 25 seconds, which can negatively impact the performance of
+downloads or any real-time streaming applications. Again, our \scheme
+implementation is able to maintain a single connection and provide the maximum
+download rate without interruption.
+
+%Compare to TapDance performance:
+%-Connection setup time
+%-Connection/session lifetime
+%-Throughput (especially upload vs download)
+%-Security considerations
 
 
 \section{Discussion}
