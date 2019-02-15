@@ -23,6 +23,7 @@
 \usepackage[font=small]{caption}
 \microtypecontext{spacing=nonfrench}
 \usepackage{subcaption}
+\usepackage{paralist}
 \usepackage{xspace}
 \usepackage{soul}
 \newcommand{\note}[2]{\hl{[\textbf{#1:} #2]}\xspace}
@@ -45,6 +46,7 @@
 % make title bold and 14 pt font (Latex default is non-bold, 16 pt)
 \title{\Large \bf Dark Decoys:
   Conjuring Proxies from Unused Address Space}
+\title{\Large \bf Conjure: Summoning Proxies from Unused Address Space}
 
 %for single author (just remove % characters)
 %\author{
@@ -88,11 +90,11 @@ deploying ISPs. Instead of using real websites as the decoy destinations
 for proxy connections, our scheme creates seemingly legitimate hosts
 on demand, at IP addresses where no web server exists.
 These phantom hosts are difficult for a censor to distinguish from
-ones, but can be used by clients as proxies.  We define the
+real ones, but can be used by clients as proxies.  We define the
 \scheme protocol, analyze its security, and evaluate a
 prototype using an ISP testbed.
-Our results suggest that \scheme can be as difficult to block
-as TapDance, is simpler to maintain and deploy,
+Our results suggest that \scheme can be harder to block
+than TapDance, is simpler to maintain and deploy,
 and offers substantially better network performance.
 
 \end{abstract}
@@ -140,77 +142,99 @@ There is an urgent need for new, more robust approaches to circumvention.
 %Importance of Refraction Networking
 %-what it is, how it solves many of the above problems
 %-acknowledge challenge of ISP deployment, cite TapDance deployment as only refraction technology that has overcome this challenge so far
-A family of techniques called Refraction Networking~\cite{refraction-site,telex11,cirripede11,curveball11,tapdance14,rebound15,slitheen16,waterfall17}, formerly known
+A family of techniques called Refraction Networking~\cite{telex11,cirripede11,curveball11,tapdance14,rebound15,slitheen16,waterfall17}, formerly known
 as Decoy Routing, has made promising steps towards that goal.
 These techniques operate in the network's core, at cooperating Internet Service Providers
-(ISPs) outside censoring countries.  Clients access circumvention service by connecting to a ``decoy site''---any uncensored website for which the connection travels over a participating ISP\@.  Upon recognizing a steganographic signal from the client, the ISP modifies the connection response to return censored content requested by the user.
-Censors cannot easily block access without also blocking legitimate connections to the decoy sites---collateral damage that may be prohibitively costly for the censor~\cite{robinson2013collateral}.
+(ISPs) outside censoring countries~\cite{refraction-site}.  Clients access circumvention service by connecting to a ``decoy site''---any uncensored website for which the connection travels over a participating ISP\@.  Upon recognizing a steganographic signal from the client, the ISP modifies the connection response to return censored content requested by the user.
+Censors cannot easily block access without also blocking legitimate connections to the decoy sites---collateral damage that may be prohibitive for censors if Refraction is widely deployed~\cite{robinson2013collateral}.
 
+However, deploying such schemes is more difficult than with most
+edge-based circumvention techniques, since ISPs must be convinced to
+operate the systems in their production networks.  To date, only
+TapDance~\cite{tapdance14}, one of six Refraction Networking
+proposals, has been deployed at ISP scale~\cite{frolov2017isp}.
 
-However, deploying such schemes in practice is more difficult than existing proxies:
-convincing ISPs to deploy proxies in their production network is a significant
-operational hurdle. To date, only one of six Refraction
-Networking schemes has been deployed in practice by a large ISP:
-TapDance~\cite{tapdance14}, a
-Refraction Networking protocol that removes the need for inline
-flow-blocking~\cite{frolov2017isp}.
-
+TapDance was designed for ease of deployment.
+Instead of in-line network devices required by earlier schemes, it
+calls for only a passive tap.
+This ``on-the-side'' approach, though much friendlier from an ISP's
+perspective, leads to major challenges when interposing in an ongoing
+client-to--decoy connection:
+\begin{compactitem}
+\item Implementation is complex and error-prone, requiring kernel
+  patches or a custom TCP stack. 
+\item To avoid detection, the system must carefully mimmick
+  subtle features of each decoy's TCP and TLS behavior.
+\item The architecture cannot resist active probing attacks, where the
+  censor sends specially crafted packets to determine whether a
+  suspected connection is using TapDance.
+\item Interactions with the decoy's network stack limit the length and
+  duration of each connection, forcing TapDance to multiplex
+  long-lived proxy connections over many shorter decoy
+  connections. This adds overhead and creates a traffic pattern
+  that is challenging to conceal. 
+\end{compactitem}
 
 %Challenges remain in Tapdance:
 %-Censor can fingerprint decoy sites
 %-Decoys themselves are limited (e.g. a few dozen in many cases)
 %-Can't have long-lived connections (performance and observability issue)
 %-Other performance limits (upload limit, TCP window size)
-But in order to be deployed, TapDance makes an aggressive tradeoff
-between observability by censors for the sake of ease of deployment.
-For instance, TapDance's passive ``on the side'' architecture
-does not resist active probing attacks, where the censor can send packets that
-confirm whether or not a suspected connection is indeed a TapDance connection.
-The use of real-world decoy sites also presents practical problems: If
-decoys are limited or not particularly important, it may be easy for a
-censor to block them altogether without much collateral damage. In addition,
-TapDance has several performance limitations due to its interaction with
-real decoys. For example, TapDance clients' individual connection duration and upload
-capacities are limited due to the interaction with the decoy's TCP and TLS stack
-behavior. This forces TapDance to multiplex long-lived proxy connections over
-several repeated shorter-duration decoy connections, which increases overhead and may
-produce a connection pattern that is visible to censors.
 
-
-\medskip
+%% AH: I'm not sure I buy this limited decoys argument. If there are
+%% few decoys, there is little collateral damage of blocking
+%% everything in the AS, and \scheme is at a big disadvantage too.
+%The use of real-world decoy sites also presents practical problems: If
+%decoys are limited or not particularly important, it may be easy for a
+%censor to block them altogether without much collateral damage.
 
 %Dark decoys solve these issues
 %-Create new decoys from ``dark'' (unused) address space
 %-Clients register (via TapDance-like or other robust protocol (email, blockchain, whatever))
 %-Connect to custom IP address, talk whatever protocol client/station agrees on
-In this paper, we present \scheme, a new Refraction Networking protocol that
-solves these issues, while maintaining the easy-to-deploy model of TapDance
-(i.e. a passive network tap). In our scheme, clients register new fictitious
-decoys in the ``dark'' or unused address space of the deploying ISP. Once
-registered, clients can connect to these dark decoy IP addresses as if they were
-real hosts. The ISP station acts as the other end of these connections, and responds as
-if it were a legitimate site or service. To the censor, these phantom hosts appear
-as legitimate sites or services, and even active probes won't reveal
-information that would allow the censor to block them.
 
+\smallskip
+
+In this paper, we present \textbf{\scheme}, a Refraction
+Networking protocol that overcomes these challenges while retaining
+TapDance's ISP-friendly deployment requirements.
+Our key innovation is an architecture that avoids
+having to actively participate in client-to-decoy connections.
+
+\TODO{more precise:}
+In our scheme (Figure~\ref{fig:highlevel}), clients 
+request the creation of phantom hosts in the ``dark''
+or unused address space of the deploying ISP. Once registered, clients
+can connect to these phantom hosts IP addresses as if they were real
+proxy servers. The ISP station acts as the other end of these connections, and
+responds as if it were a legitimate site or service. To the censor,
+these phantom hosts appear as legitimate sites or services, and even
+active probes will not reveal information that would allow the censor to
+block them.
+
+%% requests service
+%% by embedding a steganographic registration message in a TLS handshake
+%% with a decoy site. This message, which the ISP station can passively
+%% observe using a private key, uniquely determines an IP address within
+%% the ISP's address space. If there is no server running at that address,
 
 %One-time use address advantages:
 %-Censor cannot actively probe ahead of time (especially in IPv6), making it hard to fingerprint
 %-Decoys are now virtually unlimited (or limited only by address space)
 %-Connection can live as long as we want
 %-No pesky TCP/TapDance-y limits
-Dark decoys are cheap to create, allowing for discardable \textbf{one-time use}
-addresses to be used by clients. This greatly increases the cost for censors to
-block, as they must detect and block in real time. Meanwhile, even a censor that
-can detect 90\% of dark decoys does not significantly increase the cost to the
-circumvention system, giving dark decoys an advantage in the censor/circumventor
-cat-and-mouse game.
-We support both IPv4 and IPv6 dark decoys, though we note they are especially
-powerful in IPv6 where censors cannot exhaustively scan ahead of time to
-identify addresses that change behavior.
-Because we fully control the server side, dark decoy connections can live as
-long as needed, without the upload or timing limits faced by TapDance.
 
+Phantom hosts are cheap to create, allowing for discardable \textbf{one-time use}
+proxy servers to be used by clients. This greatly increases the cost for censors to
+block, as they must detect and block in real time. Meanwhile, even a censor that
+can detect 90\% of phantom hosts does not significantly increase the cost to the
+circumvention system, giving \scheme an advantage in the censor/circumventor
+cat-and-mouse game.
+\scheme supports both IPv4 and IPv6, though we note that the technique is especially
+powerful in IPv6, where censors cannot exhaustively scan the address space
+ahead of time to identify addresses that change behavior.
+Because we fully control the transport connection, connections can live as
+long as needed, without the complexity faced by TapDance.
 
 %TODO:
 %Requirements/Challenges
@@ -223,17 +247,16 @@ long as needed, without the upload or timing limits faced by TapDance.
 %    -Can overcome by limiting pickup to the registering client (but spoofing challenges...)
 %    -Note: also likely solved by the client-sends-SNI in the Mask site application...
 
-
-
 % We implement it, it works...
-We implement our dark decoy protocol under the same model as TapDance using
-only a passive tap at an ISP. Furthermore, our protocol also works with
-asymmetric routing (i.e. when the tap can only see packets from but not to the
-client). We test our deployment on a 10~Gbps real-world ISP testbed similar to the
-TapDance deployment~\cite{frolov2017isp}, and evaluate the performance and
-observability compared to TapDance.
 
-
+We introduce the \scheme protocol (Section~\ref{sec:architecture})
+and analyze its security, finding that it resists a broader
+range of detection attacks than TapDance.
+We have implemented a prototype implementation (Section~\ref{sec:implementation})
+and deployed it on a 10~Gbps testbed similar to the TapDance
+deployment~\cite{frolov2017isp}.  Compared to TapDance, we find that
+\scheme has reduced complexity and substantially improved performance
+(Section~\ref{sec:evaluation}).
 
 \input{background.tex}
 
@@ -244,7 +267,11 @@ observability compared to TapDance.
 
 Our deployment model is identical to that of TapDance: we only require a passive
 tap at the deploying ISP, and the ability to inject (spoofed) traffic from dark
-decoy sites. However, we assume a stronger threat model for the adversary than
+decoy sites.
+Furthermore, we assume
+asymmetric routing (i.e. that the tap can sometimes only see packets from but not to the
+client).
+However, we assume a stronger threat model for the adversary than
 TapDance, as our design resists active attacks.
 
 
@@ -289,6 +316,7 @@ this class of censor.
 
 
 \section{Architecture}
+\label{sec:architecture}
 % 3 pages
 
 Dark Decoys involve three main steps. First, clients \textbf{register} with the
@@ -538,6 +566,7 @@ Snowflake~\cite{snowflake}. Dark decoy applications could also use WebRTC as the
 application protocol, convincing the censor that two clients are communicating.
 
 \section{Implementation}
+\label{sec:implementation}
 
 We implemented the Dark Decoy protocol and tested it in a 10~Gbps ISP testbed
 with real traffic. Similar to TapDance~\cite{tapdance14}, we used PF\_RING to
@@ -730,6 +759,7 @@ which allows us to reuse existing TapDance CLI wrapper and Android application.
 
 
 \section{Evaluation}
+\label{sec:evaluation}
 % 1 page
 
 \TODO{Write (1 page)}

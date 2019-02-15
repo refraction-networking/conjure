@@ -15,11 +15,12 @@
     \vspace{-0.5in}
     \includegraphics[width=\linewidth,clip]{figures/high-level.png}
     \caption{\textbf{Overview}---%
-      When deployed at ISPs, \scheme monitors a passive network tap.
-      Users request service by embedding a steganographic registration message in a TLS handshake with any reachable site at the ISP\@. Then, the client connects to a random unused (``dark'')
-      address in the ISP's AS, and \scheme injects packets to communicates with the client as if it were a proxy server at that address.
+      \scheme is deployed at an ISP using a passive network tap.
+      Clients request service by embedding a steganographic registration message in a TLS connection with any reachable site at the ISP\@. The client selects
+      an unused (``dark'') address in the client's AS, and \scheme
+      injects packets to communicate with the client as if it were a proxy server at that address.
     }
-    \label{fig:overview}
+    \label{fig:highlevel}
 \end{figure}
 }
 
