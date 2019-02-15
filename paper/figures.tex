@@ -1,24 +1,25 @@
 
 \newcommand{\FigOverview}{
-\begin{figure*}[t]
+\begin{figure}[t]
     \centering
-    \includegraphics[width=0.60\linewidth,clip]{figures/dark-decoy-overview.png}
-    \caption{\textbf{\scheme Overview}\,---\, %
+    \includegraphics[width=\linewidth,clip]{figures/dark-decoy-overview.png}
+    \caption{\textbf{\scheme Operations}\,---\,%
+      \TODO{Caption}
     }
     \label{fig:overview}
-\end{figure*}
+\end{figure}
 }
 
 \newcommand{\FigHighLevel}{
 \begin{figure}[t]
     \centering
-    \vspace{-0.525in}
+    \vspace{-0.54in}
     \includegraphics[width=\linewidth,clip]{figures/high-level.png}
-    \caption{\textbf{Overview}---%
-      An ISP deploys a \scheme station, which sees a passive tap of network traffic.
-      Clients request service by embedding a steganographic message in a TLS connection with any reachable site at the ISP\@. The client then connects
-      to an unused IP address in the client's AS, and the station
-      injects packets to communicate with the client as if there were a proxy server at that address.
+    \caption{\textbf{\scheme Overview}---%
+      An ISP deploys a \scheme station, which sees a passive tap of passing traffic.
+      Following a steganographic registration process, a client can connect
+      to an unused IP address in the ISP's AS, and the station will
+      inject packets to communicate with the client as if there were a proxy server at that address.
     }
     \label{fig:highlevel}
 \end{figure}
@@ -124,10 +125,11 @@
 
 
 \newcommand{\FigImplementation}{
-\begin{figure}[ht]
+\begin{figure}[t]
     \centering
     \includegraphics[width=0.7\linewidth,clip]{figures/implementation.png}
-    \caption{\textbf{Station Architecture}\,---\, %
+    \caption{\textbf{Station Architecture}\,---\,%
+      \TODO{Caption}
     }
     \label{fig:implementation}
 \end{figure}
