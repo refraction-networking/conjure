@@ -592,6 +592,7 @@ were common for incorrect SNI, the censor's efforts to identify dark decoys
 would be frustrated.
 
 \subsubsection{WebRTC}
+\label{sec:webrtc}
 
 Dark Decoys could also pretend to be clients instead of servers. This may
 potentially give censors less to block on, as actively probing clients is common
@@ -958,8 +959,39 @@ and possibly limit to randomizing ``realistic'' bits (e.g. the middle and/or las
 \section{Future Work}
 % 0.5 page
 
-\TODO{Write (0.5 page)}
+\scheme provides a much larger degree of engineering flexibility than previous
+Refraction Networking schemes. Due to its modular design, different registration
+protocols and applications can be used. One obvious direction is to further
+study such alternatives. For instance, while we use a TapDance-like
+registration, we could potentially cut down on the overhead of one-time
+registration by using port-knocking or using a Telex-style~\cite{telex11} tag (in the Client
+Hello rather than Application Data).
 
+\paragraph{Client-side applications}
+On the application side, \scheme provides an interesting opportunity to explore
+\emph{client mimicking} dark decoys. Rather than pretend to be a server (e.g.
+mask site), our application could connect back to a client after registration
+from the dark decoy address. Protocols like WebRTC mentioned in
+Section~\ref{sec:webrtc} or other peer-to-peer protocols such as BitTorrent,
+Skype, or Bitcoin.
+
+
+\paragraph{Traffic Analysis}
+\scheme could also support applications that tradeoff performance for
+observability. While Slitheen offers ideal mimicry of decoys, it comes at a high
+cost of overhead. \scheme mask site applications could implement Slitheen
+in order to perfectly mimic the mask site's latency, packet timings, and payload
+sizes. In addition, careful choice of mask sites may allow for higher
+performance, as sites with more replaceable content can carry more covert data.
+
+
+\paragraph{Long-term Deployment}
+Ultimately, the goal for Refraction Networking protocols is to be useful in
+circumventing censorship. While it has taken many years for research
+protocols to mature, we are excited to see schemes like TapDance deployed in
+practice~\cite{frolov2017isp}. We believe \scheme can be even easier to deploy
+at scale, and hope to leverage the existing success of TapDance to place \scheme
+stations in real-world ISPs.
 
 \section{Conclusion}
 %.25 page
