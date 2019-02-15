@@ -12,13 +12,13 @@
 \newcommand{\FigHighLevel}{
 \begin{figure}[t]
     \centering
-    \vspace{-0.5in}
+    \vspace{-0.525in}
     \includegraphics[width=\linewidth,clip]{figures/high-level.png}
     \caption{\textbf{Overview}---%
-      \scheme is deployed at an ISP using a passive network tap.
-      Clients request service by embedding a steganographic registration message in a TLS connection with any reachable site at the ISP\@. The client selects
-      an unused (``dark'') address in the client's AS, and \scheme
-      injects packets to communicate with the client as if it were a proxy server at that address.
+      An ISP deploys a \scheme station, which sees a passive tap of network traffic.
+      Clients request service by embedding a steganographic message in a TLS connection with any reachable site at the ISP\@. The client then connects
+      to an unused IP address in the client's AS, and the station
+      injects packets to communicate with the client as if there were a proxy server at that address.
     }
     \label{fig:highlevel}
 \end{figure}
@@ -104,7 +104,7 @@
             & \rot{Telex~\cite{telex11}} &
             \rot{Cirripede~\cite{cirripede11}} &
             \rot{Decoy Routing~\cite{curveball11}} &
-            \rot{TapDance~\cite{tapdance14}} & \rot{Rebound~\cite{rebound15}} & \rot{Slitheen~\cite{slitheen16}} & \rot{Waterfall~\cite{waterfall}} & \rot{\textbf{\scheme}} \\
+            \rot{TapDance~\cite{tapdance14}} & \rot{Rebound~\cite{rebound15}} & \rot{Slitheen~\cite{slitheen16}} & \rot{Waterfall~\cite{waterfall17}} & \rot{\textbf{\scheme}} \\
             \hline
                                       %Telex Cirr  DR     TD      RB    Slth   Water  DD
             No inline blocking        & \no & \no  & \no & \yes  & \no  & \no  & \no  & \yes \\
