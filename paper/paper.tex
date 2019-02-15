@@ -27,6 +27,8 @@
 \usepackage{soul}
 \newcommand{\note}[2]{\hl{[\textbf{#1:} #2]}\xspace}
 \newcommand{\nikita}[1]{\note{nikita}{#1}}
+\newcommand{\TODO}[1]{\hl{TODO: #1}\xspace}
+\newcommand{\TK}{\hl{TK}\xspace}
 
 % Slight JAH fix to stop URLs from breaking after ``http:''
 \def\UrlBreaks{\do-\do\.\do\@\do\\\do\!\do\_\do\|\do\;\do\>\do\]%
@@ -59,8 +61,8 @@
 
 \maketitle
 
-%\newcommand{\scheme}{Conjure\xspace}
-\newcommand{\scheme}{Dark Decoys\xspace}
+\newcommand{\scheme}{Conjure\xspace}
+%\newcommand{\scheme}{Dark Decoys\xspace}
 
 %-------------------------------------------------------------------------------
 \begin{abstract}
@@ -77,7 +79,7 @@ Refraction scheme, TapDance, has recently been deployed at ISP-scale,
 it suffers from several problems: a limited number of ``decoy'' sites
 in realistic deployments, high technical complexity, and undesirable
 tradeoffs between performance and observability by the censor. These
-problems may impede broader deployment and ultimately allow censors to
+challenges may impede broader deployment and ultimately allow censors to
 block such techniques.
 
 We present \scheme, an improved Refraction Networking approach
@@ -108,49 +110,48 @@ and offers substantially better network performance.
 %Censorship circumvention still important
 %-More countries blocking
 %-Existing countries blocking more
-Internet censorship continues to hamper social progress throughout the world.
-Over half of the global Internet population
+%Internet censorship continues to hamper social progress throughout the world.
+
+Over half of Internet users globally
 now live in countries that block political, social, or religious content
-online~\cite{fotn2018} as governments continue to expand their censorship
-policies and programs.
-
-
+online~\cite{fotn2018}.
 %Existing circumvention strategies on shaky ground
 %-domain fronting going away
 %-active probing of existing proxies
 %-Cenosrs fingerprinting known protocols
-Meanwhile, strategies to circumvent censorship using proxies have suffered many
-recent setbacks. Many previously popular proxies are no longer functional due to
-censors evolving new ways to block them~\cite{ensafi-tor,great-cannon},
-or because they rely on temperamental
-infrastructure. For example, domain fronting was a popular circumvention
-strategy used by meek (in Tor), as well as the Signal secure messaging app to
-get around censorship in countries it was
-blocked~\cite{meek,signal,signal-domain-fronting}.
+Meanwhile, many popular tools and techniques for circumventing such censorship
+have ceased to function, because censors have evolved new ways to block them~\cite{ensafi-tor,great-cannon}
+or infrastructure they rely on has become unavailable.
+
+For example, domain fronting~\cite{meek} was a popular circumvention
+strategy used by Meek (in Tor), as well as by the Signal secure messaging app to
+get around censorship in countries where it was
+blocked~\cite{signal,signal-domain-fronting}.
 But in May~2018, Google and Amazon made both technical and policy changes to
 their cloud infrastructures that removed support for domain
 fronting~\cite{aws-front}. While meek
 continues to use other cloud providers that (for now) continue to allow domain
 fronting, Signal abandoned the strategy altogether~\cite{signal-back-on-front}.
+There is an urgent need for new, more robust approaches to circumvention.
+
 %Combined with censors' constant improvements in discovery and blocking
 %techniques~\cite{ensafi-tor,great-cannon}, ...
-
 
 %Importance of Refraction Networking
 %-what it is, how it solves many of the above problems
 %-acknowledge challenge of ISP deployment, cite TapDance deployment as only refraction technology that has overcome this challenge so far
-One emerging technique is Refraction Networking (also known as ``Decoy
-Routing''), which places proxies at cooperating Internet Service Providers
-(ISPs) outside censoring countries~\cite{refraction-site}. Clients access the
-proxies by connecting to unblocked ``decoy'' sites such that the packets pass by
-the ISP proxy, which intercepts and injects responses as the decoy site.
-Censors cannot easily block access without also blocking
-legitimate connections to the decoy sites, which may be costly for the censor.
+A family of techniques called Refraction Networking~\cite{refraction-site,telex11,cirripede11,curveball11,tapdance14,rebound15,slitheen16,waterfall17}, formerly known
+as Decoy Routing, has made promising steps towards that goal.
+These techniques operate in the network's core, at cooperating Internet Service Providers
+(ISPs) outside censoring countries.  Clients access circumvention service by connecting to a ``decoy site''---any uncensored website for which the connection travels over a participating ISP\@.  Upon recognizing a steganographic signal from the client, the ISP modifies the connection response to return censored content requested by the user.
+Censors cannot easily block access without also blocking legitimate connections to the decoy sites---collateral damage that may be prohibitively costly for the censor~\cite{robinson2013collateral}.
+
+
 However, deploying such schemes in practice is more difficult than existing proxies:
 convincing ISPs to deploy proxies in their production network is a significant
 operational hurdle. To date, only one of six Refraction
 Networking schemes has been deployed in practice by a large ISP:
-TapDance~\cite{tadance14}, a
+TapDance~\cite{tapdance14}, a
 Refraction Networking protocol that removes the need for inline
 flow-blocking~\cite{frolov2017isp}.
 
@@ -182,13 +183,13 @@ produce a connection pattern that is visible to censors.
 %-Create new decoys from ``dark'' (unused) address space
 %-Clients register (via TapDance-like or other robust protocol (email, blockchain, whatever))
 %-Connect to custom IP address, talk whatever protocol client/station agrees on
-In this paper, we present Dark Decoys, a new Refraction Networking protocol that
+In this paper, we present \scheme, a new Refraction Networking protocol that
 solves these issues, while maintaining the easy-to-deploy model of TapDance
 (i.e. a passive network tap). In our scheme, clients register new fictitious
 decoys in the ``dark'' or unused address space of the deploying ISP. Once
 registered, clients can connect to these dark decoy IP addresses as if they were
 real hosts. The ISP station acts as the other end of these connections, and responds as
-if it were a legitimate site or service. To the censor, these dark decoys appear
+if it were a legitimate site or service. To the censor, these phantom hosts appear
 as legitimate sites or services, and even active probes won't reveal
 information that would allow the censor to block them.
 
@@ -539,7 +540,7 @@ application protocol, convincing the censor that two clients are communicating.
 \section{Implementation}
 
 We implemented the Dark Decoy protocol and tested it in a 10~Gbps ISP testbed
-with real traffic. Similar to TapDance~\cite{tapdance}, we used PF\_RING to
+with real traffic. Similar to TapDance~\cite{tapdance14}, we used PF\_RING to
 consume the 10~Gbps link, and feed it to a custom \textbf{detector} written in Rust. The
 detector processes all packets and watches for new registrations. It also
 forwards all packets sent to a (registered) dark decoy's address to the local
@@ -675,7 +676,7 @@ client and a reachable site, as opposed to original TapDance.
 Client begins registation by establishing TLS connection
 to one of the reachable websites,
 path to which passes by our tap.
-Client uses a Chosen-Ciphertext Steganography technique~\cite{tapdance} to manupulate
+Client uses a Chosen-Ciphertext Steganography technique~\cite{tapdance14} to manupulate
 plaintext of a first application data HTTP request
 to get desired ciphertext,
 and exchange keys with the station.
@@ -731,6 +732,8 @@ which allows us to reuse existing TapDance CLI wrapper and Android application.
 \section{Evaluation}
 % 1 page
 
+\TODO{Write (1 page)}
+
 Compare to TapDance performance:
 -Connection setup time
 -Connection/session lifetime
@@ -761,7 +764,7 @@ short and repeatedly reconnect to decoys, increasing overhead and potentially
 alerting censors with this pattern. Dark Decoys addresses this issue and allows
 clients to maintain long-lived connections to the dark decoy.
 
-Rebound~\cite{rebound15} and Waterfall~\cite{waterfall} both focus on routing
+Rebound~\cite{rebound15} and Waterfall~\cite{waterfall17} both focus on routing
 asymmetries and routing attacks by the censor. Rebound modifies the client's
 packets on the way to the decoy, and uses error pages on the decoy site to
 reflect data back to the client. Waterfall only observes and modifies the
@@ -848,8 +851,6 @@ gain access. More importantly, unlike previous Refraction Networking protocols,
 Dark Decoy applications are not limited to mimicking websites, and can support
 any (or even a combination of) protocols.
 
-
-
 %\paragraph{Probing Dark Decoys}
 %-Active probing TLS connection
 %    -Block access unless from registering source IP
@@ -887,6 +888,8 @@ be in the same network), which must also be responded to.
 \section{Related Work}
 % 0.5-0.75 page
 
+\TODO{Write (0.5--0.75 page)}
+
 MultiFlow, The Waterfall of Liberty, Slitheen, Rebound, TapDance, Cirripede, Telex, Decoy Routing
 True Cost of RAD, Routing around Decoys
 ISP-scale TapDance
@@ -895,8 +898,12 @@ ISP-scale TapDance
 \section{Future Work}
 % 0.5 page
 
+\TODO{Write (0.5 page)}
+
 \section{Conclusion}
 %.25 page
+
+\TODO{Write (0.25 page}
 
 %%-------------------------------------------------------------------------------
 %\section*{Availability}

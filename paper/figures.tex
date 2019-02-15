@@ -3,7 +3,7 @@
 \begin{figure*}[t]
     \centering
     \includegraphics[width=0.60\linewidth,clip]{figures/dark-decoy-overview.png}
-    \caption{\textbf{Dark Decoy Overview}\,---\, %
+    \caption{\textbf{\scheme Overview}\,---\, %
     }
     \label{fig:overview}
 \end{figure*}
@@ -15,9 +15,9 @@
     \vspace{-0.5in}
     \includegraphics[width=\linewidth,clip]{figures/high-level.png}
     \caption{\textbf{Overview}---%
-      When deployed at an ISP, \scheme observes a mirror of inbound and outbound traffic.
+      When deployed at ISPs, \scheme monitors a passive network tap.
       Users request service by embedding a steganographic registration message in a TLS handshake with any reachable site at the ISP\@. Then, the client connects to a random unused (``dark'')
-      address in the ISP's AS, and \scheme communicates with the client as if it were a proxy at that address.
+      address in the ISP's AS, and \scheme injects packets to communicates with the client as if it were a proxy server at that address.
     }
     \label{fig:overview}
 \end{figure}
@@ -36,7 +36,7 @@
             & \rot{Telex~\cite{telex11}} &
             \rot{Cirripede~\cite{cirripede11}} &
             \rot{Decoy Routing~\cite{curveball11}} &
-            \rot{TapDance~\cite{tapdance14}} & \rot{Rebound~\cite{rebound15}} & \rot{Slitheen~\cite{slitheen16}} & \rot{Waterfall~\cite{waterfall}} & \rot{\textbf{Dark Decoys}} \\
+            \rot{TapDance~\cite{tapdance14}} & \rot{Rebound~\cite{rebound15}} & \rot{Slitheen~\cite{slitheen16}} & \rot{Waterfall~\cite{waterfall}} & \rot{\textbf{\scheme}} \\
             \hline
                                       %Telex Cirr  DR     TD      RB    Slth   Water  DD
             No inline blocking        & \no & \no  & \no & \yes  & \no  & \no  & \no  & \yes \\
