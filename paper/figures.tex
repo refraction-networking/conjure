@@ -64,7 +64,7 @@
         We observed 30 minutes of IPv6 traffic on our tap to the /32 of the ISP's network.
         In each address observed, we counted the number of bits set, and compared this to
         randomly generated addresses. If the 96 non-network bits
-        of each address were chosen randomly, we would expect to see a normal distribution
+        of each address were chosen randomly, we would expect to see a Binomial distribution
         (shown as Random). In practice, the distribution of observed IP addresses has much fewer
         bits set, suggesting that censors might be able to distinguish between dark decoy addresses
         and legitimate ones.
@@ -124,25 +124,25 @@
   \begin{subfigure}{\columnwidth}
     \includegraphics[width=\columnwidth]{figures/refraction-v1}
     \vspace{-3pt}
-    
+
     \caption{\textbf{First generation systems} for Refraction Networking, such as Telex and Cirripede, operated as inline network elements, with the ability to observe traffic and block specific flows. ISPs worried that if the inline element failed, it could bring down the network.\looseness=-1}
     \label{fig:refraction-v1}
   \end{subfigure}
   \vspace{16pt}
-  
+
   \begin{subfigure}{\columnwidth}
     \includegraphics[width=\columnwidth]{figures/tapdance}
     \vspace{-3pt}
-    
+
     \caption{\textbf{TapDance} is a second-generation Refraction Network scheme that operates without flow blocking, needing only to passively observe traffic and inject packets. TapDance has recently been deployed at a mid-size ISP, but the techniques used to silence the decoy site and participate in the client--decoy TCP connection mid-stream add significant complexity, performance bottlenecks, and detection risk.}
     \label{fig:tapdance}
   \end{subfigure}
   \vspace{16pt}
-  
+
   \begin{subfigure}{\columnwidth}
     \includegraphics[width=\columnwidth]{figures/dark-decoys}
     \vspace{-3pt}
-    
+
     \caption{\textbf{\scheme}, our third-generation Refraction Networking design, overcomes these limitations.  It uses two sessions. First, the client connects to a decoy site and embeds a steganographic registration message, which the station receives using only a passive tap.  Second, the client connects to a ``dark address'' where there is no running server, and the station proxies the connection in its entirety.}
     \label{fig:dark-decoys}
   \end{subfigure}
