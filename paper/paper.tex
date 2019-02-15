@@ -669,6 +669,7 @@ the remote end via the encrypted dark decoy connection.
 \if0
 In order to scale up to 10Gbps and beyond,
 one has to utilize multiple cores and employ load balancing.
+We use PF\_RING built-in load balancer \emph{zbalance} to efficiently
 distribute load between 4 cores.
 Our timeout is based on last IP address usage time, which prevents us from
 balancing load based on source IP address,
