@@ -24,6 +24,36 @@
 \end{figure}
 }
 
+\newcommand{\FigUpload}{
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.90\linewidth,clip]{figures/bandwidth-up.pdf}
+    \caption{\textbf{Upload Performance}\,---\, %
+        We used iperf to measure the upload bandwidth for a direct connection, TapDance, and \scheme.
+        As expected, TapDance's upload performance is several orders of magnitude lower than
+        the link capacity, due to the overhead of frequent reconnects to the decoy.
+    }
+    \label{fig:upload}
+\end{figure}
+}
+
+\newcommand{\FigDownload}{
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.90\linewidth,clip]{figures/bandwidth-down.pdf}
+    \caption{\textbf{Download Performance}\,---\, %
+        Using iperf, we compare the download performance of a direct connection, TapDance, and \scheme.
+        While TapDance can achieve link capacity download, it still has to occasionally reconnect
+        to the decoy, as seen by the periodic dips. These reconnects are more common the more data
+        the client sends (e.g. requests or any upload data).
+    }
+    \label{fig:download}
+\end{figure}
+}
+
+
+
+
 
 \newcommand{\FigIpBits}{
 \begin{figure}[t]
@@ -44,6 +74,8 @@
     \label{fig:ipbits}
 \end{figure}
 }
+
+
 
 
 
