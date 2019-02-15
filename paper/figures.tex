@@ -72,7 +72,6 @@
 \newcommand{\FigIpBits}{
 \begin{figure}[t]
     \centering
-    \vspace{-0.5in}
     \includegraphics[width=\linewidth,clip]{figures/ip-bits-set-pdf.pdf}
     \caption{\textbf{IPv6 Entropy}---%
         We observed 30 minutes of IPv6 traffic on our tap to the /32 of the ISP's network.
@@ -81,7 +80,7 @@
         of each address were chosen randomly, we would expect to see a Binomial distribution
         (shown as Random). In practice, the distribution of observed IP addresses has much fewer
         bits set, suggesting that censors might be able to distinguish between dark decoy addresses
-        and legitimate ones.
+        and legitimate ones.\looseness=-1
         %We note there are several /64 subnets that had many
         %addresses that appeared random (visibly overlapping the random distribution).
     }
@@ -165,6 +164,6 @@
   \end{subfigure}
 
   \vspace{12pt}
-  \caption{\textbf{Evolution of Refraction Networking Approaches}}
+  \caption{\textbf{Evolution of Refraction Networking}}
 \end{figure}
 }
