@@ -143,7 +143,7 @@
     \caption{\textbf{Station Architecture}\,---\,%
         We used PF\_RING to receive packets from a 10~Gbps packet tap, which we load balance
         across 4~CPU cores. The detector process identifies and processes registrations, and forwards
-        packets destined to registered dark decoy addresses to a local application. The application
+        packets destined to registered phantom host addresses to a local application. The application
         determines if the client is legitimate (using a seed shared during registration) and forwards
         their traffic to a proxy. Otherwise, the application responds as if it were the mask site.
     }
