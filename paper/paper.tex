@@ -44,9 +44,9 @@
 \date{}
 
 % make title bold and 14 pt font (Latex default is non-bold, 16 pt)
-\title{\Large \bf Dark Decoys:
-  Conjuring Proxies from Unused Address Space}
-%\title{\Large \bf Conjure: Summoning Proxies from Unused Address Space}
+%\title{\Large \bf Dark Decoys:
+%  Conjuring Proxies from Unused Address Space}
+\title{\Large \bf Conjure: Summoning Proxies from Unused Address Space}
 
 %for single author (just remove % characters)
 %\author{
@@ -63,8 +63,8 @@
 
 \maketitle
 
-%\newcommand{\scheme}{Conjure\xspace}
-\newcommand{\scheme}{Dark Decoys\xspace}
+%\newcommand{\scheme}{Dark Decoys\xspace}
+\newcommand{\scheme}{Conjure\xspace}
 
 %-------------------------------------------------------------------------------
 \begin{abstract}
@@ -266,8 +266,8 @@ deployment~\cite{frolov2017isp}.  Compared to TapDance, we find that
 
 
 Our deployment model is identical to that of TapDance: we only require a passive
-tap at the deploying ISP, and the ability to inject (spoofed) traffic from dark
-decoy sites.
+tap at the deploying ISP, and the ability to inject (spoofed) traffic from phantom
+hosts.
 Furthermore, we assume
 asymmetric routing (i.e. that the tap can sometimes only see packets from but not to the
 client).
@@ -284,22 +284,22 @@ Whitelists are expensive for censors to maintain and can stifle
 innovation, and are rarely employed by censors.
 
 
-We assume that the censor can know what network the dark decoy station(s) are
-deployed in and the prefixes dark decoys are selected from, but that blocking those
+We assume that the censor can know what network the \scheme station(s) are
+deployed in and the prefixes phantom hosts are selected from, but that blocking those
 networks outright brings a collateral
 damage the censor is unwilling to suffer. Instead, the censor aims to identify
-the addresses that are dark decoys, and block only those.
+the addresses that are phantom hosts, and block only those.
 
-We assume the censor can use the client to register and access its own dark
-decoys, but that these will not reveal the dark decoys of other users. The
+We assume the censor can use the client to register and access its own phantom
+hosts, but that these will not reveal the phantom hosts of other users. The
 censor can also actively probe addresses that it sees users accessing, but can
-not enumerate the entire dark decoy prefix (e.g. a /32 IPv6 prefix contains
+not enumerate the entire ISP prefix (e.g. a /32 IPv6 prefix contains
 $2^{96} addresses$).
 
 Finally, we assume the censor can replay or preplay any connections that it
-suspects involve dark decoys (or their registration) in an attempt to confirm.
+suspects involve phantom hosts (or their registration) in an attempt to confirm.
 However, the censor wishes to avoid disrupting any connections before it
-knows for certain they are dark decoy ones, lest they disrupt legitimate
+knows for certain they are from \scheme clients, lest they disrupt legitimate
 connections. This means that injecting false data or corrupting TLS sessions is
 outside the scope of the censor, but that the censor can send non-disruptive
 probes (such as stale TCP acknowledgements or other packets that would normally
@@ -319,12 +319,12 @@ this class of censor.
 \label{sec:architecture}
 % 3 pages
 
-Dark Decoys involve three main steps. First, clients \textbf{register} with the
+\scheme involve three main steps. First, clients \textbf{register} with the
 ISP station,
-and agree on the dark decoy IP address that will be used. Next, the client
+and agree on the phantom host IP address that will be used. Next, the client
 connects to the agreed upon address, which is terminated by an
 \textbf{application} running on the station. Finally, the client \textbf{proves}
-to the application that it was the same entity that registered (and not a censor
+to the application that it was the same client that registered (and not a censor
 attempting to probe), and is able to use the application as a proxy.
 
 Similar to previous schemes, our design does not require expensive in-line
@@ -348,11 +348,16 @@ that one gets through.
 \medskip
 
 To register, clients connect to a \textbf{decoy} site that supports TLS. They
-complete the handshake, and send a normal HTTPS request. In TLS, requests (and
-responses) are encrypted and sent in an \texttt{Application Data} record. During
-registration, the client alters the ciphertext of the \texttt{Application Data} record to
-convey a short \textbf{tag} to the ISP station, on path between the client and
-decoy site.
+complete the handshake, and send a normal HTTPS request that embeds a special
+steganographic \textbf{tag} in the ciphertext of the request. We use
+the same technique used in TapDance's covert ciphertext channel\footnote{Section 3 in
+TapDance~\cite{tapdance14}} to embed the tag, but we purposefully have the client
+send a complete request (rather than incomplete), allowing the decoy server to respond.
+The steganographic tag is only visible to the ISP station, which can see the tag using its
+private key. Unlike in TapDance, the \scheme station can passively observe
+the tag, and does not need to respond to it (which requires mimicking the
+decoy)
+
 
 The tag contains a public key (encoded to be indistinguishable from random using
 Elligator~\cite{elligator}), and a message encrypted under the shared secret
@@ -361,62 +366,92 @@ in the client software. The station uses its private key to compute the same
 shared secret from the (decoded) public key, and decrypts the message in the
 tag. The censor, without knowledge of either the station or client's private
 key, cannot derive the shared secret, preventing it from being able to decrypt
-the message, or learn of its existence.
+the message, or even learn of its existence.
 
 
 Inside the message, the client communicates a random \textbf{seed}, and other
 configuration-specific information, such as flags to signify version, feature
-support, and which set of dark decoy network prefixes the client knows of. The
-client and server use a hash of the provided seed to determine which specific
-dark decoy IP address to register. It may seem intuitive to instead have the client
+support, and a set of IPv6 network prefixes that the client knows can be used
+for phantom hosts (previously distributed publicly).
+The client and server hash the seed to determine which specific
+IPv6 address from the set of prefixes will be used and registered as a phantom host. It may seem intuitive to instead have the client
 send the specific IP address to register, but allowing the client arbitrary
-choice also allows the censor to register suspected dark decoys and block them if
-they pick up. By using a hash, the censor would have to pre-image the hash to
-obtain a seed it could use to register for a desired IP address. \nikita{Are we claiming that this kind of enumeration is hard to do in IPv4?} It also gives a
+choice also allows the censor to register suspected phantom hosts and block them if
+they pick up. 
+By using a hash of a seed, the censor would have to pre-image the hash to
+obtain a seed it could use to register for a desired IP address.
+It also gives a
 secret (the seed) that only the client and station know, even after the client
-connects to the dark decoy address.
+connects to the phantom host address.
 
-Once the dark decoy IP address has been selected, the station watches for
-packets destined to that address, and forwards them onto the dark decoy
+Once the phantom host IP address has been selected, the station watches for
+packets destined to that address, and forwards them onto the phantom host
 \textbf{application}. The station can also optionally ignore packets not from
-the source IP address of the registering client, so that to a probing censor,
-the dark decoy appears to be firewalled off from all but the client.
+the source IP address of the registering client, so that to a probing censor
+from a different IP address,
+the phantom host appears to be firewalled off from all but the client. We note
+this is not a robust solution: censors have previously been observed taking over
+IP addresses of clients~\cite{ensafi-tor}. We instead address active probing in
+the application.
 
-%-IPv6 vs IPv4 dark decoys subsection?
+\subsubsection{IPv6 vs IPv4 phantom hosts}
 
-\subsection{Address utilization}
-% TODO:Can be better: story for v4, these are some problems, here's what it
-% looks like in v6
 
-% Note on IPv6 space? /32 of IPv6 is 96-bits to select...
-Dark decoy IP addresses are selected from unused but still routed address
-space that passes by the ISP. Traffic to unrouted addresses would produce ICMP
-responses that a censor could observe, and are also easily blocked with knowledge
-of a routing table. Because we support the use of IPv6 addresses, censors will
-also be unable to scan ahead of time to determine if the host has been there
-previously, or what was there before. While they can probe suspected dark decoy
-addresses after clients connect to them, at that point the address has already been
-registered, preventing the censor from identifying differences in behavior
-before and after registration.
+Phantom host IP addresses must be derived from network blocks that are routed (so they pass
+the ISP station) and contain other legitimate hosts (so that censors cannot
+block the entire network without collateral damage).
+Because of the large number of IPv6 addresses, even
+relatively small network prefixes have astronomical numbers of addresses: a
+single /32 prefix has $2^{96}$ possible addresses. Therefore, client-chosen
+seeds have negligible probability of corresponding to addresses that are already
+being used by legitimate hosts. This allows us to select phantom host addresses
+from network prefixes that contain
+legitimate hosts---crucial to discouraging the censor from blocking them
+outright---without worry that registrations could interfere with legitimate
+services.
 
-While address utilization in IPv4 is quite high (all blocks have been allocated
-at the RIR level), the fraction of addresses that respond to TCP connections on
-a given port is quite low: even popular ports like 443 (use by TLS) have less
-than 2\% of IPv4 hosts respond to connection requests. This leaves a large
-number of hosts available to use as dark decoys. However, if a client registers
-a dark decoy address that is already happens to be used by an existing host,
-there will be multiple responses when the client tries to connect, and the
-connection will fail. However, this failure is still limited to the registering
-client, as the application only responds to the IP of the client that
-registered. In IPv6, the odds of picking a legitimate host are negligible: with
-a /32 prefix of IPv6, there are $2^{96}$ addresses to choose from.
-\nikita{/32 is pretty big, e.g. UIUC only has a /48}
+In addition, the use of IPv6 prevents censors from exhaustively probing
+potential phantom host network prefixes ahead of time to learn the full set of
+legitimate sites in the network.
+
+\paragraph{IPv4}
+While \scheme composes well with IPv6, we can also support IPv4,
+at the cost of being vulnerable to active probing by the censor.
+We emphasize that TapDance is already
+vulnerable to active probing attacks~\cite{tapdance14} that \scheme defends
+against when using IPv6. However, in IPv4, there are substantially fewer
+addresses, allowing censors to easily enumerate network prefixes that pass by
+the ISP station and measure legitimate sites. Furthermore, the small address
+space makes it much easier to pre-image the hash used to derive IP addresses
+from the seed. Registering a specific IPv4 address in an IPv4 /16 subnet will
+take only an expected $2^{16}$ hashes for the censor to achieve. This would let
+attackers register legitimate hosts as phantom hosts, potentially disrupting
+legitimate service. If the station refused to pick up for addresses that
+correspond to legitimate hosts (measured by scanning during registration), then
+censors could use this as an oracle for distinguishing legitimate sites from
+phantom hosts. Still, IPv4 \scheme offers many performance, flexibility, and
+simplicity benefits over TapDance, though they are both vulnerable to active
+probing attacks.
+
+
+%While address utilization in IPv4 is quite high (all blocks have been allocated
+%at the RIR level), the fraction of addresses that respond to TCP connections on
+%a given port is quite low: even popular ports like 443 (use by TLS) have less
+%than 2\% of IPv4 hosts respond to connection requests. This leaves a large
+%number of hosts available to use as dark decoys. However, if a client registers
+%a dark decoy address that is already happens to be used by an existing host,
+%there will be multiple responses when the client tries to connect, and the
+%connection will fail. However, this failure is still limited to the registering
+%client, as the application only responds to the IP of the client that
+%registered. In IPv6, the odds of picking a legitimate host are negligible: with
+%a /32 prefix of IPv6, there are $2^{96}$ addresses to choose from.
+%\nikita{/32 is pretty big, e.g. UIUC only has a /48}
 
 
 \subsection{Applications}
 
 
-Once the client has registered, packets sent to the dark decoy IP address are
+Once the client has registered, packets sent to the phantom host IP address are
 passed to the \textbf{application} running on the station. The application has
 two main jobs: first, it must look like an innocuous legitimate service to the
 censor, and second must allow the client to use it as a proxy.
@@ -440,7 +475,7 @@ employed in practice by censors, we consider two alternatives built on TLS.
 
 \subsubsection{Mask Sites}
 
-TLS is a natural protocol for dark decoy applications, because it is ubiquitous on
+TLS is a natural protocol for \scheme applications, because it is ubiquitous on
 the Internet (making it difficult for censors to block), while also providing
 strong cryptographic protection against passive and active network adversaries.
 However, there are several challenges to make it robust against censors that
@@ -452,7 +487,9 @@ Client Hello message that sends the domain name of the server, and the
 X.509 Certificate sent by the server.
 
 To evade censors, we must send a plausible SNI value (sending no SNI is
-uncommon and easily blocked---only 1\% of TLS connections\nikita{qualify this as being true in a particular sample} do not carry the
+uncommon and easily blocked---study conducted using Colorado University network
+infrastructure shows that only 1\% of all TLS connections coming in and out of 
+campus do not carry the
 SNI extension~\cite{tls-fingerprint}), and we must have the server respond with
 a plausible (and corresponding) certificate. Even if we manage to avoid sending
 either in the clear, censors could actively probe the server in a
@@ -489,46 +526,41 @@ the \textbf{seed} used in registration, it cannot coerce the application to
 appear as anything besides the mask site.
 
 
-\paragraph{Mask Site Selection}
+\subsubsection{Mask Site Selection}
 
 Selecting which sites to masquerade as must be done carefully to avoid censors
 being able to detect obvious choices. For example, if a small university network
-has a dark decoy in their network that appears to be \texttt{apple.com}, it
+has a phantom host in their network that appears to be \texttt{apple.com}, it
 would be easy for a censor to block as a likely non-legitimate host. Likewise,
-if a dark decoy at an IP address pretends to be a domain (\texttt{example.com}) that
+if a phantom host at an IP address pretends to be a domain (\texttt{example.com}) that
 globally resolves to a single different IP address, the censor could also
-identify and block the dark decoy.
+identify and block the phantom host.
 
-\smallskip
-\noindent
-\emph{Nearby sites} - One strategy for selecting mask sites to mimic is to pick websites that are
-legitimately hosted in or near the network of the dark decoy addresses. This
+\paragraph{Nearby sites.}
+One strategy for selecting mask sites to mimic is to pick websites that are
+legitimately hosted in or near the network of the phantom host addresses. This
 effectively creates copies of legitimate sites, with the censor unable to
-determine which copies are real and which are the dark decoys. However, as
+determine which copies are real and which are the phantom hosts. However, as
 mentioned, other signals such as DNS may reveal the true mask site.
 
-\smallskip
-\noindent
-\emph{Alexa sites} -
+\paragraph{Popular sites.}
 An alternative strategy is to use popular sites, such as those from the Alexa
-top million~\cite{alexa} list. As mentioned previously, it may be wise to avoid
-sites that are obviously not hosted in the dark decoy address range, such as
+top site~\cite{alexa-top500} list. As mentioned previously, it may be wise to avoid
+sites that are obviously not hosted in the phantom host address range, such as
 large companies that run their own datacenters and own their own ASN.
 The list could also be filtered to domains that resolve to different IP
 addresses from different vantage points, making it harder for a censor to know
-if a dark decoy corresponds to a domain's IP.
+if a phantom host corresponds to a domain's IP.
 
-\smallskip
-\noindent
-\emph{Passive observation} -
+\paragraph{Passive observation.}
 The ISP tap could also collect sites by passively observing DNS requests, TLS
 SNI, or certificates that pass by. This would allow for building a realistic set
-of sites that are plausibly in the vicinity of the dark decoy addresses
+of sites that are plausibly in the vicinity of the phantom host addresses
 that pass by the tap. It also has the added bonus of being able to discover
 IPv6 addresses that could be used as decoys (for registration), where active
 scanning would be infeasible.
 
-In practice, clients can often try multiple dark decoys/mask sites over
+In practice, clients can often try phantom hosts/mask sites over
 several attempts, as blocking the client outright may negatively impact other
 unrelated users behind the same network (e.g. in the case of NAT). Thus, even a
 censor that can block most (but not all) mask site only delays access, and
@@ -537,8 +569,8 @@ doesn't prevent it outright.
 \subsubsection{Encrypted SNI}
 \label{esni}
 
-TLS~1.3~\cite{tls13} offers several features that may greatly simplify dark
-decoy application design. For instance, TLS~1.3 handshakes include encrypted
+TLS~1.3~\cite{tls13} offers several features that may greatly simplify 
+\scheme application design. For instance, TLS~1.3 handshakes include encrypted
 certificates, potentially obviating the need to impersonate mask sites.
 Unfortunately, TLS~1.3 currently still sends the SNI in the (plaintext) Client
 Hello, meaning we would still have to choose a realistic domain to fool a
@@ -546,33 +578,34 @@ censor.
 
 However, there are proposals to encrypt the SNI in the Client Hello~\cite{esni},
 though none have been implemented or deployed as of early 2019. Nonetheless,
-if widely adopted, Encrypted SNI (ESNI) would offer a powerful solution for dark
-decoy applications by allowing the domain to remain hidden from the censor.
+if widely adopted, Encrypted SNI (ESNI) would offer a powerful solution for
+\scheme applications by allowing the domain to remain hidden from the censor.
 While the censor could still try to actively probe with guesses for the SNI,
 servers could respond with generic ``Unknown SNI'' errors. If such responses
-were common for incorrect SNI, the censor's efforts to identify dark decoys
+were common for incorrect SNI, the censor's efforts to identify phantom hosts
 would be frustrated.
 
 \subsubsection{WebRTC}
+\label{sec:webrtc}
 
-Dark Decoys could also pretend to be clients instead of servers. This may
+Phantom hosts could also pretend to be clients instead of servers. This may
 potentially give censors less to block on, as actively probing clients is common
 to return few or no open ports. Nonetheless, a censor may be hesitant to block
 client-to-client communication, as it could block peer-to-peer applications as
 well as many video conferencing protocols. WebRTC is a
 natural choice for a client-to-client protocol in censorship circumvention,
 and is used in existing censorship circumvention schemes like
-Snowflake~\cite{snowflake}. Dark decoy applications could also use WebRTC as the
+Snowflake~\cite{snowflake}. \scheme could also use WebRTC as the
 application protocol, convincing the censor that two clients are communicating.
 
 \section{Implementation}
 \label{sec:implementation}
 
-We implemented the Dark Decoy protocol and tested it in a 10~Gbps ISP testbed
+We implemented the \scheme protocol and tested it in a 10~Gbps ISP testbed
 with real traffic. Similar to TapDance~\cite{tapdance14}, we used PF\_RING to
 consume the 10~Gbps link, and feed it to a custom \textbf{detector} written in Rust. The
 detector processes all packets and watches for new registrations. It also
-forwards all packets sent to a (registered) dark decoy's address to the local
+forwards all packets sent to a (registered) phantom host address to the local
 \textbf{application} via an \texttt{iptables} DNAT rule that rewrites the destination IP,
 allowing the application to accept and respond to connections using the native
 operating system's interface. Figure~\ref{fig:implementation} shows the overall
@@ -591,38 +624,37 @@ of auto-generated protobuf code}.
 
 We used PF\_RING to load balance the 10~Gbps link over 4~CPU cores. PF\_RING
 supports balancing across cores based on flow (5-tuple) or source and
-destination IPs. However, both of these options present challenges for our Dark
-Decoy detector. One issue is that registrations could be processed on a
-different core than the packets sent to that specific dark decoy address. For
+destination IPs. However, both of these options present challenges for our 
+implementation. One issue is that registrations could be processed on a
+different core than the packets sent to that specific phantom host address. For
 instance, a client could have its registration handled by Core 1, while its
-packets to the dark decoy address end up on Core 3, which doesn't know about the
+packets to the phantom host address end up on Core 3, which doesn't know about the
 original registration.
 
 To address this, we used Redis~\cite{redis} to allow each process to announce
 (publish) newly registered decoys to the other cores so they can
-add them to their local list of registered dark decoy addresses.
+add them to their local list of registered phantom host addresses.
 However, this introduces two new problems. First, a core might add a
 registration \emph{after} it has already received and processed packets destined
-for the specified dark decoy. This typically isn't a problem when running on a
+for the specified phantom host. This typically isn't a problem when running on a
 single core, as packets are processed sequentially. Second, each core may
-timeout each dark decoy at different times, potentially leading to differing
+timeout each phantom host at different times, potentially leading to differing
 behavior that is visible to a censor. For instance, if we used the
-source/destination IPs to load balance, a censor's packets to a dark decoy could
+source/destination IPs to load balance, a censor's packets to a phantom host could
 be processed by a different core than the client. If the censor waits for the
-known timeout before sending a probe, its core may have timed out that dark
-decoy, while the client's core has refreshed the timeout of the dark decoy due
+known timeout before sending a probe, its core may have timed out that phantom host, while the client's core has refreshed the timeout of the phantom host due
 to active use.
 
 To address the first issue, we force the client to delay sending its connection
-to the dark decoy until a short time after registration. In practice, we force
+to the phantom host until a short time after registration. In practice, we force
 the client to wait until the registration decoy responds before starting a
-connection with the registered dark decoy.
+connection with the registered phantom host.
 
 To address the second issue, we implemented a new load-balancing algorithm in
 PF\_RING to select the core based solely on the destination IP address of the
 packet. This still means we must use Redis to tell all of the cores of new
 registrations, but that only one core will be responsible for processing all of
-the packets sent to a given dark decoy, regardless of who or when it is sent.
+the packets sent to a given phantom host, regardless of who or when it is sent.
 
 
 \subsection{Application}
@@ -632,7 +664,7 @@ other protocols (e.g. obfsproxy or WebRTC) could be used as the application, we
 implemented a mask site mimicking application, that pretends to be a mask site
 when actively probed by the censor.
 
-The application accepts connections to dark decoy addresses forwarded by the
+The application accepts connections to phantom host addresses forwarded by the
 detector and rewritten to the local address using \texttt{iptables}.
 The application also receives out-of-band information about registrations from the
 detector via a ZMQ~\cite{zmq} connection, which informs the application of the
@@ -651,7 +683,7 @@ to allow us to change the TLS secrets being used after the handshake.
 If the decryption is successful, the application switches to forwarding
 (decrypted) data back and forth with a client-specified endpoint, such as a
 SOCKS proxy, which can multiplex multiple client connections over the single
-connection to the dark decoy.
+connection to the phantom host.
 
 \subsection{Client}
 
@@ -661,10 +693,10 @@ because it consists of only a single (complete) request, and the station does
 not have to spoof packets as the decoy used during registration, only passively
 observe them.
 
-After registering, the client connects to the derived dark decoy address, and
+After registering, the client connects to the derived phantom host address, and
 switches secrets after the handshake. At this point, a local application (e.g.
 SOCKS client) can connect to the client, and it will transparently be connected to
-the remote end via the encrypted dark decoy connection.
+the remote end via the encrypted phantom host connection.
 
 \if0
 In order to scale up to 10Gbps and beyond,
@@ -683,16 +715,16 @@ IP address, we made a custom implementation of this zbalance policy.
 TODO: say it's tested on 10 Gbps
 
 Implementation of the protocol includes 3 components:
-dark decoy detector, proxy application, and client.
-Dark decoy detector will parse the traffic, searching for registrations in
+detector, proxy application, and client.
+Detector will parse the traffic, searching for registrations in
 tagged messages. After detector observes a registration, and negotiates with client
-a dark decoy IP,
-all packets, that are sent to that dark decoy IP,
+a phantom host IP,
+all packets, that are sent to that phantom host IP,
 will be forwarded into a proxy application.
 
 \subsection{Registration phase}
 
-Each Dark Decoy connection has 2 phases: registration, and usage of a dark decoy.
+Each \scheme connection has 2 phases: registration, and usage of a phantom host.
 Registration starts with a handshake that is similar to a TapDance handshake,
 but initial HTTP request is complete.
 This allows a reachable site to provide a genuine response
@@ -721,14 +753,14 @@ IV and key for encrypted of both FSP and VSP will be derived from HKDF.
 Once FSP is decrypted and the size of VSP is known, station can decrypt the VSP as well.
 VSP itself is a protobuf, which allows us to easily change the contents of VSP without risk of version mismatch, and currently contains 3 fields: version of configuration(which includes list of decoys), SNI of mask site, and a presumably blocked target host that client would like to get connected to.
 
-Client will sleep a short randomized period of time before attempting to establish connection to dark decoy.
-This is done for 2 reasons: to break potentially observable interflow dependency with a dark decoy connection being established right after a first application layer data packet sent to decoy,
+Client will sleep a short randomized period of time before attempting to establish connection to phantom host.
+This is done for 2 reasons: to break potentially observable interflow dependency with a phantom host connection being established right after a first application layer data packet sent to decoy,
 and to give station time.
 TODO: why does it need time?
 
 \subsection{Application phase}
 Client and station will use HKDF to derive 16 random bytes and use them to
-agree on a dark decoy IP address, by applying a simple selection algorithm.
+agree on a phantom host IP address, by applying a simple selection algorithm.
 Algorithm is as follows: first, flatten a list of pre-shared avaliable IP
 addresses in various subnets into a single indexed list, then make a 128-bit
 integer out of 16 random bytes and divide it by the length
@@ -743,7 +775,7 @@ is not an open proxy.
 
 TODO: describe MakeConnWithCompleteHandshake?
 
-Note that dark decoy detector and proxy application are only loosely coupled with each other,
+Note that the detector and proxy application are only loosely coupled with each other,
 making it simple to replace one of them.
 We plan to take advantage of encrypted SNI, when it gets widely adopted,
 and replace our current proxy implementation with one that uses encrypted SNI
@@ -815,8 +847,9 @@ download rate without interruption.
 
 \subsection{Attacks and Defenses}
 % 1 page
+\label{sec:attacks}
 
-There are many attacks a censor might attempt to either prevent dark decoys from
+There are many attacks a censor might attempt to either prevent phantom hosts from
 being registered or used.
 
 \paragraph{Blocking registration}
@@ -824,7 +857,7 @@ To make registration more difficult, censors could block TLS connections to all 
 limited decoys available in a deployment. Using TapDance's current deployment,
 this would involve blocking over 1500 sites. We note that such an attack would
 completely disable all existing Refraction Networking schemes, as none work
-without being able to access legitimate decoys past the station. In dark decoys,
+without being able to access legitimate decoys past the station. In \scheme,
 this would only block new registrations, and would not impact users that
 previously registered. Furthermore, registrations could also occur over email,
 or over lower-bandwidth covert channels, such as port (or even IP) knocking past
@@ -837,12 +870,12 @@ the station, that would be more difficult for the censor to block.
 
 \paragraph{Scanning masked sites}
 The censor could also attempt to fingerprint the masked site and compare it to a
-suspected dark decoy application. For instance, if a dark decoy IP responds as
+suspected \scheme application. For instance, if a phantom host IP responds as
 pretending to be \texttt{example.com}, the censor could scan or probe real instances
 of \texttt{example.com} on different ports and see how it responds. Then, the
-censor can probe the dark decoy IP, and see if it responds similarly (e.g. with
+censor can probe the phantom host IP, and see if it responds similarly (e.g. with
 the same set of open ports and payloads for certain kinds of probes). To defend
-against this, we forward \emph{all} traffic destined to the dark decoy to the
+against this, we forward \emph{all} traffic destined to the phantom host to the
 masked site, including ports that are not relevant to the proxy application
 (e.g. non 443). This ensures that above the TCP layer, we appear to be the mask
 site. However, there may be differences in TCP/IP implementations, for instance,
@@ -850,27 +883,26 @@ how IP IDs are incremented, or how TCP timestamps are incremented (or supported
 at all) that may be different from the mask site. To combat this, we can filter
 mask sites by those that have identical TCP/IP stacks to ours, as we use a
 common Linux implementation. We also note that this attack only applies when we
-use the mask site as an application, and that Dark Decoys can support other
+use the mask site as an application, and that \scheme can support other
 applications (e.g. obfsproxy, WebRTC, etc) that do not have this issue.
 
 
 
 \paragraph{Website Fingerprinting}
+Website Fingerprinting~\cite{wang2014effective,hayes2016k,sirinam2018deep} (WF) uses the patterns of encrypted traffic to identify which website a client is connected to. WF uses a classifier to label the traffic as belonging to one of several known websites, or (in some variants), an unknown or background class. Though WF is commonly studied in the context of anonymous web browsing, a censor could also use WF to detect refraction networking by distinguishing known traffic patterns of legitimate uses of a decoy site from the traffic generated by refraction networking (unknown class). Alternatively, the censor could monitor all traffic for patterns consistent with a set of blocked websites.
 
-Website Fingerprinting~\cite{kNN,kFP,DLFP} (WF) uses the patterns of encrypted traffic to identify which website a client is connected to. WF uses a classifier to label the traffic as belonging to one of several known websites, or (in some variants), an unknown or background class. Though WF is commonly studied in the context of anonymous web browsing, a censor could also use WF to detect refraction networking by distinguishing known traffic patterns of legitimate uses of a decoy site from the traffic generated by refraction networking (unknown class). Alternatively, the censor could monitor all traffic for patterns consistent with a set of blocked websites.
-
-Dark Decoy applications that mimic specific websites (e.g., mask sites) are likewise susceptible to WF. To date, however, censors have not been observed using WF and similar techniques, possibly due to the significant uncertainty resulting from even the best algorithms: even a small false
+\scheme applications that mimic specific websites (e.g., mask sites) are likewise susceptible to WF. To date, however, censors have not been observed using WF and similar techniques, possibly due to the significant uncertainty resulting from even the best algorithms: even a small false
 positive rate means blocking mostly legitimate connections (due to the base rate
 of normal traffic), and false negatives could allow clients to retry until they
 gain access.
 
-More importantly, Dark Decoy applications offer great flexibility in deploying traffic analysis defenses; for example, traffic shaping strategies such as implemented in Slitheen~\cite{slitheen16} could be easily employed in Dark Decoys. Furthermore,
-Dark Decoy applications are not limited to mimicking websites, and can support
+More importantly, \scheme applications offer great flexibility in deploying traffic analysis defenses; for example, traffic shaping strategies such as implemented in Slitheen~\cite{slitheen16} could be easily employed in \scheme. Furthermore,
+\scheme applications are not limited to mimicking websites, and can support
 any (or even a combination of) protocols. Finally, if encrypted SNI can be used (\cref{esni}), the censor would not be able to build up a traffic profile of a legitimate site since its identity would be encrypted.
 
 \paragraph{ICMP}
-Censors can use ping or traceroute utilities (via ICMP) to probe potential dark
-decoys. Because there is (usually) no host at the dark decoy address, these
+Censors can use ping or traceroute utilities (via ICMP) to probe potential phantom
+hosts. Because there is (usually) no host at the phantom host address, these
 probes will timeout and produce no response. They might also produce
 ``Destination Unreachable'' responses from routers depending on how they are
 configured. We performed a scan of 10~million IPv6 addresses in a routable /32
@@ -882,10 +914,10 @@ Many legitimate hosts and routers do not respond to or forward ICMP packets, and
 it is common for firewalls to block traceroutes from penetrating inside
 networks. Thus, simply ignoring ICMP messages (or low TTL packets that might be
 used by traceroute) may be a viable strategy. % We should evaluate this claim...
-Alternatively, we could spoof responses to convince an adversary that a dark
-decoy is part of a particular network. However, this strategy requires careful
+Alternatively, we could spoof responses to convince an adversary that a 
+phantom host is part of a particular network. However, this strategy requires careful
 consideration of what network makes sense for a mask site to be in. Also, the
-censor may try to probe for addresses around the dark decoy (but still likely to
+censor may try to probe for addresses around the phantom host (but still likely to
 be in the same network), which must also be responded to.
 
 
@@ -901,7 +933,7 @@ For instance, google.com has the address
 \texttt{2607:f8b0:400f:0806:0000:0000:0000:2004} (which can be shortened to
 \texttt{2607:f8b0:400f:806::2004}). Only 24 bits are set to 1 in this address,
 giving censors a possible feature to filter on: addresses that have too much
-entropy (or even simply bits set) could be suspicious as dark decoys. To demonstrate and quantify
+entropy (or even simply bits set) could be suspicious as phantom hosts. To demonstrate and quantify
 this problem, we measured 30 minutes of IPv6 traffic to our ISP's /32 network prefix.
 Figure~\ref{fig:ipbits} shows a histogram of bits set in the addresses we observed, which are
 notably skewed to less than expected if addresses were randomly generated. However, there
@@ -920,7 +952,39 @@ and possibly limit to randomizing ``realistic'' bits (e.g. the middle and/or las
 \section{Future Work}
 % 0.5 page
 
-\TODO{Write (0.5 page)}
+\scheme provides a much larger degree of engineering flexibility than previous
+Refraction Networking schemes. Due to its modular design, different registration
+protocols and applications can be used. One obvious direction is to further
+study such alternatives. For instance, while we use a TapDance-like
+registration, we could potentially cut down on the overhead of one-time
+registration by using port-knocking or using a Telex-style~\cite{telex11} tag (in the Client
+Hello rather than Application Data).
+
+\paragraph{Client-side applications}
+On the application side, \scheme provides an interesting opportunity to explore
+\emph{client mimicking} phantom hosts. Rather than pretend to be a server (e.g.
+mask site), our application could connect back to a client after registration
+from the phantom host address. Protocols like WebRTC mentioned in
+Section~\ref{sec:webrtc} or other peer-to-peer protocols such as BitTorrent,
+Skype, or Bitcoin.
+
+
+\paragraph{Traffic Analysis}
+\scheme could also support applications that tradeoff performance for
+observability. While Slitheen offers ideal mimicry of decoys, it comes at a high
+cost of overhead. \scheme mask site applications could implement Slitheen
+in order to perfectly mimic the mask site's latency, packet timings, and payload
+sizes. In addition, careful choice of mask sites may allow for higher
+performance, as sites with more replaceable content can carry more covert data.
+
+
+\paragraph{Long-term Deployment}
+Ultimately, the goal for Refraction Networking protocols is to be useful in
+circumventing censorship. While it has taken many years for research
+protocols to mature, we are excited to see schemes like TapDance deployed in
+practice~\cite{frolov2017isp}. We believe \scheme can be even easier to deploy
+at scale, and hope to leverage the existing success of TapDance to place \scheme
+stations in real-world ISPs.
 
 \section{Conclusion}
 %.25 page

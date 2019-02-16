@@ -1,24 +1,25 @@
 
 \newcommand{\FigOverview}{
-\begin{figure*}[t]
+\begin{figure}[t]
     \centering
-    \includegraphics[width=0.60\linewidth,clip]{figures/dark-decoy-overview.png}
-    \caption{\textbf{\scheme Overview}\,---\, %
+    \includegraphics[width=\linewidth,clip]{figures/dark-decoy-overview.png}
+    \caption{\textbf{\scheme Operations}\,---\,%
+      \TODO{Caption}
     }
     \label{fig:overview}
-\end{figure*}
+\end{figure}
 }
 
 \newcommand{\FigHighLevel}{
 \begin{figure}[t]
     \centering
-    \vspace{-0.5in}
+    \vspace{-0.54in}
     \includegraphics[width=\linewidth,clip]{figures/high-level.png}
-    \caption{\textbf{Overview}---%
-      \scheme is deployed at an ISP using a passive network tap.
-      Clients request service by embedding a steganographic registration message in a TLS connection with any reachable site at the ISP\@. The client selects
-      an unused (``dark'') address in the client's AS, and \scheme
-      injects packets to communicate with the client as if it were a proxy server at that address.
+    \caption{\textbf{\scheme Overview}---%
+      An ISP deploys a \scheme station, which sees a passive tap of passing traffic.
+      Following a steganographic registration process, a client can connect
+      to an unused IP address in the ISP's AS, and the station will
+      inject packets to communicate with the client as if there were a proxy server at that address.
     }
     \label{fig:highlevel}
 \end{figure}
@@ -71,7 +72,6 @@
 \newcommand{\FigIpBits}{
 \begin{figure}[t]
     \centering
-    \vspace{-0.5in}
     \includegraphics[width=\linewidth,clip]{figures/ip-bits-set-pdf.pdf}
     \caption{\textbf{IPv6 Entropy}---%
         We observed 30 minutes of IPv6 traffic on our tap to the /32 of the ISP's network.
@@ -79,8 +79,8 @@
         randomly generated addresses. If the 96 non-network bits
         of each address were chosen randomly, we would expect to see a Binomial distribution
         (shown as Random). In practice, the distribution of observed IP addresses has much fewer
-        bits set, suggesting that censors might be able to distinguish between dark decoy addresses
-        and legitimate ones.
+        bits set, suggesting that censors might be able to distinguish between phantom host addresses
+        and legitimate ones.\looseness=-1
         %We note there are several /64 subnets that had many
         %addresses that appeared random (visibly overlapping the random distribution).
     }
@@ -104,15 +104,17 @@
             & \rot{Telex~\cite{telex11}} &
             \rot{Cirripede~\cite{cirripede11}} &
             \rot{Decoy Routing~\cite{curveball11}} &
-            \rot{TapDance~\cite{tapdance14}} & \rot{Rebound~\cite{rebound15}} & \rot{Slitheen~\cite{slitheen16}} & \rot{Waterfall~\cite{waterfall}} & \rot{\textbf{\scheme}} \\
+            \rot{TapDance~\cite{tapdance14}} & \rot{Rebound~\cite{rebound15}} & \rot{Slitheen~\cite{slitheen16}} & \rot{Waterfall~\cite{waterfall17}} & \rot{\textbf{\scheme}} \\
             \hline
                                       %Telex Cirr  DR     TD      RB    Slth   Water  DD
             No inline blocking        & \no & \no  & \no & \yes  & \no  & \no  & \no  & \yes \\
             Handles asym. routing     & \no & \yes & \no  & \yes & \yes & \no  & \yes & \yes \\
-            Currently deployed        & \no & \no  & \no  & \yes & \no  & \no  & \no  & \no \\
+            %Currently deployed        & \no & \no  & \no  & \yes & \no  & \no  & \no  & \no \\
             Replay attack resistant   &\yes & \yes & \yes & \no  & \yes & \yes & \yes & \yes \\
             Traffic analysis resitant &\no  & \no  & \no  & \no  &\maybe& \yes &\maybe& \no \\
-            Uses unused addresses     & \no & \no  & \no  & \no  & \no  & \no  & \no  & \yes \\
+            %Uses unused addresses     & \no & \no  & \no  & \no  & \no  & \no  & \no  & \yes \\
+            Unlimited Session Length  &\yes & \yes & \yes & \no  & \no  & \no  & \no  & \yes \\
+            %Multicore Implementation  &\no  & \no  & \no  & \yes & \no  & \no  & \no  & \yes \\
     \end{tabular}
     \caption{\textbf{Comparing Refraction Networking schemes}\,---\,}
     \label{tab:compare}
@@ -122,10 +124,11 @@
 
 
 \newcommand{\FigImplementation}{
-\begin{figure}[ht]
+\begin{figure}[t]
     \centering
     \includegraphics[width=0.7\linewidth,clip]{figures/implementation.png}
-    \caption{\textbf{Station Architecture}\,---\, %
+    \caption{\textbf{Station Architecture}\,---\,%
+      \TODO{Caption}
     }
     \label{fig:implementation}
 \end{figure}
@@ -156,11 +159,11 @@
     \includegraphics[width=\columnwidth]{figures/dark-decoys}
     \vspace{-3pt}
 
-    \caption{\textbf{\scheme}, our third-generation Refraction Networking design, overcomes these limitations.  It uses two sessions. First, the client connects to a decoy site and embeds a steganographic registration message, which the station receives using only a passive tap.  Second, the client connects to a ``dark address'' where there is no running server, and the station proxies the connection in its entirety.}
+    \caption{\textbf{\scheme}, our third-generation Refraction Networking design, overcomes these limitations.  It uses two sessions. First, the client connects to a decoy site and embeds a steganographic registration message, which the station receives using only a passive tap.  Second, the client connects to a ``phantom host'' where there is no running server, and the station proxies the connection in its entirety.}
     \label{fig:dark-decoys}
   \end{subfigure}
 
   \vspace{12pt}
-  \caption{\textbf{Evolution of Refraction Networking Approaches}}
+  \caption{\textbf{Evolution of Refraction Networking}}
 \end{figure}
 }

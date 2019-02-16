@@ -1,6 +1,8 @@
+\TabCompare
+
 \section{Related Work}
 
-We first compare Dark Decoys with other Refraction Networking schemes and then discuss other related work.
+We first compare \scheme with other Refraction Networking schemes and then discuss other related work.
 
 \subsection{Prior Refraction Networking Schemes}
 
@@ -20,8 +22,8 @@ as previously described, this trick comes at a cost: the decoy only stays silent
 for a short timeout (typically 30-120 seconds), and limits the amount of data
 the client can send before it responds. TapDance clients must keep connections
 short and repeatedly reconnect to decoys, increasing overhead and potentially
-alerting censors with this pattern. Dark Decoys addresses this issue and allows
-clients to maintain long-lived connections to the dark decoy.
+alerting censors with this pattern. \scheme addresses this issue and allows
+clients to maintain long-lived connections to the phantom host.
 
 Rebound~\cite{rebound15} and Waterfall~\cite{waterfall17} both focus on routing
 asymmetries and routing attacks by the censor. Rebound modifies the client's
@@ -41,31 +43,29 @@ sizes of a Slitheen connection match that of a legitimate decoy connection.
 However, Slitheen also requires inline-blocking, and introduces a large overhead
 as it has to wait for the subset of data-carrying packets from the decoy that
 Slitheen can safely replace. We note that the Slitheen model of mimicry is
-compatible with Dark Decoys, as we could use Slitheen as the application
+compatible with \scheme, as we could use Slitheen as the application
 protocol. Despite using a passive tap, our scheme is effectively inline to the
-dark decoy (which won't otherwise respond).
+phantom host (which won't otherwise respond).
 
 
 Bocovich and Goldberg propose an asymmetric gossip scheme~\cite{secureasymmetry} that combines a passive monitor on the forward path from the client to the decoy with an inline blocking element on the return path. These elements work in concert to allow schemes such as Telex and Slitheen to work on asymmetric connections. This approach, however, still requires inline blocking on one direction, and further complicates deployment by requiring the installation of more components and potentially complex coordination between them. MultiFlow~\cite{multiflow} uses refraction networking only as a forward mechanism to communicate a web request to the station, and then uses a bulletin board or email to deliver the response back. It does not require inline flow blocking as it does not modify users' traffic at all, but it fundamentally relies on a separate data delivery mechanism, similar to other cloud- or email-based circumvention tools~\cite{SWEET-ToN,CloudTransport}.
 
-Dark Decoys allow a large amount of flexibility compared to previous schemes.
+\scheme allow a large amount of flexibility compared to previous schemes.
 Because we have significant degrees of freedom in choosing the specific
-application the dark decoy will mimic or talk, our scheme can combine the best
+application the phantom host will mimic or talk, our scheme can combine the best
 of existing Refraction Networking protocols to achieve high performance, be easy
 to deploy, and
 also be resistant to active attacks such as replaying or probing by the censor.
 Table~\ref{tab:compare} lists the existing Refraction Networking schemes and
-their features, as compared to Dark Decoys.
-
-\TabCompare
+their features, as compared to \scheme.
 
 \subsection{Decoy Placement and Routing Attacks}
 
 Houmansadr et al.~\cite{cirripede11} found that placing refraction proxies in a handful of Tier 1 networks would be sufficient for them to be usable by the majority of the Internet population. Cesareo et al.~\cite{decoy-placement} developed an algorithm for optimizing the placement of proxies based on AS-level Internet topology data. Schuchard et al.~\cite{rad} suggested that a censor may actively change its routes to ensure traffic leaving its country avoids the proxies, but Houmansadr et al.~\cite{true-cost-rad} suggested that real-world constraints on routing make this attack difficult to carry out in practice. Nevertheless, Nasr et al.~\cite{game-of-decoys} propose a game-theoretic framework to optimize proxy placement in an adversarial setting, and the design of Waterfall~\cite{waterfall17} is in part motivated by resilience to routing attacks, as it is more difficult for the censor to control the return path from a decoy site, rather than the forward path.
 
 In practice, deployment of refraction networking has so far been at access, rather than transit ISPs~\cite{frolov2017isp}. This may be in part because a transit ISP has a large number of routers and points-of-presence, significantly raising the costs of deployment~\cite{devil-details}.\footnote{We
-note that Gosain et al.~\cite{devil-details} use an estimate of \$885\,000 USD/proxy, while Frolov et al.~\cite{frolov2017isp} report line-rate TapDance deployment using commodity hardware that cost only several thousand dollars.} Likewise, we expect Dark Decoys to use address space announced by the ISP, rather than addresses relayed by it, which mitigates routing-based attacks. Depending on the size of the ISP, however, a censor may decide to block the entirety of its address space, which would incur smaller collateral damage than blocking all addresses seen by a transit ISP.
+note that Gosain et al.~\cite{devil-details} use an estimate of \$885\,000 USD/proxy, while Frolov et al.~\cite{frolov2017isp} report line-rate TapDance deployment using commodity hardware that cost only several thousand dollars.} Likewise, we expect \scheme to use address space announced by the ISP, rather than addresses relayed by it, which mitigates routing-based attacks. Depending on the size of the ISP, however, a censor may decide to block the entirety of its address space, which would incur smaller collateral damage than blocking all addresses seen by a transit ISP.
 
 \subsection{Avoiding Destination Blocking}
 
-Traditionally, proxies deployed for censorship are eventually identified and blocked by the censor. Several proposals have been made to carefully control  the distribution of proxy addresses, using social connections and reputation~\cite{proximax,rbridge,salmon}. Nevertheless, keeping this information secret is challenging; additonally, censors often employ active scanning techniques to discover proxies~\cite{Dunna2018a}. Refraction networking generally assumes that clients have no secret information, and instead relies on the  collateral damage that would result from blocking all the potential decoy destinations. Dark Decoys further this goal by creating a large number of destinations out of the dark space. A similar approach was taken by CensorSpoofer~\cite{censorspoofer}, which spoofed traffic from a large set of dummy destinations. CensorSpoofer, however, could only send information in one direction---to the client---and had to rely on a separate out-of-band channel for client-to-proxy communication. As an alternative approach, FlashProxy~\cite{flash-proxies} and Snowflake~\cite{snowflake} allow users to run Flash- or WebRTC-based proxies within their browser to allow censored users to connect to the Tor network with the potential to greatly increase the number. In practice, these proxies served a very small number of users, as compared with other Tor bridge transports.\footnote{\url{https://metrics.torproject.org/userstats-bridge-transport.html?start=2017-01-01&end=2019-02-15&transport=!<OR>&transport=websocket&transport=snowflake}}
+Traditionally, proxies deployed for censorship are eventually identified and blocked by the censor. Several proposals have been made to carefully control  the distribution of proxy addresses, using social connections and reputation~\cite{proximax,rbridge,salmon}. Nevertheless, keeping this information secret is challenging; additonally, censors often employ active scanning techniques to discover proxies~\cite{Dunna2018a}. Refraction networking generally assumes that clients have no secret information, and instead relies on the  collateral damage that would result from blocking all the potential decoy destinations. \scheme further this goal by creating a large number of destinations out of the dark space. A similar approach was taken by CensorSpoofer~\cite{censorspoofer}, which spoofed traffic from a large set of dummy destinations. CensorSpoofer, however, could only send information in one direction---to the client---and had to rely on a separate out-of-band channel for client-to-proxy communication. As an alternative approach, FlashProxy~\cite{flash-proxies} and Snowflake~\cite{snowflake} allow users to run Flash- or WebRTC-based proxies within their browser to allow censored users to connect to the Tor network with the potential to greatly increase the number. In practice, these proxies served a very small number of users, as compared with other Tor bridge transports.\footnote{\url{https://metrics.torproject.org/userstats-bridge-transport.html?start=2017-01-01&end=2019-02-15&transport=!<OR>&transport=websocket&transport=snowflake}}
