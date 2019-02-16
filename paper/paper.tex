@@ -577,7 +577,7 @@ Unfortunately, TLS~1.3 currently still sends the SNI in the (plaintext) Client
 Hello, meaning we would still have to choose a realistic domain to fool a
 censor.
 
-However, there are proposals to encrypt the SNI in the Client Hello~\cite{esni},
+However, there are proposals to encrypt the SNI in the Client Hello~\cite{ietf-tls-esni-02},
 though none have been implemented or deployed as of early 2019. Nonetheless,
 if widely adopted, Encrypted SNI (ESNI) would offer a powerful solution for
 \scheme applications by allowing the domain to remain hidden from the censor.
