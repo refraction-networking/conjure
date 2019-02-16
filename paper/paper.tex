@@ -224,8 +224,8 @@ block them.
 %-Connection can live as long as we want
 %-No pesky TCP/TapDance-y limits
 
-Phantom hosts are cheap to create, allowing for discardable \textbf{one-time use}
-proxy servers to be used by clients. This greatly increases the cost for censors to
+Phantom hosts are cheap to create, allowing for discardable or even one-time-use
+proxy servers. This greatly increases the cost for censors to
 block, as they must detect and block in real time. Meanwhile, even a censor that
 can detect 90\% of phantom hosts does not significantly increase the cost to the
 circumvention system, giving \scheme an advantage in the censor/circumventor
@@ -256,7 +256,8 @@ We have implemented a prototype implementation (Section~\ref{sec:implementation}
 and deployed it on a 10~Gbps testbed similar to the TapDance
 deployment~\cite{frolov2017isp}.  Compared to TapDance, we find that
 \scheme has reduced complexity and substantially improved performance
-(Section~\ref{sec:evaluation}).
+(Section~\ref{sec:evaluation}).  We believe that these advantages
+make \scheme a strong choice for future Refraction Networking deployments.
 
 \input{background.tex}
 
