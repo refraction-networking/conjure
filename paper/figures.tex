@@ -79,7 +79,7 @@
         randomly generated addresses. If the 96 non-network bits
         of each address were chosen randomly, we would expect to see a Binomial distribution
         (shown as Random). In practice, the distribution of observed IP addresses has much fewer
-        bits set, suggesting that censors might be able to distinguish between dark decoy addresses
+        bits set, suggesting that censors might be able to distinguish between phantom host addresses
         and legitimate ones.\looseness=-1
         %We note there are several /64 subnets that had many
         %addresses that appeared random (visibly overlapping the random distribution).
@@ -159,7 +159,7 @@
     \includegraphics[width=\columnwidth]{figures/dark-decoys}
     \vspace{-3pt}
 
-    \caption{\textbf{\scheme}, our third-generation Refraction Networking design, overcomes these limitations.  It uses two sessions. First, the client connects to a decoy site and embeds a steganographic registration message, which the station receives using only a passive tap.  Second, the client connects to a ``dark address'' where there is no running server, and the station proxies the connection in its entirety.}
+    \caption{\textbf{\scheme}, our third-generation Refraction Networking design, overcomes these limitations.  It uses two sessions. First, the client connects to a decoy site and embeds a steganographic registration message, which the station receives using only a passive tap.  Second, the client connects to a ``phantom host'' where there is no running server, and the station proxies the connection in its entirety.}
     \label{fig:dark-decoys}
   \end{subfigure}
 

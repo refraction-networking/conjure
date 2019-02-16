@@ -23,7 +23,7 @@ for a short timeout (typically 30-120 seconds), and limits the amount of data
 the client can send before it responds. TapDance clients must keep connections
 short and repeatedly reconnect to decoys, increasing overhead and potentially
 alerting censors with this pattern. \scheme addresses this issue and allows
-clients to maintain long-lived connections to the dark decoy.
+clients to maintain long-lived connections to the phantom host.
 
 Rebound~\cite{rebound15} and Waterfall~\cite{waterfall17} both focus on routing
 asymmetries and routing attacks by the censor. Rebound modifies the client's
@@ -45,14 +45,14 @@ as it has to wait for the subset of data-carrying packets from the decoy that
 Slitheen can safely replace. We note that the Slitheen model of mimicry is
 compatible with \scheme, as we could use Slitheen as the application
 protocol. Despite using a passive tap, our scheme is effectively inline to the
-dark decoy (which won't otherwise respond).
+phantom host (which won't otherwise respond).
 
 
 Bocovich and Goldberg propose an asymmetric gossip scheme~\cite{secureasymmetry} that combines a passive monitor on the forward path from the client to the decoy with an inline blocking element on the return path. These elements work in concert to allow schemes such as Telex and Slitheen to work on asymmetric connections. This approach, however, still requires inline blocking on one direction, and further complicates deployment by requiring the installation of more components and potentially complex coordination between them. MultiFlow~\cite{multiflow} uses refraction networking only as a forward mechanism to communicate a web request to the station, and then uses a bulletin board or email to deliver the response back. It does not require inline flow blocking as it does not modify users' traffic at all, but it fundamentally relies on a separate data delivery mechanism, similar to other cloud- or email-based circumvention tools~\cite{SWEET-ToN,CloudTransport}.
 
 \scheme allow a large amount of flexibility compared to previous schemes.
 Because we have significant degrees of freedom in choosing the specific
-application the dark decoy will mimic or talk, our scheme can combine the best
+application the phantom host will mimic or talk, our scheme can combine the best
 of existing Refraction Networking protocols to achieve high performance, be easy
 to deploy, and
 also be resistant to active attacks such as replaying or probing by the censor.
