@@ -163,7 +163,7 @@ client-to--decoy connection:
 \begin{compactitem}
 \item Implementation is complex and error-prone, requiring kernel
   patches or a custom TCP stack.
-\item To avoid detection, the system must carefully mimmick
+\item To avoid detection, the system must carefully mimic
   subtle features of each decoy's TCP and TLS behavior.
 \item The architecture cannot resist active probing attacks, where the
   censor sends specially crafted packets to determine whether a
@@ -319,7 +319,7 @@ this class of censor.
 \label{sec:architecture}
 % 3 pages
 
-\scheme involve three main steps. First, clients \textbf{register} with the
+\scheme involves three main steps. First, clients \textbf{register} with the
 ISP station,
 and agree on the phantom host IP address that will be used. Next, the client
 connects to the agreed upon address, which is terminated by an
@@ -336,7 +336,7 @@ describe each of these components.
 \subsection{Registration}
 
 Clients can register intent to use the proxy in several covert ways. For
-instance, they could use email or other existing intermitently available proxies
+instance, they could use email or other existing intermittently available proxies
 to register. In this section, we use a form of Refraction Networking similar to
 TapDance to register directly with the station.
 
@@ -394,7 +394,7 @@ this is not a robust solution: censors have previously been observed taking over
 IP addresses of clients~\cite{ensafi-tor}. We instead address active probing in
 the application.
 
-\subsubsection{IPv6 vs IPv4 phantom hosts}
+\subsubsection{IPv6 vs.\ IPv4 Phantom Hosts}
 
 
 Phantom host IP addresses must be derived from network blocks that are routed (so they pass
@@ -547,7 +547,7 @@ mentioned, other signals such as DNS may reveal the true mask site.
 An alternative strategy is to use popular sites, such as those from the Alexa
 top site~\cite{alexa-top500} list. As mentioned previously, it may be wise to avoid
 sites that are obviously not hosted in the phantom host address range, such as
-large companies that run their own datacenters and own their own ASN.
+large companies that run their own data centers and own their own ASN.
 The list could also be filtered to domains that resolve to different IP
 addresses from different vantage points, making it harder for a censor to know
 if a phantom host corresponds to a domain's IP.
@@ -734,20 +734,20 @@ which significantly reduces complexity of a detector,
 that does not need to decrypt and inject packets into a TLS connection between
 client and a reachable site, as opposed to original TapDance.
 
-Client begins registation by establishing TLS connection
+Client begins registration by establishing TLS connection
 to one of the reachable websites,
 path to which passes by our tap.
-Client uses a Chosen-Ciphertext Steganography technique~\cite{tapdance14} to manupulate
+Client uses a Chosen-Ciphertext Steganography technique~\cite{tapdance14} to manipulate
 plaintext of a first application data HTTP request
 to get desired ciphertext,
 and exchange keys with the station.
 After client writes Elligator-encoded~\cite{elligator} representative into the ciphertext at a static offset of 92 bytes from the end,
 that could be decoded using station's private key,
-to negotiate a 32 byte Eligator-encoded~\cite{elligator} shared secret between the client and the station.
+to negotiate a 32 byte Elligator-encoded~\cite{elligator} shared secret between the client and the station.
 That shared secret is used as a seed of SHA-256 based key derivation function (HKDF),
 allowing station and client to derive an unlimited amount of shared secrets.
 
-Elligator representative on the wire is immidiately followed by a 6 bytes long AES-GCM-encrypted
+Elligator representative on the wire is immediately followed by a 6 bytes long AES-GCM-encrypted
 fixed size payload(FSP), that holds flags and the size of the variable size payload(VSP).
 IV and key for encrypted of both FSP and VSP will be derived from HKDF.
 Once FSP is decrypted and the size of VSP is known, station can decrypt the VSP as well.
@@ -761,7 +761,7 @@ TODO: why does it need time?
 \subsection{Application phase}
 Client and station will use HKDF to derive 16 random bytes and use them to
 agree on a phantom host IP address, by applying a simple selection algorithm.
-Algorithm is as follows: first, flatten a list of pre-shared avaliable IP
+Algorithm is as follows: first, flatten a list of pre-shared available IP
 addresses in various subnets into a single indexed list, then make a 128-bit
 integer out of 16 random bytes and divide it by the length
 of the flattened list, and use the remainder of this division as an index
@@ -888,7 +888,7 @@ applications (e.g. obfsproxy, WebRTC, etc) that do not have this issue.
 
 
 
-\paragraph{Website Fingerprinting}
+\paragraph{Website fingerprinting}
 Website Fingerprinting~\cite{wang2014effective,hayes2016k,sirinam2018deep} (WF) uses the patterns of encrypted traffic to identify which website a client is connected to. WF uses a classifier to label the traffic as belonging to one of several known websites, or (in some variants), an unknown or background class. Though WF is commonly studied in the context of anonymous web browsing, a censor could also use WF to detect refraction networking by distinguishing known traffic patterns of legitimate uses of a decoy site from the traffic generated by refraction networking (unknown class). Alternatively, the censor could monitor all traffic for patterns consistent with a set of blocked websites.
 
 \scheme applications that mimic specific websites (e.g., mask sites) are likewise susceptible to WF. To date, however, censors have not been observed using WF and similar techniques, possibly due to the significant uncertainty resulting from even the best algorithms: even a small false
@@ -956,35 +956,32 @@ and possibly limit to randomizing ``realistic'' bits (e.g. the middle and/or las
 Refraction Networking schemes. Due to its modular design, different registration
 protocols and applications can be used. One obvious direction is to further
 study such alternatives. For instance, while we use a TapDance-like
-registration, we could potentially cut down on the overhead of one-time
-registration by using port-knocking or using a Telex-style~\cite{telex11} tag (in the Client
-Hello rather than Application Data).
+covert channel for registration, we could potentially cut down on the overhead of one-time
+registration by using port-knocking or using a Telex-style~\cite{telex11} tag (in the Client Hello rather than Application Data).
 
 \paragraph{Client-side applications}
 On the application side, \scheme provides an interesting opportunity to explore
-\emph{client mimicking} phantom hosts. Rather than pretend to be a server (e.g.
-mask site), our application could connect back to a client after registration
-from the phantom host address. Protocols like WebRTC mentioned in
-Section~\ref{sec:webrtc} or other peer-to-peer protocols such as BitTorrent,
+\emph{client mimicking} phantom hosts. Rather than pretend to be a server (e.g.,
+a mask site), our application could connect back to a client after registration
+from the phantom host address. Possible protocols could include WebRTC, mentioned in
+Section~\ref{sec:webrtc}, or other peer-to-peer protocols such as BitTorrent,
 Skype, or Bitcoin.
 
-
-\paragraph{Traffic Analysis}
+\paragraph{Traffic analysis}
 \scheme could also support applications that tradeoff performance for
 observability. While Slitheen offers ideal mimicry of decoys, it comes at a high
-cost of overhead. \scheme mask site applications could implement Slitheen
+cost of overhead. \scheme applications could implement Slitheen
 in order to perfectly mimic the mask site's latency, packet timings, and payload
 sizes. In addition, careful choice of mask sites may allow for higher
 performance, as sites with more replaceable content can carry more covert data.
 
-
-\paragraph{Long-term Deployment}
+\paragraph{Long-term deployment}
 Ultimately, the goal for Refraction Networking protocols is to be useful in
 circumventing censorship. While it has taken many years for research
 protocols to mature, we are excited to see schemes like TapDance deployed in
 practice~\cite{frolov2017isp}. We believe \scheme can be even easier to deploy
-at scale, and hope to leverage the existing success of TapDance to place \scheme
-stations in real-world ISPs.
+at scale, and we hope to leverage the existing success of TapDance to place \scheme
+stations at real ISPs.
 
 \section{Conclusion}
 %.25 page
