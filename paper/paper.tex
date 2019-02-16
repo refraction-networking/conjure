@@ -681,6 +681,8 @@ from the client using a key derived from the secret seed, and client and server
 randoms. We use the uTLS library~\cite{utls} on both the application and client
 to allow us to change the TLS secrets being used after the handshake.
 
+\FigTapBandwidth
+
 If the decryption is successful, the application switches to forwarding
 (decrypted) data back and forth with a client-specified endpoint, such as a
 SOCKS proxy, which can multiplex multiple client connections over the single
@@ -797,13 +799,6 @@ which allows us to reuse existing TapDance CLI wrapper and Android application.
 
 %\TODO{Write (1 page)}
 
-
-\FigTapBandwidth
-
-\FigUpload
-
-\FigDownload
-
 To evaluate our \scheme implementation, we compare its bandwidth
 to that of TapDance in a realistic ISP setting. We used a full duplex 10~Gbps
 network tap at a mid-sized ISP and run both implementations on a 1U server with
@@ -852,6 +847,9 @@ download rate without interruption.
 
 There are many attacks a censor might attempt to either prevent phantom hosts from
 being registered or used.
+
+\FigUpload
+\FigDownload
 
 \paragraph{Blocking registration}
 To make registration more difficult, censors could block TLS connections to all of the

@@ -33,7 +33,7 @@
 \newcommand{\FigUpload}{
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.90\linewidth,clip]{figures/bandwidth-up.pdf}
+    \includegraphics[width=0.95\linewidth,clip]{figures/bandwidth-up.pdf}
     \caption{\textbf{Upload Performance}\,---\, %
         We used iperf to measure the upload bandwidth for a direct connection, TapDance, and \scheme.
         As expected, TapDance's upload performance is several orders of magnitude lower than
@@ -46,7 +46,7 @@
 \newcommand{\FigDownload}{
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.90\linewidth,clip]{figures/bandwidth-down.pdf}
+    \includegraphics[width=0.95\linewidth,clip]{figures/bandwidth-down.pdf}
     \caption{\textbf{Download Performance}\,---\, %
         Using iperf, we compare the download performance of a direct connection, TapDance, and \scheme.
         While TapDance can achieve link capacity download, it still has to occasionally reconnect
@@ -59,9 +59,9 @@
 
 
 \newcommand{\FigTapBandwidth}{
-\begin{figure*}[t]
+\begin{figure*}[ht]
     \centering
-    \includegraphics[width=0.90\linewidth,clip]{figures/decoy-tap-bandwidth.png}
+    \includegraphics[width=0.75\linewidth,clip]{figures/decoy-tap-bandwidth.png}
     \caption{\textbf{Tap Bandwidth}\,---\, %
         We deployed our \scheme implementation in a realistic ISP testbed on a
         (full duplex) tap of a 10~Gbps router. As shown in a typical week, traffic
