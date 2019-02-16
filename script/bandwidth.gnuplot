@@ -39,7 +39,7 @@ set ylabel 'Mbps'
 #set datafile separator ","
 
 
-plot './data/tests/dd-max-up.dat' u ($1/1000000) w lines title 'Dark Decoys', \
+plot './data/tests/dd-max-up.dat' u ($1/1000000) w lines title 'Conjure', \
     './data/tests/direct-max-up.dat' u ($1/1000000) w lines title 'Direct', \
     './data/tests/td-max-up.dat' u ($1/1000000) w lines title 'TapDance', \
 
@@ -49,7 +49,7 @@ set output './bandwidth-down.pdf'
 #unset logscale y
 set yrange [0.1:500]
 
-plot './data/tests/dd-max-down.dat' u ($1/1000000) w lines title 'Dark Decoys', \
+plot './data/tests/dd-max-down.dat' u ($1/1000000) w lines title 'Conjure', \
     './data/tests/direct-max-down.dat' u ($1/1000000) w lines title 'Direct', \
     './data/tests/td-max-down.dat' u ($1/1000000) w lines title 'TapDance', \
 

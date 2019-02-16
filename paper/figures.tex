@@ -4,7 +4,12 @@
     \centering
     \includegraphics[width=\linewidth,clip]{figures/dark-decoy-overview.png}
     \caption{\textbf{\scheme Operations}\,---\,%
-      \TODO{Caption}
+        Clients first register by sending a secret seed in a steganographic tag past the station in a
+        normal TLS connection to a Decoy site. Clients then connect to an address derived from the seed,
+        which the station responds as a phantom host. If the client can prove knowledge of the
+        seed used during registration, they are allowed access to the proxy. Otherwise,
+        their traffic is forwarded to a Mask Site to make it difficult for censors to distinguish
+        phantom hosts from legitimate ones.
     }
     \label{fig:overview}
 \end{figure}
@@ -116,7 +121,15 @@
             Unlimited Session Length  &\yes & \yes & \yes & \no  & \no  & \no  & \no  & \yes \\
             %Multicore Implementation  &\no  & \no  & \no  & \yes & \no  & \no  & \no  & \yes \\
     \end{tabular}
-    \caption{\textbf{Comparing Refraction Networking schemes}\,---\,}
+    \caption{\textbf{Comparing Refraction Networking schemes}\,---\,
+        ``No inline blocking'' corresponds to schemes that can operate as a passive tap on the side
+        without needing an inline element in the ISP network.
+        ``Handles asymmetric routes'' refers to schemes that work when only one direction (either client to decoy or decoy to server) is seen by the station.
+        ``Replay attacks'' refers to censors who may replay/preplay previous messages or actively probe
+        the protocol.
+        ``Traffic analysis'' includes latency, inter-packet timing, and website fingerprinting.
+        ``Unlimited Sessions'' shows schemes that do not need to repeatedly reconnect to download
+        or upload arbitrarily large content.}
     \label{tab:compare}
 \end{table*}
 }
@@ -128,7 +141,11 @@
     \centering
     \includegraphics[width=0.7\linewidth,clip]{figures/implementation.png}
     \caption{\textbf{Station Architecture}\,---\,%
-      \TODO{Caption}
+        We used PF\_RING to receive packets from a 10~Gbps packet tap, which we load balance
+        across 4~CPU cores. The detector process identifies and processes registrations, and forwards
+        packets destined to registered dark decoy addreses to a local application. The application
+        determines if the client is legitimate (using a seed shared during registration) and forwards
+        their traffic to a proxy. Otherwise, the application responds as if it were the mask site.
     }
     \label{fig:implementation}
 \end{figure}
