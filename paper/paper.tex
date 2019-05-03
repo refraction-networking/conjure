@@ -1,7 +1,32 @@
-\documentclass[letterpaper,twocolumn,10pt]{article}
-\usepackage{usenix2019_v3}
+\documentclass[sigconf]{acmart}
+%\usepackage{usenix2019_v3}
 
-% For submission make this a noop
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    \normalfont B\kern-0.5em{\scshape i\kern-0.25em b}\kern-0.8em\TeX}}}
+
+%% Rights management information.  This information is sent to you
+%% when you complete the rights form.  These commands have SAMPLE
+%% values in them; it is your responsibility as an author to replace
+%% the commands and values with those provided to you when you
+%% complete the rights form.
+\setcopyright{acmcopyright}
+\copyrightyear{2019}
+\acmYear{2019}
+\acmDOI{10.1145/1122445.1122456}
+
+%% These commands are for a PROCEEDINGS abstract or paper.
+\acmConference[CCS '19]{CCS '19: ACM Conference on Computer and Communications
+Security}{November 11--15, 2019}{London, UK}
+\acmBooktitle{CCS '19: ACM Symposium on Computer and Communications Security,
+  November 11--15, 2019, London, UK}
+\acmPrice{0.00}
+\acmISBN{978-1-4503-9999-9/18/06}
+
+
+
+
 
 % to be able to draw some self-contained figs
 \usepackage{tikz}
@@ -44,6 +69,7 @@
 
 \begin{document}
 
+
 \date{}
 
 % make title bold and 14 pt font (Latex default is non-bold, 16 pt)
@@ -51,6 +77,7 @@
 %  Conjuring Proxies from Unused Address Space}
 \title{\Large \bf Conjure: Summoning Proxies from Unused Address Space}
 
+%\author{Anonymized for review}
 %for single author (just remove % characters)
 %\author{
 %{\rm Your N.\ Here}\\
@@ -64,7 +91,9 @@
 %%Name Institution
 %} % end author
 
-\maketitle
+
+
+
 
 %\newcommand{\scheme}{Dark Decoys\xspace}
 \newcommand{\scheme}{Conjure\xspace}
@@ -103,13 +132,18 @@ and offers substantially better network performance.
 \end{abstract}
 
 
-\FigHighLevel
+\keywords{anticensorship, proxies, network security}
+
+
+\maketitle
+
 
 %-------------------------------------------------------------------------------
 \section{Introduction}
 %-------------------------------------------------------------------------------
 % 1.5-2 pages
 
+\FigHighLevel
 
 
 %Censorship circumvention still important
@@ -127,6 +161,8 @@ online~\cite{fotn2018}.
 Meanwhile, many popular tools and techniques for circumventing such censorship
 have ceased to function, because censors have evolved new ways to block them~\cite{ensafi-tor,great-cannon}
 or infrastructure they rely on has become unavailable.
+
+
 
 For example, domain fronting~\cite{meek} was a popular circumvention
 strategy used by Meek (in Tor), as well as by the Signal secure messaging app to
