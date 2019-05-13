@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -104,28 +105,7 @@ func getOriginalDst(fd uintptr) (net.IP, error) {
 	}
 }
 
-func handleNewConn(clientConn *net.TCPConn) {
-	defer clientConn.Close()
-
-	fd, err := clientConn.File()
-	if err != nil {
-		logger.Printf("failed to get file descriptor on clientConn: %v\n", err)
-		return
-	}
-
-	// TODO: if NOT mPort 443: just forward things and return
-
-	originalDstIP, err := getOriginalDst(fd.Fd())
-	if err != nil {
-		logger.Println("failed to getOriginalDst from fd:", err)
-		return
-	}
-
-	reg := registeredDecoys.CheckRegistration(originalDstIP)
-	if reg == nil {
-		logger.Printf("registration for %v not found", originalDstIP)
-		return
-	}
+func threeWayProxy(reg *decoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
 	maskHostPort := reg.mask
 	if _, mPort, err := net.SplitHostPort(maskHostPort); err != nil {
 		maskHostPort = net.JoinHostPort(maskHostPort, "443")
@@ -312,38 +292,14 @@ func handleNewConn(clientConn *net.TCPConn) {
 	wg := sync.WaitGroup{}
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
-	halfProxy := func(src, dst net.Conn) {
-		buf := bufferPool.Get().([]byte)
-		_, err = io.CopyBuffer(dst, src, buf)
-		oncePrintErr.Do(
-			func() {
-				if err == nil {
-					logger.Printf("gracefully stopping forwarding from %v", src.RemoteAddr())
-				} else {
-					logger.Printf("stopping forwarding from %v due to error: %v", src.RemoteAddr(), err)
-				}
-			})
-		//if closeWriter, ok := dst.(interface {
-		//	CloseWrite() error
-		//}); ok {
-		//	closeWriter.CloseWrite()
-		//}
-		//
-		//if closeReader, ok := src.(interface {
-		//	CloseRead() error
-		//}); ok {
-		//	closeReader.CloseRead()
-		//}
-		wg.Done()
-	}
 
-	go halfProxy(finalClientConn, finalTargetConn)
+	go halfPipe(finalClientConn, finalTargetConn, wg, oncePrintErr)
 
 	go func() {
 		// wait for readFromServerAndParse to exit first, as it probably haven't seen appdata yet
 		select {
 		case _ = <-serverErrChan:
-			halfProxy(finalTargetConn, finalClientConn)
+			halfPipe(finalClientConn, finalTargetConn, wg, oncePrintErr)
 		case <-time.After(10 * time.Second):
 			finalClientConn.Close()
 			wg.Done()
@@ -352,6 +308,93 @@ func handleNewConn(clientConn *net.TCPConn) {
 	wg.Wait()
 	// closes for all the things are deferred
 	return
+}
+
+// this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to pass around
+// TODO: refactor
+func halfPipe(src, dst net.Conn, wg sync.WaitGroup, oncePrintErr sync.Once) {
+	buf := bufferPool.Get().([]byte)
+	_, err := io.CopyBuffer(dst, src, buf)
+	oncePrintErr.Do(
+		func() {
+			if err == nil {
+				logger.Printf("gracefully stopping forwarding from %v", src.RemoteAddr())
+			} else {
+				logger.Printf("stopping forwarding from %v due to error: %v", src.RemoteAddr(), err)
+			}
+		})
+	if closeWriter, ok := dst.(interface {
+		CloseWrite() error
+	}); ok {
+		closeWriter.CloseWrite()
+	} else {
+		dst.Close()
+	}
+
+	if closeReader, ok := src.(interface {
+		CloseRead() error
+	}); ok {
+		closeReader.CloseRead()
+	} else {
+		src.Close()
+	}
+	wg.Done()
+}
+
+func handleNewConn(clientConn *net.TCPConn) {
+	defer clientConn.Close()
+
+	fd, err := clientConn.File()
+	if err != nil {
+		logger.Printf("failed to get file descriptor on clientConn: %v\n", err)
+		return
+	}
+
+	// TODO: if NOT mPort 443: just forward things and return
+
+	originalDstIP, err := getOriginalDst(fd.Fd())
+	if err != nil {
+		logger.Println("failed to getOriginalDst from fd:", err)
+		return
+	}
+
+	reg := registeredDecoys.CheckRegistration(originalDstIP)
+	if reg == nil {
+		logger.Printf("registration for %v not found", originalDstIP)
+		return
+	}
+
+	//threeWayProxy(reg, clientConn, originalDstIP)
+	twoWayProxy(reg, clientConn, originalDstIP)
+}
+
+func twoWayProxy(reg *decoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
+	originalDst := originalDstIP.String()
+	notReallyOriginalSrc := clientConn.LocalAddr().String()
+	flowDescription := fmt.Sprintf("[%s -> %s (covert=%s)] ",
+		notReallyOriginalSrc, originalDst, reg.covert)
+	logger := log.New(os.Stdout, flowDescription, log.Lmicroseconds)
+	logger.Println("new flow")
+
+	covertConn, err := net.Dial("tcp", reg.covert)
+	if err != nil {
+		logger.Printf("failed to dial target: %s", err)
+		return
+	}
+	defer covertConn.Close()
+
+	if err := writePROXYHeader(covertConn, clientConn.RemoteAddr().String()); err != nil {
+		logger.Printf("failed to send PROXY header to covert: %s", err)
+		return
+	}
+
+	wg := sync.WaitGroup{}
+	oncePrintErr := sync.Once{}
+	wg.Add(2)
+
+	go halfPipe(clientConn, covertConn, wg, oncePrintErr)
+	go halfPipe(covertConn, clientConn, wg, oncePrintErr)
+	wg.Wait()
 }
 
 func get_zmq_updates() {
@@ -388,6 +431,7 @@ func get_zmq_updates() {
 
 		msgReader.Read(masterSecret[:])
 		msgReader.Read(ipAddr[:])
+
 		msgReader.Read(covertAddrLen[:])
 		covertAddr := make([]byte, covertAddrLen[0])
 		_, err = msgReader.Read(covertAddr)
@@ -396,13 +440,17 @@ func get_zmq_updates() {
 				len(msg), covertAddrLen[0])
 			continue
 		}
+
 		msgReader.Read(maskedAddrLen[:])
-		maskedAddr := make([]byte, maskedAddrLen[0])
-		_, err = msgReader.Read(maskedAddr)
-		if err != nil {
-			logger.Printf("short message with size %v didn't fit masked addr with length %v\n",
-				len(msg), maskedAddrLen[0])
-			continue
+		var maskedAddr []byte
+		if maskedAddrLen[0] != 0 {
+			maskedAddr = make([]byte, maskedAddrLen[0])
+			_, err = msgReader.Read(maskedAddr)
+			if err != nil {
+				logger.Printf("short message with size %v didn't fit masked addr with length %v\n",
+					len(msg), maskedAddrLen[0])
+				continue
+			}
 		}
 
 		reg := &decoyRegistration{
@@ -499,4 +547,17 @@ func main() {
 
 		go handleNewConn(newConn)
 	}
+}
+
+func writePROXYHeader(conn net.Conn, originalIP string) error {
+	if len(originalIP) == 0 {
+		return errors.New("can't write PROXY header: empty IP")
+	}
+	transportProtocol := "TCP4"
+	if !strings.Contains(originalIP, ".") {
+		transportProtocol = "TCP6"
+	}
+	proxyHeader := fmt.Sprintf("PROXY %s %s 127.0.0.1 1111 1234\r\n", transportProtocol, originalIP)
+	_, err := conn.Write([]byte(proxyHeader))
+	return err
 }
