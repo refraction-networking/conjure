@@ -285,10 +285,6 @@ impl PerCoreGlobal
                     error!("ClientToStation has no covert: {:?}", c2s);
                     return None;
                 }
-                if !c2s.has_masked_decoy_server_name() {
-                    error!("ClientToStation has no masked decoy: {:?}", c2s);
-                    return None;
-                }
 
                 let covert_bytes = c2s.get_covert_address().as_bytes();
                 let masked_decoy_bytes = c2s.get_masked_decoy_server_name().as_bytes();
