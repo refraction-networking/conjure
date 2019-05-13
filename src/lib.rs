@@ -199,7 +199,6 @@ impl PerCoreStats
                 0,
                 0);
         */
-        /*
         report!("stats {} pkts ({} v4, {} v6) dark decoy flows {} tracked flows {} tags checked {}",
             self.packets_this_period,
             self.ipv4_packets_this_period,
@@ -207,7 +206,6 @@ impl PerCoreStats
             dark_decoys,
             tracked,
             self.elligator_this_period);
-        */
 
         self.elligator_this_period = 0;
         self.packets_this_period = 0;
