@@ -175,18 +175,6 @@ impl PerCoreGlobal
 
         let flow = Flow::new(&ip_pkt, &tcp_pkt);
 
-
-        // Test if this is to a prefix we care about
-        /*
-        if let IpPacket::V4(pkt) = &ip_pkt {
-            if !self.ip_tree.contains_addr_v4(pkt.get_destination()) {
-                self.stats.not_in_tree_this_period += 1;
-                return;
-            }
-        }
-        self.stats.in_tree_this_period += 1;
-        */
-
         if panic::catch_unwind(||{ tcp_pkt.payload(); }).is_err() {
             return;
         }
@@ -194,7 +182,7 @@ impl PerCoreGlobal
         let dd_flow = FlowNoSrcPort::from_flow(&flow);
         if self.flow_tracker.is_registered_dark_decoy(&dd_flow) {
             // Tagged flow! Forward packet to whatever
-            debug!("Tagged flow packet {}", flow);
+            //debug!("Tagged flow packet {}", flow);
 
             // Update expire time
             self.flow_tracker.mark_dark_decoy(&dd_flow);
