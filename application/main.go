@@ -549,15 +549,19 @@ func main() {
 	}
 }
 
-func writePROXYHeader(conn net.Conn, originalIP string) error {
-	if len(originalIP) == 0 {
+func writePROXYHeader(conn net.Conn, originalIPPort string) error {
+	if len(originalIPPort) == 0 {
 		return errors.New("can't write PROXY header: empty IP")
 	}
 	transportProtocol := "TCP4"
-	if !strings.Contains(originalIP, ".") {
+	if !strings.Contains(originalIPPort, ".") {
 		transportProtocol = "TCP6"
 	}
-	proxyHeader := fmt.Sprintf("PROXY %s %s 127.0.0.1 1111 1234\r\n", transportProtocol, originalIP)
-	_, err := conn.Write([]byte(proxyHeader))
+	host, port, err := net.SplitHostPort(originalIPPort)
+	if err != nil {
+		return err
+	}
+	proxyHeader := fmt.Sprintf("PROXY %s %s 127.0.0.1 %s 1234\r\n", transportProtocol, host, port)
+	_, err = conn.Write([]byte(proxyHeader))
 	return err
 }
