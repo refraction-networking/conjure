@@ -480,7 +480,8 @@ this section, we describe existing protocols (obfs4 and obfuscated SSH) as well
 as introduce our own (Mask sites, TLS 1.3 eSNI, and phantom WebRTC clients) that
 can be used in \scheme, and evaluate how each meet the necessary requirements.
 Figure~\ref{fig:overview} describes a high-level overview of the \scheme
-registration and application behavior.
+registration and application behavior, and Table~\ref{tab:applications} compares the
+application protocols.
 
 \FigOverview
 
@@ -673,6 +674,8 @@ and is used in existing censorship circumvention schemes like
 Snowflake~\cite{snowflake}. \scheme could also use WebRTC as the
 application protocol, convincing the censor that two clients are communicating.
 
+
+\TabApplications
 
 \subsection{Address Selection}
 \label{sec:addr-selection}

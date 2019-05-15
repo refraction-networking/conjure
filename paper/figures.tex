@@ -78,16 +78,18 @@
     %\includegraphics[width=\linewidth,clip]{figures/entropy_curveball_1hr.png}
     \includegraphics[width=\linewidth,clip]{figures/entropy-ip-16hr.png}
     \caption{\textbf{IPv6 Entropy}---%,
-    To further investigate this we captured one hour of IPv6 
-        traffic at the same network tap and evaluated the entropy and aggregate count ratio 
-        (ACR) across each nybble for the set of IPv6 addresses observed~\cite{foremski2016entropy}.
-        The low entropy and high ACR in the upper nybbles can be attributed to the commonality 
-        of the addresses associated with the specific /32 on which we captured. Overall the
-        moderate entropy in most positions suggests that there is a relative structure to the way 
-        IPv6 addresses are used but no rigid positions that would betray an individual IPv6 address. 
-        Furthermore we can take consideration of that relative entropy when generating phantom 
-        addresses.%\looseness=-1
-        }
+        Censors may be able to distinguish random-looking phantom host IPv6 addresses
+        from legitimately used ones based on the address's entropy.
+        We used the Entropy/IP tool~\cite{foremski2016entropy} to analyze the entropy
+        of 4013 IPv6 addresses observed by our tap. This plot from the tool shows the
+        normalized entropy of each nibble in the addresses, which is fairly high
+        for most of the non-network prefix nibbles. In total, these addresses have
+        about 75~bits of entropy (out of 96 expected), and the relatively high entropy
+        present in each nibble would make it difficult for a censor to block without
+        significant false positives / negatives. While distinguishable from random
+        given enough samples,
+        we can also use the Entropy/IP tool to generate addresses from the Bayesian Network
+        model it produces.}
     \label{fig:ipentropy}
 \end{figure}
 }
@@ -97,12 +99,12 @@
     \centering
     \includegraphics[width=\linewidth,clip]{figures/ip-bits-set-pdf.pdf}
     \caption{\textbf{IPv6 bits set}---%
-        In 16 hours of IPv6 traffic observed on a /32 tap in 
-        the ISP's network we counted the number of bits set in each address, and compared this to
-        addresses generated from a uniform distribution. If the 96 non-network bits
-        of each address were chosen randomly, we would expect to see a Binomial distribution
-        (shown as Random). In practice, the distribution of observed IP addresses has much fewer
-        bits set. Nonetheless, the significant overlap of these distributions
+        We measure the number of bits set to 1 in IPv6 addresses in our ISP's /32
+        and observed by our tap,
+        and compare it to the Binomial distribution (Random) we would expect to see
+        if the 96 non-network bits of each address were chosen randomly. In practice,
+        we observe much fewer bits set.
+        Nonetheless, the significant overlap of these distributions
         would make it difficult for censors to block any individual phantom hosts
         without collateral risk of blocking legitimate services.
        % suggesting that censors might be able to distinguish between phantom host addresses
@@ -137,7 +139,7 @@
             Traffic analysis resistant &\no  & \no  & \no  & \no  &\maybe& \yes &\maybe& \no \\
             %Uses unused addresses     & \no & \no  & \no  & \no  & \no  & \no  & \no  & \yes \\
             Unlimited Session Length  &\yes & \yes & \yes & \no  & \no  & \no  & \no  & \yes \\
-            %Multicore Implementation  &\no  & \no  & \no  & \yes & \no  & \no  & \no  & \yes \\
+            %ISP Deployment           &\no  & \no  & \no  & \yes & \no  & \no  & \no  & \yes \\
     \end{tabular}
     \caption{\textbf{Comparing Refraction Networking schemes}\,---\,
         ``No inline blocking'' corresponds to schemes that can operate as a passive tap on the side
@@ -153,6 +155,29 @@
 }
 
 
+\newcommand{\TabApplications}{
+\begin{table}[t]
+    \centering
+    \begin{tabular}{l|ccccc}
+            & \rot{OSSH~\cite{ossh}} &
+              \rot{\texttt{obfs4}~\cite{obfs4}} &
+              \rot{Mask Sites} &
+              \rot{TLS eSNI} & \rot{WebRTC} \\
+            \hline
+            Active probe resistant  & \no  & \yes & \yes & \yes & \yes \\
+            Randomized or Tunneling & R    & R    & T    &  T   & T \\
+            Known passive attack    & \cite{Fifield2017a} & \cite{wang2015seeing} & - & - & - \\
+            \scheme implementation  & \yes & \no  & \yes  & \no & \no \\
+    \end{tabular}
+    \caption{\textbf{\scheme Applications}\,---\,
+    ``Active probe resistant`` protocols are designed to look innocuous even if scanned by a censor.
+    ``Tunneling`` (T) protocols use another protocol (e.g. TLS) to blend in, while ``Randomized`` (R)
+        ones attempt to have no discernable protocol fingerprint or headers.
+        For existing protocols, we list any known attacks suggested in the literature that let censors
+        passively detect them. We also list if we have implemented the application in our prototype.}
+    \label{tab:applications}
+\end{table}
+}
 
 \newcommand{\FigImplementation}{
 \begin{figure}[t]
@@ -163,8 +188,7 @@
         across 4~CPU cores. The detector process identifies and processes registrations, and forwards
         packets destined to registered phantom host addresses to a local application. The application
         determines if the client is legitimate (using a seed shared during registration) and forwards
-        their traffic to a proxy. Otherwise, the application responds as if it were the mask site.
-    }
+        their traffic to a proxy. Otherwise, the application responds as if it were the mask site.}
     \label{fig:implementation}
 \end{figure}
 }
