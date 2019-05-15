@@ -1113,10 +1113,20 @@ this problem, we measured 30 minutes of IPv6 traffic to our ISP's /32 network pr
 Figure~\ref{fig:ipbits} shows a histogram of bits set in the addresses we observed, which are
 notably skewed to less than expected if addresses were randomly generated. However, there
 are still a significant number of networks that appear to have random-looking addresses,
-making it difficult for censors to block these addresses outright. For a specific deployment,
-operators should be careful to observe the distribution of addresses in the subnets they use,
-and possibly limit to randomizing ``realistic'' bits (e.g. the middle and/or last 32 bits).
+making it difficult for censors to block these addresses outright. 
 
+Using one hour of collected traffic from the same tap we evaluated the entropy seen at
+each nybble in a set of IPv6 addresses~\cite{foremski2016entropy}. The entropy and aggregate 
+count ratio (ACR) for each position are used to group adjacent nybbles into probabilistically
+related segments. We can see that all segments display at least moderate entropy 
+suggesting that there is a structure to be mirrored in the way that IPv6 addresses are 
+assigned. However, we note that in the dataset that we collected there is no position 
+(outside of the upper bits related to the specific /32) that exhibited such low entropy
+so as to be a signal to a censor on their own when evaluating a single suspect IPv6 address. 
+
+For a specific deployment, operators should be careful to observe the distribution of
+addresses in the subnets they use, and possibly limit to randomizing ``realistic'' 
+bits (e.g. the upper and/or last 32 bits within the given /32).
 
 
 \input{related}

@@ -78,23 +78,30 @@
 \begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth,clip]{figures/ip-bits-set-pdf.pdf}
+    \includegraphics[width=\linewidth,clip]{figures/entropy_curveball_1hr.png}
     \caption{\textbf{IPv6 Entropy}---%
-        We observed 30 minutes of IPv6 traffic on our tap to the /32 of the ISP's network.
-        In each address observed, we counted the number of bits set, and compared this to
-        randomly generated addresses. If the 96 non-network bits
+        \textit{(Top)} In 30 minutes of IPv6 traffic observed on a /32 tap in 
+        the ISP's network we counted the number of bits set in each address, and compared this to
+        addresses generated from a uniform distribution. If the 96 non-network bits
         of each address were chosen randomly, we would expect to see a Binomial distribution
         (shown as Random). In practice, the distribution of observed IP addresses has much fewer
-        bits set, suggesting that censors might be able to distinguish between phantom host addresses
-        and legitimate ones.\looseness=-1
+        bits set. \textit{(Bottom)} To further investigate this we captured one hour of IPv6 
+        traffic at the same network tap and evaluated the entropy and aggregate count ratio 
+        (ACR) across each nybble for the set of IPv6 addresses observed~\cite{foremski2016entropy}.
+        The low entropy and high ACR in the upper nybbles can be attributed to the commonality 
+        of the addresses associated with the specific /32 on which we captured. Overall the
+        moderate entropy in most positions suggests that there is a relative structure to the way 
+        IPv6 addresses are used but no rigid positions that would betray an individual IPv6 address. 
+        Furthermore we can take consideration of that relative entropy when generating phantom 
+        addresses.\looseness=-1
+        % suggesting that censors might be able to distinguish between phantom host addresses
+        % and legitimate ones.
         %We note there are several /64 subnets that had many
         %addresses that appeared random (visibly overlapping the random distribution).
     }
     \label{fig:ipbits}
 \end{figure}
 }
-
-
-
 
 
 \newcommand{\yes}{\CIRCLE}
