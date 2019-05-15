@@ -445,7 +445,8 @@ It also gives a
 secret (the seed) that only the client and station know, which can
 later be used to verify a client connecting to the phantom host address is the
 original registering client.
-
+We discuss the intricacies of phantom IP address selection in
+Section~\ref{sec:addr-selection}.
 
 Once the phantom host IP address has been selected, the station watches for
 packets destined to that address, and forwards them onto the phantom host
@@ -461,93 +462,6 @@ client IP address. Simply scanning the prefixes with ZMap~\cite{zmap13} from a
 single vantage point would not reveal hosts that only respond to specific IPs
 (e.g. are firewalled off).
 %We instead address active probing in the application.
-
-\subsubsection{IPv6 vs.\ IPv4 Phantom Hosts}
-
-Phantom host IP addresses must be derived from network blocks that are routed (so they pass
-the ISP station) and contain other legitimate hosts (so that censors cannot
-block the entire network without collateral damage).
-Because of the large number of IPv6 addresses, even
-relatively small network prefixes have astronomical numbers of addresses: a
-single /32 prefix has $2^{96}$ possible addresses. Therefore, client-chosen
-seeds have negligible probability of corresponding to addresses that are already
-being used by legitimate hosts. This allows us to select phantom host addresses
-from network prefixes that contain
-legitimate hosts---crucial to discouraging the censor from blocking them
-outright---without worry that registrations could interfere with legitimate
-services.
-
-%In addition, the use of IPv6 prevents censors from exhaustively probing
-%potential phantom host network prefixes ahead of time to learn the full set of
-%legitimate sites in the network, even from a single vantage point.
-%Therefore, IPv6 phantom hosts could choose
-%to respond to any client, and not just the original registering client.
-
-\paragraph{IPv4}
-While \scheme composes well with IPv6, we can also support IPv4, with some
-careful caveats. First, in IPv4, there are substaintially fewer addresses,
-allowing censors to easily \textbf{enumerate network prefxies} that pass by the ISP
-station to look for legitimate sites to whitelist. However, as previously noted,
-having phantom hosts pretend to be firewalled off from all but the registered
-client forces censors to have to enumerate from all potential client vantage
-points to measure the state of hosts before registration. This whitelist
-approach for a censor would also overblock new services that came online after
-their scan.
-Additionally, for IPv4 \scheme, we dynamically generate the TCP port of the phantom host
-during registration (along with its IP), which further makes exhaustive scans infeasible:
-a censor that must enumerate from the vantage point of a /10 of client IPs (4~million IPs)
-to a /16 (65K IPs) of potential phantom proxies on each of 65K potential ports would take nearly
-50~years of scanning with ZMap at 10~Gbps.
-
-A second problem in IPv4 \scheme is that the limited range of IPs (and ports)
-makes it possible for a censor to \textbf{pre-image the hash} used to derive the phantom
-address from the seed. Even with the /16 of IPs and all 65K ports, a censor need
-only test an expecated $2^{32}$ possible seeds to find one that would allow it
-to register for that phantom address. The censor could then register a suspected
-address, and see if it provides proxy access. If it does, the censor learns
-there is no legitimate service there, and can block it. To combat this, we
-allow only a single client to register for a particular phantom address at a
-time. A censor could attempt to register all addresses in an attempt to deny
-proxy service to legitimate users, but this would be easily observed at the
-registration system, where rate limits via client puzzles or account-based fees
-could be enforced.
-
-Finally, legitimate \textbf{IPv4 addresses density} is much higher than IPv6,
-increasing the potential for users to accidentally register seeds that derive
-phantom addresses corresponding to live hosts. To address this, the station
-sends probes to potential phantom hosts during registration, and ignores the
-registration if a real host responds.
-
-
-%We emphasize that TapDance is already
-%vulnerable to active probing attacks~\cite{tapdance14} that \scheme defends
-%against when using IPv6. However, in IPv4, there are substantially fewer
-%addresses, allowing censors to easily enumerate network prefixes that pass by
-%the ISP station and measure legitimate sites. Furthermore, the small address
-%space makes it much easier to pre-image the hash used to derive IP addresses
-%from the seed. Registering a specific IPv4 address in an IPv4 /16 subnet will
-%take only an expected $2^{16}$ hashes for the censor to achieve. This would let
-%attackers register legitimate hosts as phantom hosts, potentially disrupting
-%legitimate service. If the station refused to pick up for addresses that
-%correspond to legitimate hosts (measured by scanning during registration), then
-%censors could use this as an oracle for distinguishing legitimate sites from
-%phantom hosts. Still, IPv4 \scheme offers many performance, flexibility, and
-%simplicity benefits over TapDance, though they are both vulnerable to active
-%probing attacks.
-
-
-%While address utilization in IPv4 is quite high (all blocks have been allocated
-%at the RIR level), the fraction of addresses that respond to TCP connections on
-%a given port is quite low: even popular ports like 443 (use by TLS) have less
-%than 2\% of IPv4 hosts respond to connection requests. This leaves a large
-%number of hosts available to use as dark decoys. However, if a client registers
-%a dark decoy address that is already happens to be used by an existing host,
-%there will be multiple responses when the client tries to connect, and the
-%connection will fail. However, this failure is still limited to the registering
-%client, as the application only responds to the IP of the client that
-%registered. In IPv6, the odds of picking a legitimate host are negligible: with
-%a /32 prefix of IPv6, there are $2^{96}$ addresses to choose from.
-%\nikita{/32 is pretty big, e.g. UIUC only has a /48}
 
 
 \subsection{Applications}
@@ -758,6 +672,166 @@ natural choice for a client-to-client protocol in censorship circumvention,
 and is used in existing censorship circumvention schemes like
 Snowflake~\cite{snowflake}. \scheme could also use WebRTC as the
 application protocol, convincing the censor that two clients are communicating.
+
+
+\subsection{Address Selection}
+\label{sec:addr-selection}
+
+Phantom host IP addresses must be derived from network blocks that are routed (so they pass
+the ISP station) and contain other legitimate hosts (so that censors cannot
+block the entire network without collateral damage).
+Because of the large number of IPv6 addresses, even
+relatively small network prefixes have astronomical numbers of addresses: a
+single /32 prefix has $2^{96}$ possible addresses. Therefore, client-chosen
+seeds have negligible probability of corresponding to addresses that are already
+being used by legitimate hosts. This allows us to select phantom host addresses
+from network prefixes that contain
+legitimate hosts---crucial to discouraging the censor from blocking them
+outright---without worry that registrations could interfere with legitimate
+services.
+
+%In addition, the use of IPv6 prevents censors from exhaustively probing
+%potential phantom host network prefixes ahead of time to learn the full set of
+%legitimate sites in the network, even from a single vantage point.
+%Therefore, IPv6 phantom hosts could choose
+%to respond to any client, and not just the original registering client.
+
+\subsubsection{IPv4}
+While \scheme composes well with IPv6, we can also support IPv4, with some
+careful caveats. First, in IPv4, there are substantially fewer addresses,
+allowing censors to easily \textbf{enumerate network prefixes} that pass by the ISP
+station to look for legitimate sites to whitelist. To address this, \scheme
+phantom hosts are firewalled from all IPs other than the client that registered
+them. Thus, censors would not see them in an enumerating scan from a single
+vantage point before registration (when they do not exist), and blocking hosts
+not seen in such a scan would block legitimate hosts that firewalled themselves
+off from all but a few IPs. % Such firewall behavior is a best practice for...
+Censors could attempt to scan the network from \emph{all} potential client
+vantage points, by co-opting client IPs to perform scans---a behavior previously
+observed by the Great Firewall of China to scan for Tor bridges~\cite{ensafi-tor}.
+To prevent this, for IPv4 \scheme, we dynamically generate the TCP port of the
+phantom host (along with its IP) from the registration seed, which further makes
+exhaustive scans infeasible:
+a censor that must enumerate from the vantage point of a /10 of client IPs (4~million IPs)
+to a /16 (65K IPs) of potential phantom proxies on each of 65K potential ports would take nearly
+50~years of scanning with ZMap at 10~Gbps. We note that while the use of
+non-standard ports could potentially be suspicious, several successful
+circumvention tools---including Psiphon~\cite{psiphon} and
+\texttt{obfs4}~\cite{obfs4}---use random ports on their obfuscated protocols.
+Finally, we note that censors that whitelist either standard ports or discovered
+hosts from enumerations scans would over-block new services that came online after
+their scans.
+
+A second problem in IPv4 \scheme is that the limited range of IPs (and ports)
+makes it possible for a censor to \textbf{pre-image the hash} used to derive the phantom
+address from the seed. Even with the /16 of IPs and all 65K ports, a censor need
+only test an expected $2^{32}$ possible seeds to find one that would allow it
+to register for that phantom address. The censor could then register a suspected
+address, and see if it provides proxy access. If it does, the censor learns
+there is no legitimate service there, and can block it. To combat this, we
+allow only a single client to register for a particular phantom address at a
+time. A censor could attempt to register all addresses in an attempt to deny
+proxy service to legitimate users, but this would be easily observed at the
+registration system, where rate limits via client puzzles or account-based fees
+could be enforced.
+
+Finally, legitimate \textbf{IPv4 addresses density} is much higher than IPv6,
+increasing the potential for users to accidentally register seeds that derive
+phantom addresses corresponding to live hosts. To address this, the station
+sends probes to potential IPv4 phantom hosts during registration, and ignores the
+registration if a real host responds. Censors that try to register specific
+phantom proxies will be unable to distinguish if another user has registered it
+or a legitimate host is there, as in both cases we ignore the censor's
+registration. This also serves to prevent abuse by attackers that attempt
+to use the \scheme station to interfere with legitimate services.
+
+
+%We emphasize that TapDance is already
+%vulnerable to active probing attacks~\cite{tapdance14} that \scheme defends
+%against when using IPv6. However, in IPv4, there are substantially fewer
+%addresses, allowing censors to easily enumerate network prefixes that pass by
+%the ISP station and measure legitimate sites. Furthermore, the small address
+%space makes it much easier to pre-image the hash used to derive IP addresses
+%from the seed. Registering a specific IPv4 address in an IPv4 /16 subnet will
+%take only an expected $2^{16}$ hashes for the censor to achieve. This would let
+%attackers register legitimate hosts as phantom hosts, potentially disrupting
+%legitimate service. If the station refused to pick up for addresses that
+%correspond to legitimate hosts (measured by scanning during registration), then
+%censors could use this as an oracle for distinguishing legitimate sites from
+%phantom hosts. Still, IPv4 \scheme offers many performance, flexibility, and
+%simplicity benefits over TapDance, though they are both vulnerable to active
+%probing attacks.
+
+
+%While address utilization in IPv4 is quite high (all blocks have been allocated
+%at the RIR level), the fraction of addresses that respond to TCP connections on
+%a given port is quite low: even popular ports like 443 (use by TLS) have less
+%than 2\% of IPv4 hosts respond to connection requests. This leaves a large
+%number of hosts available to use as dark decoys. However, if a client registers
+%a dark decoy address that is already happens to be used by an existing host,
+%there will be multiple responses when the client tries to connect, and the
+%connection will fail. However, this failure is still limited to the registering
+%client, as the application only responds to the IP of the client that
+%registered. In IPv6, the odds of picking a legitimate host are negligible: with
+%a /32 prefix of IPv6, there are $2^{96}$ addresses to choose from.
+%\nikita{/32 is pretty big, e.g. UIUC only has a /48}
+
+
+
+
+\subsubsection{IPv6 address entropy}
+\FigIpBits
+
+In IPv6 \scheme, we no longer need to worry about address enumeration or
+pre-image attacks. Our ISP routes a /32 IPv6 prefix, which provides $2^{96}$ potential
+phantom host IP addresses. However, IPv6 addresses often have long runs of 0
+bits in them, and rarely use all 128-bits equally.
+For instance, google.com has the address
+%\texttt{2607:f8b0:400f:0806:0000:0000:0000:2004} (which can be shortened to
+\texttt{2607:f8b0:400f:806::2004}, which only has 24 bits set to 1.
+Censors might try to use this observation and block high entropy IPv6 addresses.
+
+To measure and quantify this problem, we collected and analyzed 16 hours of
+netflow data at our ISP tap. We extracted 4013 IPv6 addresses observed in the /32
+IPv6 prefix routed by the ISP (out of 32,817 total observed). To confirm the
+hypothesis that 0 bits are more common in IPv6 addresses, we counted the number
+of bits set in each address. Figure~\ref{fig:ipbits} shows a histogram of the
+number of bits set and compares it to the histogram of a uniformly random set of
+addresses.\footnote{The random distribution's center is skewed from 64 due to
+the number of set bits in our fixed /32 network prefix.} Although these
+distributions are distinguishable, they do have significant overlap. Given
+enough samples, a censor could trivially tell if the addresses were chosen
+randomly or were legitimate hosts. However, a censor's job is significantly
+harder, and they must tell from a single sample which distribution it comes
+from. The presence of random-looking addresses makes it difficult for censors to
+block such hosts outright.
+
+% 7 bits set in 2001:48a8:: (would expect 16)
+
+\FigIpEntropy
+
+Prior work by Foremski et al.~\cite{foremski2016entropy} has developed models to
+generate likely IPv6 addresses from a set of known addresses, useful for
+discovering new hosts to scan given known ones. We use their Entropy/IP tool to
+analyze the addresses we collected. Figure~\ref{fig:ipentropy} shows the
+normalized entropy of each address 4-bit nibble and the total entropy (18.8 out
+of 32). Nibbles that were constant across all addresses
+(such as the /32 network prefix nibbles) have zero entropy, while those that
+equally span the range of values have maximum entropy (normalized to 1). In our
+addresses, we observe an entropy of over 75~bits, with more entropy in the later
+segments of the address. While not quite the full 96~bits that uniformly random
+would produce, this is still a significant amount for phantom hosts to hide in.
+
+For a specific deployment, operators should be careful to observe the distribution of
+addresses in the subnets they use, and possibly limit to randomizing ``realistic''
+bits (e.g. the upper and/or last 32 bits within the given /32).
+As an improvement, we could also use the Entropy/IP
+tool~\cite{foremski2016entropy} to generate the random IPv6 phantom hosts from
+the registration seed based on the Bayesian Network model created by the tool.
+
+
+
+
 
 \section{Implementation}
 \label{sec:implementation}
@@ -1100,39 +1174,10 @@ be in the same network), which must also be responded to.
 %-Fingerprinting Masked site vs Dark decoy application
 %-ICMP
 
-\FigIpBits
-
-\paragraph{Address entropy}
-Addresses in IPv6 are commonly shortened, as many of the 128-bits in the address are set to 0.
-For instance, google.com has the address
-%\texttt{2607:f8b0:400f:0806:0000:0000:0000:2004} (which can be shortened to
-\texttt{2607:f8b0:400f:806::2004}. Only 24~bits are set to 1 in this address,
-giving censors a possible feature to filter on: addresses that have too much
-entropy (or even simply bits set) could be suspicious as phantom hosts. To demonstrate and quantify
-this problem, we measured 30 minutes of IPv6 traffic to our ISP's /32 network prefix.
-Figure~\ref{fig:ipbits} shows a histogram of bits set in the addresses we observed, which are
-notably skewed to less than expected if addresses were randomly generated. However, there
-are still a significant number of networks that appear to have random-looking addresses,
-making it difficult for censors to block these addresses outright. 
-
-Using one hour of collected traffic from the same tap we evaluated the entropy seen at
-each nybble in a set of IPv6 addresses~\cite{foremski2016entropy}. The entropy and aggregate 
-count ratio (ACR) for each position are used to group adjacent nybbles into probabilistically
-related segments. We can see that all segments display at least moderate entropy 
-suggesting that there is a structure to be mirrored in the way that IPv6 addresses are 
-assigned. However, we note that in the dataset that we collected there is no position 
-(outside of the upper bits related to the specific /32) that exhibited such low entropy
-so as to be a signal to a censor on their own when evaluating a single suspect IPv6 address. 
-
-For a specific deployment, operators should be careful to observe the distribution of
-addresses in the subnets they use, and possibly limit to randomizing ``realistic'' 
-bits (e.g. the upper and/or last 32 bits within the given /32).
 
 
 \input{related}
 % 0.5-0.75 page
-
-
 
 \section{Conclusion and Future Work}
 % 0.5 page
