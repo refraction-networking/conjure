@@ -68,4 +68,30 @@ note that Gosain et al.~\cite{devil-details} use an estimate of \$885,000/proxy,
 
 \subsection{Avoiding Destination Blocking}
 
-Traditionally, proxies deployed for censorship are eventually identified and blocked by the censor. Several proposals have been made to carefully control  the distribution of proxy addresses, using social connections and reputation~\cite{proximax,rbridge,salmon}. Nevertheless, keeping this information secret is challenging; additionally, censors often employ active scanning techniques to discover proxies~\cite{Dunna2018a}. Refraction networking generally assumes that clients have no secret information, and instead relies on the  collateral damage that would result from blocking all the potential decoy destinations. \scheme furthers this goal by creating a large number of destinations out of the dark space. A similar approach was taken by CensorSpoofer~\cite{censorspoofer}, which spoofed traffic from a large set of dummy destinations. CensorSpoofer, however, could only send information in one direction---to the client---and had to rely on a separate out-of-band channel for client-to-proxy communication. As an alternative approach, FlashProxy~\cite{flash-proxies} and Snowflake~\cite{snowflake} allow users to run Flash- or WebRTC-based proxies within their browser to allow censored users to connect to the Tor network with the potential to greatly increase the number. In practice, these proxies served a very small number of users, as compared with other Tor bridge transports.\footnote{\url{https://metrics.torproject.org/userstats-bridge-transport.html?start=2017-01-01&end=2019-02-15&transport=!<OR>&transport=websocket&transport=snowflake}}
+Traditionally, proxies deployed for censorship are eventually identified and
+blocked by the censor. Several proposals have been made to carefully control
+the distribution of proxy addresses, using social connections and
+reputation~\cite{proximax,rbridge,salmon}. Nevertheless, keeping this
+information secret is challenging; additionally, censors often employ active
+scanning techniques to discover proxies~\cite{Dunna2018a}. Refraction
+networking generally assumes that clients have no secret information, and
+instead relies on the  collateral damage that would result from blocking all
+the potential decoy destinations. \scheme furthers this goal by creating a
+large number of destinations out of the dark space. A similar approach was
+conceptualized in DEFIANCE~\cite{lincoln2012}, where censored Tor clients
+connect to pools of addresses that are volunteered to run Tor bridge nodes.
+Unlike \scheme, DEFIANCE requires network admins that own the IP blocks to
+participate and operate proxies on their addresses, allowing censors to block
+the IP ranges involved once discovered. In contrast, \scheme can be
+deployed at transit ISPs, and censors face a large risk of collateral
+over-blocking if they block the network blocks used.
+Another similar approach was
+taken by CensorSpoofer~\cite{censorspoofer}, which spoofed traffic from a large
+set of dummy destinations. CensorSpoofer, however, could only send information
+in one direction---to the client---and had to rely on a separate out-of-band
+channel for client-to-proxy communication. As an alternative approach,
+FlashProxy~\cite{flash-proxies} and Snowflake~\cite{snowflake} allow users to
+run Flash- or WebRTC-based proxies within their browser to allow censored users
+to connect to the Tor network with the potential to greatly increase the
+number. In practice, these proxies served a very small number of users, as
+compared with other Tor bridge transports.\footnote{\url{https://metrics.torproject.org/userstats-bridge-transport.html?start=2017-01-01&end=2019-02-15&transport=!<OR>&transport=websocket&transport=snowflake}}

@@ -270,7 +270,8 @@ can detect 90\% of phantom hosts does not significantly increase the cost to the
 circumvention system, giving \scheme an advantage in the censor/circumventor
 cat-and-mouse game.
 %TODO: don't need to hedge on IPv4 anymore..?
-\scheme supports both IPv4 and IPv6, though we note that the technique is especially
+\scheme supports both IPv4 and IPv6,
+though we note that the technique is especially
 powerful in IPv6, where censors cannot exhaustively scan the address space
 ahead of time to identify addresses that change behavior.
 Because we fully control the transport connection, connections can live as
@@ -294,8 +295,8 @@ long as needed, without the complexity faced by TapDance.
 We introduce the \scheme protocol (Section~\ref{sec:architecture})
 and analyze its security, finding that it resists a broader
 range of detection attacks than TapDance.
-We have implemented a prototype implementation (Section~\ref{sec:implementation})
-and deployed it on a 10~Gbps testbed similar to the TapDance
+We have implemented Conjure (Section~\ref{sec:implementation})
+and deployed it on a 20~Gbps ISP testbed similar to the TapDance
 deployment~\cite{frolov2017isp}.  Compared to TapDance, we find that
 \scheme has reduced complexity and substantially improved performance
 (Section~\ref{sec:evaluation}).  In addition, \scheme provides significantly
@@ -384,7 +385,7 @@ describe each of these components, and then describe our implementation and
 deployment in Section~\ref{sec:implementation}.
 
 \subsection{Registration}
-
+\label{sec:registration}
 Clients can register intent to use the proxy in several covert ways. For
 instance, they could use email~\cite{SWEET-ToN} or any other existing intermittently
 available proxies
@@ -448,13 +449,13 @@ original registering client.
 
 Once the phantom host IP address has been selected, the station watches for
 packets destined to that address, and forwards them onto the phantom host
-\textbf{application}. The station ignores packets that are not from
-the source IP address of the registering client, so that to a probing censor
-from a different IP address,
-the phantom host appears to be firewalled off from all but the client. We note
-that this does not address censors that send follow-up probes, as censors could
-take over the IP address of suspected clients for these
-probes~\cite{ensafi-tor}. However, it does prevent censors from enumerating the
+\textbf{application}. The station only forwards packets that originate from the
+IP address of the registering client, making the phantom host appear as
+firewalled off to everyone but the client.
+We note that censors have been observed taking over client IP
+addresses for follow-up probing~\cite{ensafi-tor}, which would allow censors to
+still communicate with registered phantom hosts despite this filter.
+However, filtering in this way does prevent censors from enumerating the
 address space before hand, as they would have to do so from every potential
 client IP address. Simply scanning the prefixes with ZMap~\cite{zmap13} from a
 single vantage point would not reveal hosts that only respond to specific IPs
@@ -462,7 +463,6 @@ single vantage point would not reveal hosts that only respond to specific IPs
 %We instead address active probing in the application.
 
 \subsubsection{IPv6 vs.\ IPv4 Phantom Hosts}
-
 
 Phantom host IP addresses must be derived from network blocks that are routed (so they pass
 the ISP station) and contain other legitimate hosts (so that censors cannot
@@ -554,59 +554,88 @@ registration if a real host responds.
 
 
 Once the client has registered, packets sent to the phantom host IP address are
-passed to the \textbf{application} running on the station. The application has
-two main requirements: first, the protocol it uses to communicate with the
-client must be difficult for the censor to passively detect and block by traffic
-inspection. Second, the application must resist active probes by the censor (who
+passed to the \textbf{application} running on the station, which provides
+proxy access to the client. The application has
+two main requirements: first, the protocol it uses with the client 
+must be difficult for the censor to \emph{passively detect} and block by traffic
+inspection. Second, the application must resist \emph{active probes} by the censor (who
 does not know the registration seed).
 
-Any protocol that satisfies these criteria can be used as an application. For
-instance, \texttt{obfs4}~\cite{obfs4} is a pluggable transport used by
-Tor~\cite{tor} that is designed to address both of these requirements:
-it requires each endpoint to have knowledge of a
-shared secret (which we can derive from the registration seed),
-and attempts to be a protocol with no discernible
-fingerprint. Probing censors that do not have the shared secret receive no
-response, while clients that have the secret can communicate with the proxy.
+Any protocol that satisfies these criteria can be used as an application. In
+this section, we describe existing protocols (obfs4 and obfuscated SSH) as well
+as introduce our own (Mask sites, TLS 1.3 eSNI, and phantom WebRTC clients) that
+can be used in \scheme, and evaluate how each meet the necessary requirements.
+Figure~\ref{fig:overview} describes a high-level overview of the \scheme
+registration and application behavior.
 
+\FigOverview
+
+
+\subsubsection{obfs4}
+
+\texttt{obfs4}~\cite{obfs4} is a pluggable transport used by
+Tor~\cite{tor} designed to resist both passive detection and active probing.
+Traffic is obfuscated by encrypting it and sending headerless ciphertext
+messages, and clients can only connect to \texttt{obfs4}
+servers by proving knowledge of a secret. Probing censors that do not have the
+secret get no response from \texttt{obfs4} servers, making it difficult for
+censors to confirm if a host is a proxy. Server IPs and their corresponding secrets
+are normally distributed out-of-band through Tor's bridge distribution system.
+
+We can adopt \texttt{obfs4} for use as a \scheme application, with minimal
+modification. During
+registration, the \scheme client and station can use the registration seed to
+derive the \texttt{obfs4} secrets (NODE\_ID and server private/public keys)
+needed for the client to connect. The station then launches an \texttt{obfs4} server
+instance at the registered phantom address, and the client can connect to it using the
+derived secrets. If a censor attempts to connect to the phantom address (even
+using the client's IP), it will not receive a response, as it does not know the
+registration seed used to derive the \texttt{obfs4} secrets.
+
+Using \texttt{obfs4} as a \scheme application has the added benefit that servers
+and secrets do not need to be distributed out-of-band, eliminating one of the
+main ways censors currently block existing \texttt{obfs4}
+instances~\cite{tor-bridge-blocking-blog}. Instead, each \scheme \texttt{obfs4}
+instance is private to its registering client, and there is no public service
+that censors can use to discover them.
 
 %However, even though \texttt{obfs4} is indistinguishable from random, there are
 %still known attacks that can differentiate it from other
 %traffic~\cite{wang2015seeing}. While we have yet to see evidence of such attacks
 %employed in practice by censors, we consider two alternatives built on TLS.
 
-Besides obfs4, we next describe in detail several alternative application
-protocols based on SSH, TLS, and WebRTC. These
-alternatives neatly demonstrate the flexibility of \scheme in allowing deployments
-to support multiple application protocols. Should censors develop ways to
-identify and block one protocol, others can still be used to provide proxy
-access.
+%Besides obfs4, we next describe in detail several alternative application
+%protocols based on SSH, TLS, and WebRTC. These
+%alternatives neatly demonstrate the flexibility of \scheme in allowing deployments
+%to support multiple application protocols. Should censors develop ways to
+%identify and block one protocol, others can still be used to provide proxy
+%access.
 
-
-\FigOverview
 
 
 \subsubsection{Obfuscated SSH}
+\label{sec:ossh}
 
 Obfuscated SSH~\cite{ossh} is a protocol that attempts to mask the Secure Shell
 (SSH) protocol in a thin
-layer of encryption. This makes it difficult for censors to identify using a
-regular expression, as there are no identifying headers or fields for a censor
+layer of encryption. This makes it difficult for censors to identify using basic
+packet filters, as there are no identifying headers or fields
 to search for. Instead, Obfuscated SSH clients first send a 16-byte seed, which
 is then used to derive a symmetric key that encrypts the rest of the
-communication. While this can be passively observable by censors (who can also
+communication. While this can passively detected by censors (who can also
 derive the key and deobfuscate the protocol), the key derivation is deliberately
 slowed by an iterated hash to make such identifcation
 expensive (though not impossible) at high speeds.
 
 Obfuscated SSH also does not protect against active probing, as the censor can
 easily create their own connections and confirm the server is using the
-protocol. Nonetheless, this protocol is used successfully in deployed censorship
-circumvention systems~\cite{psiphon}. Obfuscated SSH could also be used as a \scheme
+protocol. Nonetheless, this protocol is still used successfully in deployed censorship
+circumvention systems~\cite{psiphon}. Obfuscated SSH can also be used as a \scheme
 application protocol, though we note it provides no active probing or passive
 identifcation resistance.
 
 \subsubsection{Mask Sites}
+\label{sec:mask-sites}
 
 TLS is a natural protocol for \scheme applications, because it is ubiquitous on
 the Internet (making it difficult for censors to block), while also providing
@@ -717,7 +746,7 @@ servers could respond with generic ``Unknown SNI'' errors. If such responses
 were common for incorrect SNI, the censor's efforts to identify phantom hosts
 would be frustrated.
 
-\subsubsection{WebRTC}
+\subsubsection{Phantom WebRTC Clients}
 \label{sec:webrtc}
 
 Phantom hosts could also pretend to be clients instead of servers. This may
@@ -733,9 +762,9 @@ application protocol, convincing the censor that two clients are communicating.
 \section{Implementation}
 \label{sec:implementation}
 
-We implemented the \scheme protocol and deployed it at a 10~Gbps ISP
-with real traffic. Similar to TapDance~\cite{tapdance14}, we used PF\_RING to
-consume the 10~Gbps link, and feed it to a custom \textbf{detector} written in Rust. The
+We implemented the \scheme protocol and deployed a station at a
+20~Gbps router in a mid-sized transit ISP. Similar to TapDance~\cite{tapdance14}, we used PF\_RING to
+consume the 20~Gbps link, and feed it to a custom \textbf{detector} written in Rust. The
 detector processes all packets and watches for new registrations. It also
 forwards all packets sent to a (registered) phantom host address to the local
 \textbf{application} via an \texttt{iptables} DNAT rule that rewrites the destination IP,
@@ -754,16 +783,18 @@ We implemented our detector in approximately 1,800 lines of Rust (compared to
 over 5,000 lines for TapDance)\footnote{excluding (from both) about 3,000 lines
 of auto-generated protobuf code}.
 
-We used PF\_RING to load balance the 10~Gbps link over 4~CPU cores. PF\_RING
+To achieve high-performance necessary to operate at 20~Gbps, we used
+PF\_RING~\cite{pfring} to load balance incoming packets over 4~CPU cores. PF\_RING
 supports balancing across cores based on flow (5-tuple) or source and
-destination IPs. However, both of these options present challenges for our 
-implementation. One issue is that registrations could be processed on a
+destination IPs. However, both of these options present engineering challenges
+for \scheme that we must overcome.
+One issue is that registrations could be processed on a
 different core than the packets sent to that specific phantom host address. For
 instance, a client could have its registration handled by Core 1, while its
 packets to the phantom host address end up on Core 3, which doesn't know about the
 original registration.
 
-To address this, we used Redis~\cite{redis} to allow each process to announce
+To address this, we used Redis~\cite{redis} to allow each process to broadcast
 (publish) newly registered decoys to the other cores so they can
 add them to their local list of registered phantom host addresses.
 However, this introduces two new problems. First, a core might add a
@@ -777,15 +808,18 @@ be processed by a different core than the client. If the censor waits for the
 known timeout before sending a probe, its core may have timed out that phantom host, while the client's core has refreshed the timeout of the phantom host due
 to active use.
 
-To address the first issue, we force the client to delay sending its connection
+To address the first issue of asynchronous cores, we force the client to delay sending its connection
 to the phantom host until a short time after registration. In practice, we force
 the client to wait until the registration decoy responds before starting a
-connection with the registered phantom host.
+connection with the registered phantom host. While the decoy response is
+unrelated to the station's processing, it serves as a conservative way to know
+the registration has had time to reach the station.
 
-To address the second issue, we implemented a new load-balancing algorithm in
+To address the second issue of differing core timeouts, we implemented a new
+load-balancing algorithm in
 PF\_RING to select the core based solely on the destination IP address of the
-packet. This still means we must use Redis to tell all of the cores of new
-registrations, but that only one core will be responsible for processing all of
+packet. We still must use Redis to tell all of the cores of new
+registrations, but only one core will be ultimately responsible for processing all of
 the packets sent to a given phantom host, regardless of who or when it is sent.
 
 
@@ -821,19 +855,30 @@ connection to the phantom host.
 
 \subsection{Client}
 
-Our client is also written in Golang, and uses a TapDance-like protocol for
+
+%TODO: how many registration requests do we make? how long does it take?
+We created a \scheme client and integrated it with the Psiphon~\cite{psiphon}
+anticensorship client. Psiphon has millions of users in censored countries, and
+we are in the early stages of rolling \scheme out to real-world users.
+
+Our \scheme client is written in Golang, and uses the TapDance-like protocol
+(Section~\ref{sec:registration}) for
 registration. We note that this protocol should be harder for censors to observe
-because it consists of only a single (complete) request, and the station does
+than normal TapDance because it consists of only a single (complete) request, and the station does
 not have to spoof packets as the decoy used during registration, only passively
 observe them.
 
-After registering, the client connects to the derived phantom host address, and
-switches secrets after the handshake. At this point, a local application (e.g.
-SOCKS client) can connect to the client, and it will transparently be connected to
-the remote end via the encrypted phantom host connection.
+We implemented two of the applications in our client: Obfuscated SSH used by
+Psiphon
+(Section~\ref{sec:ossh}) and our Mask Site protocol
+(Section~\ref{sec:mask-sites}). Our client signals which application it will use
+in the registration tag. After registration, the client connects to the derived
+phantom host address, and speaks the specified application protocol, which
+tunnels a SOCKS connection between the client and Psiphon's backend servers,
+which proxy the client's connections.
 
 \if0
-In order to scale up to 10Gbps and beyond,
+In order to scale up to 20Gbps and beyond,
 one has to utilize multiple cores and employ load balancing.
 We use PF\_RING built-in load balancer \emph{zbalance} to efficiently
 distribute load between 4 cores.
@@ -846,7 +891,7 @@ To avoid such unusual behavior we balance on destination IP.
 Since PF\_RING does not feature load balancing based only on destination
 IP address, we made a custom implementation of this zbalance policy.
 
-TODO: say it's tested on 10 Gbps
+TODO: say it's tested on 20 Gbps
 
 Implementation of the protocol includes 3 components:
 detector, proxy application, and client.
@@ -931,7 +976,7 @@ which allows us to reuse existing TapDance CLI wrapper and Android application.
 %\TODO{Write (1 page)}
 
 To evaluate our \scheme implementation, we compare its bandwidth
-to that of TapDance in a realistic ISP setting. We used a full duplex 10~Gbps
+to that of TapDance in a realistic ISP setting. We used a 20~Gbps
 network tap at a mid-sized ISP and run both implementations on a 1U server with
 an 8-core Intel Xeon E5-2640 CPU, 64GB of RAM, and a dual-port Intel X710 10GbE SFP+
 network interface. A typical week of bandwidth seen on the tap is
@@ -1038,7 +1083,7 @@ probes will timeout and produce no response. They might also produce
 configured. We performed a scan of 10~million IPv6 addresses in a routable /32
 prefix to see if it is common to respond with such tell-tale ICMP messages for
 unused messages. We found only 0.016\% of addresses responded with any ICMP
-messages (a combination of ``Time Exceeded'' and ``Destination Unreachable'').
+messages (mainly ``Time Exceeded'' and ``Destination Unreachable'').
 
 Many legitimate hosts and routers do not respond to or forward ICMP packets, and
 it is common for firewalls to block traceroutes from penetrating inside
@@ -1060,8 +1105,8 @@ be in the same network), which must also be responded to.
 \paragraph{Address entropy}
 Addresses in IPv6 are commonly shortened, as many of the 128-bits in the address are set to 0.
 For instance, google.com has the address
-\texttt{2607:f8b0:400f:0806:0000:0000:0000:2004} (which can be shortened to
-\texttt{2607:f8b0:400f:806::2004}). Only 24 bits are set to 1 in this address,
+%\texttt{2607:f8b0:400f:0806:0000:0000:0000:2004} (which can be shortened to
+\texttt{2607:f8b0:400f:806::2004}. Only 24~bits are set to 1 in this address,
 giving censors a possible feature to filter on: addresses that have too much
 entropy (or even simply bits set) could be suspicious as phantom hosts. To demonstrate and quantify
 this problem, we measured 30 minutes of IPv6 traffic to our ISP's /32 network prefix.
