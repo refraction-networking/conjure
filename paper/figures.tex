@@ -2,14 +2,14 @@
 \newcommand{\FigOverview}{
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\linewidth,clip]{figures/dark-decoy-overview.png}
+    \includegraphics[width=\linewidth,clip]{figures/conjure-overview.png}
     \caption{\textbf{\scheme Operations}\,---\,%
         Clients first register by sending a secret seed in a steganographic tag past the station in a
         normal TLS connection to a Decoy site. Clients then connect to an address derived from the seed,
-        which the station responds as a phantom host. If the client can prove knowledge of the
+        which the station responds as a phantom host application. If the client can prove knowledge of the
         seed used during registration, they are allowed access to the proxy. Otherwise,
-        their traffic is forwarded to a Mask Site to make it difficult for censors to distinguish
-        phantom hosts from legitimate ones.
+        the phantom host application pretends to be a benign host by staying silent or forwarding traffic
+        to a mask site to make it difficult for censors to distinguish phantom hosts from legitimate ones.
     }
     \label{fig:overview}
 \end{figure}
