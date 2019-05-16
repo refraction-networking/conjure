@@ -3,7 +3,7 @@
 \begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth,clip]{figures/conjure-overview.png}
-    \caption{\textbf{\scheme Operations}\,---\,%
+    \caption{\textbf{\scheme Operations}\,---\,\rm%
         Clients first register by sending a secret seed in a steganographic tag past the station in a
         normal TLS connection to a Decoy site. Clients then connect to an address derived from the seed,
         which the station responds as a phantom host application. If the client can prove knowledge of the
@@ -20,7 +20,7 @@
     \centering
     %\vspace{-0.54in}
     \includegraphics[width=\linewidth,clip]{figures/high-level.png}
-    \caption{\textbf{\scheme Overview}---%
+    \caption{\textbf{\scheme Overview}\,---\,\rm%
       An ISP deploys a \scheme station, which sees a passive tap of passing traffic.
       Following a steganographic registration process, a client can connect
       to an unused IP address in the ISP's AS, and the station will
@@ -34,7 +34,7 @@
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.95\linewidth,clip]{figures/bandwidth-up.pdf}
-    \caption{\textbf{Upload Performance}\,---\, %
+    \caption{\textbf{Upload Performance}\,---\,\rm%
         We used iperf to measure the upload bandwidth for a direct connection, TapDance, and \scheme.
         As expected, TapDance's upload performance is several orders of magnitude lower than
         the link capacity, due to the overhead of frequent reconnects to the decoy.
@@ -47,7 +47,7 @@
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.95\linewidth,clip]{figures/bandwidth-down.pdf}
-    \caption{\textbf{Download Performance}\,---\, %
+    \caption{\textbf{Download Performance}\,---\,\rm%
         Using iperf, we compare the download performance of a direct connection, TapDance, and \scheme.
         While TapDance can achieve link capacity download, it still has to occasionally reconnect
         to the decoy, as seen by the periodic dips. These reconnects are more common the more data
@@ -63,7 +63,7 @@
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.95\linewidth,clip]{figures/td-dd-latency.pdf}
-    \caption{\textbf{Latency}\,---\, %
+    \caption{\textbf{Latency}\,---\,\rm%
         We compare the CDF of latency for requests between \scheme and TapDance.
         In each case, we have a long-lived session over which requests are being made
         using Apache Benchmark (ab). At the median, \scheme has 44~ms (19\%) faster latency than
@@ -84,7 +84,7 @@
 \begin{figure*}[ht]
     \centering
     \includegraphics[width=0.75\linewidth,clip]{figures/decoy-tap-bandwidth.png}
-    \caption{\textbf{Tap Bandwidth}\,---\, %
+    \caption{\textbf{Tap Bandwidth}\,---\,\rm%
         We deployed our \scheme implementation in a realistic ISP testbed on a
         tap of a 20~Gbps router. As shown in a typical week, traffic
         ranges from 2-17~Gbps.
@@ -99,7 +99,7 @@
     \centering
     %\includegraphics[width=\linewidth,clip]{figures/entropy_curveball_1hr.png}
     \includegraphics[width=\linewidth,clip]{figures/entropy-ip-16hr.png}
-    \caption{\textbf{IPv6 Entropy}---%,
+    \caption{\textbf{IPv6 Entropy}\,---\,\rm%
         Censors may be able to distinguish random-looking phantom host IPv6 addresses
         from legitimately used ones based on the address's entropy.
         We used the Entropy/IP tool~\cite{foremski2016entropy} to analyze the entropy
@@ -120,7 +120,7 @@
 \begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth,clip]{figures/ip-bits-set-pdf.pdf}
-    \caption{\textbf{IPv6 bits set}---%
+    \caption{\textbf{IPv6 bits set}\,---\,\rm%
         We measure the number of bits set to 1 in IPv6 addresses in our ISP's /32
         and observed by our tap,
         and compare it to the Binomial distribution (Random) we would expect to see
@@ -163,7 +163,8 @@
             Unlimited Session Length  &\yes & \yes & \yes & \no  & \no  & \no  & \no  & \yes \\
             %ISP Deployment           &\no  & \no  & \no  & \yes & \no  & \no  & \no  & \yes \\
     \end{tabular}
-    \caption{\textbf{Comparing Refraction Networking schemes}\,---\,
+    \medskip
+    \caption{\textbf{Comparing Refraction Networking schemes}\,---\,\rm%
         ``No inline blocking'' corresponds to schemes that can operate as a passive tap on the side
         without needing an inline element in the ISP network.
         ``Handles asymmetric routes'' refers to schemes that work when only one direction (either client to decoy or decoy to server) is seen by the station.
@@ -191,7 +192,8 @@
             Known passive attack    & \cite{Fifield2017a} & \cite{wang2015seeing} & - & - & - \\
             \scheme implementation  & \yes & \no  & \yes  & \no & \no \\
     \end{tabular}
-    \caption{\textbf{\scheme Applications}\,---\,
+    \medskip
+    \caption{\textbf{\scheme Applications}\,---\,\rm%
     ``Active probe resistant`` protocols are designed to look innocuous even if scanned by a censor.
     ``Tunneling`` (T) protocols use another protocol (e.g. TLS) to blend in, while ``Randomized`` (R)
         ones attempt to have no discernable protocol fingerprint or headers.
@@ -205,7 +207,7 @@
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.7\linewidth,clip]{figures/implementation.png}
-    \caption{\textbf{Station Architecture}\,---\,%
+    \caption{\textbf{Station Architecture}\,---\,\rm%
         We used PF\_RING to receive packets from a 20~Gbps packet tap, which we load balance
         across 4~CPU cores. The detector process identifies and processes registrations, and forwards
         packets destined to registered phantom host addresses to a local application. The application
@@ -223,7 +225,7 @@
     \includegraphics[width=\columnwidth]{figures/refraction-v1}
     \vspace{-3pt}
 
-    \caption{\textbf{First generation systems} for Refraction Networking, such as Telex and Cirripede, operated as inline network elements, with the ability to observe traffic and block specific flows. ISPs worried that if the inline element failed, it could bring down the network.\looseness=-1}
+    \caption{\textbf{First generation systems}\rm for Refraction Networking, such as Telex and Cirripede, operated as inline network elements, with the ability to observe traffic and block specific flows. ISPs worried that if the inline element failed, it could bring down the network.\looseness=-1}
     \label{fig:refraction-v1}
   \end{subfigure}
   \vspace{16pt}
@@ -232,7 +234,7 @@
     \includegraphics[width=\columnwidth]{figures/tapdance}
     \vspace{-3pt}
 
-    \caption{\textbf{TapDance} is a second-generation Refraction Network scheme that operates without flow blocking, needing only to passively observe traffic and inject packets. TapDance has recently been deployed at a mid-size ISP, but the techniques used to silence the decoy site and participate in the client--decoy TCP connection mid-stream add significant complexity, performance bottlenecks, and detection risk.}
+    \caption{\textbf{TapDance}\rm is a second-generation Refraction Network scheme that operates without flow blocking, needing only to passively observe traffic and inject packets. TapDance has recently been deployed at a mid-size ISP, but the techniques used to silence the decoy site and participate in the client--decoy TCP connection mid-stream add significant complexity, performance bottlenecks, and detection risk.}
     \label{fig:tapdance}
   \end{subfigure}
   \vspace{16pt}
@@ -241,7 +243,7 @@
     \includegraphics[width=\columnwidth]{figures/dark-decoys}
     \vspace{-3pt}
 
-    \caption{\textbf{\scheme}, our third-generation Refraction Networking design, overcomes these limitations.  It uses two sessions. First, the client connects to a decoy site and embeds a steganographic registration message, which the station receives using only a passive tap.  Second, the client connects to a ``phantom host'' where there is no running server, and the station proxies the connection in its entirety.}
+    \caption{\textbf{\scheme}\rm, our third-generation Refraction Networking design, overcomes these limitations.  It uses two sessions. First, the client connects to a decoy site and embeds a steganographic registration message, which the station receives using only a passive tap.  Second, the client connects to a ``phantom host'' where there is no running server, and the station proxies the connection in its entirety.}
     \label{fig:dark-decoys}
   \end{subfigure}
 

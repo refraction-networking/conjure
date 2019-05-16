@@ -1,7 +1,6 @@
 \documentclass[sigconf]{acmart}
 %\usepackage{usenix2019_v3}
 
-
 \AtBeginDocument{%
   \providecommand\BibTeX{{%
     \normalfont B\kern-0.5em{\scshape i\kern-0.25em b}\kern-0.8em\TeX}}}
@@ -11,27 +10,36 @@
 %% values in them; it is your responsibility as an author to replace
 %% the commands and values with those provided to you when you
 %% complete the rights form.
-\setcopyright{acmcopyright}
-\copyrightyear{2019}
+%% \setcopyright{acmcopyright}
+%% \copyrightyear{2019}
+%% \acmYear{2019}
+%% \acmDOI{10.1145/1122445.1122456}
+
+%% %% These commands are for a PROCEEDINGS abstract or paper.
+%% \acmConference[CCS '19]{CCS '19: ACM Conference on Computer and Communications
+%% Security}{November 11--15, 2019}{London, UK}
+%% \acmBooktitle{CCS '19: ACM Symposium on Computer and Communications Security,
+%%   November 11--15, 2019, London, UK}
+%% \acmPrice{0.00}
+%% \acmISBN{978-1-4503-9999-9/18/06}
+
+\fancyhf{} % Remove fancy page headers                                                                
+\fancyhead[C]{Anonymous submission \#610 to ACM CCS 2019}
+\fancyfoot[C]{\thepage}
+
+\setcopyright{none} % No copyright notice required for submissions                                     
+\acmConference[Anonymous Submission to ACM CCS 2019]{ACM Conference on Computer and Communications Security}{Due 15 May 2019}{London, TBD}
 \acmYear{2019}
-\acmDOI{10.1145/1122445.1122456}
 
-%% These commands are for a PROCEEDINGS abstract or paper.
-\acmConference[CCS '19]{CCS '19: ACM Conference on Computer and Communications
-Security}{November 11--15, 2019}{London, UK}
-\acmBooktitle{CCS '19: ACM Symposium on Computer and Communications Security,
-  November 11--15, 2019, London, UK}
-\acmPrice{0.00}
-\acmISBN{978-1-4503-9999-9/18/06}
-
-
+\settopmatter{printacmref=false, printccs=true, printfolios=true}
+                   
 
 
 
 % to be able to draw some self-contained figs
 \usepackage{tikz}
 %\usepackage{parskip}
-\usepackage{mathptmx}\renewcommand{\ttdefault}{cmtt}
+%\usepackage{mathptmx}\renewcommand{\ttdefault}{cmtt}
 \usepackage{amsmath}
 \usepackage{wasysym}
 %\setlength{\parskip}{1pt} % 1ex plus 0.5ex minus 0.2ex}
@@ -45,9 +53,9 @@ Security}{November 11--15, 2019}{London, UK}
 \usepackage{cleveref}
 \usepackage{microtype}
 \SetExtraKerning{encoding=*,font=*}{\textemdash={120,120}} % Add space around emdashes
-\usepackage[font=small]{caption}
+%\usepackage[font=small]{caption}
 \microtypecontext{spacing=nonfrench}
-\usepackage{subcaption}
+%\usepackage{subcaption}
 \usepackage{paralist}
 \usepackage{xspace}
 \usepackage{soul}
@@ -75,7 +83,7 @@ Security}{November 11--15, 2019}{London, UK}
 % make title bold and 14 pt font (Latex default is non-bold, 16 pt)
 %\title{\Large \bf Dark Decoys:
 %  Conjuring Proxies from Unused Address Space}
-\title{\Large \bf Conjure: Summoning Proxies from Unused Address Space}
+\title{Conjure: Summoning Proxies from Unused Address Space}
 
 %\author{Anonymized for review}
 %for single author (just remove % characters)
