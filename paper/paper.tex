@@ -406,17 +406,16 @@ To register, clients connect to a \textbf{decoy} site that supports TLS. They
 complete the handshake, and send a normal HTTPS request that embeds a special
 steganographic \textbf{tag} in the ciphertext of the request. We use
 the same technique used in TapDance's covert ciphertext
-channel\footnote{Section~3 in
-TapDance~\cite{tapdance14}} to embed the tag, but we purposefully have the client
+channel~\cite[\S3]{tapdance14}
+to embed the tag, but we purposefully have the client
 send a complete request (rather than incomplete), allowing the decoy server to respond.
 The steganographic tag is only visible to the ISP station, which can see the tag using its
 private key. Unlike in TapDance, the \scheme station can passively observe
-the tag, and does not need to respond to it (which requires mimicking the
-decoy).
-%In addition, more potential decoys can be used than in TapDance, as
-%there is no need to exclude decoys that have timeouts or TCP windows unfavorable
-%for keeping connections open. We estimate in our deployment an increase of 25\%
-%in decoys that could be used.
+the tag, and does not need to respond to it, obviating the need to mimick the decoy.
+In addition, more potential decoys can be used than in TapDance, as
+there is no need to exclude decoys that have timeouts or TCP windows unfavorable
+for keeping connections open. In our ISP deployment, this results in a modest increase
+of 25\% more decoys that could be used than in TapDance.
 
 
 The tag contains a public key (encoded to be indistinguishable from random using
@@ -531,23 +530,26 @@ that censors can use to discover them.
 \subsubsection{Obfuscated SSH}
 \label{sec:ossh}
 
-Obfuscated SSH~\cite{ossh} is a protocol that attempts to mask the Secure Shell
+Obfuscated SSH~\cite{ossh} (OSSH) is a protocol that attempts to mask the Secure Shell
 (SSH) protocol in a thin
 layer of encryption. This makes it difficult for censors to identify using basic
 packet filters, as there are no identifying headers or fields
 to search for. Instead, Obfuscated SSH clients first send a 16-byte seed, which
 is then used to derive a symmetric key that encrypts the rest of the
 communication. While this can passively detected by censors (who can also
-derive the key and deobfuscate the protocol), the key derivation is deliberately
-slowed by an iterated hash to make such identifcation
+derive the key and de-obfuscate the protocol), the key derivation is deliberately
+slowed by an iterated hash to make such identification
 expensive (though not impossible) at high speeds.
 
 Obfuscated SSH also does not protect against active probing, as the censor can
 easily create their own connections and confirm the server is using the
-protocol. Nonetheless, this protocol is still used successfully in deployed censorship
-circumvention systems~\cite{psiphon}. Obfuscated SSH can also be used as a \scheme
+protocol. Nonetheless, this protocol is still used in deployed censorship
+circumvention systems~\cite{psiphon}, though has to deploy proxies at new IP
+addresses when censors inevitably discover and block them.
+Obfuscated SSH can also be used as a \scheme
 application protocol, though we note it provides no active probing or passive
-identifcation resistance.
+identification resistance. However, \scheme OSSH can still make it cheaper to
+rotate to new IP addresses when proxies are found and blocked.
 
 \subsubsection{Mask Sites}
 \label{sec:mask-sites}
@@ -684,7 +686,7 @@ Phantom host IP addresses must be derived from network blocks that are routed (s
 the ISP station) and contain other legitimate hosts (so that censors cannot
 block the entire network without collateral damage).
 Because of the large number of IPv6 addresses, even
-relatively small network prefixes have astronomical numbers of addresses: a
+moderately-sized network prefixes have astronomical numbers of addresses: a
 single /32 prefix has $2^{96}$ possible addresses. Therefore, client-chosen
 seeds have negligible probability of corresponding to addresses that are already
 being used by legitimate hosts. This allows us to select phantom host addresses
