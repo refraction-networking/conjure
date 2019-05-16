@@ -48,7 +48,19 @@ protocol. Despite using a passive tap, our scheme is effectively inline to the
 phantom host (which won't otherwise respond).
 
 
-Bocovich and Goldberg propose an asymmetric gossip scheme~\cite{secureasymmetry} that combines a passive monitor on the forward path from the client to the decoy with an inline blocking element on the return path. These elements work in concert to allow schemes such as Telex and Slitheen to work on asymmetric connections. This approach, however, still requires inline blocking on one direction, and further complicates deployment by requiring the installation of more components and potentially complex coordination between them. MultiFlow~\cite{multiflow} uses refraction networking only as a forward mechanism to communicate a web request to the station, and then uses a bulletin board or email to deliver the response back. It does not require inline flow blocking as it does not modify users' traffic at all, but it fundamentally relies on a separate data delivery mechanism, similar to other cloud- or email-based circumvention tools~\cite{SWEET-ToN,CloudTransport}.
+Bocovich and Goldberg propose an asymmetric gossip scheme~\cite{secureasymmetry} 
+that combines a passive monitor on the forward path from the client to the decoy 
+with an inline blocking element on the return path. These elements work in concert 
+to allow schemes such as Telex and Slitheen to work on asymmetric connections. 
+This approach, however, still requires inline blocking on one direction, and 
+further complicates deployment by requiring the installation of more components 
+and potentially complex coordination between them. MultiFlow~\cite{multiflow} 
+uses refraction networking only as a forward mechanism to communicate a web 
+request to the station, and then uses a bulletin board or email to deliver the 
+response back. It does not require inline flow blocking as it does not modify 
+users' traffic at all, but it fundamentally relies on a separate data delivery 
+mechanism, similar to other cloud- or email-based circumvention 
+tools~\cite{SWEET-ToN,CloudTransport}.
 
 \scheme allows a large amount of flexibility compared to previous schemes.
 Because we have significant degrees of freedom in choosing the specific
@@ -61,10 +73,32 @@ their features, as compared to \scheme.
 
 \subsection{Decoy Placement and Routing Attacks}
 
-Houmansadr et al.~\cite{cirripede11} found that placing refraction proxies in a handful of Tier 1 networks would be sufficient for them to be usable by the majority of the Internet population. Cesareo et al.~\cite{decoy-placement} developed an algorithm for optimizing the placement of proxies based on AS-level Internet topology data. Schuchard et al.~\cite{rad} suggested that a censor may actively change its routes to ensure traffic leaving its country avoids the proxies, but Houmansadr et al.~\cite{true-cost-rad} suggested that real-world constraints on routing make this attack difficult to carry out in practice. Nevertheless, Nasr et al.~\cite{game-of-decoys} propose a game-theoretic framework to optimize proxy placement in an adversarial setting, and the design of Waterfall~\cite{waterfall17} is in part motivated by resilience to routing attacks, as it is more difficult for the censor to control the return path from a decoy site, rather than the forward path.
+Houmansadr et al.~\cite{cirripede11} found that placing refraction proxies in a 
+handful of Tier 1 networks would be sufficient for them to be usable by the 
+majority of the Internet population. Cesareo et al.~\cite{decoy-placement} 
+developed an algorithm for optimizing the placement of proxies based on AS-level 
+Internet topology data. Schuchard et al.~\cite{rad12} suggested that a censor may 
+actively change its routes to ensure traffic leaving its country avoids the 
+proxies, but Houmansadr et al.~\cite{true-cost-rad} suggested that real-world 
+constraints on routing make this attack difficult to carry out in practice. 
+Nevertheless, Nasr et al.~\cite{game-of-decoys} propose a game-theoretic 
+framework to optimize proxy placement in an adversarial setting, and the 
+design of Waterfall~\cite{waterfall17} is in part motivated by resilience to 
+routing attacks, as it is more difficult for the censor to control the return 
+path from a decoy site, rather than the forward path.
 
-In practice, deployment of refraction networking has so far been at access, rather than transit ISPs~\cite{frolov2017isp}. This may be in part because a transit ISP has a large number of routers and points-of-presence, significantly raising the costs of deployment~\cite{devil-details}.\footnote{We
-note that Gosain et al.~\cite{devil-details} use an estimate of \$885,000/proxy, while Frolov et al.~\cite{frolov2017isp} report line-rate TapDance deployment using commodity hardware that costs only several thousand dollars.} Likewise, we expect \scheme to use address space announced by the ISP, rather than addresses relayed by it, which mitigates routing-based attacks. Depending on the size of the ISP, however, a censor may decide to block the entirety of its address space, which would incur smaller collateral damage than blocking all addresses seen by a transit ISP.
+In practice, deployment of refraction networking has so far been at access, 
+rather than transit ISPs~\cite{frolov2017isp}. This may be in part because a 
+transit ISP has a large number of routers and points-of-presence, significantly 
+raising the costs of deployment~\cite{devil-details}.\footnote{We
+note that Gosain et al.~\cite{devil-details} use an estimate of \$885,000/proxy, 
+while Frolov et al.~\cite{frolov2017isp} report line-rate TapDance deployment 
+using commodity hardware that costs only several thousand dollars.} Likewise, 
+we expect \scheme to use address space announced by the ISP, rather than 
+addresses relayed by it, which mitigates routing-based attacks. Depending on 
+the size of the ISP, however, a censor may decide to block the entirety of its 
+address space, which would incur smaller collateral damage than blocking all 
+addresses seen by a transit ISP.
 
 \subsection{Avoiding Destination Blocking}
 
