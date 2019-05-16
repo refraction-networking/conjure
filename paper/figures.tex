@@ -86,7 +86,7 @@
     \includegraphics[width=0.75\linewidth,clip]{figures/decoy-tap-bandwidth.png}
     \caption{\textbf{Tap Bandwidth}\,---\, %
         We deployed our \scheme implementation in a realistic ISP testbed on a
-        (full duplex) tap of a 10~Gbps router. As shown in a typical week, traffic
+        tap of a 20~Gbps router. As shown in a typical week, traffic
         ranges from 2-17~Gbps.
     }
     \label{fig:tap-bandwidth}
@@ -206,11 +206,12 @@
     \centering
     \includegraphics[width=0.7\linewidth,clip]{figures/implementation.png}
     \caption{\textbf{Station Architecture}\,---\,%
-        We used PF\_RING to receive packets from a 10~Gbps packet tap, which we load balance
+        We used PF\_RING to receive packets from a 20~Gbps packet tap, which we load balance
         across 4~CPU cores. The detector process identifies and processes registrations, and forwards
         packets destined to registered phantom host addresses to a local application. The application
         determines if the client is legitimate (using a seed shared during registration) and forwards
-        their traffic to a proxy. Otherwise, the application responds as if it were the mask site.}
+        their traffic to a proxy. Otherwise, the application responds as an innocuous host, such as by
+        forwarding pakcets to a mask site.}
     \label{fig:implementation}
 \end{figure}
 }

@@ -184,7 +184,7 @@ There is an urgent need for new, more robust approaches to circumvention.
 A family of techniques called Refraction Networking~\cite{telex11,cirripede11,curveball11,tapdance14,rebound15,slitheen16,waterfall17}, formerly known
 as Decoy Routing, has made promising steps towards that goal.
 These techniques operate in the network's core, at cooperating Internet Service Providers
-(ISPs) outside censoring countries~\cite{refraction-site}.  Clients access circumvention service by connecting to a ``decoy site''---any uncensored website for which the connection travels over a participating ISP\@.  Upon recognizing a steganographic signal from the client, the ISP modifies the connection response to return censored content requested by the user.
+(ISPs) outside censoring countries~\cite{refraction-site}.  Clients access circumvention services by connecting to a ``decoy site''---any uncensored website for which the connection travels over a participating ISP\@.  Upon recognizing a steganographic signal from the client, the ISP modifies the connection response to return censored content requested by the user.
 Censors cannot easily block access without also blocking legitimate connections to the decoy sites---collateral damage that may be prohibitive for censors if Refraction is widely deployed~\cite{robinson2013collateral}.
 
 However, deploying such schemes is more difficult than with most
@@ -269,7 +269,7 @@ block, as they must detect and block in real time. Meanwhile, even a censor that
 can detect 90\% of phantom hosts does not significantly increase the cost to the
 circumvention system, giving \scheme an advantage in the censor/circumventor
 cat-and-mouse game.
-%TODO: don't need to hedge on IPv4 anymore..?
+%TODO: don't need to hedge on IPv4 anymore..? couldcut
 \scheme supports both IPv4 and IPv6,
 though we note that the technique is especially
 powerful in IPv6, where censors cannot exhaustively scan the address space
@@ -299,11 +299,17 @@ We have implemented Conjure (Section~\ref{sec:implementation})
 and deployed it on a 20~Gbps ISP testbed similar to the TapDance
 deployment~\cite{frolov2017isp}.  Compared to TapDance, we find that
 \scheme has reduced complexity and substantially improved performance
-(Section~\ref{sec:evaluation}).  In addition, \scheme provides significantly
+(Section~\ref{sec:evaluation}): on average, \scheme has 20\% lower latency,
+14\% faster download bandwidth, and over 1400 times faster upload bandwidth.
+In addition, \scheme provides significantly
 more flexibility than existing Refraction protocols, allowing maintainers to
 respond to future censor techniques.
 We believe that these advantages
 make \scheme a strong choice for future Refraction Networking deployments.
+
+%download: dd - td: 5947790000 - 5219112999 = 14% faster down
+% upload:  5088330000/3500000.0 = 1453x upload
+% latency: td avg 297ms, dd avg 237ms = 20% lower latency
 
 \input{background.tex}
 
@@ -437,7 +443,7 @@ IP address from the set of prefixes will be used and registered as a phantom hos
 It may seem intuitive to instead have the client
 send the specific IP address to register, but allowing the client arbitrary
 choice also allows the censor to register suspected phantom hosts and block them if
-they pick up.
+they can be used as proxies.
 By using a hash of a seed, the censor would have to pre-image the hash to
 obtain a seed it could use to register for a desired IP address.
 It also gives a
@@ -1068,8 +1074,8 @@ shown in Figure~\ref{fig:tap-bandwidth}, ranging from 2.4~Gbps to peaks above
 
 We evaluated the performance of a client from an India-based VPS,
 Figures~\ref{fig:upload} and~\ref{fig:download} show the upload and download as
-measured by iperf for TapDance, our \scheme implementation, and a direct
-connection to our iperf server in the ISP's network.
+measured by iperf for TapDance, our \scheme implementation (using the mask site application),
+and a direct connection to our iperf server in the ISP's network.
 
 TapDance must reconnect if the amount of data sent by the client
 exceeds a short TCP window (typically on the order of 32~KBytes) or the
@@ -1077,17 +1083,17 @@ connection persists until a timeout (18-120 seconds). At each reconnect, the
 TapDance client naively blocks until a new TLS connection to the decoy and
 station has been established. Thus, when uploading files, TapDance has to create
 a new TLS connection for every 32~KBytes of data it sends, limiting its average
-upload bandwidth to less than 1~Mbps due to the high overhead. In contrast,
+upload bandwidth to around 0.1~Mbps due to the high overhead. In contrast,
 our \scheme implementation is
 able to maintain the same connection during large uploads, and achieves
-performance inline with the direct connection.
+performance inline with the direct connection, over 1400 times faster.
 
 During download-only workloads, TapDance is able to better utilize the network,
 but must still reconnect before the decoy times out. In our tests, we see
 TapDance reconnect every 25 seconds, which can negatively impact the performance of
 downloads or any real-time streaming applications. Again, our \scheme
 implementation is able to maintain a single connection and provide the maximum
-download rate without interruption.
+download rate without interruption, 14\% faster than TapDance.
 
 We also measure the latency of repeated small requests. In both \scheme (using
 the OSSH protocol) and
