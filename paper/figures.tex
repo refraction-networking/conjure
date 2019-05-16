@@ -58,6 +58,28 @@
 }
 
 
+
+\newcommand{\FigLatency}{
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.95\linewidth,clip]{figures/td-dd-latency.pdf}
+    \caption{\textbf{Latency}\,---\, %
+        We compare the CDF of latency for requests between \scheme and TapDance.
+        In each case, we have a long-lived session over which requests are being made
+        using Apache Benchmark (ab). At the median, \scheme has 44~ms (19\%) faster latency than
+        TapDance.
+        In addition, TapDance requests are frequently slowed by its intermittent reconnections
+        to the decoy, as shown in the longer tail of TapDance's latency CDF. \scheme has no such
+        reconnects, and thus has more uniform latency. At the 99th
+        percentile, \scheme is 281~ms (92\%) faster than TapDance.
+    }
+    \label{fig:latency}
+\end{figure}
+}
+
+
+
+
 \newcommand{\FigTapBandwidth}{
 \begin{figure*}[ht]
     \centering

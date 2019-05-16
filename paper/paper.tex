@@ -1054,7 +1054,10 @@ which allows us to reuse existing TapDance CLI wrapper and Android application.
 
 %\TODO{Write (1 page)}
 
-To evaluate our \scheme implementation, we compare its bandwidth
+\FigUpload
+\FigDownload
+
+To evaluate our \scheme implementation, we compare its bandwidth and latency
 to that of TapDance in a realistic ISP setting. We used a 20~Gbps
 network tap at a mid-sized ISP and run both implementations on a 1U server with
 an 8-core Intel Xeon E5-2640 CPU, 64GB of RAM, and a dual-port Intel X710 10GbE SFP+
@@ -1063,7 +1066,7 @@ shown in Figure~\ref{fig:tap-bandwidth}, ranging from 2.4~Gbps to peaks above
 17~Gbps.
 
 
-We evaluated the performance of a client from a Singapore-based VPS,
+We evaluated the performance of a client from an India-based VPS,
 Figures~\ref{fig:upload} and~\ref{fig:download} show the upload and download as
 measured by iperf for TapDance, our \scheme implementation, and a direct
 connection to our iperf server in the ISP's network.
@@ -1086,6 +1089,22 @@ downloads or any real-time streaming applications. Again, our \scheme
 implementation is able to maintain a single connection and provide the maximum
 download rate without interruption.
 
+We also measure the latency of repeated small requests. In both \scheme (using
+the OSSH protocol) and
+TapDance we establish a single session tunnel using our integrated Psiphon
+client, and make 1000 requests through each using Apache Benchmark (ab). We find
+that our India-based VPS throttles TLS but not OSSH, making TapDance twice as slow as
+\scheme. We repeated these tests on a US-based VPS which does not have such
+throttling, and show results in Figure~\ref{fig:latency}. TapDance's frequent
+reconnects adds significant latency to about 10\% of requests. In addition, the
+median latency of \scheme is about 19\% faster, due to the added
+overhead of TLS and the complex path that TapDance data packets take through
+the station compared to \scheme.
+
+\FigLatency
+
+
+
 %Compare to TapDance performance:
 %-Connection setup time
 %-Connection/session lifetime
@@ -1103,8 +1122,6 @@ download rate without interruption.
 There are many attacks a censor might attempt to either prevent phantom hosts from
 being registered or used.
 
-\FigUpload
-\FigDownload
 
 \paragraph{Blocking registration}
 To make registration more difficult, censors could block TLS connections to all of the
