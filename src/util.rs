@@ -179,17 +179,52 @@ impl HKDFKeys
     }
 }
 
+
+pub enum DDIpSupport {
+    V4 = 1,
+    V6 = 2,
+    Both = 3,
+}
+impl From<u32> for DDIpSupport {
+    fn from(val: u32) -> Self {
+        match val {
+            1 => DDIpSupport::V4,
+            2 => DDIpSupport::V6,
+            3 => DDIpSupport::Both,
+            _ => DDIpSupport::Both,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct DDIpSelector {
     pub networks: LinkedList<IpNetwork>,
 }
 
 impl DDIpSelector {
-    pub fn new(subnets: &Vec<String>) -> Result<DDIpSelector, self::ipnetwork::IpNetworkError> {
+    pub fn new(subnets: &Vec<String>, dd_client_ip_support: DDIpSupport ) -> Result<DDIpSelector, self::ipnetwork::IpNetworkError> {
         let mut net_list = LinkedList::new();
         for str_net in subnets.iter() {
             let net: IpNetwork = str_net.parse()?;
-            net_list.push_back(net.clone());
+            match dd_client_ip_support {
+                DDIpSupport::V4 => {
+                    match net {
+                        IpNetwork::V4(_) => net_list.push_back(net.clone()),
+                        IpNetwork::V6(_) => (),
+                    }
+                }
+                DDIpSupport::V6 => {
+                    match net {
+                        IpNetwork::V4(_) => (),
+                        IpNetwork::V6(_) => net_list.push_back(net.clone()),
+                    }
+                }
+                DDIpSupport::Both => {
+                    net_list.push_back(net.clone());
+
+                }
+                _ => (),
+            }
         }
         Ok(DDIpSelector { networks: net_list })
     }
@@ -270,8 +305,9 @@ fn array_as_u32_be(a: &[u8; 4]) -> u32 {
 #[cfg(test)]
 mod tests {
     use util;
-    use util::DDIpSelector;
+    use util::{DDIpSelector, DDIpSupport};
 
+ 
     #[test]
     fn mem_used_kb_parses_something()
     {
@@ -279,8 +315,14 @@ mod tests {
     }
 
     #[test]
-    fn test_dd_ip_selector() {
+    fn test_dd_ip_selector4() {
         let s1 = DDIpSelector::new(&vec![String::from("2001:48a8:8000::/33"),
-                                         String::from("192.122.200.0/24")]);
+                                         String::from("192.122.200.0/24")], DDIpSupport::V4);
+    }
+
+    #[test]
+    fn test_dd_ip_selector6() {
+        let s1 = DDIpSelector::new(&vec![String::from("2001:48a8:8000::/33"),
+                                         String::from("192.122.200.0/24")], DDIpSupport::V6);
     }
 }

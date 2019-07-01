@@ -3,6 +3,12 @@ name = "rust_dark_decoy"
 version = "0.0.1"
 authors = ["Eric Wustrow <ewust@colorado.edu>"]
 include = ["src/*"]
+links="tapdance"
+build="build.rs"
+
+[build-dependencies]
+gcc="~0.3"
+
 
 [lib]
 name = "rust_dark_decoy"
@@ -13,7 +19,7 @@ lazycell = "^0.5"
 libc = "~0.2"
 rust-crypto = "^0.2"
 time = "*"
-pnet = "0.21.0"
+pnet = "0.22.0"
 arrayref = "0.3.2"
 log = "0.3.6"
 rand = "0.4.2"
@@ -21,7 +27,7 @@ errno = "0.2.3"
 radix = { git = "https://github.com/refraction-networking/radix" }
 tuntap = { git = "https://github.com/ewust/tuntap.rs" }
 ipnetwork = "*"
-protobuf = "1.4"
+protobuf = "2.6"
 hkdf = "0.7"
 sha2 = "0.8.*"
 hex = "0.3.*"

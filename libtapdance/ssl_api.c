@@ -86,6 +86,7 @@ SSL* get_ssl_obj(const uint8_t *master_key, size_t master_key_len,
                  const uint8_t *client_random, int npn)
 {
     static SSL_CTX *ctx = 0;
+
     if (!ctx) {
         SSL_library_init();
         SSL_load_error_strings();
@@ -104,12 +105,12 @@ SSL* get_ssl_obj(const uint8_t *master_key, size_t master_key_len,
         fprintf(stderr, "could not init ssl...\n");
         return NULL;
     }
-
+    /*
     ssl->type = SSL_ST_ACCEPT;
     ssl->method = TLSv1_2_server_method();
 
     ssl->rwstate = SSL_NOTHING;
-    ssl->in_handshake = 0; /* We're simulating having finished SSL_connect. */
+    ssl->in_handshake = 0; // We're simulating having finished SSL_connect.
     ssl->handshake_func = ssl3_connect;
     ssl->server = 0;
 
@@ -180,6 +181,7 @@ SSL* get_ssl_obj(const uint8_t *master_key, size_t master_key_len,
         fprintf(stderr, "Couldn't change to telex crypto!\n");
         return NULL;
     }
+    */
     return ssl;
 }
 
@@ -187,6 +189,7 @@ SSL* get_ssl_obj(const uint8_t *master_key, size_t master_key_len,
 int setup_ssl_secrets(SSL *ssl, const char *master_key, size_t master_key_len,
                       uint16_t cipher_suite, int npn)
 {
+    /*
     // SSL record sequence numbers should be 1; we just got done with
     // a round of hellos
     ssl->type = SSL_ST_ACCEPT;
@@ -247,5 +250,6 @@ int setup_ssl_secrets(SSL *ssl, const char *master_key, size_t master_key_len,
         // Consume the NPN NextProtocol Handshake message
         ssl->s3->read_sequence[7] = '\x02';
     }
+    */
     return 1;
 }

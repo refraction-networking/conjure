@@ -15,7 +15,7 @@ use std::u8;
 //use elligator;
 use flow_tracker::{Flow, FlowNoSrcPort};
 use PerCoreGlobal;
-use util::{IpPacket, DDIpSelector};
+use util::{IpPacket, DDIpSelector, DDIpSupport};
 use elligator;
 use protobuf;
 use signalling::ClientToStation;
@@ -255,8 +255,24 @@ impl PerCoreGlobal
         self.stats.elligator_this_period += 1;
         match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
             Ok(res) => {
+
+                let mut c2s = match protobuf::parse_from_bytes::<ClientToStation>
+                    (&res.2) {
+                    Ok(pb) => pb,
+                    Err(e) => {
+                        error!("Error parsing protobuf from VSP: {:?}", e);
+                        return None;
+                    }
+                };
+
+                let dd_client_ip_support = match c2s.has_dark_decoy_ip_support()  {
+                    true => DDIpSupport::from( c2s.get_dark_decoy_ip_support() ), // IF SPECIFIED USE
+                    false => DDIpSupport::Both, // IF NOT, BOTH IS THE DEFAULT OPTION 
+                };
+
                 let dd_ip_selector = match DDIpSelector::new(&vec![String::from("192.122.190.0/24"),
-                                                                   String::from("2001:48a8:687f:1::/64")]) {
+                                                                   String::from("2001:48a8:687f:1::/64")], 
+                                                             dd_client_ip_support) {
                     // TODO: move this initialization up
                     Ok(dd) => dd,
                     Err(e) => {
@@ -273,14 +289,7 @@ impl PerCoreGlobal
                     }
                 };
 
-                let mut c2s = match protobuf::parse_from_bytes::<ClientToStation>
-                    (&res.2) {
-                    Ok(pb) => pb,
-                    Err(e) => {
-                        error!("Error parsing protobuf from VSP: {:?}", e);
-                        return None;
-                    }
-                };
+;
                 if !c2s.has_covert_address() {
                     error!("ClientToStation has no covert: {:?}", c2s);
                     return None;
@@ -345,3 +354,6 @@ fn usize_to_u8(a: usize) -> Option<u8> {
         Some(a as u8)
     }
 }
+
+
+

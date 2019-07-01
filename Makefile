@@ -24,7 +24,7 @@ app:
 	cd ./application/ && make
 
 libtd:
-	cd ./libtapdance/ && make
+	cd ./libtapdance/ && make libtapdance.a
 
 dark-decoy: detect.c loadkey.c rust_util.c rust libtapdance
 	${CC} ${CFLAGS} -o $@ detect.c loadkey.c rust_util.c ${LIBS}
