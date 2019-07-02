@@ -184,7 +184,7 @@ message ClientToStation {
     optional string masked_decoy_server_name = 21;
 
     // Used to indicate to server if client doesn't support ipv6 for dark decoy address selection.
-    optional uint32 dark_decoy_ip_support = 22;
+    optional bool dark_decoy_v6_support = 22;
 
     // Random-sized junk to defeat packet size fingerprinting.
     optional bytes padding = 100;

@@ -15,7 +15,7 @@ use std::u8;
 //use elligator;
 use flow_tracker::{Flow, FlowNoSrcPort};
 use PerCoreGlobal;
-use util::{IpPacket, DDIpSelector, DDIpSupport};
+use util::{IpPacket, DDIpSelector};
 use elligator;
 use protobuf;
 use signalling::ClientToStation;
@@ -265,15 +265,14 @@ impl PerCoreGlobal
                     }
                 };
 
-                let dd_client_ip_support = match c2s.has_dark_decoy_ip_support()  {
-                    true => DDIpSupport::from( c2s.get_dark_decoy_ip_support() ), // IF SPECIFIED USE
-                    false => DDIpSupport::Both, // IF NOT, BOTH IS THE DEFAULT OPTION 
+                let dd_client_v6_support = match c2s.has_dark_decoy_v6_support()  {
+                    true => c2s.get_dark_decoy_v6_support(), // v6 support specified
+                    false => true, // If not, v6 supported is default for backward compatibility.
                 };
 
-                let dd_ip_selector = match DDIpSelector::new(&vec![String::from("192.122.190.0/24"),
-                                                                   String::from("2001:48a8:687f:1::/64")], 
-                                                             dd_client_ip_support) {
-                    // TODO: move this initialization up
+                let dd_ip_selector = match DDIpSelector::new(
+                    &vec![String::from("192.122.190.0/24"), String::from("2001:48a8:687f:1::/64")], 
+                    dd_client_v6_support) {
                     Ok(dd) => dd,
                     Err(e) => {
                         error!("failed to make Dark Decoy IP selector: {}", e);

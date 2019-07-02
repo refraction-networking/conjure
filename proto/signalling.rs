@@ -1543,7 +1543,7 @@ pub struct ClientToStation {
     stats: ::protobuf::SingularPtrField<SessionStats>,
     covert_address: ::protobuf::SingularField<::std::string::String>,
     masked_decoy_server_name: ::protobuf::SingularField<::std::string::String>,
-    dark_decoy_ip_support: ::std::option::Option<u32>,
+    dark_decoy_v6_support: ::std::option::Option<bool>,
     padding: ::protobuf::SingularField<::std::vec::Vec<u8>>,
     // special fields
     pub unknown_fields: ::protobuf::UnknownFields,
@@ -1767,23 +1767,23 @@ impl ClientToStation {
         self.masked_decoy_server_name.take().unwrap_or_else(|| ::std::string::String::new())
     }
 
-    // optional uint32 dark_decoy_ip_support = 22;
+    // optional bool dark_decoy_v6_support = 22;
 
 
-    pub fn get_dark_decoy_ip_support(&self) -> u32 {
-        self.dark_decoy_ip_support.unwrap_or(0)
+    pub fn get_dark_decoy_v6_support(&self) -> bool {
+        self.dark_decoy_v6_support.unwrap_or(false)
     }
-    pub fn clear_dark_decoy_ip_support(&mut self) {
-        self.dark_decoy_ip_support = ::std::option::Option::None;
+    pub fn clear_dark_decoy_v6_support(&mut self) {
+        self.dark_decoy_v6_support = ::std::option::Option::None;
     }
 
-    pub fn has_dark_decoy_ip_support(&self) -> bool {
-        self.dark_decoy_ip_support.is_some()
+    pub fn has_dark_decoy_v6_support(&self) -> bool {
+        self.dark_decoy_v6_support.is_some()
     }
 
     // Param is passed by value, moved
-    pub fn set_dark_decoy_ip_support(&mut self, v: u32) {
-        self.dark_decoy_ip_support = ::std::option::Option::Some(v);
+    pub fn set_dark_decoy_v6_support(&mut self, v: bool) {
+        self.dark_decoy_v6_support = ::std::option::Option::Some(v);
     }
 
     // optional bytes padding = 100;
@@ -1877,8 +1877,8 @@ impl ::protobuf::Message for ClientToStation {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     }
-                    let tmp = is.read_uint32()?;
-                    self.dark_decoy_ip_support = ::std::option::Option::Some(tmp);
+                    let tmp = is.read_bool()?;
+                    self.dark_decoy_v6_support = ::std::option::Option::Some(tmp);
                 },
                 100 => {
                     ::protobuf::rt::read_singular_bytes_into(wire_type, is, &mut self.padding)?;
@@ -1920,8 +1920,8 @@ impl ::protobuf::Message for ClientToStation {
         if let Some(ref v) = self.masked_decoy_server_name.as_ref() {
             my_size += ::protobuf::rt::string_size(21, &v);
         }
-        if let Some(v) = self.dark_decoy_ip_support {
-            my_size += ::protobuf::rt::value_size(22, v, ::protobuf::wire_format::WireTypeVarint);
+        if let Some(v) = self.dark_decoy_v6_support {
+            my_size += 3;
         }
         if let Some(ref v) = self.padding.as_ref() {
             my_size += ::protobuf::rt::bytes_size(100, &v);
@@ -1958,8 +1958,8 @@ impl ::protobuf::Message for ClientToStation {
         if let Some(ref v) = self.masked_decoy_server_name.as_ref() {
             os.write_string(21, &v)?;
         }
-        if let Some(v) = self.dark_decoy_ip_support {
-            os.write_uint32(22, v)?;
+        if let Some(v) = self.dark_decoy_v6_support {
+            os.write_bool(22, v)?;
         }
         if let Some(ref v) = self.padding.as_ref() {
             os.write_bytes(100, &v)?;
@@ -2046,10 +2046,10 @@ impl ::protobuf::Message for ClientToStation {
                     |m: &ClientToStation| { &m.masked_decoy_server_name },
                     |m: &mut ClientToStation| { &mut m.masked_decoy_server_name },
                 ));
-                fields.push(::protobuf::reflect::accessor::make_option_accessor::<_, ::protobuf::types::ProtobufTypeUint32>(
-                    "dark_decoy_ip_support",
-                    |m: &ClientToStation| { &m.dark_decoy_ip_support },
-                    |m: &mut ClientToStation| { &mut m.dark_decoy_ip_support },
+                fields.push(::protobuf::reflect::accessor::make_option_accessor::<_, ::protobuf::types::ProtobufTypeBool>(
+                    "dark_decoy_v6_support",
+                    |m: &ClientToStation| { &m.dark_decoy_v6_support },
+                    |m: &mut ClientToStation| { &mut m.dark_decoy_v6_support },
                 ));
                 fields.push(::protobuf::reflect::accessor::make_singular_field_accessor::<_, ::protobuf::types::ProtobufTypeBytes>(
                     "padding",
@@ -2086,7 +2086,7 @@ impl ::protobuf::Clear for ClientToStation {
         self.stats.clear();
         self.covert_address.clear();
         self.masked_decoy_server_name.clear();
-        self.dark_decoy_ip_support = ::std::option::Option::None;
+        self.dark_decoy_v6_support = ::std::option::Option::None;
         self.padding.clear();
         self.unknown_fields.clear();
     }
@@ -2727,8 +2727,8 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x18\x0b\x20\x01(\x0b2\x16.tapdance.SessionStatsR\x05stats\x12%\n\x0ecov\
     ert_address\x18\x14\x20\x01(\tR\rcovertAddress\x127\n\x18masked_decoy_se\
     rver_name\x18\x15\x20\x01(\tR\x15maskedDecoyServerName\x121\n\x15dark_de\
-    coy_ip_support\x18\x16\x20\x01(\rR\x12darkDecoyIpSupport\x12\x18\n\x07pa\
-    dding\x18d\x20\x01(\x0cR\x07padding\"\xdd\x01\n\x0cSessionStats\x120\n\
+    coy_v6_support\x18\x16\x20\x01(\x08R\x12darkDecoyV6Support\x12\x18\n\x07\
+    padding\x18d\x20\x01(\x0cR\x07padding\"\xdd\x01\n\x0cSessionStats\x120\n\
     \x14failed_decoys_amount\x18\x14\x20\x01(\rR\x12failedDecoysAmount\x121\
     \n\x15total_time_to_connect\x18\x1f\x20\x01(\rR\x12totalTimeToConnect\
     \x12$\n\x0ertt_to_station\x18!\x20\x01(\rR\x0crttToStation\x12\x20\n\x0c\
@@ -2998,12 +2998,12 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x20to.\n\n\r\n\x05\x04\x05\x02\x07\x04\x12\x04\xb7\x01\x04\x0c\n\r\n\
     \x05\x04\x05\x02\x07\x05\x12\x04\xb7\x01\r\x13\n\r\n\x05\x04\x05\x02\x07\
     \x01\x12\x04\xb7\x01\x14,\n\r\n\x05\x04\x05\x02\x07\x03\x12\x04\xb7\x01/\
-    1\nk\n\x04\x04\x05\x02\x08\x12\x04\xba\x01\x04/\x1a]\x20Used\x20to\x20in\
+    1\nk\n\x04\x04\x05\x02\x08\x12\x04\xba\x01\x04-\x1a]\x20Used\x20to\x20in\
     dicate\x20to\x20server\x20if\x20client\x20doesn't\x20support\x20ipv6\x20\
     for\x20dark\x20decoy\x20address\x20selection.\n\n\r\n\x05\x04\x05\x02\
     \x08\x04\x12\x04\xba\x01\x04\x0c\n\r\n\x05\x04\x05\x02\x08\x05\x12\x04\
-    \xba\x01\r\x13\n\r\n\x05\x04\x05\x02\x08\x01\x12\x04\xba\x01\x14)\n\r\n\
-    \x05\x04\x05\x02\x08\x03\x12\x04\xba\x01,.\nG\n\x04\x04\x05\x02\t\x12\
+    \xba\x01\r\x11\n\r\n\x05\x04\x05\x02\x08\x01\x12\x04\xba\x01\x12'\n\r\n\
+    \x05\x04\x05\x02\x08\x03\x12\x04\xba\x01*,\nG\n\x04\x04\x05\x02\t\x12\
     \x04\xbd\x01\x04!\x1a9\x20Random-sized\x20junk\x20to\x20defeat\x20packet\
     \x20size\x20fingerprinting.\n\n\r\n\x05\x04\x05\x02\t\x04\x12\x04\xbd\
     \x01\x04\x0c\n\r\n\x05\x04\x05\x02\t\x05\x12\x04\xbd\x01\r\x12\n\r\n\x05\
