@@ -265,8 +265,8 @@ impl PerCoreGlobal
                     }
                 };
 
-                let dd_client_v6_support = match c2s.has_dark_decoy_v6_support()  {
-                    true => c2s.get_dark_decoy_v6_support(), // v6 support specified
+                let dd_client_v6_support = match c2s.has_v6_support()  {
+                    true => c2s.get_v6_support(), // v6 support specified
                     false => true, // If not, v6 supported is default for backward compatibility.
                 };
 

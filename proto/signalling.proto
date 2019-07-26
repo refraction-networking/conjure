@@ -172,6 +172,8 @@ message ClientToStation {
 
     optional SessionStats stats = 11;
 
+
+
     // Station is only required to check this variable during session initialization.
     // If set, station must facilitate connection to said target by itself, i.e. write into squid
     // socket an HTTP/SOCKS/any other connection request.
@@ -184,7 +186,15 @@ message ClientToStation {
     optional string masked_decoy_server_name = 21;
 
     // Used to indicate to server if client doesn't support ipv6 for dark decoy address selection.
-    optional bool dark_decoy_v6_support = 22;
+    optional bool v6_support = 22;
+
+    // Client Conf version -> used to signal to the station what decoy ip blocks are supported
+    optional uint32 client_conf_v = 23;
+
+    // Protocol Type -> protocol used in client to proxy station
+    optional uint32 c2s_protocol = 24;
+
+
 
     // Random-sized junk to defeat packet size fingerprinting.
     optional bytes padding = 100;
