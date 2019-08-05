@@ -341,6 +341,30 @@ func halfPipe(src, dst net.Conn, wg sync.WaitGroup, oncePrintErr sync.Once) {
 	wg.Done()
 }
 
+
+func proxyFactory(proxyProtocol uint) func(decoyRegistration, *net.TCPConn, net.IP) {
+	switch proxyProtocol {
+	case 0: 
+		return func(reg decoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
+			twoWayProxy(reg, clientConn, originalDstIP)
+		}
+	case 1:
+		return func(reg decoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP){
+			threeWayProxy(reg, clientConn, originalDstIP)
+		}
+	case 2: 
+		return func(reg decoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
+			// Obfs4 handler
+			return nil
+		}
+	default:
+		return func(reg decoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
+			return nil
+		}
+	}
+}
+
+
 func handleNewConn(clientConn *net.TCPConn) {
 	defer clientConn.Close()
 
@@ -364,8 +388,15 @@ func handleNewConn(clientConn *net.TCPConn) {
 		return
 	}
 
-	//threeWayProxy(reg, clientConn, originalDstIP)
-	twoWayProxy(reg, clientConn, originalDstIP)
+	proxyHandler := proxyFactory(0)
+	if proxyHandler != nil {
+		proxyHandler(reg, clientConn, originalDstIP)
+		// threeWayProxy(reg, clientConn, originalDstIP)
+		// twoWayProxy(reg, clientConn, originalDstIP)
+	} else{
+		logger.Printf("failed to initialize proxy, unknown or unimplemented protocol.")
+		return
+	}
 }
 
 func twoWayProxy(reg *decoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
