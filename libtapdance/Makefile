@@ -3,7 +3,7 @@ INCLUDE=-I../../forge_socket
 CFLAGS+=-fPIC -g $(INCLUDE)
 
 # User and System libraries
-LIBS       = -lgmp -ldl
+LIBS       = -lgmp -ldl -lpthread
 
 OPENSSL_STATIC_LIB = -Wl,-Bstatic -lssl -Wl,-Bstatic -lcrypto
 
