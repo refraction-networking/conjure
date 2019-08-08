@@ -17,6 +17,7 @@ import (
 	"time"
 
 	zmq "github.com/pebbe/zmq4"
+	dd "./lib"
 	"github.com/refraction-networking/utls"
 )
 
@@ -92,6 +93,14 @@ const (
 	TlsHandshakeTypeNextProtocol       = byte(67)
 )
 
+const (
+	tdFlagUploadOnly  = uint8(1 << 7)
+	tdFlagDarkDecoy   = uint8(1 << 6)
+	tdFlagProxyHeader = uint8(1 << 1)
+	tdFlagUseTIL      = uint8(1 << 0)
+)
+
+
 func getOriginalDst(fd uintptr) (net.IP, error) {
 	const SO_ORIGINAL_DST = 80
 	if sockOpt, err := syscall.GetsockoptIPv6Mreq(int(fd), syscall.IPPROTO_IP, SO_ORIGINAL_DST); err == nil {
@@ -105,8 +114,8 @@ func getOriginalDst(fd uintptr) (net.IP, error) {
 	}
 }
 
-func threeWayProxy(reg *decoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
-	maskHostPort := reg.mask
+func threeWayProxy(reg *dd.DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
+	maskHostPort := reg.Mask
 	if _, mPort, err := net.SplitHostPort(maskHostPort); err != nil {
 		maskHostPort = net.JoinHostPort(maskHostPort, "443")
 	} else {
@@ -115,8 +124,8 @@ func threeWayProxy(reg *decoyRegistration, clientConn *net.TCPConn, originalDstI
 			return
 		}
 	}
-	targetHostPort := reg.covert
-	masterSecret := reg.masterSecret[:]
+	targetHostPort := reg.Covert
+	masterSecret := reg.MasterSecret[:]
 	originalDst := originalDstIP.String()
 	notReallyOriginalSrc := clientConn.LocalAddr().String()
 
@@ -399,24 +408,28 @@ func handleNewConn(clientConn *net.TCPConn) {
 	}
 }
 
-func twoWayProxy(reg *decoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
+func twoWayProxy(reg *dd.DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
+	var err error
 	originalDst := originalDstIP.String()
 	notReallyOriginalSrc := clientConn.LocalAddr().String()
 	flowDescription := fmt.Sprintf("[%s -> %s (covert=%s)] ",
-		notReallyOriginalSrc, originalDst, reg.covert)
+		notReallyOriginalSrc, originalDst, reg.Covert)
 	logger := log.New(os.Stdout, flowDescription, log.Lmicroseconds)
 	logger.Println("new flow")
 
-	covertConn, err := net.Dial("tcp", reg.covert)
+	covertConn, err := net.Dial("tcp", reg.Covert)
 	if err != nil {
 		logger.Printf("failed to dial target: %s", err)
 		return
 	}
 	defer covertConn.Close()
 
-	if err := writePROXYHeader(covertConn, clientConn.RemoteAddr().String()); err != nil {
-		logger.Printf("failed to send PROXY header to covert: %s", err)
-		return
+	if reg.Flags & tdFlagProxyHeader == 1 {
+		err = writePROXYHeader(covertConn, clientConn.RemoteAddr().String())
+		if err != nil {
+			logger.Printf("failed to send PROXY header to covert: %s", err)
+			return
+		}
 	}
 
 	wg := sync.WaitGroup{}
@@ -443,121 +456,76 @@ func get_zmq_updates() {
 
 	logger.Printf("listening on %v\n", bindAddr)
 
+	for {
+
+		ipAddr, reg, err := recieve_zmq_message(sub)
+		if err != nil {
+			continue
+		}
+
+		registeredDecoys.Register(*ipAddr, reg)
+		logger.Printf("new registration: {dark decoy address=%v, covert=%v, mask=%v}\n",
+			net.IP(ipAddr[:]).String(), reg.Covert, reg.Mask)
+	}
+}
+
+
+func recieve_zmq_message(sub *zmq.Socket) (*[16]byte, *dd.DecoyRegistration, error) {
 	var masterSecret [48]byte
 	var ipAddr [16]byte
-	var covertAddrLen, maskedAddrLen [1]byte
+	var covertAddrLen, maskedAddrLen, flags [1]byte
 
-	for {
-		msg, err := sub.RecvBytes(0)
+	msg, err := sub.RecvBytes(0)
+	if err != nil {
+		logger.Printf("error reading from ZMQ socket: %v\n", err)
+		return nil, nil, err
+	}
+	if len(msg) < 48+22 {
+		logger.Printf("short message of size %v\n", len(msg))
+		return nil, nil, fmt.Errorf("short message of size %v\n", len(msg))
+	}
+
+	msgReader := bytes.NewReader(msg)
+
+	msgReader.Read(masterSecret[:])
+	msgReader.Read(ipAddr[:])
+
+	msgReader.Read(covertAddrLen[:])
+	covertAddr := make([]byte, covertAddrLen[0])
+	_, err = msgReader.Read(covertAddr)
+	if err != nil {
+		logger.Printf("short message with size %v didn't fit covert addr with length %v\n",
+			len(msg), covertAddrLen[0])
+		return nil, nil, err
+	}
+
+	msgReader.Read(maskedAddrLen[:])
+	var maskedAddr []byte
+	if maskedAddrLen[0] != 0 {
+		maskedAddr = make([]byte, maskedAddrLen[0])
+		_, err = msgReader.Read(maskedAddr)
 		if err != nil {
-			logger.Printf("error reading from ZMQ socket: %v\n", err)
-			continue
+			logger.Printf("short message with size %v didn't fit masked addr with length %v\n",
+				len(msg), maskedAddrLen[0])
+			return nil, nil, err
 		}
-		if len(msg) < 48+22 {
-			logger.Printf("short message of size %v\n", len(msg))
-			continue
-		}
-
-		msgReader := bytes.NewReader(msg)
-
-		msgReader.Read(masterSecret[:])
-		msgReader.Read(ipAddr[:])
-
-		msgReader.Read(covertAddrLen[:])
-		covertAddr := make([]byte, covertAddrLen[0])
-		_, err = msgReader.Read(covertAddr)
-		if err != nil {
-			logger.Printf("short message with size %v didn't fit covert addr with length %v\n",
-				len(msg), covertAddrLen[0])
-			continue
-		}
-
-		msgReader.Read(maskedAddrLen[:])
-		var maskedAddr []byte
-		if maskedAddrLen[0] != 0 {
-			maskedAddr = make([]byte, maskedAddrLen[0])
-			_, err = msgReader.Read(maskedAddr)
-			if err != nil {
-				logger.Printf("short message with size %v didn't fit masked addr with length %v\n",
-					len(msg), maskedAddrLen[0])
-				continue
-			}
-		}
-
-		reg := &decoyRegistration{
-			masterSecret: masterSecret,
-			covert:       string(covertAddr),
-			mask:         string(maskedAddr),
-		}
-		registeredDecoys.Register(ipAddr, reg)
-		logger.Printf("new registration: {dark decoy address=%v, covert=%v, mask=%v}\n",
-			net.IP(ipAddr[:]).String(), reg.covert, reg.mask)
 	}
+	msgReader.Read(flags[:])
+
+	return &ipAddr, &dd.DecoyRegistration{
+		MasterSecret: masterSecret,
+		Covert:       string(covertAddr),
+		Mask:         string(maskedAddr),
+		Flags:		  uint8(flags[0]),
+	}, nil
 }
 
-type decoyRegistration struct {
-	masterSecret [48]byte
-	covert, mask string
-}
-
-type RegisteredDecoys struct {
-	decoys         map[[16]byte]*decoyRegistration
-	decoysTimeouts []struct {
-		decoy            [16]byte
-		registrationTime time.Time
-	}
-	m sync.RWMutex
-}
-
-func NewRegisteredDecoys() *RegisteredDecoys {
-	return &RegisteredDecoys{
-		decoys: make(map[[16]byte]*decoyRegistration),
-	}
-}
-
-func (r *RegisteredDecoys) Register(darkDecoyAddr [16]byte, d *decoyRegistration) {
-	r.m.Lock()
-	if d != nil {
-		r.decoys[darkDecoyAddr] = d
-		r.decoysTimeouts = append(r.decoysTimeouts, struct {
-			decoy            [16]byte
-			registrationTime time.Time
-		}{decoy: darkDecoyAddr, registrationTime: time.Now()})
-	}
-	r.m.Unlock()
-}
-
-func (r *RegisteredDecoys) CheckRegistration(darkDecoyAddr net.IP) *decoyRegistration {
-	var darkDecoyAddrStatic [16]byte
-	copy(darkDecoyAddrStatic[:], darkDecoyAddr)
-	r.m.RLock()
-	d := r.decoys[darkDecoyAddrStatic]
-	r.m.RUnlock()
-	return d
-}
-
-func (r *RegisteredDecoys) RemoveOldRegistrations() {
-	const timeout = -time.Minute * 5
-	cutoff := time.Now().Add(timeout)
-	idx := 0
-	r.m.Lock()
-	for idx < len(r.decoysTimeouts) {
-		if cutoff.After(r.decoysTimeouts[idx].registrationTime) {
-			break
-		}
-		delete(r.decoys, r.decoysTimeouts[idx].decoy)
-		idx += 1
-	}
-	r.decoysTimeouts = r.decoysTimeouts[idx:]
-	r.m.Unlock()
-}
-
-var registeredDecoys *RegisteredDecoys
+var registeredDecoys *dd.RegisteredDecoys
 var logger *log.Logger
 
 func main() {
 	logger = log.New(os.Stdout, "", log.Lmicroseconds)
-	registeredDecoys = NewRegisteredDecoys()
+	registeredDecoys = dd.NewRegisteredDecoys()
 	go get_zmq_updates()
 
 	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
@@ -575,7 +543,7 @@ func main() {
 			logger.Printf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
 			return // continue?
 		}
-
+		logger.Printf("[CONNECT] new connection from address: %v\n", ln.Addr())
 		go handleNewConn(newConn)
 	}
 }

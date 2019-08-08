@@ -1,7 +1,7 @@
-extern crate gcc;
+extern crate cc;
 
 fn main() {
-    gcc::Config::new()
+    cc::Build::new()
                 .file("libtapdance/tapdance.c")
                 .include("src")
                 .compile("libtapdance.a");

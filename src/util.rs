@@ -8,6 +8,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::collections::LinkedList;
+use std::error::Error;
 
 use pnet::packet::Packet;
 use pnet::packet::tcp::{TcpOptionNumbers, TcpPacket};
@@ -179,6 +180,57 @@ impl HKDFKeys
     }
 }
 
+
+pub struct FSP {
+    pub vsp_size: u16,
+    pub flags: u8,
+    unassigned: [u8; FSP::UNUSED_BYTES],
+    bytes: Vec<u8>,
+}
+
+impl FSP {
+    const UNUSED_BYTES: usize = 3;
+    const USED_BYTES: usize = 3;
+    const LENGTH: usize = 6;
+    pub const FLAG_PROXY_HEADER: u8 = 0x4;
+    pub const FLAG_UPLOAD_ONLY:  u8 = (1 << 7);
+	pub const FLAG_USE_TIL:      u8 = (1 << 0);
+    
+    pub fn fromVec(fixed_size_payload: Vec<u8>) -> Result<FSP, Box<Error>> {
+        if fixed_size_payload.len() < FSP::USED_BYTES {
+            let err: Box<Error> = From::from("Not Enough bytes to parse FSP".to_string());
+            return Err(err)
+        } else {
+            let vsp_size = ((fixed_size_payload[0] as u16) << 8) + (fixed_size_payload[1] as u16);
+            return Ok( FSP{vsp_size, flags: fixed_size_payload[2], unassigned: [0u8; FSP::UNUSED_BYTES], bytes: fixed_size_payload} )
+        }
+    }
+
+    pub fn check_flag(&self, flag: u8) -> bool {
+        if self.flags & flag != 0 {
+            return true
+        } else {
+            return false
+        }
+    }
+
+    pub fn to_vec(&self) -> &Vec<u8> {
+        let vec = &self.bytes;
+        return vec
+    }
+
+    pub fn use_proxy_header(&self) -> bool {
+        return self.check_flag(FSP::FLAG_PROXY_HEADER)
+    }
+
+    pub fn upload_only(&self) -> bool {
+        return self.check_flag(FSP::FLAG_UPLOAD_ONLY)
+    }
+
+    pub fn use_til(&self) -> bool {
+        return self.check_flag(FSP::FLAG_USE_TIL)
+    }
+}
 
 #[derive(Debug)]
 pub struct DDIpSelector {

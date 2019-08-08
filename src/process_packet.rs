@@ -15,7 +15,7 @@ use std::u8;
 //use elligator;
 use flow_tracker::{Flow, FlowNoSrcPort};
 use PerCoreGlobal;
-use util::{IpPacket, DDIpSelector};
+use util::{IpPacket, DDIpSelector, FSP};
 use elligator;
 use protobuf;
 use signalling::ClientToStation;
@@ -63,6 +63,54 @@ fn get_ip_packet<'p>(eth_pkt: &'p EthernetPacket) -> Option<IpPacket<'p>>
     }
 }
 
+fn eth_debug<'p>(eth_pkt: &'p EthernetPacket) {
+    let payload = eth_pkt.payload();
+
+    match eth_pkt.get_ethertype() {
+        EtherTypes::Vlan => {
+            if payload[2] == 0x08 && payload[3] == 0x00 {
+                //let vlan_id: u16 = (payload[0] as u16)*256
+                //                 + (payload[1] as u16);
+                let pkt = match Ipv4Packet::new(payload) {
+                    Some(pkt) => {
+                        println!("{} -> {}", pkt.get_source(), pkt.get_destination());
+                        Some(pkt)
+                    },
+                    None => None,
+                };
+            } else if payload[2] == 0x86 && payload[3] == 0xdd {
+                let pkt = match Ipv6Packet::new(payload) {
+                    Some(pkt) => {
+                        println!("{} -> {}", pkt.get_source(), pkt.get_destination());
+                        Some(pkt)
+                    },
+                    None => None,
+                };
+            }
+        },
+        EtherTypes::Ipv4 => {
+            let pkt = match Ipv4Packet::new(payload) {
+                Some(pkt) => {
+                    println!("{} -> {}", pkt.get_source(), pkt.get_destination());
+                    Some(pkt)
+                },
+                None => None,
+            };
+        },
+        EtherTypes::Ipv6 => {
+            let pkt = match Ipv6Packet::new(payload) {
+                Some(pkt) => {
+                    println!("{} -> {}", pkt.get_source(), pkt.get_destination());
+                    Some(pkt)
+                },
+                None => None,
+            };
+        },
+        _ => {
+            println!("{} -- ", eth_pkt.get_ethertype());
+        },
+    };
+}
 
 // The jumping off point for all of our logic. This function inspects a packet
 // that has come in the tap interface. We do not yet have any idea if we care
@@ -86,6 +134,8 @@ pub extern "C" fn rust_process_packet(ptr: *mut PerCoreGlobal,
         Some(pkt) => pkt,
         None => return,
     };
+
+    // eth_debug(pkt)
 
     match get_ip_packet(&eth_pkt) {
         Some(IpPacket::V4(pkt)) => global.process_ipv4_packet(pkt, rust_view_len),
@@ -248,6 +298,7 @@ impl PerCoreGlobal
 
     }
 
+
     fn check_dark_decoy_tag(&mut self,
                             flow: &Flow,
                             tcp_pkt: &TcpPacket) -> Option<FlowNoSrcPort>
@@ -255,6 +306,7 @@ impl PerCoreGlobal
         self.stats.elligator_this_period += 1;
         match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
             Ok(res) => {
+                let fixed_size_payload: FSP = res.1;
 
                 let mut c2s = match protobuf::parse_from_bytes::<ClientToStation>
                     (&res.2) {
@@ -334,6 +386,8 @@ impl PerCoreGlobal
                 };
                 zmq_msg.push(masked_decoy_bytes_len);
                 zmq_msg.append(&mut masked_decoy_bytes.to_vec());
+
+                zmq_msg.push(fixed_size_payload.flags);
 
                 self.zmq_sock.send(&zmq_msg, 0);
 

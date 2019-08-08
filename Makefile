@@ -12,7 +12,7 @@ CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_R
 PROTO_RS_PATH=src/signalling.rs
 
 
-all: rust dark-decoy libtd app ${PROTO_RS_PATH}
+all: rust libtd dark-decoy app ${PROTO_RS_PATH}
 
 rust: ./src/*.rs
 	cargo build --${DEBUG_OR_RELEASE}

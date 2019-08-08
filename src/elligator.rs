@@ -5,7 +5,7 @@ use c_api;
 extern crate crypto;
 
 use std::error::Error;
-use util::HKDFKeys;
+use util::{HKDFKeys, FSP};
 use elligator::crypto::aes_gcm::AesGcm;
 use elligator::crypto::aead::AeadDecryptor;
 use elligator::crypto::aes;
@@ -39,7 +39,7 @@ fn extract_stego_bytes(in_buf: &[u8], out_buf: &mut [u8])
 
 //out: &mut [u8; STEGO_DATA_LEN]) -> i32
 // Returns either (HKDFKeys, Fixed Size Payload, Variable Size Payload) or boxed Error
-pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> (Result<(HKDFKeys, Vec<u8>, Vec<u8>), Box<Error>>)
+pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> (Result<(HKDFKeys, FSP, Vec<u8>), Box<Error>>)
 {
     if tls_record.len() < 112 // (conservatively) smaller than minimum request
     {
@@ -88,16 +88,20 @@ pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> (Result<(HKDFKe
                 }
             };
 
-            let mut fixed_size_payload: [u8; 6] = [0; 6];
+            let mut fixed_size_payload_bytes: [u8; 6] = [0; 6];
             let mut fsp_aes_gcm = AesGcm::new(aes::KeySize::KeySize128, &keys.fsp_key, &keys.fsp_iv, &[0u8; 0]);
-            if !fsp_aes_gcm.decrypt(&stego_repr_and_fsp[32..38], fixed_size_payload.as_mut(), &stego_repr_and_fsp[38..54]) {
+            if !fsp_aes_gcm.decrypt(&stego_repr_and_fsp[32..38], fixed_size_payload_bytes.as_mut(), &stego_repr_and_fsp[38..54]) {
                 let err: Box<Error> = From::from("fsp_aes_gcm.decrypt failed".to_string());
                 return Err(err);
             }
+            let fixed_size_payload = match FSP::fromVec(fixed_size_payload_bytes.to_vec()) {
+                Ok(fsp) => fsp,
+                Err(err) => return Err(err),
+            };
 
-            let vsp_size = ((fixed_size_payload[0] as u16) << 8) + (fixed_size_payload[1] as u16); // includes aes gcm tag
+            let vsp_size = fixed_size_payload.vsp_size; // includes aes gcm tag
             if vsp_size <= 16 {
-                return Ok((keys, fixed_size_payload.to_vec(), vec![]));
+                return Ok((keys, fixed_size_payload, vec![]));
             }
             if vsp_size % 3 != 0 {
                 let err: Box<Error> = From::from(format!("Variable Stego Payload Size {} non-divisible by 3", vsp_size));
@@ -130,7 +134,7 @@ pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> (Result<(HKDFKe
                 return Err(err);
             }
 
-            Ok((keys, fixed_size_payload.to_vec(), variable_size_payload.to_vec()))
+            Ok((keys, fixed_size_payload, variable_size_payload.to_vec()))
         });
     match result {
         Ok(res) => return res,
