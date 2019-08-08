@@ -15,7 +15,7 @@ use std::u8;
 //use elligator;
 use flow_tracker::{Flow, FlowNoSrcPort};
 use PerCoreGlobal;
-use util::{IpPacket, DDIpSelector};
+use util::{IpPacket, DDIpSelector, FSP};
 use elligator;
 use protobuf;
 use signalling::ClientToStation;
@@ -298,15 +298,16 @@ impl PerCoreGlobal
 
     }
 
+
     fn check_dark_decoy_tag(&mut self,
                             flow: &Flow,
                             tcp_pkt: &TcpPacket) -> Option<FlowNoSrcPort>
     {
         self.stats.elligator_this_period += 1;
-        print!("CHECK_DD_TAG -- {}", flow);
         match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
             Ok(res) => {
-                println!("-- YEAHHHHHH");
+                let fixed_size_payload: FSP = res.1;
+
                 let mut c2s = match protobuf::parse_from_bytes::<ClientToStation>
                     (&res.2) {
                     Ok(pb) => pb,
@@ -386,12 +387,13 @@ impl PerCoreGlobal
                 zmq_msg.push(masked_decoy_bytes_len);
                 zmq_msg.append(&mut masked_decoy_bytes.to_vec());
 
+                zmq_msg.push(fixed_size_payload.flags);
+
                 self.zmq_sock.send(&zmq_msg, 0);
 
                 return Some(FlowNoSrcPort::from_parts(flow.src_ip, dst_ip, 443));
             },
             Err(_e) => {
-                println!(" -- NO");
                 return None;
             }
         }

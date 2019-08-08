@@ -92,6 +92,14 @@ const (
 	TlsHandshakeTypeNextProtocol       = byte(67)
 )
 
+const (
+	tdFlagUploadOnly  = uint8(1 << 7)
+	tdFlagDarkDecoy   = uint8(1 << 6)
+	tdFlagProxyHeader = uint8(1 << 1)
+	tdFlagUseTIL      = uint8(1 << 0)
+)
+
+
 func getOriginalDst(fd uintptr) (net.IP, error) {
 	const SO_ORIGINAL_DST = 80
 	if sockOpt, err := syscall.GetsockoptIPv6Mreq(int(fd), syscall.IPPROTO_IP, SO_ORIGINAL_DST); err == nil {
@@ -369,6 +377,7 @@ func handleNewConn(clientConn *net.TCPConn) {
 }
 
 func twoWayProxy(reg *decoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
+	var err error
 	originalDst := originalDstIP.String()
 	notReallyOriginalSrc := clientConn.LocalAddr().String()
 	flowDescription := fmt.Sprintf("[%s -> %s (covert=%s)] ",
@@ -383,9 +392,12 @@ func twoWayProxy(reg *decoyRegistration, clientConn *net.TCPConn, originalDstIP 
 	}
 	defer covertConn.Close()
 
-	if err := writePROXYHeader(covertConn, clientConn.RemoteAddr().String()); err != nil {
-		logger.Printf("failed to send PROXY header to covert: %s", err)
-		return
+	if reg.flags & tdFlagProxyHeader == 1 {
+		err = writePROXYHeader(covertConn, clientConn.RemoteAddr().String())
+		if err != nil {
+			logger.Printf("failed to send PROXY header to covert: %s", err)
+			return
+		}
 	}
 
 	wg := sync.WaitGroup{}
@@ -414,7 +426,7 @@ func get_zmq_updates() {
 
 	var masterSecret [48]byte
 	var ipAddr [16]byte
-	var covertAddrLen, maskedAddrLen [1]byte
+	var covertAddrLen, maskedAddrLen, flags [1]byte
 
 	for {
 		msg, err := sub.RecvBytes(0)
@@ -452,11 +464,13 @@ func get_zmq_updates() {
 				continue
 			}
 		}
+		msgReader.Read(flags[:])
 
 		reg := &decoyRegistration{
 			masterSecret: masterSecret,
 			covert:       string(covertAddr),
 			mask:         string(maskedAddr),
+			flags:		  uint8(flags[0]),
 		}
 		registeredDecoys.Register(ipAddr, reg)
 		logger.Printf("new registration: {dark decoy address=%v, covert=%v, mask=%v}\n",
@@ -467,6 +481,7 @@ func get_zmq_updates() {
 type decoyRegistration struct {
 	masterSecret [48]byte
 	covert, mask string
+	flags uint8
 }
 
 type RegisteredDecoys struct {
@@ -544,7 +559,7 @@ func main() {
 			logger.Printf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
 			return // continue?
 		}
-
+		logger.Printf("[CONNECT] new connection from address: %v\n", ln.Addr())
 		go handleNewConn(newConn)
 	}
 }
