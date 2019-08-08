@@ -8,10 +8,9 @@ import (
 	"os"
 	"syscall"
 
-	zmq "github.com/pebbe/zmq4"
 	dd "./lib"
+	zmq "github.com/pebbe/zmq4"
 )
-
 
 func getOriginalDst(fd uintptr) (net.IP, error) {
 	const SO_ORIGINAL_DST = 80
@@ -52,12 +51,11 @@ func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) 
 	proxyHandler := dd.ProxyFactory(reg, 0)
 	if proxyHandler != nil {
 		proxyHandler(reg, clientConn, originalDstIP)
-	} else{
+	} else {
 		logger.Printf("failed to initialize proxy, unknown or unimplemented protocol.")
 		return
 	}
 }
-
 
 func get_zmq_updates(regManager *dd.RegistrationManager) {
 	logger := log.New(os.Stdout, "[ZMQ] ", log.Lmicroseconds)
@@ -86,7 +84,6 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 			net.IP(ipAddr[:]).String(), reg.Covert, reg.Mask)
 	}
 }
-
 
 func recieve_zmq_message(sub *zmq.Socket) (*[16]byte, *dd.DecoyRegistration, error) {
 	var masterSecret [48]byte
@@ -134,7 +131,7 @@ func recieve_zmq_message(sub *zmq.Socket) (*[16]byte, *dd.DecoyRegistration, err
 		MasterSecret: masterSecret,
 		Covert:       string(covertAddr),
 		Mask:         string(maskedAddr),
-		Flags:		  uint8(flags[0]),
+		Flags:        uint8(flags[0]),
 	}, nil
 }
 
