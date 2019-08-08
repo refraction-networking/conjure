@@ -1,10 +1,38 @@
 package lib
 
 import (
+	"log"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
+
+type RegistrationManager struct {
+	registeredDecoys *RegisteredDecoys
+	Logger           *log.Logger
+}
+
+func NewRegistrationManager() *RegistrationManager {
+	logger := log.New(os.Stdout, "", log.Lmicroseconds)
+
+	return &RegistrationManager{
+		Logger:           logger,
+		registeredDecoys: NewRegisteredDecoys(),
+	}
+}
+
+func (regManager *RegistrationManager) AddRegistration(darkDecoyAddr [16]byte, d *DecoyRegistration) {
+	regManager.registeredDecoys.register(darkDecoyAddr, d)
+}
+
+func (regManager *RegistrationManager) CheckRegistration(darkDecoyAddr net.IP) *DecoyRegistration {
+	return regManager.registeredDecoys.checkRegistration(darkDecoyAddr)
+}
+
+func (regManager *RegistrationManager) RemoveOldRegistrations() {
+	regManager.registeredDecoys.removeOldRegistrations()
+}
 
 type DecoyRegistration struct {
 	MasterSecret [48]byte
@@ -27,7 +55,7 @@ func NewRegisteredDecoys() *RegisteredDecoys {
 	}
 }
 
-func (r *RegisteredDecoys) Register(darkDecoyAddr [16]byte, d *DecoyRegistration) {
+func (r *RegisteredDecoys) register(darkDecoyAddr [16]byte, d *DecoyRegistration) {
 	r.m.Lock()
 	if d != nil {
 		r.decoys[darkDecoyAddr] = d
@@ -39,7 +67,7 @@ func (r *RegisteredDecoys) Register(darkDecoyAddr [16]byte, d *DecoyRegistration
 	r.m.Unlock()
 }
 
-func (r *RegisteredDecoys) CheckRegistration(darkDecoyAddr net.IP) *DecoyRegistration {
+func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr net.IP) *DecoyRegistration {
 	var darkDecoyAddrStatic [16]byte
 	copy(darkDecoyAddrStatic[:], darkDecoyAddr)
 	r.m.RLock()
@@ -48,7 +76,7 @@ func (r *RegisteredDecoys) CheckRegistration(darkDecoyAddr net.IP) *DecoyRegistr
 	return d
 }
 
-func (r *RegisteredDecoys) RemoveOldRegistrations() {
+func (r *RegisteredDecoys) removeOldRegistrations() {
 	const timeout = -time.Minute * 5
 	cutoff := time.Now().Add(timeout)
 	idx := 0
