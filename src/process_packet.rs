@@ -63,55 +63,6 @@ fn get_ip_packet<'p>(eth_pkt: &'p EthernetPacket) -> Option<IpPacket<'p>>
     }
 }
 
-fn eth_debug<'p>(eth_pkt: &'p EthernetPacket) {
-    let payload = eth_pkt.payload();
-
-    match eth_pkt.get_ethertype() {
-        EtherTypes::Vlan => {
-            if payload[2] == 0x08 && payload[3] == 0x00 {
-                //let vlan_id: u16 = (payload[0] as u16)*256
-                //                 + (payload[1] as u16);
-                let pkt = match Ipv4Packet::new(payload) {
-                    Some(pkt) => {
-                        println!("{} -> {}", pkt.get_source(), pkt.get_destination());
-                        Some(pkt)
-                    },
-                    None => None,
-                };
-            } else if payload[2] == 0x86 && payload[3] == 0xdd {
-                let pkt = match Ipv6Packet::new(payload) {
-                    Some(pkt) => {
-                        println!("{} -> {}", pkt.get_source(), pkt.get_destination());
-                        Some(pkt)
-                    },
-                    None => None,
-                };
-            }
-        },
-        EtherTypes::Ipv4 => {
-            let pkt = match Ipv4Packet::new(payload) {
-                Some(pkt) => {
-                    println!("{} -> {}", pkt.get_source(), pkt.get_destination());
-                    Some(pkt)
-                },
-                None => None,
-            };
-        },
-        EtherTypes::Ipv6 => {
-            let pkt = match Ipv6Packet::new(payload) {
-                Some(pkt) => {
-                    println!("{} -> {}", pkt.get_source(), pkt.get_destination());
-                    Some(pkt)
-                },
-                None => None,
-            };
-        },
-        _ => {
-            println!("{} -- ", eth_pkt.get_ethertype());
-        },
-    };
-}
-
 // The jumping off point for all of our logic. This function inspects a packet
 // that has come in the tap interface. We do not yet have any idea if we care
 // about it; it might not even be TLS. It might not even be TCP!
@@ -134,8 +85,6 @@ pub extern "C" fn rust_process_packet(ptr: *mut PerCoreGlobal,
         Some(pkt) => pkt,
         None => return,
     };
-
-    // eth_debug(pkt)
 
     match get_ip_packet(&eth_pkt) {
         Some(IpPacket::V4(pkt)) => global.process_ipv4_packet(pkt, rust_view_len),
@@ -298,7 +247,6 @@ impl PerCoreGlobal
 
     }
 
-
     fn check_dark_decoy_tag(&mut self,
                             flow: &Flow,
                             tcp_pkt: &TcpPacket) -> Option<FlowNoSrcPort>
@@ -306,6 +254,9 @@ impl PerCoreGlobal
         self.stats.elligator_this_period += 1;
         match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
             Ok(res) => {
+                // res.0 => HKDFKeys
+                // res.1 => Fixed sixe payload
+                // res.2 => variable size paylaod (c2s)
                 let fixed_size_payload: FSP = res.1;
 
                 let mut c2s = match protobuf::parse_from_bytes::<ClientToStation>
@@ -340,7 +291,6 @@ impl PerCoreGlobal
                     }
                 };
 
-;
                 if !c2s.has_covert_address() {
                     error!("ClientToStation has no covert: {:?}", c2s);
                     return None;
