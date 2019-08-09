@@ -333,6 +333,7 @@ mod tests {
     use util::{DDIpSelector};
     use rand::Rng;
     use super::ipnetwork::{IpNetwork};
+    use std::net::{IpAddr, Ipv4Addr};
 
  
     #[test]
@@ -354,16 +355,36 @@ mod tests {
         };
 
         let seed_bytes = rand::thread_rng().gen::<[u8; 16]>();
-        println!("{:?}\n", dd_ip_selector.select(seed_bytes));
+        let dark_decoy_addr = match dd_ip_selector.select(seed_bytes) {
+            Some(ip) => ip,
+            None => {
+                error!("failed to select dark decoy IP address");
+                return
+            }
+        };
 
+        println!("{:?}\n",dark_decoy_addr);
+
+        let dark_decoy_addr4: Ipv4Addr = match dark_decoy_addr {
+            IpAddr::V4(ip) => ip,
+            IpAddr::V6(_) => panic!("Ipv6 Address SHOULD NOT BE CHOSEN"),
+        };
+
+        let mut included = false;
         for net in dd_ip_selector.networks.iter() {
             match *net {
-                IpNetwork::V4(_) => {}
+                IpNetwork::V4(net4) => {
+                    if net4.contains( dark_decoy_addr4 ) {
+                        included = true
+                    }
+                }
                 IpNetwork::V6(_) => {
                     panic!("Error V6 address block found");
                 }
             }
         }
+
+        assert_eq!(included, true)
     }
 
     #[test]
@@ -378,6 +399,54 @@ mod tests {
         };
 
         let seed_bytes = rand::thread_rng().gen::<[u8; 16]>();
-        println!("{:?}\n", dd_ip_selector.select(seed_bytes));
+        
+        
+        let dark_decoy_addr = match dd_ip_selector.select(seed_bytes) {
+            Some(ip) => ip,
+            None => {
+                error!("failed to select dark decoy IP address");
+                return
+            }
+        };
+
+        println!("{:?}\n",dark_decoy_addr);
+
+        let dark_decoy_ip4 = match dark_decoy_addr {
+            IpAddr::V4(ip) => Some(ip),
+            IpAddr::V6(_) => None,
+        };
+
+        let dark_decoy_ip6 = match dark_decoy_addr {
+            IpAddr::V4(_) => None,
+            IpAddr::V6(ip) => Some(ip),
+        };
+
+        let mut included: bool = false;
+        for net in dd_ip_selector.networks.iter() {
+            match *net {
+                IpNetwork::V4(net4) => {
+                    match dark_decoy_ip4 {
+                        Some(ip) => {
+                            if net4.contains( ip ) {
+                                included = true
+                            }
+                        },
+                        None => {},
+                    }
+                },
+                IpNetwork::V6(net6) => {
+                    match dark_decoy_ip6 {
+                        Some(ip) => {
+                            if net6.contains( ip ) {
+                                included = true
+                            }
+                        },
+                        None => {},
+                    }
+                },
+            } // End Match Network type  
+        } // End iterate through subnets
+
+        assert_eq!(included, true)
     }
 }
