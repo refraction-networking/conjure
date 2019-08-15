@@ -123,7 +123,7 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 	}
 	defer covertConn.Close()
 
-	if reg.Flags&TdFlagProxyHeader == 1 {
+	if reg.Flags & TdFlagProxyHeader != 0 {
 		err = writePROXYHeader(covertConn, clientConn.RemoteAddr().String())
 		if err != nil {
 			logger.Printf("failed to send PROXY header to covert: %s", err)
@@ -141,6 +141,8 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 }
 
 func writePROXYHeader(conn net.Conn, originalIPPort string) error {
+	logger := log.New(os.Stdout, "[2WP] ", log.Lmicroseconds)
+  logger.Println("Writing Proxy Header")
 	if len(originalIPPort) == 0 {
 		return errors.New("can't write PROXY header: empty IP")
 	}

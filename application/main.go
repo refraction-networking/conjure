@@ -80,8 +80,8 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 		}
 
 		regManager.AddRegistration(*ipAddr, reg)
-		logger.Printf("new registration: {dark decoy address=%v, covert=%v, mask=%v}\n",
-			net.IP(ipAddr[:]).String(), reg.Covert, reg.Mask)
+		logger.Printf("new registration: {dark decoy address=%v, covert=%v, mask=%v, flags=0x%02x}\n",
+			net.IP(ipAddr[:]).String(), reg.Covert, reg.Mask, reg.Flags)
 	}
 }
 
