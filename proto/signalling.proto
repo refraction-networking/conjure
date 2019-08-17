@@ -83,10 +83,15 @@ message ClientConf {
     optional DecoyList decoy_list = 1;
     optional uint32 generation = 2;
     optional PubKey default_pubkey = 3;
+    optional DarkDecoyBlocks dark_decoy_blocks = 4;
 }
 
 message DecoyList {
     repeated TLSDecoySpec tls_decoys = 1;
+}
+
+message DarkDecoyBlocks{
+    repeated string blocks = 1;
 }
 
 // State transitions of the client
@@ -188,12 +193,8 @@ message ClientToStation {
     // Used to indicate to server if client doesn't support ipv6 for dark decoy address selection.
     optional bool v6_support = 22;
 
-    // Client Conf version -> used to signal to the station what decoy ip blocks are supported
-    optional uint32 client_conf_v = 23;
-
     // Protocol Type -> protocol used in client to proxy station
     optional uint32 c2s_protocol = 24;
-
 
 
     // Random-sized junk to defeat packet size fingerprinting.

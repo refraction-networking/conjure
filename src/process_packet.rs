@@ -15,7 +15,7 @@ use std::u8;
 //use elligator;
 use flow_tracker::{Flow, FlowNoSrcPort};
 use PerCoreGlobal;
-use util::{IpPacket, DDIpSelector, FSP};
+use util::{IpPacket, FSP};
 use elligator;
 use protobuf;
 use signalling::ClientToStation;
@@ -236,8 +236,8 @@ impl PerCoreGlobal
         // looks like the tun setup has its own type of header, rather than just
         // making up a fake Ethernet header.
         let raw_hdr = match ip_pkt {
-            IpPacket::V4(p) => [0x00, 0x01, 0x08, 0x00],
-            IpPacket::V6(p) => [0x00, 0x01, 0x86, 0xdd],
+            IpPacket::V4(_p) => [0x00, 0x01, 0x08, 0x00],
+            IpPacket::V6(_p) => [0x00, 0x01, 0x86, 0xdd],
         };
         tun_pkt.extend_from_slice(&raw_hdr);
         tun_pkt.extend_from_slice(data);
@@ -273,17 +273,28 @@ impl PerCoreGlobal
                     false => true, // If not, v6 supported is default for backward compatibility.
                 };
 
-                let dd_ip_selector = match DDIpSelector::new(
-                    &vec![String::from("192.122.190.0/24"), String::from("2001:48a8:687f:1::/64")], 
-                    dd_client_v6_support) {
-                    Ok(dd) => dd,
-                    Err(e) => {
-                        error!("failed to make Dark Decoy IP selector: {}", e);
+                let dd_client_list_generation = match c2s.has_decoy_list_generation() {
+                    true => c2s.get_decoy_list_generation(),
+                    false => {
+                        error!("Error - No decoy list generations specified");
                         return None;
                     }
                 };
 
-                let dst_ip = match dd_ip_selector.select(res.0.dark_decoy_seed){
+                // let dd_ip_selector = match DDIpSelector::new(
+                //     dd_client_list_generation,
+                //     dd_client_v6_support) {
+                //     Ok(dd) => dd,
+                //     Err(e) => {
+                //         error!("failed to make Dark Decoy IP selector: {}", e);
+                //         return None;
+                //     }
+                // };
+
+                let dst_ip = match self.dd_ip_selector.select(
+                    res.0.dark_decoy_seed,
+                    dd_client_list_generation,
+                    dd_client_v6_support){
                     Some(ip) => ip,
                     None => {
                         error!("failed to select dark decoy IP address");
