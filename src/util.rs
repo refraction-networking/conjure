@@ -228,3 +228,15 @@ impl FSP {
         return self.check_flag(FSP::FLAG_USE_TIL)
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mem_used_kb_parses_something()
+    {
+        assert!(mem_used_kb() > 0);
+    }
+}

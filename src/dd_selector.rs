@@ -1,6 +1,8 @@
 extern crate ipnetwork;
 
 use std::collections::{BTreeMap, LinkedList};
+use std::fmt;
+use std::fmt::{Write};
 use redis;
 
 use self::ipnetwork::{IpNetwork};
@@ -40,9 +42,7 @@ impl DDIpSelector {
     {
         let subnets = match self.get_generation_subnets(generation) {
             Some(net_list) => net_list,
-            None => {
-                return None
-            },
+            None => return None,
         };
 
         let mut addresses_total: u128 = 0;
@@ -119,10 +119,9 @@ impl DDIpSelector {
         }
     }
 
-    pub fn get_generation_subnets(&self, generation: u32) -> Option<Vec<String>> 
+    pub fn get_generation_subnets(&self, generation: u32) -> Option<&Vec<String>> 
     {
-        self.networks.get(&generation);
-        return None
+        return self.networks.get(&generation);
     }
 
     // fn ipnetworks_from_vec(subnets: &Vec<String>, dd_client_v6_support: bool ) -> Option<Vec<String>> 
@@ -143,6 +142,21 @@ impl DDIpSelector {
     // }
 
     //TODO: Integrate with REDIS So that new generations can be added via network
+}
+
+impl fmt::Display for DDIpSelector {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut combined_str = String::new();
+        
+        for (gen_idx, gen) in self.networks.iter() {
+            write!(&mut combined_str, "{} -[", gen_idx).unwrap();
+            for net in gen.iter() {
+                write!(&mut combined_str, "{}  ", net).unwrap();
+            }
+            write!(&mut combined_str,"]\n").unwrap();
+        }
+        write!(f, "{}", combined_str)
+    }
 }
 
 
@@ -183,17 +197,24 @@ fn get_redis_conn() -> redis::Connection
 
 #[cfg(test)]
 mod tests {
-    use util;
-    use dd_selector::{DDIpSelector};
+    use super::*;
     use rand::Rng;
-    use super::ipnetwork::{IpNetwork};
-    use std::net::{IpAddr, Ipv4Addr};
 
- 
+
     #[test]
-    fn mem_used_kb_parses_something()
-    {
-        assert!(util::mem_used_kb() > 0);
+    fn test_get_generation() {
+        let dd_ip_selector = DDIpSelector::new();
+        println!("All Generations:\n{}", dd_ip_selector);
+        let gen1 = match dd_ip_selector.get_generation_subnets(1) {
+            Some(subnets) => subnets,
+            None => panic!("Failed to get generation")
+        };
+        // for net in gen1 {
+        //     println!("{:?}", net);
+        // }
+
+        let gen1_real = vec![String::from("192.122.190.0/24"), String::from("2001:48a8:687f:1::/64")];
+        assert_eq!(&gen1_real, gen1);
     }
 
     #[test]
@@ -207,34 +228,19 @@ mod tests {
         let dark_decoy_addr = match dd_ip_selector.select(seed_bytes, gen, false) {
             Some(ip) => ip,
             None => {
-                error!("failed to select dark decoy IP address");
-                return
+                panic!("failed to select dark decoy IP address");
             }
         };
 
         println!("{:?}\n",dark_decoy_addr);
 
-        let dark_decoy_addr4: Ipv4Addr = match dark_decoy_addr {
-            IpAddr::V4(ip) => ip,
+        match dark_decoy_addr {
+            IpAddr::V4(_) => {},
             IpAddr::V6(_) => panic!("Ipv6 Address SHOULD NOT BE CHOSEN"),
         };
 
-        let mut included = false;
-        for net_str in dd_ip_selector.get_generation_subnets(gen).unwrap().iter() {
-            let net: IpNetwork = net_str.parse().unwrap();
-            match net {
-                IpNetwork::V4(net4) => {
-                    if net4.contains( dark_decoy_addr4 ) {
-                        included = true
-                    }
-                }
-                IpNetwork::V6(_) => {
-                    panic!("Error V6 address block found");
-                }
-            }
-        }
-
-        assert_eq!(included, true)
+        let subnets = dd_ip_selector.get_generation_subnets(gen).unwrap();
+        assert_eq!(check_subnets_contain_ip(dark_decoy_addr, subnets), true)
     }
 
     #[test]
@@ -247,25 +253,89 @@ mod tests {
         let dark_decoy_addr = match dd_ip_selector.select(seed_bytes, gen, true) {
             Some(ip) => ip,
             None => {
-                error!("failed to select dark decoy IP address");
-                return
+                panic!("failed to select dark decoy IP address");
             }
         };
 
         println!("{:?}\n",dark_decoy_addr);
 
-        let dark_decoy_ip4 = match dark_decoy_addr {
-            IpAddr::V4(ip) => Some(ip),
+        let subnets = dd_ip_selector.get_generation_subnets(gen).unwrap();
+        assert_eq!(true, check_subnets_contain_ip(dark_decoy_addr, subnets));
+    }
+
+    #[test]
+    fn test_seeded_selection() {
+
+        let mut dd_ip_selector = DDIpSelector::new();
+        let seed_bytes: [u8; 16] = [
+            0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 
+            0x8, 0x9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF];
+
+        let new_addr1 = vec![String::from("18.0.0.0/8"), String::from("1234::/64")];
+        let gen = dd_ip_selector.add_generation( &new_addr1);
+
+        let dark_decoy_addr6 = match dd_ip_selector.select(seed_bytes, gen, true) {
+            Some(ip) => ip,
+            None => {
+                panic!("failed to select dark decoy IP address");
+            }
+        };
+
+        let dark_decoy_addr4 = match dd_ip_selector.select(seed_bytes, gen, false) {
+            Some(ip) => ip,
+            None => {
+                panic!("failed to select dark decoy IP address");
+            }
+        };
+
+        println!("{}\n", dark_decoy_addr4);
+        println!("{}\n", dark_decoy_addr6);
+
+        // Correct addresses were chosen based on seed from test generation  w/ and w/out v6 support
+        assert_eq!("1234::507:90c:e17:181a".parse(), Ok(dark_decoy_addr6));
+        assert_eq!("18.35.40.45".parse(), Ok(dark_decoy_addr4));
+    }
+
+    #[test] 
+    fn test_remove_generation() {
+        let mut dd_ip_selector = DDIpSelector::new();
+        let seed_bytes: [u8; 16] = [
+            0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 
+            0x8, 0x9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF];
+
+        let new_addr1 = vec![String::from("18.0.0.0/8"), String::from("1234::/64")];
+        let gen = dd_ip_selector.add_generation( &new_addr1);
+
+        match dd_ip_selector.select(seed_bytes, gen, true) {
+            Some(ip) => {
+                println!("{}", ip);
+            },
+            None => {
+                panic!("failed to select dark decoy IP address");
+            }
+        };
+
+        // Successful removal
+        assert_eq!(true, dd_ip_selector.remove_generation(gen));
+
+        // when selecting from non-existant generation return none.
+        assert_eq!(None, dd_ip_selector.select(seed_bytes, gen, true));
+    }
+
+
+    fn check_subnets_contain_ip(ip: IpAddr, subnets: &Vec<String>) -> bool {
+       let dark_decoy_ip4 = match ip {
+            IpAddr::V4(ip4) => Some(ip4),
             IpAddr::V6(_) => None,
         };
 
-        let dark_decoy_ip6 = match dark_decoy_addr {
+        let dark_decoy_ip6 = match ip {
             IpAddr::V4(_) => None,
-            IpAddr::V6(ip) => Some(ip),
+            IpAddr::V6(ip6) => Some(ip6),
         };
 
-        let mut included: bool = false;
-        for net_str in dd_ip_selector.get_generation_subnets(gen).unwrap().iter() {
+        let mut included = false;
+        for net_str in subnets.iter() {
             let net: IpNetwork = net_str.parse().unwrap();
             match net {
                 IpNetwork::V4(net4) => {
@@ -290,7 +360,6 @@ mod tests {
                 },
             } // End Match Network type  
         } // End iterate through subnets
-
-        assert_eq!(included, true)
+        included
     }
 }
