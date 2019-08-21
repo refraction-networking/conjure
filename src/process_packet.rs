@@ -14,6 +14,7 @@ use std::net::IpAddr;
 use std::u8;
 //use elligator;
 use flow_tracker::{Flow, FlowNoSrcPort};
+use dd_selector::DDIpSelector;
 use PerCoreGlobal;
 use util::{IpPacket, FSP};
 use elligator;
@@ -281,24 +282,14 @@ impl PerCoreGlobal
                     }
                 };
 
-                // let dd_ip_selector = match DDIpSelector::new(
-                //     dd_client_list_generation,
-                //     dd_client_v6_support) {
-                //     Ok(dd) => dd,
-                //     Err(e) => {
-                //         error!("failed to make Dark Decoy IP selector: {}", e);
-                //         return None;
-                //     }
-                // };
-
                 let dst_ip = match self.dd_ip_selector.select(
                     res.0.dark_decoy_seed,
                     dd_client_list_generation,
                     dd_client_v6_support){
-                    Some(ip) => ip,
-                    None => {
-                        error!("failed to select dark decoy IP address");
-                        return None;
+                    Ok(ip) => ip,
+                    Err(e) => {
+                        error!("{}: {}", flow, e);
+                        return None
                     }
                 };
 
