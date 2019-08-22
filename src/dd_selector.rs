@@ -8,6 +8,34 @@ use redis;
 use self::ipnetwork::{IpNetwork};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
+
+// Blacklist is a quick hack for preventing clients from choosing LIVE
+// hosts on the (admittedly small) ipv4 decoy space as their dark decoy.
+struct DDBlackList {}
+
+impl fmt::Debug for DDBlackList {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "blacklist: {:?}\n", DDBlackList::List)
+    }
+}
+
+impl DDBlackList {
+    const List: [&'static str; 7] = [
+        "192.122.190.101", "192.122.190.104", "192.122.190.105",
+        "192.122.190.106", "192.122.190.108", "192.122.190.109",
+        "192.122.190.110"];
+
+    pub fn contains(ip: IpAddr) -> bool {
+        for addr in DDBlackList::List.iter() {
+            let net: IpNetwork = addr.parse().unwrap();
+            if net.contains(ip) {
+                return true
+            }
+        }
+        return false
+    }
+}
+
 #[derive(Debug)]
 pub struct DDIpSelector {
     pub networks: HashMap<u32, Vec<&'static str>>,
@@ -23,7 +51,6 @@ fn get_static_subnets() ->  HashMap<u32, Vec<&'static str>> {
 }
 
 impl DDIpSelector {
-    
     
     pub fn new() -> DDIpSelector {
         let new_selector = DDIpSelector {
@@ -76,7 +103,14 @@ impl DDIpSelector {
                     IpNetwork::V4(netv4) => {
                         let min_ip_u32: u32 = array_as_u32_be(&netv4.ip().octets());
                         let ip_u32 = min_ip_u32 + ((id - elem.0) as u32);
-                        return Ok(IpAddr::from(Ipv4Addr::from(ip_u32)));
+                        let chosen_addr = IpAddr::from(Ipv4Addr::from(ip_u32));
+
+                        if DDBlackList::contains(chosen_addr) {
+                            let message = format!("Chose blacklisted IP ({})", chosen_addr);
+                            return Err(DDSelectorErr{generation, message})
+                        } else {
+                            return Ok(chosen_addr)
+                        }
                     }
                     IpNetwork::V6(netv6) => {
                         let min_ip_u128 = array_as_u128_be(&netv6.ip().octets());
@@ -221,6 +255,16 @@ mod tests {
     use super::*;
     use rand::Rng;
 
+
+    #[test]
+    fn test_blacklist() {
+        let ip_blacklisted: IpAddr = "192.122.190.105".parse().unwrap();
+        let ip_okay: IpAddr = "192.122.190.120".parse().unwrap();
+
+        assert_eq!(true, DDBlackList::contains(ip_blacklisted));
+        assert_eq!(false, DDBlackList::contains(ip_okay));
+
+    }
 
     #[test]
     fn test_get_generation() {
