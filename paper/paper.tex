@@ -548,22 +548,39 @@ Obfuscated SSH~\cite{ossh} (OSSH) is a protocol that attempts to mask the Secure
 (SSH) protocol in a thin
 layer of encryption. This makes it difficult for censors to identify using basic
 packet filters, as there are no identifying headers or fields
-to search for. Instead, Obfuscated SSH clients first send a 16-byte seed, which
-is then used to derive a symmetric key that encrypts the rest of the
-communication. While this can passively detected by censors (who can also
-derive the key and de-obfuscate the protocol), the key derivation is deliberately
-slowed by an iterated hash to make such identification
-expensive (though not impossible) at high speeds.
+to search for. Instead, Obfuscated SSH clients first send a 16-byte random seed, which
+is used to derive a symmetric key that encrypts the rest of the
+communication. Early versions of OSSH were passively detectable by censors, who
+can observe the random seed and derive the key, allowing them to de-obfuscate the protocol.
+These versions also did
+not protect against active probing attacks, as a censor can easily create their
+own connections to confirm if a server supports the protocol.
 
-Obfuscated SSH also does not protect against active probing, as the censor can
-easily create their own connections and confirm the server is using the
-protocol. Nonetheless, this protocol is still used in deployed censorship
-circumvention systems~\cite{psiphon}, though has to deploy proxies at new IP
-addresses when censors inevitably discover and block them.
-Obfuscated SSH can also be used as a \scheme
-application protocol, though we note it provides no active probing or passive
-identification resistance. However, \scheme OSSH can still make it cheaper to
-rotate to new IP addresses when proxies are found and blocked.
+More recent versions of OSSH, such as those used by Psiphon~\cite{psiphon}, mix a secret
+value into the key derivation, thwarting the naive passive detection/decryption
+attack. The secret is distributed out-of-band along with the proxy's address,
+and is unknown to a passive or active-probing censor. If a client connects and cannot
+demonstrate knowledge of
+the secret, the OSSH server does not respond, making it more difficult for
+censors to discover OSSH servers via active probing attacks.
+
+
+%While this can passively detected by censors (who can also
+%derive the key and de-obfuscate the protocol), the key derivation is deliberately
+%slowed by an iterated hash to make such identification
+%expensive (though not impossible) at high speeds.
+%
+%
+%% This is wrong...it actually does protect against active probing
+%Obfuscated SSH also does not protect against active probing, as the censor can
+%easily create their own connections and confirm the server is using the
+%protocol. Nonetheless, this protocol is still used in deployed censorship
+%circumvention systems~\cite{psiphon}, though has to deploy proxies at new IP
+%addresses when censors inevitably discover and block them.
+%Obfuscated SSH can also be used as a \scheme
+%application protocol, though we note it provides no active probing or passive
+%identification resistance. However, \scheme OSSH can still make it cheaper to
+%rotate to new IP addresses when proxies are found and blocked.
 
 \subsubsection{Mask Sites}
 \label{sec:mask-sites}
@@ -589,10 +606,10 @@ the server in a way that would normally elicit a certificate.
 
 We therefore attempt to mimic an existing \textbf{mask site} by relaying
 traffic between the client and a selected mask website. To a censor, this site
-will be indistinguishable from the legitimate mask site, making it difficult for
-them to block without potentially blocking the actual site. TLS connections to the
+will be indistinguishable from the actual site, making it difficult for
+them to block without potentially blocking the real site. TLS connections to the
 application will terminate exactly as connections to the mask site would, with the
-application acting as a transparent proxy between the client and mask site.
+application acting as a transparent TCP-layer proxy between the client and mask site.
 However, this leaves the application unable to introspect on the contents of the
 TLS connection to the mask site, as it does not have the client-site shared
 secrets, and it cannot overtly man-in-the-middle the connection before knowing
@@ -605,8 +622,8 @@ mask site to something that the application can also derive. The client's first
 \texttt{Application Data} packet is thus encrypted under a different secret than
 the client/mask site secret. Specifically, the client uses the \textbf{seed}
 sent during registration to derive the pre-master secret for the connection.
-This is hashed along with the client and server randoms of the current (mask
-site) TLS connection to obtain the master secret that determines
+The new pre-master secret is hashed along with the client and server randoms of the current
+(mask site) TLS connection to obtain the master secret that determines
 encryption/decryption/authentication keys.
 
 The application can determine if the client did this by trial decryption with
@@ -965,7 +982,10 @@ We implemented two of the applications in our client: Obfuscated SSH used by
 Psiphon
 (Section~\ref{sec:ossh}) and our Mask Site protocol
 (Section~\ref{sec:mask-sites}). Our client signals which application it will use
-in the registration tag. After registration, the client connects to the derived
+in the registration tag. The client also sends a flag that indicates if the
+client supports IPv6, to allow IPv4-only clients to only derive IPv4 phantom
+hosts.
+After registration, the client connects to the derived
 phantom host address, and speaks the specified application protocol, which
 tunnels a SOCKS connection between the client and Psiphon's backend servers,
 which proxy the client's connections.
@@ -1126,18 +1146,154 @@ the station compared to \scheme.
 %-Security considerations
 
 
-\section{Discussion}
+%\section{Discussion}
 
 
-\subsection{Attacks and Defenses}
+\section{Attacks and Defenses}
 % 1 page
 \label{sec:attacks}
 
-There are many attacks a censor might attempt to either prevent phantom hosts from
-being registered or used.
+In this section, we discuss several attacks a censor might attempt to either
+block phantom hosts from being registered or used.
 
 
-\paragraph{Blocking registration}
+\subsection{Probing phantom hosts}
+% censors could actively scan phantom hosts...we review how this works for obfs4, OSSH, masked sites individually
+Censors may attempt to actively probe suspected phantom hosts to determine if
+they are proxies or real hosts. China has been observed using exactly this technique to
+discover existing proxies and Tor bridge
+nodes~\cite{tor-bridge-blocking-blog,active-probe,ensafi-tor,china-blocking-tor}.
+In response to China's active probing, Tor and other circumvention tool developers have developed
+\emph{probe-resistant} protocols, such as \texttt{obfs4}~\cite{obfs4}, Obfuscated SSH
+(OSSH)~\cite{ossh}, and Shadowsocks~\cite{shadowsocks}. Each of these protocols
+require the client to know a special secret distributed alongside the original
+proxy address. Without knowledge of this secret, active-probing censors will not
+receive any response from these hosts, making it difficult for censors to tell if
+a server is a proxy or a non-responsive legitimate host.
+
+\paragraph{Obfuscated SSH} Modern OSSH protocols are intended to be
+probe-resistant. Censors that attempt to probe suspected OSSH servers without
+knowledge of the secret receive no data response, making it difficult to
+distinguish them from other non-responsive hosts. To confirm this, we use
+ZMap~\cite{zmap} to scan over 1 billion random IP/port combinations, and sent 25
+random bytes (corresponding to the OSSH handshake) to the approximately 800,000
+servers that responded. We expect very few of these to actually be OSSH
+servers as they are simply random servers on random TCP ports.
+However, over 99.4\% of them did not respond with any data, behavior mirrored by
+OSSH servers.
+Furthermore, 7.42\% of servers closed the connection with a TCP RST
+after we send our random data, a response we also see with OSSH. While there may
+be other ways to differentiate OSSH servers from others online, our tests
+suggest censors could face steep false-positive rates in identifying OSSH
+servers with active probing.
+
+
+
+%TODO: how many servers in zmap look like OSSH? e.g. we send them 23 random
+%bytes and then they don't respond with data. 99.46% (793789 out of 798032)
+% If we send 25 bytes (~OSSH handshake size...), OSSH server responds with RST.
+% zmap: 28.42% respond with RST within 4 secs. Only 7.49% within 
+
+\paragraph{\texttt{obfs4}}
+Unlike previous versions of obfsproxy, the \texttt{obfs4} protocol is designed to
+be resistant to active probing
+attacks, requiring the client prove knowledge of a secret before the server will
+respond. We verified that naive active probing attacks (where we attempt to
+connect to an \texttt{obfs4} server without knowledge of the secret and see if
+it provides proxy access) do not work
+against \texttt{obfs4}. In addition, although China is effective at blocking
+\texttt{obfs3}, the more recent probe-resistant \texttt{obfs4} remains a viable
+proxy in the country
+
+
+\paragraph{Mask sites}
+The censor could also attempt to fingerprint a masked site and compare it to a
+suspected \scheme application. For instance, if a phantom host IP responds to a
+censors' probes
+pretending to be \texttt{example.com}, the censor could probe real instances
+of \texttt{example.com} on different ports and see how it responds. Then, the
+censor can probe the phantom host IP, and see if it responds similarly (e.g. with
+the same set of open ports and payloads for certain kinds of probes). To defend
+against this, we forward \emph{all} traffic destined to the phantom host to the
+masked site, including ports that are not relevant to the proxy application
+(e.g. non 443). This ensures that above the TCP layer, we appear to be the mask
+site. However, there may be differences in TCP/IP implementations, for instance,
+how IP IDs are incremented, or how TCP timestamps are incremented (or supported
+at all) that may be different from the mask site. To combat this, we can filter
+mask sites by those that have identical TCP/IP stacks to ours, as we use a
+common Linux implementation. We also note that this attack only applies when we
+use the mask site as an application, and that \scheme can support other
+applications (e.g. obfsproxy, WebRTC, etc) that do not have this issue.
+
+We acknowledge that perfect mimicry of the real site is likely infeasible:
+Houmansadr et al.~\cite{houmansadr-parrot} demonstrated the difficulty in fully
+mimicking known applications, showing that staying fully-feature compatible is
+an expensive and potentially intractable problem for circumvention systems.
+However, their study focuses on \emph{application-specific} mimicry, used by
+circumvention tools like CensorSpoofer, StegoTorus, and Skypemorph. These tools
+generally attempt to mimic a specific protocol used by a complex application
+such as Skype,
+where only one or a handful of official popular clients are used. Houmansadr et
+al.~\cite{houmansadr-parrot} show that such mimicry is difficult in practice due
+to the complexity and opaqueness of specifications, side protocols that
+applications may use, and intra- and inter-dependence on connections and other
+protocols.
+
+In contrast, mask sites have
+the advantage that we can mimic any sites from a large set of heterogeneous real
+websites, making it harder for a censor to fully fingerprint and characterize
+\emph{all} potential mask sites. As websites may themselves use distributed
+or heterogeneous server implementations, it could be more difficult for a
+censor to block all mask site application use.
+Nonetheless, it is still possible for censors to
+use active probing attacks to detect either protocol feature, payload size, or
+timing differences between mask sites and the real sites they attempt to mimic.
+
+%This general issue remains an open problem in censorship circumvention; however,
+%if solved, \scheme can use it to thwart active probing attacks in a useable
+% and flexible system.
+
+\subsection{Passive identification}
+Censors might also attempt to use passive methods to distinguish and block communication
+with registration decoys or phantom hosts. For example, 
+Website Fingerprinting~\cite{wang2014effective,hayes2016k,sirinam2018deep} (WF)
+uses the patterns of encrypted traffic to identify which website a client is
+connected to. WF uses a classifier to label the traffic as belonging to one of
+several known websites, or (in some variants), an unknown or background class.
+Though WF is commonly studied in the context of anonymous web browsing, a censor
+could also use WF to detect \scheme applications by distinguishing known traffic
+patterns of legitimate website use from traffic generated by \scheme (unknown
+class). Alternatively, the censor could monitor traffic for patterns consistent
+with tunneled access to a set of blocked websites.
+
+Wang et al.~\cite{wang2015seeing} demonstrated several effective classifiers
+that can passively distinguish normal traffic from obfuscated circumvention
+protocols including \texttt{obfs3}, \texttt{obfs4}, Format-transforming
+encryption~\cite{fte}, and meek~\cite{meek}. However, despite the low false
+positive rate of these classifiers, Wang et~al.~\cite{wang2015seeing} caution
+that the base rate of normal traffic compared to obfuscated traffic would force
+censors that employ such attacks to suffer significant collateral damage in
+degrading performance and reliability of legitimate traffic.
+Indeed, to date, censors have not been observed using WF or other
+passive techniques, possibly due to the inaccuracy of these identification
+techniques in practice. Even small false positive rates means blocking mostly legitimate
+connections, and false negatives could allow clients to retry until they gain
+access.
+
+
+More importantly, \scheme applications offer great flexibility in deploying
+traffic analysis defenses; for example, traffic shaping strategies such as
+implemented in Slitheen~\cite{slitheen16} could be easily employed in \scheme.
+\scheme clients could also choose from a large set of potential applications,
+forcing censors to have to block access to all of them to block use.
+%Furthermore, \scheme applications are not limited to mimicking websites, and can
+%support any (or even a combination of) protocols. Finally, if encrypted SNI can
+%be used (\cref{esni}), the censor would not be able to build up a traffic
+%profile of a legitimate site since its identity would be encrypted.
+
+
+
+\subsection{Blocking registration}
 To make registration more difficult, censors could block TLS connections to all of the
 limited decoys available in a deployment. Using TapDance's current deployment,
 this would involve blocking over 1500 sites. We note that such an attack would
@@ -1153,39 +1309,9 @@ the station, that would be more difficult for the censor to block.
 %initial sequence numbers. Since most mobile users do not have such control, we
 %suggest other methods be used instead.
 
-\paragraph{Scanning masked sites}
-The censor could also attempt to fingerprint the masked site and compare it to a
-suspected \scheme application. For instance, if a phantom host IP responds as
-pretending to be \texttt{example.com}, the censor could scan or probe real instances
-of \texttt{example.com} on different ports and see how it responds. Then, the
-censor can probe the phantom host IP, and see if it responds similarly (e.g. with
-the same set of open ports and payloads for certain kinds of probes). To defend
-against this, we forward \emph{all} traffic destined to the phantom host to the
-masked site, including ports that are not relevant to the proxy application
-(e.g. non 443). This ensures that above the TCP layer, we appear to be the mask
-site. However, there may be differences in TCP/IP implementations, for instance,
-how IP IDs are incremented, or how TCP timestamps are incremented (or supported
-at all) that may be different from the mask site. To combat this, we can filter
-mask sites by those that have identical TCP/IP stacks to ours, as we use a
-common Linux implementation. We also note that this attack only applies when we
-use the mask site as an application, and that \scheme can support other
-applications (e.g. obfsproxy, WebRTC, etc) that do not have this issue.
 
 
-
-\paragraph{Website fingerprinting}
-Website Fingerprinting~\cite{wang2014effective,hayes2016k,sirinam2018deep} (WF) uses the patterns of encrypted traffic to identify which website a client is connected to. WF uses a classifier to label the traffic as belonging to one of several known websites, or (in some variants), an unknown or background class. Though WF is commonly studied in the context of anonymous web browsing, a censor could also use WF to detect refraction networking by distinguishing known traffic patterns of legitimate uses of a decoy site from the traffic generated by refraction networking (unknown class). Alternatively, the censor could monitor all traffic for patterns consistent with a set of blocked websites.
-
-\scheme applications that mimic specific websites (e.g., mask sites) are likewise susceptible to WF. To date, however, censors have not been observed using WF and similar techniques, possibly due to the significant uncertainty resulting from even the best algorithms: even a small false
-positive rate means blocking mostly legitimate connections (due to the base rate
-of normal traffic), and false negatives could allow clients to retry until they
-gain access.
-
-More importantly, \scheme applications offer great flexibility in deploying traffic analysis defenses; for example, traffic shaping strategies such as implemented in Slitheen~\cite{slitheen16} could be easily employed in \scheme. Furthermore,
-\scheme applications are not limited to mimicking websites, and can support
-any (or even a combination of) protocols. Finally, if encrypted SNI can be used (\cref{esni}), the censor would not be able to build up a traffic profile of a legitimate site since its identity would be encrypted.
-
-\paragraph{ICMP}
+\subsection{ICMP}
 Censors can use ping or traceroute utilities (via ICMP) to probe potential phantom
 hosts. Because there is (usually) no host at the phantom host address, these
 probes will timeout and produce no response. They might also produce
