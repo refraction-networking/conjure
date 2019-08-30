@@ -187,7 +187,7 @@
               \rot{Mask Sites} &
               \rot{TLS eSNI} & \rot{WebRTC} \\
             \hline
-            Active probe resistant  & \no  & \yes & \yes & \yes & \yes \\
+            Active probe resistant  & \yes  & \yes & \yes & \yes & \yes \\
             Randomized or Tunneling & R    & R    & T    &  T   & T \\
             Known passive attack    & \cite{Fifield2017a} & \cite{wang2015seeing} & - & - & - \\
             \scheme implementation  & \yes & \no  & \yes  & \no & \no \\
@@ -206,14 +206,22 @@
 \newcommand{\FigImplementation}{
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.7\linewidth,clip]{figures/implementation.png}
+    \includegraphics[width=0.7\linewidth,clip]{figures/dark-decoy-flow1.png}
     \caption{\textbf{Station Architecture}\,---\,\rm%
         We used PF\_RING to receive packets from a 20~Gbps packet tap, which we load balance
-        across 4~CPU cores. The detector process identifies and processes registrations, and forwards
-        packets destined to registered phantom host addresses to a local application. The application
-        determines if the client is legitimate (using a seed shared during registration) and forwards
-        their traffic to a proxy. Otherwise, the application responds as an innocuous host, such as by
-        forwarding pakcets to a mask site.}
+        across 4~CPU cores. The detector process identifies registrations, notifying all
+        cores when a new registration is received (green dashed registration flow). The detector also
+        identifies packets associated with registered flows (by connection 4-tuple) and diverts them
+        to a local application which handles proxying connections(purple dotted flow). The local 
+        application determines which proxy the flow should use based on a parameter specified by 
+        the client in the registration and initializes a goroutine to handle forwarding. 
+        \\\hspace{\textwidth}
+        A censor trying to interfere in this
+        connection would need to co-opt the clients IP address in a precise window (after the 
+        registration but before the client connects to the phantom) and correctly guess the phantom hosts 
+        IP address (or connect to all possible phantom IPs) before the active probe traffic gets to the local application. 
+        At this point their connection will fail in a manor specific to the proxy that the client specified
+        in the registration (e.g. connecting to OSSH without knowledge of the preshared secret).}
     \label{fig:implementation}
 \end{figure}
 }
