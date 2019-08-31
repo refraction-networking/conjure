@@ -354,8 +354,8 @@ the addresses that are phantom hosts, and block only those. We note this
 assumption supposes that the deployment is large enough to deter routing around
 decoy attacks~\cite{rad12,true-cost-rad}.
 
-We assume the censor can use the client to register and access its own phantom
-hosts, but that these will not reveal the phantom hosts of other users. The
+We allow the censor access to the client to register and use its own phantom hosts, 
+so the system should ensure that these will not reveal the phantom hosts of other users. The
 censor can also actively probe addresses that it sees users accessing, and can
 employ tools such as ZMap~\cite{zmap13} to scan large network blocks, excepting
 large IPv6 prefixes (e.g. a /32 IPv6 prefix contains $2^{96}$ addresses).
@@ -1175,7 +1175,7 @@ a server is a proxy or a non-responsive legitimate host.
 probe-resistant. Censors that attempt to probe suspected OSSH servers without
 knowledge of the secret receive no data response, making it difficult to
 distinguish them from other non-responsive hosts. To confirm this, we use
-ZMap~\cite{zmap} to scan over 1 billion random IP/port combinations, and sent 25
+ZMap~\cite{zmap13} to scan over 1 billion random IP/port combinations, and sent 25
 random bytes (corresponding to the OSSH handshake) to the approximately 800,000
 servers that responded. We expect very few of these to actually be OSSH
 servers as they are simply random servers on random TCP ports.
@@ -1394,5 +1394,9 @@ stations at real ISPs.
 \bibliographystyle{plain}
 \small
 \bibliography{biblio}
+
+\appendix
+
+\input{rebuttal}
 
 \end{document}
