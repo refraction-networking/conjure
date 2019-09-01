@@ -3,10 +3,10 @@
 We thank the reviewers for their detailed comments and insights. In this resubmission we have modified 
 multiple items to address concerns and clarify various ambiguities raised by the previous submission. 
 First we have modified sections \ref{sec:architecture} 
-and \ref{sec:implementation} to better communicate the construction of the Conjure system, 
+and \ref{sec:implementation} to better communicate the construction of the \scheme system, 
 the modularity that it affords, and the benefits that we derive from it's properties. We 
 have also added section \ref{sec:attacks} to discuss the security benefits and shortcomings 
-of Conjure directly.
+of \scheme directly.
 
 Reviewers A, C, and D reference the difficulty of correctly mimicking realistic services with
 reference to the mask site proxy option. We have added acknowledgement of the inherent difficulty of mimicking 
@@ -17,15 +17,15 @@ favor. First we do not choose a single service to mimic as other works in the pa
 of website fingerprinting being employed by censors to detect proxies in nation-state censorship 
 efforts due to the cost of overblocking at scale. 
 
-We would like to underscore that mimicry is only a feature of a Conjure session when the client 
-elects to use the mask site proxy option. A Conjure session that uses OSSH, Obfs4, etc. will 
-not employ any mimicking. This heterogeneity is a strength as it allows Conjure to continue
+We would like to underscore that mimicry is only a feature of a \scheme session when the client 
+elects to use the mask site proxy option. A \scheme session that uses OSSH, Obfs4, etc. will 
+not employ any mimicking. This heterogeneity is a strength as it allows \scheme to continue
 providing secure proxy access to clients even when new active probing attacks are discovered for 
 individual transports.
 
 Reviewer D raises a concern about identifying phantom hosts by attempting to connect and
-classifying based on the non-response of a host seen previously responding to a possible Conjure client. 
-This would not be an effective attack on Conjure for multiple reasons. First, the internet is volatile,
+classifying based on the non-response of a host seen previously responding to a possible \scheme client. 
+This would not be an effective attack on \scheme for multiple reasons. First, the internet is volatile,
 and services come up, go down, or transition addresses regularly. Second, many networks are fire-walled
 and require specific authentication and/or source address to access. Finally protocols on the internet
 are diverse and may not reply when improperly probed. Simply checking whether a connection can be opened 
@@ -33,14 +33,14 @@ from a third party client will not indicate to a censor with reliable confidence
 contacting a phantom host. 
 
 All reviewers voice similar concerns about the incentives present for ISPs to deploy a system like
-Conjure, and the burden that this may impose upon them. Conjure already has the cooperation of a 
-major state level ISP, and our test bench has demonstrated that this places
+\scheme, and the burden that this may impose upon them. \scheme already has the cooperation of a 
+a mid-sized transit ISP, and our test bench has demonstrated that this places
 no undue burden upon them. Our system does not require any inline blocking or packet modification 
 as we operate on packets mirrored to a machine that we host within the ISP's network. 
 To clarify, the ISP is not responsible for finding unused addresses, discovering viable mask sites, 
 or managing proxied connections -- we perform those operations on our station deployed
 at an ISP. They are also not responsible for hosting sites (or managing certificates) at any of the 
-phantom hosts, as Conjure does not host any fake services, connections to phantom hosts are 
+phantom hosts, as \scheme does not host any fake services, connections to phantom hosts are 
 redirected to the covert destination out of line. The only overhead 
 for the ISP is providing our station (hosted locally in their network) with a TAP on the packets that 
 pass by, ensuring that we do not create any bottleneck in the service that they provide to their customers. 
@@ -48,10 +48,10 @@ pass by, ensuring that we do not create any bottleneck in the service that they 
 As for the risk of refraction networking making the ISP a target for malicious activity, they likely already
 are a target based on the information and access that they have and they work to make their networks 
 secure against those attacks. The motivation of making the internet a more free and open environment,
-low overhead of deployment, and the effective demonstration of Conjure in a production environment 
+low overhead of deployment, and the effective demonstration of \scheme in a production environment 
 form a strong incentive. 
 
-We believe that Conjure represents a significant step forward in the arms race of proxy
+We believe that \scheme represents a significant step forward in the arms race of proxy
 discovery and censorship circumvention because we leverage the the unused addresses of the internet
 to connect clients to secure, active probe resistant proxies without giving censors a singular 
 specific IP address that can be blocked to inexpensively deny proxy access.

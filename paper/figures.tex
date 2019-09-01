@@ -2,14 +2,22 @@
 \newcommand{\FigOverview}{
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\linewidth,clip]{figures/conjure-overview.png}
+    \includegraphics[width=\linewidth,clip]{figures/dark-decoy-flow2.png}
     \caption{\textbf{\scheme Operations}\,---\,\rm%
-        Clients first register by sending a secret seed in a steganographic tag past the station in a
-        normal TLS connection to a Decoy site. Clients then connect to an address derived from the seed,
-        which the station responds as a phantom host application. If the client can prove knowledge of the
-        seed used during registration, they are allowed access to the proxy. Otherwise,
-        the phantom host application pretends to be a benign host by staying silent or forwarding traffic
-        to a mask site to make it difficult for censors to distinguish phantom hosts from legitimate ones.
+        A \scheme session is constructed in two pieces. First a client registers by sending a tls connection
+        to the Decoy host (see Figure 2c) with a steganographically tagged payload.
+        This registration contains the true address that the client would like to connect to and a seed 
+        which the \scheme station uses to derive the Phantom IP address for the session(green dashed flow). 
+        Second The client derives the same 
+        Phantom IP address and connects directly to it using the proxy protocol (e.g. OSSH) that they specified in
+        their registration (purple dotted flow). The station identifies registered packets by source IP, destination IP,
+        and destination port (client IP, phantom IP, and phantom port respectively). The traffic is passed 
+        to a proxy server handling the specific proxy specified by the client then redirected to the 
+        covert address that the client indicated in their registration. 
+        \\\hspace{\textwidth}
+        Secrets for the individual proxy services are shared out of band or derived from the shared secret 
+        between the client and the station such that an adversary attempting to probe a connection will be
+        unable to connect to the proxy service. 
     }
     \label{fig:overview}
 \end{figure}
@@ -248,6 +256,7 @@
   \vspace{16pt}
 
   \begin{subfigure}{\columnwidth}
+    \label{fig:evolutionconjure}
     \includegraphics[width=\columnwidth]{figures/dark-decoys}
     \vspace{-3pt}
 
