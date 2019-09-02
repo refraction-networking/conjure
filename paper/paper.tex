@@ -114,7 +114,7 @@ emerged as a promising next-generation approach for circumventing
 Internet censorship. Rather than trying to hide individual
 circumvention proxy servers from censors, proxy functionality is
 implemented in the core of the network, at cooperating ISPs in
-friendly countries.  Any connection that traverses these ISPs could be
+friendly countries. Any connection that traverses these ISPs could be
 a conduit for the free flow of information, so censors cannot easily
 block access without also blocking many legitimate sites.  While one
 Refraction scheme, TapDance, has recently been deployed at ISP-scale,
@@ -127,8 +127,8 @@ block such techniques.
 We present \scheme, an improved Refraction Networking approach
 that overcomes these limitations by leveraging unused address space at
 deploying ISPs. Instead of using real websites as the decoy destinations
-for proxy connections, our scheme creates seemingly legitimate hosts
-on demand, at IP addresses where no web server exists.
+for proxy connections, our scheme connects to IP addresses where no 
+web server exists leveraging proxy functionality from the core of the network.
 These phantom hosts are difficult for a censor to distinguish from
 real ones, but can be used by clients as proxies.  We define the
 \scheme protocol, analyze its security, and evaluate a
@@ -271,18 +271,18 @@ block them.
 %-Connection can live as long as we want
 %-No pesky TCP/TapDance-y limits
 
-\TODO{Phantom hosts are cheap to create, allowing for discardable or even one-time-use
-proxy servers}. This greatly increases the cost for censors to
+Phantom hosts are cheap to connect to, and greatly expand the 
+number of viable proxy endpoints that a censor must consider. This increases the cost for censors to
 block, as they must detect and block in real time. Meanwhile, even a censor that
-can detect 90\% of phantom hosts does not significantly increase the cost to the
-circumvention system, giving \scheme an advantage in the censor/circumventor
+could theoretically detect 90\% of phantom hosts with confidence does not significantly reduce the
+effectiveness of a circumvention system, giving \scheme an advantage in the censor/circumventor
 cat-and-mouse game.
-%TODO: don't need to hedge on IPv4 anymore..? could cut
+
 \scheme supports both IPv4 and IPv6,
 though we note that the technique is especially
 powerful in IPv6, where censors cannot exhaustively scan the address space
 ahead of time to identify addresses that change behavior.
-Because we fully control the transport connection, connections can live as
+Because we fully control the proxy transport, connections can live as
 long as needed, without the complexity faced by TapDance.
 
 %TODO:
@@ -1218,15 +1218,20 @@ be in the same network), which must also be responded to.
 
 \scheme provides a much larger degree of engineering flexibility than previous
 Refraction Networking schemes. Due to its modular design, different registration
-protocols and applications can be used. One obvious direction is to further
-study such alternatives. For instance, while we use a TapDance-like
-covert channel for registration, we could potentially cut down on the overhead of one-time
-registration by using port-knocking or using a Telex-style~\cite{telex11} tag (in the Client Hello rather than Application Data).
+protocols and proxy transports can be used interchangeably by the client. The
+flexibility of proxy transports and simplicity of registration allows \scheme to
+incorporate state of the art censorship circumvention tools and resist 
+nation-state censors. 
+
+One obvious future direction is to study new options for registration and proxy transport. For instance, while 
+\scheme currently uses a refraction networking covert channel for registration, we could potentially 
+cut down on the overhead of one-time registration by using port-knocking or using a 
+Telex-style~\cite{telex11} tag (in the Client Hello rather than Application Data).
 
 \paragraph{Client-side applications}
-\TODO{On the application side}, \scheme provides an interesting opportunity to explore
+\scheme provides an interesting opportunity to explore
 \emph{client mimicking} phantom hosts. Rather than pretend to be a server (e.g.,
-a mask site), our application could connect back to a client after registration
+a mask site), our transport itself could connect to a newly registered client
 from the phantom host address. Possible protocols could include WebRTC, mentioned in
 Section~\ref{sec:webrtc}, or other peer-to-peer protocols such as BitTorrent,
 Skype, or Bitcoin.
@@ -1234,8 +1239,8 @@ Skype, or Bitcoin.
 \paragraph{Traffic analysis}
 \scheme could also support applications that tradeoff performance for
 observability. While Slitheen offers ideal mimicry of decoys, it comes at a high
-cost of overhead. \scheme applications could implement Slitheen
-in order to perfectly mimic the mask site's latency, packet timings, and payload
+cost of overhead. \scheme transports such as mask site could implement Slitheen
+in order to perfectly mimic the decoy site's latency, packet timings, and payload
 sizes. In addition, careful choice of mask sites may allow for higher
 performance, as sites with more replaceable content can carry more covert data.
 
@@ -1247,10 +1252,6 @@ practice~\cite{frolov2017isp}. We believe \scheme can be even easier to deploy
 at scale, and we hope to leverage the existing success of TapDance to place \scheme
 stations at real ISPs.
 
-%\section{Conclusion}
-%.25 page
-
-%\TODO{Write (0.25 page}
 
 %%-------------------------------------------------------------------------------
 %\section*{Availability}
