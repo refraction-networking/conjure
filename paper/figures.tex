@@ -214,22 +214,23 @@
 \newcommand{\FigImplementation}{
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.7\linewidth,clip]{figures/dark-decoy-flow1.png}
+    \includegraphics[width=0.7\linewidth,clip]{figures/dark-decoy-impl1.png}
     \caption{\textbf{Station Architecture}\,---\,\rm%
-        We used PF\_RING to receive packets from a 20~Gbps packet tap, which we load balance
-        across 4~CPU cores. The detector process identifies registrations, notifying all
-        cores when a new registration is received (green dashed registration flow). The detector also
-        identifies packets associated with registered flows (by connection 4-tuple) and diverts them
-        to a local application which handles proxying connections(purple dotted flow). The local 
-        application determines which proxy the flow should use based on a parameter specified by 
-        the client in the registration and initializes a goroutine to handle forwarding. 
+        We used PF\_RING to receive packets from a 20~Gbps tap which we load balance
+        across 4~CPU cores. The detector processes identify registrations, sending notification to
+        all other cores via redis and to the local application 
+        via ZMQ when a new registration is received . The detector also
+        identifies packets associated with registered flows and diverts them
+        to the local application which handles proxying connections. The local 
+        application determines which transport the flow should use based on a parameter specified in
+        the client's registration and initializes a goroutine to handle forwarding. 
         \\\hspace{\textwidth}
         A censor trying to interfere in this
-        connection would need to co-opt the clients IP address in a precise window (after the 
-        registration but before the client connects to the phantom) and correctly guess the phantom hosts 
+        connection would need to take over the clients IP address in a precise window (after the 
+        registration but before the client connects to the phantom) and correctly guess the phantom host's 
         IP address (or connect to all possible phantom IPs) before the active probe traffic gets to the local application. 
-        At this point their connection will fail in a manor specific to the proxy that the client specified
-        in the registration (e.g. connecting to OSSH without knowledge of the preshared secret).}
+        At this point their connection will fail in a manor specific to the transport that the client specified
+        in the registration (e.g. connecting to OSSH without knowledge of the pre-shared secret).}
     \label{fig:implementation}
 \end{figure}
 }

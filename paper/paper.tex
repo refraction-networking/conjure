@@ -677,13 +677,19 @@ transport protocol, convincing the censor that two clients are communicating.
 \section{Implementation}
 \label{sec:implementation}
 
-We implemented the \scheme protocol and deployed a station at a
-20~Gbps router in a mid-sized transit ISP. We used PF\_RING to
+We implemented \scheme and deployed a station at a mid-sized transit ISP tapping 
+traffic from a 20~Gbps router. We used PF\_RING to
 consume the 20~Gbps link, and feed it to a custom \textbf{detector} written in Rust. The
-detector processes all packets and watches for new registrations. It also
-forwards all packets sent to a (registered) phantom host address to the local
-\textbf{application} via an \texttt{iptables} DNAT rule that rewrites the destination IP,
-allowing the application to accept and respond to connections using the native
+detector processes all packets and watches for new registrations. Once a registration 
+is detected the local application is notified via an 
+out-of-band ZMQ~\cite{zmq} connection, which provides the
+registering client's IP address, the seed, and other configuration
+information. We note that this is not along a critical timing path for 
+proxying connections and no client packets are sent over ZMQ.
+
+The detectors forwards all packets destined for a (registered) phantom host address to the local
+\textbf{application} via tun interfaces and \texttt{iptables} DNAT rules that rewrite the destination IP,
+allowing the local application to accept and respond to connections using the native
 operating system's interface. Figure~\ref{fig:implementation} shows the overall
 architecture of our implementation, which we describe next.
 % Along with the client?
@@ -692,8 +698,8 @@ architecture of our implementation, which we describe next.
 
 \subsection{Detector}
 
-Our detector is a modified fork of the open source TapDance
-implementation~\cite{tapdance-source}.
+% Our detector is a modified fork of the open source TapDance
+% implementation~\cite{tapdance-source}.
 We implemented our detector in approximately 1,800 lines of Rust (compared to
 over 5,000 lines for TapDance)\footnote{excluding (from both) about 3,000 lines
 of auto-generated protobuf code}.
@@ -735,38 +741,8 @@ load-balancing algorithm in
 PF\_RING to select the core based solely on the destination IP address of the
 packet. We still must use Redis to tell all of the cores of new
 registrations, but only one core will be ultimately responsible for processing all of
-the packets sent to a given phantom host, regardless of who or when it is sent.
+the packets sent to a given phantom host, regardless of who sends it or when it is sent.
 
-
-\subsection{Application}
-
-We implemented our application in about 500~lines of Golang. Though we note
-other protocols (e.g. obfsproxy or WebRTC) could be used as the application, we
-implemented a mask site mimicking application, that pretends to be a mask site
-when actively probed by the censor.
-
-The application accepts connections to phantom host addresses forwarded by the
-detector and rewritten to the local address using \texttt{iptables}.
-The application also receives out-of-band information about registrations from the
-detector via a ZMQ~\cite{zmq} connection, which informs the application of the
-registering client's IP address, the secret seed, and other configuration
-information passed by the client.
-
-Once the application accepts a connection, it initially acts as a transparent
-proxy to the mask site specified by the client during registration. The
-application parses the handshake, forwarding packets back and forth between
-client and mask site without modification, and extracting the server and client
-randoms. The application attempts to decrypt the first application data record
-from the client using a key derived from the secret seed, and client and server
-randoms. We use the uTLS library~\cite{utls} on both the application and client
-to allow us to change the TLS secrets being used after the handshake.
-
-\FigTapBandwidth
-
-If the decryption is successful, the application switches to forwarding
-(decrypted) data back and forth with a client-specified endpoint, such as a
-SOCKS proxy, which can multiplex multiple client connections over the single
-connection to the phantom host.
 
 \subsection{Client}
 
@@ -776,115 +752,60 @@ We created a \scheme client and integrated it with the Psiphon~\cite{psiphon}
 anticensorship client. Psiphon has millions of users in censored countries, and
 we are in the early stages of rolling \scheme out to real-world users.
 
-Our \scheme client is written in Golang, and uses the TapDance-like protocol
-(Section~\ref{sec:registration}) for
-registration. We note that this protocol should be harder for censors to observe
+Our \scheme client is written in Golang, and uses the refraction networking tagging
+schema (Section~\ref{sec:registration}) for
+registration. We note that this protocol will be more difficult for censors to observe
 than normal TapDance because it consists of only a single (complete) request, and the station does
-not have to spoof packets as the decoy used during registration, only passively
-observe them.
+not have to spoof packets as the decoy during registration, only passively
+observe them. 
 
-We implemented two of the applications in our client: Obfuscated SSH used by
-Psiphon
-(Section~\ref{sec:ossh}) and our Mask Site protocol
-(Section~\ref{sec:mask-sites}). Our client signals which application it will use
-in the registration tag. The client also sends a flag that indicates if the
-client supports IPv6, to allow IPv4-only clients to only derive IPv4 phantom
-hosts.
+We implemented support for two of the transports in our client: Obfuscated SSH used by
+Psiphon (Section~\ref{sec:ossh}) and our TLS Mask Site protocol
+(Section~\ref{sec:mask-sites}). Our client signals which transport it will use
+in the registration tag along with a flag indicating whether the
+client supports IPv6, allowing IPv4-only clients to derive exclusively IPv4 phantom hosts.
 After registration, the client connects to the derived
-phantom host address, and speaks the specified application protocol, which
-tunnels a SOCKS connection between the client and Psiphon's backend servers,
-which proxy the client's connections.
+phantom host address, and speaks the specified transport protocol, which
+tunnels between the client and either the mask site transport local to the 
+station or Psiphon's backend servers. A SOCKS connection can be initiated through
+this tunnel to allow for connection multiplexing.
 
-\if0
-In order to scale up to 20Gbps and beyond,
-one has to utilize multiple cores and employ load balancing.
-We use PF\_RING built-in load balancer \emph{zbalance} to efficiently
-distribute load between 4 cores.
-Our timeout is based on last IP address usage time, which prevents us from
-balancing load based on source IP address,
-as censor would be able to observe
-same destination IP address picking or not picking up
-depending on source IP address.
-To avoid such unusual behavior we balance on destination IP.
-Since PF\_RING does not feature load balancing based only on destination
-IP address, we made a custom implementation of this zbalance policy.
 
-TODO: say it's tested on 20 Gbps
+\subsection{Application \& Transports} 
 
-Implementation of the protocol includes 3 components:
-detector, proxy application, and client.
-Detector will parse the traffic, searching for registrations in
-tagged messages. After detector observes a registration, and negotiates with client
-a phantom host IP,
-all packets, that are sent to that phantom host IP,
-will be forwarded into a proxy application.
+We implemented our station-side application in about 500~lines of Golang. This includes
+support for OSSH (via integration with Psiphon) and Mask Sites, both specifiable by the client
+during registration. We note that support for other transport protocols (e.g. Obfs4 or WebRTC)
+can be added as development continues. 
 
-\subsection{Registration phase}
+\subsubsection{OSSH}
 
-Each \scheme connection has 2 phases: registration, and usage of a phantom host.
-Registration starts with a handshake that is similar to a TapDance handshake,
-but initial HTTP request is complete.
-This allows a reachable site to provide a genuine response
-to a HTTP GET request of its index page.
-Since station does not need to produce a response,
-which significantly reduces complexity of a detector,
-that does not need to decrypt and inject packets into a TLS connection between
-client and a reachable site, as opposed to original TapDance.
+Our \scheme implementation includes support for OSSH through integration with Psiphon. 
+Client traffic is forwarded to a Psiphon server by using  \scheme as a  
+transparent proxy. This symbiotic relationship provides \scheme with active 
+and passive probe resistance, while preventing censors from being able to inexpensively
+block Psiphon's backend servers individually. 
 
-Client begins registration by establishing TLS connection
-to one of the reachable websites,
-path to which passes by our tap.
-Client uses a Chosen-Ciphertext Steganography technique~\cite{tapdance14} to manipulate
-plaintext of a first application data HTTP request
-to get desired ciphertext,
-and exchange keys with the station.
-After client writes Elligator-encoded~\cite{elligator} representative into the ciphertext at a static offset of 92 bytes from the end,
-that could be decoded using station's private key,
-to negotiate a 32 byte Elligator-encoded~\cite{elligator} shared secret between the client and the station.
-That shared secret is used as a seed of SHA-256 based key derivation function (HKDF),
-allowing station and client to derive an unlimited amount of shared secrets.
 
-Elligator representative on the wire is immediately followed by a 6 bytes long AES-GCM-encrypted
-fixed size payload(FSP), that holds flags and the size of the variable size payload(VSP).
-IV and key for encrypted of both FSP and VSP will be derived from HKDF.
-Once FSP is decrypted and the size of VSP is known, station can decrypt the VSP as well.
-VSP itself is a protobuf, which allows us to easily change the contents of VSP without risk of version mismatch, and currently contains 3 fields: version of configuration(which includes list of decoys), SNI of mask site, and a presumably blocked target host that client would like to get connected to.
+\subsubsection{Mask Sites}
 
-Client will sleep a short randomized period of time before attempting to establish connection to phantom host.
-This is done for 2 reasons: to break potentially observable interflow dependency with a phantom host connection being established right after a first application layer data packet sent to decoy,
-and to give station time.
-TODO: why does it need time?
+We implemented a mask site mimicking proxy, that pretends to be a mask site
+when actively probed by the censor. Once the station accepts accepts a connection 
+for a registered flow, it initially acts as a transparent
+proxy to a mask site specified by the client during registration. The
+application parses the handshake, forwarding packets back and forth between
+client and mask site without modification, extracting the server and client
+randoms. The application attempts to decrypt the first application data record
+from the client using a key derived from the secret seed, client, and server
+randoms. We use the uTLS library~\cite{utls} on both the application and client
+to allow us to change the TLS secrets being used after the handshake.
 
-\subsection{Application phase}
-Client and station will use HKDF to derive 16 random bytes and use them to
-agree on a phantom host IP address, by applying a simple selection algorithm.
-Algorithm is as follows: first, flatten a list of pre-shared available IP
-addresses in various subnets into a single indexed list, then make a 128-bit
-integer out of 16 random bytes and divide it by the length
-of the flattened list, and use the remainder of this division as an index
-of the list to pick an IP address.
+\FigTapBandwidth
 
-To thwart active probing attacks, this application will then confirm
-that connecting client knows a secret, negotiated during the registration.
-If connecting client does know that secret, application will set up proxying,
-otherwise it may give censor a response, that acts like that this IP address
-is not an open proxy.
-
-TODO: describe MakeConnWithCompleteHandshake?
-
-Note that the detector and proxy application are only loosely coupled with each other,
-making it simple to replace one of them.
-We plan to take advantage of encrypted SNI, when it gets widely adopted,
-and replace our current proxy implementation with one that uses encrypted SNI
-and achieve improved unobservability properties, described in section~\ref{esni}.
-
-\subsection{Languages and LOC counts} % TODO: rename/restructure and complete section
-Client is written in Golang and follows the same API as standard TapDance does,
-which allows us to reuse existing TapDance CLI wrapper and Android application.
-
--Language choice (Rust, Go, minimal C)
--Open source (client, station and application)
-\fi
+If the decryption is successful, the application switches to forwarding
+(decrypted) data back and forth with a client-specified endpoint, such as a
+SOCKS proxy, which can provide multiple secure connections over the single
+connection to the phantom host.
 
 
 \section{Evaluation}
