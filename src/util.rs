@@ -188,7 +188,7 @@ pub struct FSP {
 impl FSP {
     const UNUSED_BYTES: usize = 3;
     const USED_BYTES: usize = 3;
-    const LENGTH: usize = 6;
+    pub const LENGTH: usize = 6;
     pub const FLAG_PROXY_HEADER: u8 = 0x4;
     pub const FLAG_UPLOAD_ONLY:  u8 = (1 << 7);
 	pub const FLAG_USE_TIL:      u8 = (1 << 0);
@@ -214,6 +214,12 @@ impl FSP {
     pub fn to_vec(&self) -> &Vec<u8> {
         let vec = &self.bytes;
         return vec
+    }
+
+    pub fn to_bytes(&self)-> [u8; FSP::LENGTH] {
+        let mut array = [0; FSP::LENGTH];
+        array.copy_from_slice(&self.bytes);
+        return array
     }
 
     pub fn use_proxy_header(&self) -> bool {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"bytes"
 	"fmt"
 	"log"
@@ -10,6 +11,8 @@ import (
 
 	dd "./lib"
 	zmq "github.com/pebbe/zmq4"
+	"github.com/golang/protobuf/proto"
+	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
 func getOriginalDst(fd uintptr) (net.IP, error) {
@@ -74,21 +77,61 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 
 	for {
 
-		ipAddr, reg, err := recieve_zmq_message(sub)
-		if err != nil {
+		newReg, err := recieve_zmq_message(sub, regManager)
+		if err != nil || newReg == nil {
 			continue
 		}
 
-		regManager.AddRegistration(*ipAddr, reg)
-		logger.Printf("new registration: {dark decoy address=%v, covert=%v, mask=%v, flags=0x%02x}\n",
-			net.IP(ipAddr[:]).String(), reg.Covert, reg.Mask, reg.Flags)
+		if !newReg.PhantomIsLive() {
+			regManager.AddRegistration(newReg)
+			logger.Printf("new registration: {dark decoy address=%v, covert=%v, mask=%v, flags=0x%02x}\n",
+				net.IP(ipAddr[:]).String(), reg.Covert, reg.Mask, reg.Flags)
+		}
 	}
 }
 
-func recieve_zmq_message(sub *zmq.Socket) (*[16]byte, *dd.DecoyRegistration, error) {
-	var masterSecret [48]byte
-	var ipAddr [16]byte
-	var covertAddrLen, maskedAddrLen, flags [1]byte
+func recieve_zmq_message(sub *zmq.Socket, regManager *RegistrationManager) (*dd.DecoyRegistration, error) {
+	// var sharedSecret [32]byte
+	// var ipAddr []byte
+	// var covertAddrLen, maskedAddrLen [1]byte
+
+	var sharedSecret [32]byte
+	var fixedSizePayload [6]byte
+	var flags [1]byte
+
+	msg, err := sub.RecvBytes(0)
+	if err != nil {
+		logger.Printf("error reading from ZMQ socket: %v\n", err)
+		return nil, nil, err
+	}
+	if len(msg) < 32 + 6 + 1 + 16 {
+		logger.Printf("short message of size %v\n", len(msg))
+		return nil, nil, fmt.Errorf("short message of size %v\n", len(msg))
+	}
+
+	msgReader := bytes.NewReader(msg)
+
+	msgReader.Read(sharedSecret[:])
+	msgReader.Read(fixedSizePayload[:])
+	msgReader.Read(sharedSecret[:])
+
+	vspSize := binary.BigEndian.Uint16(fixedSizePayload[0:2])
+
+	var clientToStationBytes [vspSize]byte
+
+	msgReader.Read(clientToStationBytes[:])
+
+	// parse c2s
+	clientToStation := pb.ClientToStation{}
+	proto.unmarshal(clientToStationBytes, clientToStation)
+
+	conjureKeys, err := dd.generateKeys(sharedSecret)
+
+	newReg := regManager.NewRegistration(clientToStation, conjureKeys, flags)
+
+	return newReg, nil
+
+
 
 	msg, err := sub.RecvBytes(0)
 	if err != nil {
@@ -102,7 +145,6 @@ func recieve_zmq_message(sub *zmq.Socket) (*[16]byte, *dd.DecoyRegistration, err
 
 	msgReader := bytes.NewReader(msg)
 
-	msgReader.Read(masterSecret[:])
 	msgReader.Read(ipAddr[:])
 
 	msgReader.Read(covertAddrLen[:])

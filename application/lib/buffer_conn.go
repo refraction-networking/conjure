@@ -26,9 +26,9 @@ func (bc *bufferedReaderConn) CloseWrite() error {
 		CloseWrite() error
 	}); ok {
 		return closeWriter.CloseWrite()
-	} else {
-		return errors.New("not a CloseWriter")
 	}
+	return errors.New("not a CloseWriter")
+
 }
 
 func (bc *bufferedReaderConn) CloseRead() error {
@@ -36,9 +36,9 @@ func (bc *bufferedReaderConn) CloseRead() error {
 		CloseRead() error
 	}); ok {
 		return closeReader.CloseRead()
-	} else {
-		return errors.New("not a CloseReader")
 	}
+	return errors.New("not a CloseReader")
+
 }
 
 func makeBufferedReaderConn(c net.Conn, r *bufio.Reader) *bufferedReaderConn {
