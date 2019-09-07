@@ -12,6 +12,8 @@ import (
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
+const DETECTOR_REG_CHANNEL string = "dark_decoy_map"
+
 type RegistrationManager struct {
 	registeredDecoys *RegisteredDecoys
 	Logger           *log.Logger
@@ -51,9 +53,10 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	}
 	return &reg, nil
 }
+
 func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 
-	registerForDetector(&DecoyRegistration)
+	registerForDetector(d)
 
 	darkDecoyAddr := d.DarkDecoy.String()
 	regManager.registeredDecoys.register(darkDecoyAddr, d)
@@ -74,6 +77,7 @@ type DecoyRegistration struct {
 	Flags        uint8
 }
 
+// TODO
 func (reg *DecoyRegistration) PhantomIsLive() bool {
 	return true
 }
@@ -130,13 +134,16 @@ func (r *RegisteredDecoys) removeOldRegistrations() {
 }
 
 func registerForDetector(reg *DecoyRegistration) {
-
-	client := getRedisClient()
-
-	result := client.Publish(DETECTOR_REG_CHANNEL, message)
+	client, err := getRedisClient()
+	if err != nil {
+		fmt.Printf("couldn't connect to redis")
+	} else {
+		client.Publish(DETECTOR_REG_CHANNEL, reg.DarkDecoy.String())
+		client.Close()
+	}
 }
 
-func getRedisClient() *redis.Client {
+func getRedisClient() (*redis.Client, error) {
 	var client *redis.Client
 	client = redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
@@ -144,5 +151,11 @@ func getRedisClient() *redis.Client {
 		DB:       0,
 		PoolSize: 10,
 	})
-	return client
+
+	_, err := client.Ping().Result()
+	if err != nil {
+		return client, err
+	}
+
+	return client, err
 }
