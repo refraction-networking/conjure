@@ -45,7 +45,7 @@ func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) 
 		return
 	}
 
-	reg := regManager.CheckRegistration(originalDstIP)
+	reg := regManager.CheckRegistration(&originalDstIP)
 	if reg == nil {
 		logger.Printf("registration for %v not found", originalDstIP)
 		return
@@ -85,12 +85,12 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 		if !newReg.PhantomIsLive() {
 			regManager.AddRegistration(newReg)
 			logger.Printf("new registration: {dark decoy address=%v, covert=%v, mask=%v, flags=0x%02x}\n",
-				net.IP(ipAddr[:]).String(), reg.Covert, reg.Mask, reg.Flags)
+				newReg.DarkDecoy.String(), newReg.Covert, newReg.Mask, newReg.Flags)
 		}
 	}
 }
 
-func recieve_zmq_message(sub *zmq.Socket, regManager *RegistrationManager) (*dd.DecoyRegistration, error) {
+func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, error) {
 	// var sharedSecret [32]byte
 	// var ipAddr []byte
 	// var covertAddrLen, maskedAddrLen [1]byte
@@ -102,79 +102,46 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *RegistrationManager) (*dd.
 	msg, err := sub.RecvBytes(0)
 	if err != nil {
 		logger.Printf("error reading from ZMQ socket: %v\n", err)
-		return nil, nil, err
+		return nil, err
 	}
 	if len(msg) < 32 + 6 + 1 + 16 {
 		logger.Printf("short message of size %v\n", len(msg))
-		return nil, nil, fmt.Errorf("short message of size %v\n", len(msg))
+		return nil, fmt.Errorf("short message of size %v", len(msg))
 	}
 
 	msgReader := bytes.NewReader(msg)
 
 	msgReader.Read(sharedSecret[:])
 	msgReader.Read(fixedSizePayload[:])
-	msgReader.Read(sharedSecret[:])
 
 	vspSize := binary.BigEndian.Uint16(fixedSizePayload[0:2])
 
-	var clientToStationBytes [vspSize]byte
+	var clientToStationBytes []byte
 
-	msgReader.Read(clientToStationBytes[:])
+	bytesReceived, err := msgReader.Read(clientToStationBytes)
 
+	if bytesReceived < int(vspSize) {
+		logger.Printf("VSP received is shorter than expected by FSP: %d<%d\n", bytesReceived, vspSize)
+		return nil, fmt.Errorf("VSP received is shorter than expected by FSP: %d<%d", bytesReceived, vspSize)
+	}
+	c2sBytes := clientToStationBytes[:vspSize]
+	
 	// parse c2s
-	clientToStation := pb.ClientToStation{}
-	proto.unmarshal(clientToStationBytes, clientToStation)
+	clientToStation := &pb.ClientToStation{}
+	err = proto.Unmarshal(c2sBytes, clientToStation)
+	if err != nil {
+		logger.Printf("Failed to unmarshall ClientToStation: %v", err)
+		return nil, err
+	}
 
-	conjureKeys, err := dd.generateKeys(sharedSecret)
+	conjureKeys, err := dd.GenSharedKeys(sharedSecret[:])
 
-	newReg := regManager.NewRegistration(clientToStation, conjureKeys, flags)
+	newReg, err := regManager.NewRegistration(clientToStation, &conjureKeys, flags)
+	if err != nil {
+		return nil, err
+	}
 
 	return newReg, nil
-
-
-
-	msg, err := sub.RecvBytes(0)
-	if err != nil {
-		logger.Printf("error reading from ZMQ socket: %v\n", err)
-		return nil, nil, err
-	}
-	if len(msg) < 48+22 {
-		logger.Printf("short message of size %v\n", len(msg))
-		return nil, nil, fmt.Errorf("short message of size %v\n", len(msg))
-	}
-
-	msgReader := bytes.NewReader(msg)
-
-	msgReader.Read(ipAddr[:])
-
-	msgReader.Read(covertAddrLen[:])
-	covertAddr := make([]byte, covertAddrLen[0])
-	_, err = msgReader.Read(covertAddr)
-	if err != nil {
-		logger.Printf("short message with size %v didn't fit covert addr with length %v\n",
-			len(msg), covertAddrLen[0])
-		return nil, nil, err
-	}
-
-	msgReader.Read(maskedAddrLen[:])
-	var maskedAddr []byte
-	if maskedAddrLen[0] != 0 {
-		maskedAddr = make([]byte, maskedAddrLen[0])
-		_, err = msgReader.Read(maskedAddr)
-		if err != nil {
-			logger.Printf("short message with size %v didn't fit masked addr with length %v\n",
-				len(msg), maskedAddrLen[0])
-			return nil, nil, err
-		}
-	}
-	msgReader.Read(flags[:])
-
-	return &ipAddr, &dd.DecoyRegistration{
-		MasterSecret: masterSecret,
-		Covert:       string(covertAddr),
-		Mask:         string(maskedAddr),
-		Flags:        uint8(flags[0]),
-	}, nil
 }
 
 var logger *log.Logger

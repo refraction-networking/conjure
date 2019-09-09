@@ -6,13 +6,13 @@ import (
 	"golang.org/x/crypto/hkdf"
 )
 
-type conjureSharedKeys struct {
+type ConjureSharedKeys struct {
 	FspKey, FspIv, VspKey, VspIv, MasterSecret, DarkDecoySeed []byte
 }
 
-func genSharedKeys(sharedSecret []byte) (conjureSharedKeys, error) {
+func GenSharedKeys(sharedSecret []byte) (ConjureSharedKeys, error) {
 	tdHkdf := hkdf.New(sha256.New, sharedSecret, []byte("tapdancetapdancetapdancetapdance"), nil)
-	keys := conjureSharedKeys{
+	keys := ConjureSharedKeys{
 		FspKey:        make([]byte, 16),
 		FspIv:         make([]byte, 12),
 		VspKey:        make([]byte, 16),

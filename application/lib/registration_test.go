@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func mockReceiveFromDetector() (pb.ClientToStation, conjureSharedKeys, [1]byte) {
+func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys, [1]byte) {
 	clientToStationBytes := []byte{
 		0x10, 0x9a, 0x04, 0x18, 0x0b, 0xa2, 0x01, 0x0e, 0x35, 0x32, 0x2e, 0x34, 0x34, 0x2e, 0x37,
 		0x33, 0x2e, 0x36, 0x3a, 0x34, 0x34, 0x33, 0xb0, 0x01, 0x00, 0xa2, 0x06, 0x01, 0x00}
@@ -24,7 +24,7 @@ func mockReceiveFromDetector() (pb.ClientToStation, conjureSharedKeys, [1]byte) 
 		fmt.Printf("Failed to unmarshal ClientToStation protobuf\n")
 	}
 
-	conjureKeys, err := genSharedKeys(sharedSecret)
+	conjureKeys, err := GenSharedKeys(sharedSecret)
 
 	return *clientToStation, conjureKeys, flags
 }

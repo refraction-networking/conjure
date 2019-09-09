@@ -35,7 +35,7 @@ func NewRegistrationManager() *RegistrationManager {
 	}
 }
 
-func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *conjureSharedKeys, flags [1]byte) (*DecoyRegistration, error) {
+func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, flags [1]byte) (*DecoyRegistration, error) {
 
 	darkDecoyAddr, err := regManager.DDSelector.Select(
 		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), c2s.GetV6Support())

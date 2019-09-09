@@ -260,106 +260,30 @@ impl PerCoreGlobal
         match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
             Ok(res) => {
                 // res.0 => shared secret
-                // res.1 => Fixed sixe payload
-                // res.2 => variable size paylaod (c2s)
+                // res.1 => Fixed size payload
+                // res.2 => variable size payload (c2s)
 
                 // form message for zmq
                 let mut zmq_msg: Vec<u8> = Vec::new();
 
-                // shared secret 
-                zmq_msg.append(res.0);
+                let mut shared_secret = res.0.to_vec();
+                zmq_msg.append(&mut shared_secret);
 
-                // FSP
-                zmq_msg.append(res.1);
+                let mut fsp = res.1.to_vec(); 
+                zmq_msg.append(&mut fsp);
 
                 // VSP --> ClientToStation
-                zmq_msg.append(res.2);
+                let mut vsp = res.2.to_vec();
+                zmq_msg.append(&mut vsp);
 
 
-                self.zmq_sock.send(&zmq_msg, 0);
-                return true;
-
-                // let mut c2s = match protobuf::parse_from_bytes::<ClientToStation>
-                //     (&res.2) {
-                //     Ok(pb) => pb,
-                //     Err(e) => {
-                //         error!("Error parsing protobuf from VSP: {:?}", e);
-                //         return None;
-                //     }
-                // };
-
-                // let dd_client_v6_support = match c2s.has_v6_support()  {
-                //     true => c2s.get_v6_support(), // v6 support specified
-                //     false => true, // If not, v6 supported is default for backward compatibility.
-                // };
-
-                // let dd_client_list_generation = match c2s.has_decoy_list_generation() {
-                //     true => c2s.get_decoy_list_generation(),
-                //     false => {
-                //         error!("Error - No decoy list generations specified");
-                //         return None;
-                //     }
-                // };
-
-                // let dst_ip = match self.dd_ip_selector.select(
-                //     res.0.dark_decoy_seed,
-                //     dd_client_list_generation,
-                //     dd_client_v6_support){
-                //     Ok(ip) => ip,
-                //     Err(e) => {
-                //         error!("{}: {}", flow, e);
-                //         return None
-                //     }
-                // };
-
-                // if !c2s.has_covert_address() {
-                //     error!("ClientToStation has no covert: {:?}", c2s);
-                //     return None;
-                // }
-
-                // let covert_bytes = c2s.get_covert_address().as_bytes();
-                // let masked_decoy_bytes = c2s.get_masked_decoy_server_name().as_bytes();
-
-                // zmq_msg.append(&mut res.0.new_master_secret.to_vec());
-
-                // let mut ip_as_bytes = match dst_ip {
-                //     IpAddr::V6(ip) => ip.octets().to_vec(),
-                //     IpAddr::V4(ip) => {
-                //         // Convert to Ipv6-mapped v4 address
-                //         let mut v6 = vec![0; 16];
-                //         v6[10] = 0xff;
-                //         v6[11] = 0xff;
-                //         v6[12..].clone_from_slice(&ip.octets());
-                //         v6
-                //     },
-                // };
-                // zmq_msg.append(&mut ip_as_bytes);
-
-                // let covert_bytes_len: u8 = match usize_to_u8(covert_bytes.len()) {
-                //     Some(len) => len,
-                //     None => {
-                //         error!("covert address too long");
-                //         return None;
-                //     }
-                // };
-                // zmq_msg.push(covert_bytes_len);
-                // zmq_msg.append(&mut covert_bytes.to_vec());
-
-                // let masked_decoy_bytes_len: u8 = match usize_to_u8(masked_decoy_bytes.len()) {
-                //     Some(len) => len,
-                //     None => {
-                //         error!("covert address too long");
-                //         return None;
-                //     }
-                // };
-                // zmq_msg.push(masked_decoy_bytes_len);
-                // zmq_msg.append(&mut masked_decoy_bytes.to_vec());
-
-                // zmq_msg.push(fixed_size_payload.flags);
-
-                // self.zmq_sock.send(&zmq_msg, 0);
-
-                // return Some(FlowNoSrcPort::from_parts(flow.src_ip, dst_ip, 443));
+                match self.zmq_sock.send(&zmq_msg, 0){
+                    Ok(_)=> return true,
+                    Err(e) => {
+                        warn!("Failed to send registration information over ZMQ: {}", e);
+                        return false
+                    },
+                }
             },
             Err(_e) => {
                 return false;
