@@ -82,7 +82,7 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 			continue
 		}
 
-		if !newReg.PhantomIsLive() {
+		if newReg.PhantomIsLive() {
 			regManager.AddRegistration(newReg)
 			logger.Printf("new registration: {dark decoy address=%v, covert=%v, mask=%v, flags=0x%02x}\n",
 				newReg.DarkDecoy.String(), newReg.Covert, newReg.Mask, newReg.Flags)
@@ -114,21 +114,15 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*
 	msgReader.Read(sharedSecret[:])
 	msgReader.Read(fixedSizePayload[:])
 
-	vspSize := binary.BigEndian.Uint16(fixedSizePayload[0:2])
+	vspSize := binary.BigEndian.Uint16(fixedSizePayload[0:2]) - 16
 
-	var clientToStationBytes []byte
+	clientToStationBytes := make([]byte, vspSize)
 
-	bytesReceived, err := msgReader.Read(clientToStationBytes)
-
-	if bytesReceived < int(vspSize) {
-		logger.Printf("VSP received is shorter than expected by FSP: %d<%d\n", bytesReceived, vspSize)
-		return nil, fmt.Errorf("VSP received is shorter than expected by FSP: %d<%d", bytesReceived, vspSize)
-	}
-	c2sBytes := clientToStationBytes[:vspSize]
+	msgReader.Read(clientToStationBytes)
 	
 	// parse c2s
 	clientToStation := &pb.ClientToStation{}
-	err = proto.Unmarshal(c2sBytes, clientToStation)
+	err = proto.Unmarshal(clientToStationBytes, clientToStation)
 	if err != nil {
 		logger.Printf("Failed to unmarshall ClientToStation: %v", err)
 		return nil, err
