@@ -1,109 +1,64 @@
-\documentclass[sigconf,anonymous]{acmart}
-%\usepackage{usenix2019_v3}
+\documentclass[sigconf]{acmart}
 
-\AtBeginDocument{%
-  \providecommand\BibTeX{{%
-    \normalfont B\kern-0.5em{\scshape i\kern-0.25em b}\kern-0.8em\TeX}}}
+\settopmatter{printacmref=true}
 
-%% Rights management information.  This information is sent to you
-%% when you complete the rights form.  These commands have SAMPLE
-%% values in them; it is your responsibility as an author to replace
-%% the commands and values with those provided to you when you
-%% complete the rights form.
-%% \setcopyright{acmcopyright}
-%% \copyrightyear{2019}
-%% \acmYear{2019}
-%% \acmDOI{10.1145/1122445.1122456}
-
-%% %% These commands are for a PROCEEDINGS abstract or paper.
-%% \acmConference[CCS '19]{CCS '19: ACM Conference on Computer and Communications
-%% Security}{November 11--15, 2019}{London, UK}
-%% \acmBooktitle{CCS '19: ACM Symposium on Computer and Communications Security,
-%%   November 11--15, 2019, London, UK}
-%% \acmPrice{0.00}
-%% \acmISBN{978-1-4503-9999-9/18/06}
-
-\fancyhf{} % Remove fancy page headers                                                                
-\fancyhead[C]{Anonymous submission \#610 to ACM CCS 2019}
-\fancyfoot[C]{\thepage}
-
-\setcopyright{none} % No copyright notice required for submissions                                     
-\acmConference[Anonymous Submission to ACM CCS 2019]{ACM Conference on Computer and Communications Security}{Due 15 May 2019}{London, TBD}
-\acmYear{2019}
-
-\settopmatter{printacmref=false, printccs=true, printfolios=true}
-                   
-
-
-
-% to be able to draw some self-contained figs
-\usepackage{tikz}
-%\usepackage{parskip}
-%\usepackage{mathptmx}\renewcommand{\ttdefault}{cmtt}
-\usepackage{amsmath}
-\usepackage{wasysym}
-%\setlength{\parskip}{1pt} % 1ex plus 0.5ex minus 0.2ex}
-%\setlength\parskip{1pt}
-\usepackage{graphicx} % http://ctan.org/pkg/graphicx
-\usepackage{booktabs} % http://ctan.org/pkg/booktabs
-\usepackage{xparse}   % http://ctan.org/pkg/xparse%don't print date
-\NewDocumentCommand{\rot}{O{45} O{1em} m}{\makebox[#2][l]{\rotatebox{#1}{#3}}}%
-\include{figures}
-\usepackage{subcaption}
-\usepackage{cleveref}
+\usepackage[utf8]{inputenc}
 \usepackage{microtype}
-\SetExtraKerning{encoding=*,font=*}{\textemdash={120,120}} % Add space around emdashes
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{tabularx}
 \usepackage[font=small]{caption}
-\microtypecontext{spacing=nonfrench}
-%\usepackage{subcaption}
-\usepackage{paralist}
+\usepackage{subcaption}
 \usepackage{xspace}
-\usepackage{soul}
-\newcommand{\note}[2]{\hl{[\textbf{#1:} #2]}\xspace}
-\newcommand{\nikita}[1]{\note{nikita}{#1}}
-\newcommand{\TODO}[1]{\hl{TODO: #1}\xspace}
-\newcommand{\TK}{\hl{TK}\xspace}
+\usepackage{dblfloatfix} % magic
+\usepackage{balance}
+\usepackage{paralist}
+\usepackage{wasysym}
+\usepackage{xparse}
+\NewDocumentCommand{\rot}{O{45} O{1em} m}{\makebox[#2][l]{\rotatebox{#1}{#3}}}%
+\urlstyle{rm}
 
-% Slight JAH fix to stop URLs from breaking after ``http:''
+% From CCS template:
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08emT\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+% Fix URL hyphenation (AH 12/2008)
 \def\UrlBreaks{\do-\do\.\do\@\do\\\do\!\do\_\do\|\do\;\do\>\do\]%
  \do\)\do\,\do\?\do\'\do+\do\=\do\#}
 \def\UrlBigBreaks{\do\:\do\/}%
-\urlstyle{rm}
 
-\widowpenalty=10000
-\clubpenalty=10000
+\newcommand{\todo}[1]{}
+\renewcommand{\todo}[1]{{\color{red} TODO: {#1}}}
+\newcommand{\TODO}[1]{}
+\renewcommand{\TODO}[1]{{\color{red} TODO: {#1}}}
+\newcommand{\TK}{}
+\renewcommand{\TK}{{\color{red}TK}\xspace}
 
 \renewcommand{\paragraph}[1]{\smallskip\noindent\textbf{#1\quad}}
 
+\copyrightyear{2019}
+\acmYear{2019}
+\acmConference[CCS '19]{2019 ACM SIGSAC Conference on Computer and Communications Security}{November 11--15, 2019}{London, United Kingdom}
+\acmBooktitle{2019 ACM SIGSAC Conference on Computer and Communications Security (CCS '19), November 11--15, 2019, London, United Kingdom}
+\acmPrice{15.00}
+\acmDOI{10.1145/3319535.3363218}
+\acmISBN{978-1-4503-6747-9/19/11}
+\setcopyright{rightsretained}
+
+\include{figures}
+
 \begin{document}
 
+\fancyhead{} % From CCS template.
 
-\date{}
-
-% make title bold and 14 pt font (Latex default is non-bold, 16 pt)
-%\title{\Large \bf Dark Decoys:
-%  Conjuring Proxies from Unused Address Space}
 \title{Conjure: Summoning Proxies from Unused Address Space}
 
-%\author{Anonymized for review}
-%for single author (just remove % characters)
-%\author{
-%{\rm Your N.\ Here}\\
-%Your Institution
-%\and
-%{\rm Second Name}\\
-%Second Institution
-%% copy the following lines to add more authors
-%% \and
-%% {\rm Name}\\
-%%Name Institution
-%} % end author
+\author{Sergey Frolov}\affiliation{University of Colorado Boulder}
+\author{Jack Wampler}\affiliation{University of Colorado Boulder}
+\author{Sze Chuen Tan}\affiliation{UIUC}
+\author{J. Alex Halderman}\affiliation{University of Michigan}
+\author{Nikita Borisov}\affiliation{UIUC}
+\author{Eric Wustrow}\affiliation{University of Colorado Boulder}
 
-
-
-
-
-%\newcommand{\scheme}{Dark Decoys\xspace}
 \newcommand{\scheme}{Conjure\xspace}
 
 %-------------------------------------------------------------------------------
@@ -139,6 +94,23 @@ and offers substantially better network performance.
 
 \end{abstract}
 
+\begin{CCSXML}
+  <ccs2012>
+  <concept>
+  <concept_id>10003033.10003083.10003014</concept_id>
+  <concept_desc>Networks~Network security</concept_desc>
+  <concept_significance>300</concept_significance>
+  </concept>
+  <concept>
+  <concept_id>10003456.10003462.10003480</concept_id>
+  <concept_desc>Social and professional topics~Censorship</concept_desc>
+  <concept_significance>300</concept_significance>
+  </concept>
+  </ccs2012>
+\end{CCSXML}
+
+\ccsdesc[300]{Networks~Network security}
+\ccsdesc[300]{Social and professional topics~Censorship}
 
 \keywords{anticensorship, proxies, network security}
 
@@ -1264,12 +1236,21 @@ stations at real ISPs.
 
 %-------------------------------------------------------------------------------
 
-\bibliographystyle{plain}
-\small
+\begin{acks}
+  The authors thank the incredible partner organizations that have
+  made deployment of Refraction Networking a reality, especially Merit
+  Network and Psiphon. We also thank \TODO{anyone else?} the
+  University of Colorado IT Security and Network Operations
+  staff. This material is based in part upon work supported by the
+  U.S. National Science Foundation under Awards \TODO{others?}
+  CNS-1518888 and OAC-1925476.
+\end{acks}
+
+\bibliographystyle{ACM-Reference-Format}
+\balance
 \bibliography{biblio}
 
-\appendix
-
-\input{rebuttal}
+%\appendix
+%\input{rebuttal}
 
 \end{document}
