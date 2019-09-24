@@ -797,6 +797,7 @@ network interface. A typical week of bandwidth seen on the tap is
 shown in Figure~\ref{fig:tap-bandwidth}, ranging from 2.4~Gbps to peaks above
 17~Gbps.
 
+\subsection{Performance}
 
 We evaluated the performance of a client from an India-based VPS,
 Figures~\ref{fig:upload} and~\ref{fig:download} show the upload and download as
@@ -859,15 +860,17 @@ services.
 %to respond to any client, and not just the original registering client.
 
 \subsubsection{IPv4}
-While \scheme composes well with IPv6, we can also support IPv4, with some
-careful caveats. First, in IPv4, there are substantially fewer addresses,
-allowing censors to easily \textbf{enumerate network prefixes} that pass by the ISP
-station to look for legitimate sites to whitelist. To address this, \scheme
+While \scheme works best with IPv6, it can also support IPv4, with some
+careful caveats.
+
+First, in IPv4, there are substantially fewer addresses,
+allowing censors to potentially \textbf{enumerate all the network prefixes}
+that pass by the ISP station, compose the list of innocuous sites,
+and block other websites, as they are being summoned by \scheme.
+To address this, \scheme
 phantom hosts are firewalled from all IPs other than the client that registered
-them. Thus, censors would not see them in an enumerating scan from a single
-vantage point before registration (when they do not exist), and blocking hosts
-not seen in such a scan would block legitimate hosts that firewalled themselves
-off from all but a few IPs. % Such firewall behavior is a best practice for...
+them, providing a reason why the address hasn't been seen in an enumerating scan,
+conducted by a censor from a single vantage point.
 Censors could attempt to scan the network from \emph{all} potential client
 vantage points, by co-opting client IPs to perform scans---a behavior previously
 observed by the Great Firewall of China to scan for Tor bridges~\cite{ensafi-tor}.
@@ -886,9 +889,10 @@ their scans.
 
 A second problem in IPv4 \scheme is that the limited range of IPs (and ports)
 makes it possible for a censor to \textbf{pre-image the hash} used to derive the phantom
-address from the seed. Even with the /16 of IPs and all 65K ports, a censor need
-only test an expected $2^{32}$ possible seeds to find one that would allow it
-to register for that phantom address. The censor could then register a suspected
+address from the seed. Even with the /16 of IPs and all 65K ports, in order to
+find a seed for any desired address a censor
+needs to only test an expected $2^{32}$ possible seeds.
+The censor could then register a suspected
 address, and see if it provides proxy access. If it does, the censor learns
 there is no legitimate service there, and can block it. To combat this, we
 allow only a single client to register for a particular phantom address at a
@@ -905,7 +909,7 @@ registration if a real host responds. Censors that try to register specific
 phantom proxies will be unable to distinguish if another user has registered it
 or a legitimate host is there, as in both cases we ignore the censor's
 registration. This also serves to prevent abuse by attackers that attempt
-to use the \scheme station to interfere with legitimate services.
+to use the \scheme station to interfere with innocuous services.
 
 
 %We emphasize that TapDance is already
@@ -941,11 +945,12 @@ to use the \scheme station to interfere with legitimate services.
 
 
 
-\subsubsection{IPv6 address entropy}
+\subsubsection{IPv6}
 \FigIpBits
 
-In IPv6 \scheme, we no longer need to worry about address enumeration or
-pre-image attacks. Our ISP routes a /32 IPv6 prefix, which provides $2^{96}$ potential
+In IPv6 \scheme address enumeration and pre-image attacks are infeasible due to a large amount of
+potential IP addresses.
+Our ISP routes a /32 IPv6 prefix, which provides $2^{96}$ potential
 phantom host IP addresses. However, IPv6 addresses often have long runs of 0
 bits in them, and rarely use all 128-bits equally.
 For instance, google.com has the address
