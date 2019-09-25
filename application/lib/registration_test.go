@@ -117,8 +117,11 @@ func TestRegisterForDetector(t *testing.T) {
 		t.Logf("Read %s from subscriber\n", msg.Payload)
 	}
 
+	// reconstruct IP from message
+	ip_string := fmt.Sprintf("%d.%d.%d.%d", msg.Payload[0], msg.Payload[1], msg.Payload[2], msg.Payload[3])
+
 	// check IP equality
-	if reg.DarkDecoy.Equal(net.ParseIP(msg.Payload)) == false {
-		t.Fatalf("Expected %v, got %v", reg.DarkDecoy, msg.Payload)
+	if reg.DarkDecoy.Equal(net.ParseIP(ip_string)) == false {
+		t.Fatalf("Expected %v, got %v", reg.DarkDecoy, net.ParseIP(msg.Payload))
 	}
 }

@@ -138,7 +138,7 @@ func registerForDetector(reg *DecoyRegistration) {
 	if err != nil {
 		fmt.Printf("couldn't connect to redis")
 	} else {
-		client.Publish(DETECTOR_REG_CHANNEL, reg.DarkDecoy.String())
+		client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To4()))
 		client.Close()
 	}
 }
