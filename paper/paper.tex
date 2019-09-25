@@ -678,44 +678,47 @@ We implemented our detector in approximately 1,800 lines of Rust (compared to
 over 5,000 lines for TapDance)\footnote{excluding (from both) about 3,000 lines
 of auto-generated protobuf code}.
 
-To achieve high-performance necessary to operate at 20~Gbps, we used
-PF\_RING~\cite{pfring} to load balance incoming packets over 4~CPU cores. PF\_RING
-supports balancing across cores based on flow (5-tuple) or source and
-destination IPs. However, both of these options present engineering challenges
-for \scheme that we must overcome.
-One issue is that registrations could be processed on a
-different core than the packets sent to that specific phantom host address. For
-instance, a client could have its registration handled by Core 1, while its
-packets to the phantom host address end up on Core 3, which doesn't know about the
-original registration.
+To achieve performance needed to operate at 20~Gbps, we used
+PF\_RING~\cite{pfring} to load balance incoming packets across 4~CPU cores,
+which each run a dedicated detector process.
+PF\_RING supports load balancing packets based on
+either their flow (5-tuple), or their source/destination IPs, which allows
+connections to be processed by a single process without
+requiring communication across independent cores.
 
-To address this, we used Redis~\cite{redis} to allow each process to broadcast
+However, in \scheme, registration connections and phantom proxy connections
+could end up being load balanced to different cores. In order for an individual
+detector process to forward phantom proxy connections to the application, it must
+know about the original registration, even if that registration was observed by a
+different core.
+To address this, we used Redis~\cite{redis} to allow each core's process to broadcast
 (publish) newly registered decoys to the other cores so they can
-add them to their local list of registered phantom host addresses.
-However, this introduces two new problems. First, a core might add a
-registration \emph{after} it has already received and processed packets destined
-for the specified phantom host. This typically isn't a problem when running on a
-single core, as packets are processed sequentially. Second, each core may
-timeout each phantom host at different times, potentially leading to differing
-behavior that is visible to a censor. For instance, if we used the
-source/destination IPs to load balance, a censor's packets to a phantom host could
-be processed by a different core than the client. If the censor waits for the
-known timeout before sending a probe, its core may have timed out that phantom host, while the client's core has refreshed the timeout of the phantom host due
-to active use.
+add them to their local list of registered phantom host addresses. Broadcasting
+registrations across all cores ensures that each detector process sees all
+registrations, and can forward phantom proxy connections accordingly.
 
-To address the first issue of asynchronous cores, we force the client to delay sending its connection
-to the phantom host until a short time after registration. In practice, we force
-the client to wait until the registration decoy responds before starting a
-connection with the registered phantom host. While the decoy response is
-unrelated to the station's processing, it serves as a conservative way to know
-the registration has had time to reach the station.
+A second problem arises when considering how to \emph{timeout} unused phantom proxies
+in the detector. When a phantom proxy is timed out, it no longer responds to any
+active probes. A naive implementation might simply have each core timeout unused
+phantom proxies after they go unused for a set time. However, this could leave
+one core (that sees active proxy use) forwarding packets to the application, while
+other cores (that do not see use) would timeout the proxy. A censor could probe the
+phantom proxy and observe this behavior: if the censor's packets are processed
+on a forwarding core, the censor can establish a TCP connection with the phantom
+application. Otherwise, if they are processed on a timed out core, the censor's packets
+will be ignored. Through multiple connections, the censor could use this strange
+behavior (of intermittent TCP response) to identify and block potential phantom
+proxies.
 
-To address the second issue of differing core timeouts, we implemented a new
+To address this issue of differing core timeouts, we implemented a new
 load-balancing algorithm in
-PF\_RING to select the core based solely on the destination IP address of the
-packet. We still must use Redis to tell all of the cores of new
-registrations, but only one core will be ultimately responsible for processing all of
-the packets sent to a given phantom host, regardless of who sends it or when it is sent.
+PF\_RING to select the core based only off the destination IP address of a
+packet. This means that \emph{all} packets sent to a particular phantom proxy address
+are processed by the same detector core, which allows the phantom proxy's timeout state
+to be consistent regardless of what source attempts to connect to it.
+%We still must use Redis to tell all of the cores of new
+%registrations, but only one core will be ultimately responsible for processing all of
+%the packets sent to a given phantom host, regardless of who sends it or when it is sent.
 
 
 \subsection{Client}
