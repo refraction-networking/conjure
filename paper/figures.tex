@@ -229,7 +229,7 @@
         connection would need to take over the clients IP address in a precise window (after the 
         registration but before the client connects to the phantom) and correctly guess the phantom host's 
         IP address (or connect to all possible phantom IPs) before the active probe traffic gets to the local application. 
-        At this point their connection will fail in a manor specific to the transport that the client specified
+        At this point their connection will fail in a manner specific to the transport that the client specified
         in the registration (e.g. connecting to OSSH without knowledge of the pre-shared secret).}
     \label{fig:implementation}
 \end{figure}
@@ -242,7 +242,7 @@
     \includegraphics[width=\columnwidth]{figures/refraction-v1}
     \vspace{-3pt}
 
-    \caption{\textbf{First generation systems}\rm for Refraction Networking, such as Telex and Cirripede, operated as inline network elements, with the ability to observe traffic and block specific flows. ISPs worried that if the inline element failed, it could bring down the network.\looseness=-1}
+    \caption{\textbf{First generation systems}\rm\ for Refraction Networking, such as Telex and Cirripede, operated as inline network elements, with the ability to observe traffic and block specific flows. ISPs worried that if the inline element failed, it could bring down the network.\looseness=-1}
     \label{fig:refraction-v1}
   \end{subfigure}
   \vspace{16pt}
@@ -251,7 +251,7 @@
     \includegraphics[width=\columnwidth]{figures/tapdance}
     \vspace{-3pt}
 
-    \caption{\textbf{TapDance}\rm is a second-generation Refraction Network scheme that operates without flow blocking, needing only to passively observe traffic and inject packets. TapDance has recently been deployed at a mid-size ISP, but the techniques used to silence the decoy site and participate in the client--decoy TCP connection mid-stream add significant complexity, performance bottlenecks, and detection risk.}
+    \caption{\textbf{TapDance}\rm\ is a second-generation Refraction Network scheme that operates without flow blocking, needing only to passively observe traffic and inject packets. TapDance has recently been deployed at a mid-size ISP, but the techniques used to silence the decoy site and participate in the client--decoy TCP connection mid-stream add significant complexity, performance bottlenecks, and detection risk.}
     \label{fig:tapdance}
   \end{subfigure}
   \vspace{16pt}

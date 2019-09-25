@@ -165,7 +165,7 @@ A family of techniques called Refraction Networking~\cite{telex11,cirripede11,cu
 as Decoy Routing, has made promising steps towards that goal.
 These techniques operate in the network's core, at cooperating Internet Service Providers
 (ISPs) outside censoring countries~\cite{refraction-site}.  Clients access circumvention services by connecting to a ``decoy site''---any uncensored website for which the connection travels over a participating ISP\@.  Upon recognizing a steganographic signal from the client, the ISP modifies the connection response to return censored content requested by the user.
-Censors cannot easily block access without also blocking legitimate connections to the decoy sites---collateral damage that may be prohibitive for censors if Refraction is widely deployed~\cite{robinson2013collateral}.
+Censors cannot easily block access without also blocking legitimate connections to the decoy sites---collateral damage that may be prohibitive for censors if Refraction Networking is widely deployed~\cite{robinson2013collateral}.
 
 However, deploying such schemes is more difficult than with most
 edge-based circumvention techniques, since ISPs must be convinced to
@@ -284,7 +284,7 @@ deployment~\cite{frolov2017isp}.  Compared to TapDance, we find that
 (Section~\ref{sec:evaluation}): on average, \scheme has 20\% lower latency,
 14\% faster download bandwidth, and over 1400 times faster upload bandwidth.
 In addition, \scheme provides significantly
-more flexibility than existing Refraction protocols, allowing maintainers to
+more flexibility than existing Refraction Networking protocols, allowing maintainers to
 respond to future censor techniques.
 We believe that these advantages
 make \scheme a strong choice for future Refraction Networking deployments.
@@ -325,8 +325,8 @@ deployed in and the prefixes phantom hosts are selected from, but that blocking 
 networks outright brings a collateral
 damage the censor is unwilling to suffer. Instead, the censor aims to identify
 the addresses that are phantom hosts, and block only those. We note this
-assumption supposes that the deployment is large enough to deter routing around
-decoy attacks~\cite{rad12,true-cost-rad}.
+assumption supposes that the censor does not mount effective routing
+decoy attacks~\cite{rad12,true-cost-rad}; we discuss these attacks further in Section~\ref{sec:placement-rad}.
 
 We allow the censor access to the client to register and use its own phantom hosts, 
 so the system should ensure that these will not reveal the phantom hosts of other users. The
@@ -366,7 +366,7 @@ traffic to a proxy application specified by the client in their registration
 providing a probe resistant tunnel. Figure~\ref{fig:overview} describes a 
 high-level overview of the \scheme registration and connection behavior.
 
-Similar to previous schemes, our design does not require expensive in-line
+Similar to TapDance~\cite{tapdance14}, our design does not require expensive in-line
 flow blocking and is accomplished with only a passive tap at the ISP, imparting
 little to no burden on their infrastructure and service reliability.
 Our architecture is also modular, in that the registration and connection steps operate
@@ -447,7 +447,7 @@ Filtering by client IP and phantom IP also prevents censors from enumerating the
 address space before hand, as they would have to do so from every potential
 client IP address. Simply scanning the prefixes with ZMap~\cite{zmap13} from a
 single vantage point would not reveal hosts that only respond to specific IPs
-(e.g. firewalled subnets).
+(e.g., firewalled subnets).
 
 
 \subsection{Transports}
@@ -560,7 +560,7 @@ if widely adopted, Encrypted SNI (ESNI) would offer a powerful solution for
 \scheme applications by allowing the client to use plain TLS as the transport
 while remaining hidden from the censor.
 Censors could still try to actively probe with guesses for the SNI,
-servers could respond with generic ``Unknown SNI'' errors. If such responses
+but servers could respond with generic ``Unknown SNI'' errors. If such responses
 were common for incorrect SNI, the censor's efforts to identify phantom hosts
 would be frustrated.
 
@@ -608,12 +608,12 @@ if a phantom host at an IP address pretends to be a domain (\texttt{example.com}
 globally resolves to a single IP address, the censor could also trivially
 identify and block the phantom host.
 
-\textit{Nearby sites --} pick websites that are
+\textit{Nearby sites ---} pick websites that are
 legitimately hosted in or near the network of the phantom host addresses
 effectively creating copies of legitimate sites. However, other signals such as 
 DNS may reveal the true mask site.
 
-\textit{Popular sites --} choose mask sites from a list such as the Alexa
+\textit{Popular sites ---} choose mask sites from a list such as the Alexa
 top site~\cite{alexa-top500} list. Although it may be wise to avoid
 sites that are obviously not hosted in the phantom host address range, such as
 large companies that run their own data centers and own their own ASN.
@@ -621,7 +621,7 @@ The list could also be filtered to domains that resolve to different IP
 addresses from different vantage points, making it harder for a censor to know
 if a phantom host corresponds to a domain's IP.
 
-\textit{Passive observation --} collect sites by passively observing DNS requests, TLS
+\textit{Passive observation ---} collect sites by passively observing DNS requests, TLS
 SNI, or certificates that pass by at the network tap. This would allow for building a realistic set
 of sites that are plausibly in the vicinity of the phantom host addresses
 that pass by the tap. 
