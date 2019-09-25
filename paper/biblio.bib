@@ -63,12 +63,12 @@
 }
 
 @InProceedings{telex11,
-    author = {Eric Wustrow and Scott Wolchok and Ian Goldberg and J. Alex Halderman},
-    title = {Telex: Anticensorship in the Network Infrastructure},
-    booktitle = {20th USENIX Security Symposium},
-    month = aug,
-    year = 2011,
-	note = {\url{https://telex.cc}},
+  author = {Eric Wustrow and Scott Wolchok and Ian Goldberg and J. Alex Halderman},
+  title = {Telex: Anticensorship in the Network Infrastructure},
+  booktitle = {20th USENIX Security Symposium},
+  month = aug,
+  year = 2011,
+  _note = {\url{https://telex.cc}},
 }
 
 @inproceedings{cirripede11,
@@ -89,10 +89,10 @@
     location = {Raleigh, North Carolina, USA},
     pages = {85--96},
     numpages = {12},
-    url = {http://doi.acm.org/10.1145/2382196.2382209},
-    doi = {10.1145/2382196.2382209},
+    _url = {http://doi.acm.org/10.1145/2382196.2382209},
+    _doi = {10.1145/2382196.2382209},
     acmid = {2382209},
-    address = {New York, NY, USA},
+    _address = {New York, NY, USA},
     keywords = {bgp, decoy routing, telex, cirripede, censorship},
 }
 
@@ -183,9 +183,10 @@
 }
 
 @misc{pfring,
-    author = {Ntop},
+    key = {Ntop},
     title = {{PF\_RING}},
-    note = {\url{http://www.ntop.org/products/pf_ring}}
+    note = {\url{http://www.ntop.org/products/pf_ring}},
+    year = {{}},
 }
 
 @inproceedings{fastclick,
@@ -283,6 +284,7 @@
   author={{Alexa Internet, Inc.}},
   note={\url{https://www.alexa.com/topsites}},
   urldate = {2019-02-15},
+  year = {2019},
 }
 
 @misc{active-probe,
@@ -303,7 +305,7 @@
 }
 
 @misc{refraction-site,
-  key={refraction routing internet},
+  key={Refraction Routing Site},
   title={Refraction {N}etworking: {I}nternet freedom in the network's core},
   note={\url{https://refraction.network/}}
 }
@@ -382,33 +384,37 @@
 }
 
 @misc{uproxy,
-    key={uproxy},
-    title = {{uProxy}},
-    note = {\url{https://www.uproxy.org/}}
+  key={uproxy},
+  title = {{uProxy}},
+  note = {\url{https://www.uproxy.org/}},
 }
 
 @misc{lantern,
-    key={lantern},
-    title = {{Lantern}},
-    note = {\url{https://getlantern.org/}}
+  key={lantern},
+  title = {{Lantern}},
+  note = {\url{https://getlantern.org/}},
+  year = {{}},
 }
 
 @misc{psiphon,
-    key={psiphon},
-    title = {{Psiphon}},
-    note = {\url{https://psiphon.ca}}
+  key={Psiphon},
+  title = {{Psiphon}},
+  note = {\url{https://psiphon.ca}},
+  year = {{}},
 }
 
 @misc{obfs4,
-    author = {{The Tor Project}},
-    title = {{obfs4} (The obfourscator) specification},
-    note = {\url{https://gitweb.torproject.org/pluggable-transports/obfs4.git/tree/doc/obfs4-spec.txt}}
+  key = {The Tor Project},
+  title = {{obfs4} Specification},
+  note = {\url{https://gitweb.torproject.org/pluggable-transports/obfs4.git/tree/doc/obfs4-spec.txt}},
+  year = {{}},
 }
 
 @Misc{signal,
   title     = {{Signal Private Messenger}},
-  author    = {Open Whisper Systems},
-  note  = {\url{https://signal.org/}}
+  key    = {Open Whisper Systems},
+  note  = {\url{https://signal.org/}},
+  year = {{}},
 }
 
 @Misc{signal-domain-fronting,
@@ -463,7 +469,7 @@
       volume = "2018",
       number = "3",
 			pages = {43-62},
-      url = "https://content.sciendo.com/view/journals/popets/2018/3/article-p43.xml"
+      _url = "https://content.sciendo.com/view/journals/popets/2018/3/article-p43.xml"
 }
 
 @inproceedings {multiflow,
@@ -471,8 +477,8 @@ author = {Victoria Manfredi and Pi Songkuntham},
 title = {MultiFlow: Cross-Connection Decoy Routing using {TLS} 1.3 Session Resumption},
 booktitle = {8th {USENIX} Workshop on Free and Open Communications on the Internet ({FOCI} 18)},
 year = {2018},
-address = {Baltimore, MD},
-url = {https://www.usenix.org/conference/foci18/presentation/manfredi},
+_address = {Baltimore, MD},
+_url = {https://www.usenix.org/conference/foci18/presentation/manfredi},
 publisher = {{USENIX} Association},
 }
 
@@ -500,7 +506,7 @@ title = {Optimizing the Placement of Implicit Proxies},
 author = {Jacopo Cesareo and Josh Karlin and Michael Shapira and Jennifer Rexford},
 year = 2012,
 month = jun,
-howpublished = {\url{http://www.cs.princeton.edu/~jrex/papers/decoy-routing.pdf}}
+_howpublished = {\url{http://www.cs.princeton.edu/~jrex/papers/decoy-routing.pdf}}
 }
 
 @inproceedings{true-cost-rad,
@@ -508,11 +514,10 @@ howpublished = {\url{http://www.cs.princeton.edu/~jrex/papers/decoy-routing.pdf}
                Edmund L. Wong and
                Vitaly Shmatikov},
   title     = {No Direction Home: The True Cost of Routing Around Decoys},
-  booktitle = {21st Annual Network and Distributed System Security Symposium, {NDSS}
-               2014, San Diego, California, USA, February 23-26, 2014},
+  booktitle = {21st Annual Network and Distributed System Security Symposium, {NDSS} 2014},
   publisher = {The Internet Society},
   year      = {2014},
-  url       = {https://www.ndss-symposium.org/ndss2014/no-direction-home-true-cost-routing-around-decoys},
+  _url       = {https://www.ndss-symposium.org/ndss2014/no-direction-home-true-cost-routing-around-decoys},
   timestamp = {Tue, 16 Jan 2018 13:23:48 +0100},
   biburl    = {https://dblp.org/rec/bib/conf/ndss/HoumansadrWS14},
   bibsource = {dblp computer science bibliography, https://dblp.org}
@@ -521,7 +526,7 @@ howpublished = {\url{http://www.cs.princeton.edu/~jrex/papers/decoy-routing.pdf}
 @inproceedings{game-of-decoys,
   author    = {Milad Nasr and
                Amir Houmansadr},
-  editor    = {Edgar R. Weippl and
+  _editor    = {Edgar R. Weippl and
                Stefan Katzenbeisser and
                Christopher Kruegel and
                Andrew C. Myers and
@@ -532,8 +537,8 @@ howpublished = {\url{http://www.cs.princeton.edu/~jrex/papers/decoy-routing.pdf}
   pages     = {1727--1738},
   publisher = {{ACM}},
   year      = {2016},
-  url       = {https://doi.org/10.1145/2976749.2978367},
-  doi       = {10.1145/2976749.2978367},
+  _url       = {https://doi.org/10.1145/2976749.2978367},
+  _doi       = {10.1145/2976749.2978367},
   timestamp = {Tue, 06 Nov 2018 11:07:31 +0100},
   biburl    = {https://dblp.org/rec/bib/conf/ccs/NasrH16},
   bibsource = {dblp computer science bibliography, https://dblp.org}
@@ -550,11 +555,11 @@ howpublished = {\url{http://www.cs.princeton.edu/~jrex/papers/decoy-routing.pdf}
  location = {Orlando, FL, USA},
  pages = {577--589},
  numpages = {13},
- url = {http://doi.acm.org/10.1145/3134600.3134608},
- doi = {10.1145/3134600.3134608},
+ _url = {http://doi.acm.org/10.1145/3134600.3134608},
+ _doi = {10.1145/3134600.3134608},
  acmid = {3134608},
  publisher = {ACM},
- address = {New York, NY, USA},
+ _address = {New York, NY, USA},
  keywords = {Anti-Censorship, Decoy Routing, Internet topology, Traceroute},
 }
 
@@ -565,11 +570,11 @@ howpublished = {\url{http://www.cs.princeton.edu/~jrex/papers/decoy-routing.pdf}
  series = {FC'11},
  year = {2012},
  isbn = {978-3-642-27575-3},
- location = {Gros Islet, St. Lucia},
+ _location = {Gros Islet, St. Lucia},
  pages = {260--267},
  numpages = {8},
- url = {http://dx.doi.org/10.1007/978-3-642-27576-0_21},
- doi = {10.1007/978-3-642-27576-0_21},
+ _url = {http://dx.doi.org/10.1007/978-3-642-27576-0_21},
+ _doi = {10.1007/978-3-642-27576-0_21},
  acmid = {2186405},
  publisher = {Springer-Verlag},
  address = {Berlin, Heidelberg},
@@ -582,11 +587,10 @@ howpublished = {\url{http://www.cs.princeton.edu/~jrex/papers/decoy-routing.pdf}
                Nicholas Hopper},
   title     = {{rBridge}: User Reputation based {Tor} Bridge Distribution with Privacy
                Preservation},
-  booktitle = {20th Annual Network and Distributed System Security Symposium, {NDSS}
-               2013, San Diego, California, USA, February 24-27, 2013},
+  booktitle = {20th Annual Network and Distributed System Security Symposium, {NDSS} 2013},
   publisher = {The Internet Society},
   year      = {2013},
-  url       = {https://www.ndss-symposium.org/ndss2013/rbridge-user-reputation-based-tor-bridge-distribution-privacy-preservation},
+  _url       = {https://www.ndss-symposium.org/ndss2013/rbridge-user-reputation-based-tor-bridge-distribution-privacy-preservation},
   timestamp = {Tue, 16 Jan 2018 13:23:48 +0100},
   biburl    = {https://dblp.org/rec/bib/conf/ndss/WangLBH13},
   bibsource = {dblp computer science bibliography, https://dblp.org}
@@ -603,8 +607,8 @@ howpublished = {\url{http://www.cs.princeton.edu/~jrex/papers/decoy-routing.pdf}
   number    = {4},
   pages     = {4--20},
   year      = {2016},
-  url       = {https://doi.org/10.1515/popets-2016-0026},
-  doi       = {10.1515/popets-2016-0026},
+  _url       = {https://doi.org/10.1515/popets-2016-0026},
+  _doi       = {10.1515/popets-2016-0026},
   timestamp = {Sat, 27 May 2017 14:24:30 +0200},
   biburl    = {https://dblp.org/rec/bib/journals/popets/DouglasRPC16},
   bibsource = {dblp computer science bibliography, https://dblp.org}
@@ -633,7 +637,7 @@ year = 2017
   booktitle = {Computer and Communications Security},
   publisher = {ACM},
   year = {2012},
-  url = {https://hatswitch.org/~nikita/papers/censorspoofer.pdf},
+  _url = {https://hatswitch.org/~nikita/papers/censorspoofer.pdf},
 }
 
 
@@ -641,9 +645,9 @@ year = 2017
   author = {Arun Dunna and Ciar\'{a}n O'Brien and Phillipa Gill},
   title = {Analyzing {China}'s Blocking of Unpublished {Tor} Bridges},
   booktitle = {Free and Open Communications on the Internet},
-  publisher = {USENIX},
+  publisher = {8th {USENIX} Workshop on Free and Open Communications on the Internet (FOCI 18)},
   year = {2018},
-  url = {https://www.usenix.org/system/files/conference/foci18/foci18-paper-dunna.pdf},
+  _url = {https://www.usenix.org/system/files/conference/foci18/foci18-paper-dunna.pdf},
 }
 
 @inproceedings{tls-fingerprint,
@@ -656,9 +660,9 @@ year = 2017
 
 @misc{tls13,
   howpublished =  {RFC 8446},
-  doi =   {10.17487/RFC8446},
-  url =   {https://rfc-editor.org/rfc/rfc8446.txt},
-        author =  {Eric Rescorla},
+  _doi =   {10.17487/RFC8446},
+  _url =   {https://rfc-editor.org/rfc/rfc8446.txt},
+  author =  {Eric Rescorla},
   title =   {The Transport Layer Security ({TLS}) Protocol Version 1.3},
   year =    2018,
   month =   aug,
@@ -670,8 +674,8 @@ year = 2017
 	institution =	{Internet Engineering Task Force},
 	publisher =	{Internet Engineering Task Force},
 	note =		{Work in Progress},
-	url =		{https://datatracker.ietf.org/doc/html/draft-ietf-tls-esni-02},
-        author =	{Eric Rescorla and Kazuho Oku and Nick Sullivan and Christopher A. Wood},
+	_url =		{https://datatracker.ietf.org/doc/html/draft-ietf-tls-esni-02},
+  author =	{Eric Rescorla and Kazuho Oku and Nick Sullivan and Christopher A. Wood},
 	title =		{Encrypted Server Name Indication for {TLS} 1.3},
 	pagetotal =	21,
 	year =		2018,
@@ -682,20 +686,23 @@ year = 2017
 
 @misc{zmq,
     title = {{ZeroMQ Distributed Messaging}},
-    author={ZeroMQ},
-    note = {\url{http://zeromq.org/}}
+    key={ZeroMQ},
+    note = {\url{http://zeromq.org/}},
+    year = {{}},
 }
 
 @misc{redis,
     author = {Redis Labs},
     title = {{Redis is open source, in-memory data structure store}},
-    note = {\url{https://redis.io/}}
+    note = {\url{https://redis.io/}},
+    year = {2019},
 }
 
 @misc{utls,
     author = {Refraction Networking},
     title = {{uTLS---fork of the Go standard TLS library, providing low-level access to the ClientHello for mimicry purposes.}},
-    note = {\url{https://github.com/refraction-networking/utls/}}
+    note = {\url{https://github.com/refraction-networking/utls/}},
+    year = {2019},
 }
 
 @misc{tapdance-source,
@@ -733,13 +740,13 @@ year = 2017
 
 
 @inproceedings{lincoln2012,
-        title = {Bootstrapping Communications into an Anti-Censorship System},
-          author={Lincoln, Patrick and Mason, Ian and Porras, Phillip A and Yegneswaran, Vinod and Weinberg, Zachary and Massar, Jeroen and Simpson, William Allen and Vixie, Paul and Boneh, Dan},
-        booktitle = {Presented as part of the 2nd {USENIX} Workshop on Free and Open Communications on the Internet},
-        year = {2012},
-        address = {Bellevue, WA},
-        url = {https://www.usenix.org/conference/foci12/workshop-program/presentation/Lincoln},
-        publisher = {{USENIX}},
+    title = {Bootstrapping Communications into an Anti-Censorship System},
+    author={Lincoln, Patrick and Mason, Ian and Porras, Phillip A and Yegneswaran, Vinod and Weinberg, Zachary and Massar, Jeroen and Simpson, William Allen and Vixie, Paul and Boneh, Dan},
+    booktitle = {2nd {USENIX} Workshop on Free and Open Communications on the Internet},
+    year = {2012},
+    _address = {Bellevue, WA},
+    _url = {https://www.usenix.org/conference/foci12/workshop-program/presentation/Lincoln},
+    publisher = {{USENIX}},
 }
 
 @misc{tor-bridge-blocking-blog,
@@ -765,27 +772,30 @@ year = 2017
   school = {University of California, Berkeley},
   month = dec,
   year = 2017,
-  url = {https://www.bamsoftware.com/papers/thesis/},
+  _url = {https://www.bamsoftware.com/papers/thesis/},
 }
 
 @inproceedings{china-blocking-tor,
   title = {How the {Great} {Firewall} of {China} is Blocking {Tor}},
-  booktitle = {Presented as part of the 2nd {USENIX} Workshop on Free and Open Communications on the Internet},
+  _booktitle = {Presented as part of the 2nd {USENIX} Workshop on Free and Open Communications on the Internet},
+  booktitle = {2nd {USENIX} Workshop on Free and Open Communications on the Internet},
+  author= {Winter,Philipp  and Lindskog, Stefan}, 
   year = {2012},
-  address = {Bellevue, WA},
-  url = {https://www.usenix.org/conference/foci12/workshop-program/presentation/Winter},
+  _address = {Bellevue, WA},
+  _url = {https://www.usenix.org/conference/foci12/workshop-program/presentation/Winter},
   publisher = {{USENIX}},
 }
 
 @misc{shadowsocks, 
   title={Shadowsocks: A secure {SOCKS5} proxy}, 
-  url={https://shadowsocks.org/assets/whitepaper.pdf}, 
-  journal={Shadowsocks}
+  _url={https://shadowsocks.org/assets/whitepaper.pdf}, 
+  journal={Shadowsocks},
+  year=2019,
+  month = jan,
 }
 
-
 @misc{tor-metrics,
-   title={Tor Metrics - China},
+  title={Tor Metrics - China},
   author={Tor Project},
   url={https://metrics.torproject.org/userstats-bridge-combined.html?start=2019-05-31&end=2019-08-29&country=cn},
   year=2019
