@@ -462,7 +462,7 @@ inspection. Second, the endpoint must resist \emph{active probes} by the censor 
 does not know some shared secret). 
 
 Any protocol that satisfies these criteria can be used as an effective transport
-with \scheme. In this section, we describe various existing protocols (OSSH and obfuscated Obfs4) as well
+with \scheme. In this section, we describe various existing protocols (OSSH and obfs4) as well
 as introduce our own (Mask sites, TLS 1.3 eSNI, and phantom WebRTC clients) that
 can be used in \scheme, and evaluate how each meet the necessary requirements.
 Table~\ref{tab:applications} compares the application protocols. \scheme uses a modular 
@@ -567,9 +567,10 @@ would be frustrated.
 \paragraph{Mask Sites}
 \label{sec:mask-sites}
 
-Working with currently popular implementations of TLS we overcome the active 
-and passive probing challenges by mimicking an existing mask site. To a censor, this site
-will be difficult to distinguish from the actual site, making it expensive for
+Another option to overcome active and passive probing attacks is to mimic existing TLS sites.
+In this application, we simply forward traffic between any connecting clients
+and a real TLS site. To a censor, our phantom site
+will be difficult to distinguish from the actual ``mask'' site, making it expensive for
 them to block without potentially blocking the real site. TLS connections to the
 \scheme station will terminate exactly as connections to the mask site would, with
 \scheme acting as a transparent TCP-layer proxy between the client and mask site.
@@ -592,7 +593,7 @@ The \scheme station can determine if the client did this by trial decryption wit
 the master secret derived from the known seed shared at registration. If it succeeds, the
 client has proved knowledge of the seed, and the application can
 respond as a proxy. If not, the application simply continues to forward data
-between the client and the mask site, in case a clients IP was taken over by
+between the client and the mask site, in case a client's IP was taken over by
 a censor after registration. As the censor does not have knowledge of
 the \textbf{seed} used in registration, it cannot coerce the application to
 appear as anything besides the mask site.
@@ -604,8 +605,8 @@ Selecting which sites to masquerade as must be done carefully to avoid censors
 being able to detect obvious choices. For example, if a small university network
 has a phantom host in their network that appears to be \texttt{apple.com}, it
 would be easy for a censor to block as a likely non-legitimate host. Likewise,
-if a phantom host at an IP address pretends to be a domain (\texttt{example.com}) that
-globally resolves to a single IP address, the censor could also trivially
+if a phantom host at an IP address pretends to be a domain that
+globally resolves to a single (different) IP address, the censor could also trivially
 identify and block the phantom host.
 
 \textit{Nearby sites ---} pick websites that are
