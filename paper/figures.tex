@@ -4,20 +4,20 @@
     \centering
     \includegraphics[width=\linewidth,clip]{figures/dark-decoy-flow2.png}
     \caption{\textbf{\scheme Operations}\,---\,\rm%
-        A \scheme session is constructed in two pieces. First a client registers by sending a tls connection
-        to the Decoy host (see Figure 2c) with a steganographically tagged payload.
-        This registration contains the true address that the client would like to connect to and a seed 
-        which the \scheme station uses to derive the Phantom IP address for the session(green dashed flow). 
-        Second The client derives the same 
-        Phantom IP address and connects directly to it using the proxy protocol (e.g. OSSH) that they specified in
-        their registration (purple dotted flow). The station identifies registered packets by source IP, destination IP,
-        and destination port (client IP, phantom IP, and phantom port respectively). The traffic is passed 
-        to a proxy server handling the specific proxy specified by the client then redirected to the 
-        covert address that the client indicated in their registration. 
+        A \scheme session is constructed in two pieces. First a client registers by sending a TLS connection
+        to the decoy host (see Figure 2c) with a steganographically tagged payload.
+        This registration contains the true ``covert'' address that the client would like to connect to and a seed 
+        which the \scheme station uses to derive the Phantom IP address for the session (green dashed flow). 
+        Second, the client derives the same 
+        Phantom IP address and connects directly to it using the proxy protocol (e.g. OSSH) specified in
+        the registration (purple dotted flow). The station identifies registered packets by source IP, destination IP,
+        and destination port (client IP, phantom IP and port respectively). The traffic is passed 
+        to a proxy server handling the specific proxy protocol, which ultimately proxies traffic to
+        the covert address.
         \\\hspace{\textwidth}
-        Secrets for the individual proxy services are shared out of band or derived from the shared secret 
-        between the client and the station such that an adversary attempting to probe a connection will be
-        unable to connect to the proxy service. 
+        Secrets for the individual application proxy service are shared out of band or derived from the secret seed shared
+        between client and station during registration, preventing an adversary from being
+        able to successfully connect to the application in follow up probes.
     }
     \label{fig:overview}
 \end{figure}
