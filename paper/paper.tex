@@ -775,7 +775,7 @@ application parses the handshake, forwarding packets back and forth between
 client and mask site without modification, extracting the server and client
 randoms. The application attempts to decrypt the first application data record
 from the client using a key derived from the secret seed, client, and server
-randoms. We use the uTLS library~\cite{utls} on both the application and client
+randoms. We use the uTLS library~\cite{utls,tls-fingerprint} on both the application and client
 to allow us to change the TLS secrets being used after the handshake.
 
 \FigTapBandwidth
@@ -805,8 +805,8 @@ shown in Figure~\ref{fig:tap-bandwidth}, ranging from 2.4~Gbps to peaks above
 
 \subsection{Performance}
 
-We evaluated the performance of a client from an India-based VPS,
-Figures~\ref{fig:upload} and~\ref{fig:download} show the upload and download as
+We evaluated the performance of a client from an India-based VPS.
+Figures~\ref{fig:upload} and~\ref{fig:download} show the upload and download bandwidth as
 measured by iperf for TapDance, our \scheme implementation (using the mask site application),
 and a direct connection to our iperf server in the ISP's network.
 
