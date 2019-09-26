@@ -1057,7 +1057,7 @@ connect to an \texttt{obfs4} server without knowledge of the secret and see if
 it provides proxy access) do not work
 against \texttt{obfs4}. In addition, although China is effective at blocking
 \texttt{obfs3}, the more recent probe-resistant \texttt{obfs4} remains a viable
-proxy in the country
+proxy in the country.\footnote{E.g., \url{https://metrics.torproject.org/userstats-bridge-combined.html?start=2019-06-27&end=2019-09-25&country=cn} shows \texttt{obfs4} clients from China successfully using Tor.}
 
 
 \paragraph{Mask sites}
@@ -1206,9 +1206,9 @@ incorporate state of the art censorship circumvention tools and resist
 nation-state censors. 
 
 One obvious future direction is to study new options for registration and proxy transport. For instance, while 
-\scheme currently uses a refraction networking covert channel for registration, we could potentially 
+\scheme currently uses a TapDance- style covert channel for registration, we could potentially 
 cut down on the overhead of one-time registration by using port-knocking or using a 
-Telex-style~\cite{telex11} tag (in the Client Hello rather than Application Data).
+Telex-style~\cite{telex11} tag (in the ClientHello rather than Application Data).
 
 \paragraph{Client-side applications}
 \scheme provides an interesting opportunity to explore
