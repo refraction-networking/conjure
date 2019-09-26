@@ -216,7 +216,7 @@ client-to--decoy connection:
 
 In this paper, we present \textbf{\scheme}, a Refraction
 Networking protocol that overcomes these challenges while retaining
-TapDance's ISP-friendly deployment requirements~\footnote{
+TapDance's ISP-friendly deployment requirements\footnote{
 We have released the open source implementation of the Conjure client at 
 \url{https://github.com/refraction-networking/gotapdance/tree/dark-decoy}.}.
 Our key innovation is an architecture that avoids
@@ -378,7 +378,7 @@ deployment in Section~\ref{sec:implementation}.
 
 \subsection{Registration}
 \label{sec:registration}
-We use a form of refraction networking similar to Tapdance to register directly with
+We use a form of Refraction Networking similar to Tapdance to register directly with
 the station, though \scheme registration is significantly simpler and more difficult
 to detect than vanilla Tapdance. This is because registration flows are unidirectional; 
 a client communicates their intent to register to the station without any 
@@ -729,7 +729,7 @@ We created a \scheme client and integrated it with the Psiphon~\cite{psiphon}
 anticensorship client. Psiphon has millions of users in censored countries, and
 we are in the early stages of rolling \scheme out to real-world users.
 
-Our \scheme client is written in Golang, and uses the refraction networking tagging
+Our \scheme client is written in Golang, and uses the Refraction Networking tagging
 schema (Section~\ref{sec:registration}) for
 registration. We note that this protocol will be more difficult for censors to observe
 than normal TapDance because it consists of only a single (complete) request, and the station does
