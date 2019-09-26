@@ -1,6 +1,6 @@
 \section{Background}
 
-Refraction networking operates by injecting covert communication inside a
+Refraction Networking operates by injecting covert communication inside a
 client's HTTPS connection with a reachable site, also known as a decoy site. In
 a regular HTTPS session, a client establishes a TCP connection, performs a TLS
 handshake with a destination site, sends an encrypted web request, and
@@ -14,7 +14,7 @@ communication.
 
 \FigEvolution
 
-One of the key challenges for refraction networking is in taking over a session. The station must start responding to the client's traffic as if it were the decoy destination, and at the same time prevent the destination from sending its own responses back to the client. A simple approach is to have the refraction station act as an inline transparent proxy (Figure~\ref{fig:refraction-v1}) that forwards the traffic between the client and the decoy site. After a TLS handshake has been completed, the station terminates the connection with the decoy site by sending a TCP reset and takes over the session with the client.
+One of the key challenges for Refraction Networking is in taking over a session. The station must start responding to the client's traffic as if it were the decoy destination, and at the same time prevent the destination from sending its own responses back to the client. A simple approach is to have the refraction station act as an inline transparent proxy (Figure~\ref{fig:refraction-v1}) that forwards the traffic between the client and the decoy site. After a TLS handshake has been completed, the station terminates the connection with the decoy site by sending a TCP reset and takes over the session with the client.
 
 An inline element, however, can significantly affect the reliability and performance of the regular, non-refraction traffic of an ISP. Cirripede~\cite{cirripede11} and Telex~\cite{telex11} attempted to mitigate this by dynamically adding router rules to forward only a subset of traffic from a registered client or an active session through the element, but this nevertheless presented a deployability challenge.
 
@@ -28,4 +28,4 @@ The tap-based approach, however, has some disadvantages. A decoy site will only 
 %The registration session is used to send a signal to the station to let RS know that the client plans to use dark sessions and to establish a seed to be used in future communications (\cref{XXX}); the RS only passively observes this connection without any interference. The dark session connects to a dark address that is not routed to any host; the RS instead acts as a remote endpoint for the entirety of the connection, starting with the TCP handshake. 
 This design obviates the need for taking over a session already in progress, which both simplifies the implementation and eliminates certain attacks, as we will discuss in Section~\ref{sec:attacks}.
 
-\paragraph{Registration Signal} In all implementations of refraction networking, a client must send a covert signal to the station to initiate communication. This covert signal is  embedded inside communication fields that must be indistinguishable from random by a censor without access to a secret/private key available to the station. Past implementations have used TCP initial sequence numbers~\cite{cirripede11}, the ClientRandom field inside a TLS handshake~\cite{curveball11,telex11}, and the encrypted body of an HTTPS request~\cite{tapdance14}. In principle \scheme can use any of these mechanisms for registration, but in our prototype we used the HTTPS request body as it offers the greatest flexibility for the amount of data that can be sent with the registration.
+\paragraph{Registration Signal} In all implementations of Refraction Networking, a client must send a covert signal to the station to initiate communication. This covert signal is  embedded inside communication fields that must be indistinguishable from random by a censor without access to a secret/private key available to the station. Past implementations have used TCP initial sequence numbers~\cite{cirripede11}, the ClientRandom field inside a TLS handshake~\cite{curveball11,telex11}, and the encrypted body of an HTTPS request~\cite{tapdance14}. In principle \scheme can use any of these mechanisms for registration, but in our prototype we used the HTTPS request body as it offers the greatest flexibility for the amount of data that can be sent with the registration.
