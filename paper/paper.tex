@@ -340,7 +340,7 @@ However, the censor wishes to avoid disrupting any connections before it
 knows for certain they are from \scheme clients, lest they disrupt legitimate
 connections. This means that injecting false data or corrupting TLS sessions is
 outside the scope of the censor, but that the censor can send non-disruptive
-probes (such as stale TCP acknowledgements) that would normally
+probes (such as stale TCP acknowledgments) that would normally
 be ignored. We emphasize that TapDance is observable by censors that can send
 TCP packets in suspected connections, but that our protocol is robust against
 this class of censor.
@@ -378,9 +378,9 @@ deployment in Section~\ref{sec:implementation}.
 
 \subsection{Registration}
 \label{sec:registration}
-We use a form of Refraction Networking similar to Tapdance to register directly with
+We use a form of Refraction Networking similar to TapDance to register directly with
 the station, though \scheme registration is significantly simpler and more difficult
-to detect than vanilla Tapdance. This is because registration flows are unidirectional; 
+to detect than vanilla TapDance. This is because registration flows are unidirectional; 
 a client communicates their intent to register to the station without any 
 response from the station itself. This makes registration flows very difficult to detect as they 
 can be sent to any site hosted behind the ISP, and display no evidence of proxy behavior. 
@@ -395,7 +395,7 @@ other existing intermittently available proxies to register.
 A registration connection is sent to a \textbf{registration decoy}: any site that 
 supports TLS behind the ISP relative to the client. The client completes the handshake,
 and sends a normal HTTPS request that embeds a ciphertext tag in the payload. 
-\scheme leverages the same steganographic technique as Tapdance to encode the 
+\scheme leverages the same steganographic technique as TapDance to encode the 
 ciphertext~\cite[\S3]{tapdance14}, however we send a complete request allowing the
 registration decoy to respond or close the connection. The tag is encrypted such 
 that it is only visible to the station. The \scheme station passively observes
