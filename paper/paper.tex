@@ -217,9 +217,7 @@ client-to-decoy connection:
 \noindent\textbf{Conjure}\enskip
 In this paper, we present \scheme, a Refraction
 Networking protocol that overcomes these challenges while retaining
-TapDance's ISP-friendly deployment requirements\footnote{
-We have released the open source implementation of the Conjure client at 
-\url{https://github.com/refraction-networking/gotapdance/tree/dark-decoy}.}.
+TapDance's ISP-friendly deployment requirements
 Our key innovation is an architecture that avoids
 having to actively participate in client-to-decoy connections.
 
@@ -284,11 +282,14 @@ deployment~\cite{frolov2017isp}.  Compared to TapDance, we find that
 \scheme has reduced complexity and substantially improved performance
 (Section~\ref{sec:evaluation}): on average, \scheme has 20\% lower latency,
 14\% faster download bandwidth, and over 1400 times faster upload bandwidth.
-In addition, \scheme provides significantly
-more flexibility than existing Refraction Networking protocols, allowing maintainers to
-respond to future censor techniques.
-We believe that these advantages
+In addition, \scheme is significantly more
+flexible than existing Refraction Networking protocols, allowing maintainers to
+respond to future censor techniques with greater agility.
+We believe that these advantages will
 make \scheme a strong choice for future Refraction Networking deployments.
+
+We have released the open source implementation of the Conjure client at 
+\url{https://github.com/refraction-networking/gotapdance/tree/dark-decoy}.
 
 %download: dd - td: 5947790000 - 5219112999 = 14% faster down
 % upload:  5088330000/3500000.0 = 1453x upload
@@ -309,8 +310,6 @@ asymmetric routing (i.e. that the tap might only see packets from but not to the
 client).
 However, we assume a stronger threat model for the adversary than
 TapDance, as our design resists active attacks.
-\looseness=1
-
 
 We assume the censor can block arbitrary IP addresses and networks, but faces a
 cost in doing so if it blocks potentially useful resources. In particular, we
@@ -320,7 +319,6 @@ proxies and objectionable content.
 Whitelists are expensive for censors to maintain and can stifle
 innovation, and are rarely employed by country-level censors.
 %TODO: cite OONI? censored planet?
-
 
 We assume that the censor can know what network the \scheme station(s) are
 deployed in and the prefixes phantom hosts are selected from, but that blocking those
@@ -335,7 +333,6 @@ so the system should ensure that these will not reveal the phantom hosts of othe
 censor can also actively probe addresses that it sees users accessing, and can
 employ tools such as ZMap~\cite{zmap13} to scan large network blocks, excepting
 large IPv6 prefixes (e.g. a /32 IPv6 prefix contains $2^{96}$ addresses).
-\looseness=1
 
 Finally, we assume the censor can replay or preplay any connections that it
 suspects involve phantom hosts (or their registration) in an attempt to confirm.
@@ -979,8 +976,6 @@ block such hosts outright.
 
 % 7 bits set in 2001:48a8:: (would expect 16)
 
-\FigIpEntropy
-
 Prior work by Foremski et al.~\cite{foremski2016entropy} has developed models to
 generate likely IPv6 addresses from a set of known addresses, useful for
 discovering new hosts to scan given known ones. We use their Entropy/IP tool to
@@ -992,6 +987,7 @@ equally span the range of values have maximum entropy (normalized to 1). In our
 addresses, we observe an entropy of over 75~bits, with more entropy in the later
 segments of the address. While not quite the full 96~bits that uniformly random
 would produce, this is still a significant amount for phantom hosts to hide in.
+\looseness=-1
 
 For a specific deployment, operators should be careful to observe the distribution of
 addresses in the subnets they use, and possibly limit to randomizing ``realistic''
@@ -1019,7 +1015,7 @@ nodes~\cite{tor-bridge-blocking-blog,active-probe,ensafi-tor,china-blocking-tor}
 In response to China's active probing, Tor and other circumvention tool developers have developed
 \emph{probe-resistant} protocols, such as \texttt{obfs4}~\cite{obfs4}, Obfuscated SSH
 (OSSH)~\cite{ossh}, and Shadowsocks~\cite{shadowsocks}. Each of these protocols
-require the client to know a special secret distributed alongside the original
+require the client to know a secret distributed alongside the original
 proxy address. Without knowledge of this secret, active-probing censors will not
 receive any response from these hosts, making it difficult for censors to tell if
 a server is a proxy or a non-responsive legitimate host.
@@ -1040,7 +1036,7 @@ be other ways to differentiate OSSH servers from others online, our tests
 suggest censors could face steep false-positive rates in identifying OSSH
 servers with active probing.
 
-
+\FigIpEntropy
 
 %TODO: how many servers in zmap look like OSSH? e.g. we send them 23 random
 %bytes and then they don't respond with data. 99.46% (793789 out of 798032)
@@ -1077,6 +1073,7 @@ mask sites by those that have identical TCP/IP stacks to ours, as we use a
 common Linux implementation. We also note that this attack only applies when we
 use the mask site as an application, and that \scheme can support other
 applications (e.g. obfsproxy, WebRTC, etc) that do not have this issue.
+\looseness=-1
 
 We acknowledge that perfect mimicry of the real site is likely infeasible:
 Houmansadr et al.~\cite{houmansadr-parrot} demonstrated the difficulty in fully
@@ -1161,7 +1158,6 @@ the station, that would be more difficult for the censor to block.
 %generally requires clients to have root access to their device to control the
 %initial sequence numbers. Since most mobile users do not have such control, we
 %suggest other methods be used instead.
-
 
 
 \subsection{ICMP}

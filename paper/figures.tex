@@ -39,11 +39,11 @@
 \newcommand{\FigUpload}{
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.95\linewidth,clip]{figures/bandwidth-up.pdf}
+    \includegraphics[width=0.95\linewidth,clip]{figures/bandwidth-up.pdf}\vspace{-2pt}
     \caption{\textbf{Upload Performance}\,---\,\rm%
         We used iperf to measure the upload bandwidth for a direct connection, TapDance, and \scheme.
         As expected, TapDance's upload performance is several orders of magnitude lower than
-        the link capacity, due to the overhead of frequent reconnects to the decoy.
+        the link capacity, due to the overhead of making frequent reconnects to the decoy site.
     }
     \label{fig:upload}
 \end{figure}
@@ -52,12 +52,12 @@
 \newcommand{\FigDownload}{
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.95\linewidth,clip]{figures/bandwidth-down.pdf}
+    \includegraphics[width=0.95\linewidth,clip]{figures/bandwidth-down.pdf}\vspace{-2pt}
     \caption{\textbf{Download Performance}\,---\,\rm%
         Using iperf, we compare the download performance of a direct connection, TapDance, and \scheme.
-        While TapDance can achieve link capacity download, it still has to occasionally reconnect
+        While TapDance can achieve link-capacity download, it still has to occasionally reconnect
         to the decoy, as seen by the periodic dips. These reconnects are more common the more data
-        the client sends (e.g. requests or any upload data).
+        the client sends (e.g. requests or uploads).
     }
     \label{fig:download}
 \end{figure}
@@ -91,9 +91,9 @@
     \centering
     \includegraphics[width=0.75\linewidth,clip]{figures/decoy-tap-bandwidth.png}
     \caption{\textbf{Tap Bandwidth}\,---\,\rm%
-        We deployed our \scheme implementation in a realistic ISP testbed on a
-        tap of a 20~Gbps router. As shown in a typical week, traffic
-        ranges from 2-17~Gbps.
+        We deployed \scheme in a realistic ISP testbed on a
+        tap of a 20~Gbps router. In a typical week, traffic
+        ranges from 2--17~Gbps.
     }
     \label{fig:tap-bandwidth}
 \end{figure*}
@@ -104,7 +104,7 @@
 \begin{figure}[t]
     \centering
     %\includegraphics[width=\linewidth,clip]{figures/entropy_curveball_1hr.png}
-    \includegraphics[width=\linewidth,clip]{figures/entropy-ip-16hr.png}
+    \includegraphics[width=0.95\linewidth,clip]{figures/entropy-ip-16hr.png}
     \caption{\textbf{IPv6 Entropy}\,---\,\rm%
         Censors may be able to distinguish random-looking phantom host IPv6 addresses
         from legitimately used ones based on the address's entropy.
@@ -117,7 +117,7 @@
         significant false positives / negatives. While distinguishable from random
         given enough samples,
         we can also use the Entropy/IP tool to generate addresses from the Bayesian Network
-        model it produces.}
+        model it produces.\vspace{-5pt}}
     \label{fig:ipentropy}
 \end{figure}
 }
@@ -126,7 +126,7 @@
 \begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth,clip]{figures/ip-bits-set-pdf.pdf}
-    \caption{\textbf{IPv6 bits set}\,---\,\rm%
+    \caption{\textbf{IPv6 Bits Set}\,---\,\rm%
         We measure the number of bits set to 1 in IPv6 addresses in our ISP's /32
         and observed by our tap,
         and compare it to the Binomial distribution (Random) we would expect to see
@@ -170,7 +170,7 @@
             %ISP Deployment           &\no  & \no  & \no  & \yes & \no  & \no  & \no  & \yes \\
     \end{tabular}
     \medskip
-    \caption{\textbf{Comparing Refraction Networking schemes}\,---\,\rm%
+    \caption{\textbf{Comparing Refraction Networking Schemes}\,---\,\rm%
         ``No inline blocking'' corresponds to schemes that can operate as a passive tap on the side
         without needing an inline element in the ISP network.
         ``Handles asymmetric routes'' refers to schemes that work when only one direction (either client to decoy or decoy to server) is seen by the station.
@@ -178,7 +178,7 @@
         the protocol.
         ``Traffic analysis'' includes latency, inter-packet timing, and website fingerprinting.
         ``Unlimited Sessions'' shows schemes that do not need to repeatedly reconnect to download
-        or upload arbitrarily large content.}
+        or upload arbitrarily large content.\vspace{-10pt}}
     \label{tab:compare}
 \end{table*}
 }
