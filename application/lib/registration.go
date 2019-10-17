@@ -49,8 +49,15 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		Covert:       c2s.GetCovertAddress(),
 		Mask:         c2s.GetMaskedDecoyServerName(),
 		MasterSecret: conjureKeys.MasterSecret,
+		SharedSecret: conjureKeys.MasterSecret,
 		Flags:        uint8(flags[0]),
 	}
+
+	// log phantom IP, shared secret, ipv6 support
+	regManager.Logger.Printf("New Registration: phantom:%s, shared secret:% x, v6support:%t\n",
+		darkDecoyAddr, reg.SharedSecret, c2s.GetV6Support(),
+	)
+
 	return &reg, nil
 }
 
@@ -73,6 +80,7 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 type DecoyRegistration struct {
 	DarkDecoy    *net.IP
 	MasterSecret []byte
+	SharedSecret []byte
 	Covert, Mask string
 	Flags        uint8
 }
@@ -117,6 +125,7 @@ func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP) *DecoyRegist
 	return d
 }
 
+// TODO log registration expiration
 func (r *RegisteredDecoys) removeOldRegistrations() {
 	const timeout = -time.Minute * 5
 	cutoff := time.Now().Add(timeout)

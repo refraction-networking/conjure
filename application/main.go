@@ -1,8 +1,8 @@
 package main
 
 import (
-	"encoding/binary"
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
@@ -10,8 +10,8 @@ import (
 	"syscall"
 
 	dd "./lib"
-	zmq "github.com/pebbe/zmq4"
 	"github.com/golang/protobuf/proto"
+	zmq "github.com/pebbe/zmq4"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
@@ -47,15 +47,18 @@ func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) 
 
 	reg := regManager.CheckRegistration(&originalDstIP)
 	if reg == nil {
-		logger.Printf("registration for %v not found", originalDstIP)
+		logger.Printf("registration for %v not found\n", originalDstIP)
 		return
 	}
 
 	proxyHandler := dd.ProxyFactory(reg, 0)
 	if proxyHandler != nil {
 		proxyHandler(reg, clientConn, originalDstIP)
+		logger.Printf("New Connection: source: %s, phantom: %s, shared secret: % x\n",
+			clientConn.RemoteAddr().String(), reg.DarkDecoy.String(), reg.SharedSecret,
+		)
 	} else {
-		logger.Printf("failed to initialize proxy, unknown or unimplemented protocol.")
+		logger.Printf("failed to initialize proxy, unknown or unimplemented protocol.\n")
 		return
 	}
 }
@@ -119,7 +122,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*
 	clientToStationBytes := make([]byte, vspSize)
 
 	msgReader.Read(clientToStationBytes)
-	
+
 	// parse c2s
 	clientToStation := &pb.ClientToStation{}
 	err = proto.Unmarshal(clientToStationBytes, clientToStation)
