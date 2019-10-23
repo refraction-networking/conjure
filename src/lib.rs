@@ -8,6 +8,7 @@ extern crate pnet;
 extern crate rand;
 extern crate time;
 extern crate errno;
+extern crate hex;
 
 extern crate radix; // https://github.com/refraction-networking/radix
 extern crate tuntap; // https://github.com/ewust/tuntap.rs
