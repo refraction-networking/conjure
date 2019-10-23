@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -45,18 +46,12 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	}
 
 	reg := DecoyRegistration{
-		DarkDecoy:    darkDecoyAddr,
-		Covert:       c2s.GetCovertAddress(),
-		Mask:         c2s.GetMaskedDecoyServerName(),
-		MasterSecret: conjureKeys.MasterSecret,
-		SharedSecret: conjureKeys.MasterSecret,
-		Flags:        uint8(flags[0]),
+		DarkDecoy: darkDecoyAddr,
+		keys:      conjureKeys,
+		Covert:    c2s.GetCovertAddress(),
+		Mask:      c2s.GetMaskedDecoyServerName(),
+		Flags:     uint8(flags[0]),
 	}
-
-	// log phantom IP, shared secret, ipv6 support
-	regManager.Logger.Printf("New Registration: phantom:%s, shared secret:% x, v6support:%t\n",
-		darkDecoyAddr, reg.SharedSecret, c2s.GetV6Support(),
-	)
 
 	return &reg, nil
 }
@@ -79,13 +74,28 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 
 type DecoyRegistration struct {
 	DarkDecoy    *net.IP
-	MasterSecret []byte
-	SharedSecret []byte
+	keys         *ConjureSharedKeys
 	Covert, Mask string
 	Flags        uint8
 }
 
-// TODO
+func (reg *DecoyRegistration) String() string {
+	reprStr := make([]byte, hex.EncodedLen(len(reg.keys.representative)))
+	hex.Encode(reprStr, reg.keys.representative)
+	digest := fmt.Sprintf("{client=%v, phantom=%v, covert=%v, mask=%v, flags=0x%02x, representative:%s}\n",
+		reg.DarkDecoy.String(), reg.Covert, reg.Mask, reg.Flags, reprStr)
+
+	return digest
+}
+
+func (reg *DecoyRegistration) IDString() string {
+	reprStr := make([]byte, hex.EncodedLen(len(reg.keys.representative[:8])))
+	hex.Encode(reprStr, reg.keys.representative[:8])
+	return fmt.Sprintf("%s", reprStr)
+
+}
+
+//[TODO]{priority:winter-break} test if this is reasonable
 func (reg *DecoyRegistration) PhantomIsLive() bool {
 	return true
 }

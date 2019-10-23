@@ -54,9 +54,8 @@ func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) 
 	proxyHandler := dd.ProxyFactory(reg, 0)
 	if proxyHandler != nil {
 		proxyHandler(reg, clientConn, originalDstIP)
-		logger.Printf("New Connection: source: %s, phantom: %s, shared secret: % x\n",
-			clientConn.RemoteAddr().String(), reg.DarkDecoy.String(), reg.SharedSecret,
-		)
+		logger.Printf("New Connection: source: %s, phantom: %s, repr: %s\n",
+			clientConn.RemoteAddr().String(), reg.DarkDecoy.String(), reg.IDString())
 	} else {
 		logger.Printf("failed to initialize proxy, unknown or unimplemented protocol.\n")
 		return
@@ -87,18 +86,18 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 
 		if newReg.PhantomIsLive() {
 			regManager.AddRegistration(newReg)
-			logger.Printf("new registration: {dark decoy address=%v, covert=%v, mask=%v, flags=0x%02x}\n",
-				newReg.DarkDecoy.String(), newReg.Covert, newReg.Mask, newReg.Flags)
+
+			// log phantom IP, shared secret, ipv6 support
+			logger.Printf("new registration: %v\n", newReg.String)
 		}
 	}
 }
 
 func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, error) {
-	// var sharedSecret [32]byte
 	// var ipAddr []byte
 	// var covertAddrLen, maskedAddrLen [1]byte
 
-	var sharedSecret [32]byte
+	var representative [32]byte
 	var fixedSizePayload [6]byte
 	var flags [1]byte
 
@@ -107,14 +106,14 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*
 		logger.Printf("error reading from ZMQ socket: %v\n", err)
 		return nil, err
 	}
-	if len(msg) < 32 + 6 + 1 + 16 {
+	if len(msg) < 32+6+1+16 {
 		logger.Printf("short message of size %v\n", len(msg))
 		return nil, fmt.Errorf("short message of size %v", len(msg))
 	}
 
 	msgReader := bytes.NewReader(msg)
 
-	msgReader.Read(sharedSecret[:])
+	msgReader.Read(representative[:])
 	msgReader.Read(fixedSizePayload[:])
 
 	vspSize := binary.BigEndian.Uint16(fixedSizePayload[0:2]) - 16
@@ -131,7 +130,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*
 		return nil, err
 	}
 
-	conjureKeys, err := dd.GenSharedKeys(sharedSecret[:])
+	conjureKeys, err := dd.GenSharedKeys(representative[:])
 
 	newReg, err := regManager.NewRegistration(clientToStation, &conjureKeys, flags)
 	if err != nil {
