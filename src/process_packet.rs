@@ -214,7 +214,7 @@ impl PerCoreGlobal
         if  is_tls_app_pkt(&tcp_pkt) {
             match self.check_dark_decoy_tag(&flow, &tcp_pkt) {
                 true => {
-                    debug!("New Dark Decoy registration detected in {},", flow);
+                    // debug!("New Conjure registration detected in {},", flow);
                     // self.flow_tracker.mark_dark_decoy(&dd_flow);
                     // not removing flow from stale_tracked_flows for optimization reasons:
                     // it will be removed later
@@ -259,15 +259,15 @@ impl PerCoreGlobal
         self.stats.elligator_this_period += 1;
         match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
             Ok(res) => {
-                // res.0 => shared secret
+                // res.0 => representative
                 // res.1 => Fixed size payload
                 // res.2 => variable size payload (c2s)
 
                 // form message for zmq
                 let mut zmq_msg: Vec<u8> = Vec::new();
 
-                let mut shared_secret = res.0.to_vec();
-                zmq_msg.append(&mut shared_secret);
+                let mut representative = res.0.to_vec();
+                zmq_msg.append(&mut representative);
 
                 let mut fsp = res.1.to_vec(); 
                 zmq_msg.append(&mut fsp);
@@ -275,7 +275,9 @@ impl PerCoreGlobal
                 // VSP --> ClientToStation
                 let mut vsp = res.2.to_vec();
                 zmq_msg.append(&mut vsp);
-
+                
+                let repr_str = hex::encode(representative);
+                debug!("New Conjure registration detected in {}, {}", flow, repr_str);
 
                 match self.zmq_sock.send(&zmq_msg, 0){
                     Ok(_)=> return true,
