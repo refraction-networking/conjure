@@ -88,7 +88,7 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 			regManager.AddRegistration(newReg)
 
 			// log phantom IP, shared secret, ipv6 support
-			logger.Printf("new registration: %v\n", newReg.String)
+			logger.Printf("New registration: %v\n", newReg.String())
 		}
 	}
 }
