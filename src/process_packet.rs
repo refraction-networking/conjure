@@ -276,8 +276,8 @@ impl PerCoreGlobal
                 let mut vsp = res.2.to_vec();
                 zmq_msg.append(&mut vsp);
                 
-                let repr_str = hex::encode(representative);
-                debug!("New Conjure registration detected in {}, {}", flow, repr_str);
+                let repr_str = hex::encode(res.0);
+                debug!("New registration {}, {}", flow, repr_str);
 
                 match self.zmq_sock.send(&zmq_msg, 0){
                     Ok(_)=> return true,
