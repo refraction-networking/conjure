@@ -151,8 +151,8 @@ impl HKDFKeys
 {
     pub fn new(shared_secret: &[u8]) -> Result<HKDFKeys, Box<hkdf::InvalidLength>>
     {
-        // const salt: &'static str = "tapdancetapdancetapdancetapdance";
-        let salt = "tapdancetapdancetapdancetapdance".as_bytes();
+        // let salt = "tapdancetapdancetapdancetapdance".as_bytes();
+        let salt = "conjureconjureconjureconjure".as_bytes();
         let kdf = hkdf::Hkdf::<sha2::Sha256>::extract(Some(salt), shared_secret);
         let info = [0u8; 0];
 
