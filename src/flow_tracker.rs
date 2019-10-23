@@ -161,7 +161,7 @@ fn update_pubsub_map(map: Arc<RwLock<HashMap<IpAddr, u64>>>)
             // Get rid of it
             drop(mmap);
 
-            debug!("Added ip {}", ip);
+            debug!("Added registered ip {} from redis", ip);
         }
     }
 }

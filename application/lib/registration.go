@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -45,12 +46,13 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	}
 
 	reg := DecoyRegistration{
-		DarkDecoy:    darkDecoyAddr,
-		Covert:       c2s.GetCovertAddress(),
-		Mask:         c2s.GetMaskedDecoyServerName(),
-		MasterSecret: conjureKeys.MasterSecret,
-		Flags:        uint8(flags[0]),
+		DarkDecoy: darkDecoyAddr,
+		keys:      conjureKeys,
+		Covert:    c2s.GetCovertAddress(),
+		Mask:      c2s.GetMaskedDecoyServerName(),
+		Flags:     uint8(flags[0]),
 	}
+
 	return &reg, nil
 }
 
@@ -72,12 +74,29 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 
 type DecoyRegistration struct {
 	DarkDecoy    *net.IP
-	MasterSecret []byte
+	keys         *ConjureSharedKeys
 	Covert, Mask string
 	Flags        uint8
 }
 
-// TODO
+// String -- Print a digest of the important identifying information for this registration.
+//[TODO]{priority:soon} Find a way to add the client IP to this logging
+func (reg *DecoyRegistration) String() string {
+	reprStr := make([]byte, hex.EncodedLen(len(reg.keys.representative)))
+	hex.Encode(reprStr, reg.keys.representative)
+	digest := fmt.Sprintf("{phantom=%v, covert=%v, mask=%v, flags=0x%02x, representative:%s}\n",
+		reg.DarkDecoy.String(), reg.Covert, reg.Mask, reg.Flags, reprStr)
+
+	return digest
+}
+
+func (reg *DecoyRegistration) IDString() string {
+	reprStr := make([]byte, hex.EncodedLen(len(reg.keys.representative[:8])))
+	hex.Encode(reprStr, reg.keys.representative[:8])
+	return fmt.Sprintf("%s", reprStr)
+}
+
+//[TODO]{priority:winter-break} test if this is reasonable
 func (reg *DecoyRegistration) PhantomIsLive() bool {
 	return true
 }
@@ -117,6 +136,7 @@ func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP) *DecoyRegist
 	return d
 }
 
+// TODO log registration expiration
 func (r *RegisteredDecoys) removeOldRegistrations() {
 	const timeout = -time.Minute * 5
 	cutoff := time.Now().Add(timeout)
