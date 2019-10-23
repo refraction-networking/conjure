@@ -79,10 +79,12 @@ type DecoyRegistration struct {
 	Flags        uint8
 }
 
+// String -- Print a digest of the important identifying information for this registration.
+//[TODO]{priority:soon} Find a way to add the client IP to this logging
 func (reg *DecoyRegistration) String() string {
 	reprStr := make([]byte, hex.EncodedLen(len(reg.keys.representative)))
 	hex.Encode(reprStr, reg.keys.representative)
-	digest := fmt.Sprintf("{client=%v, phantom=%v, covert=%v, mask=%v, flags=0x%02x, representative:%s}\n",
+	digest := fmt.Sprintf("{phantom=%v, covert=%v, mask=%v, flags=0x%02x, representative:%s}\n",
 		reg.DarkDecoy.String(), reg.Covert, reg.Mask, reg.Flags, reprStr)
 
 	return digest
@@ -92,7 +94,6 @@ func (reg *DecoyRegistration) IDString() string {
 	reprStr := make([]byte, hex.EncodedLen(len(reg.keys.representative[:8])))
 	hex.Encode(reprStr, reg.keys.representative[:8])
 	return fmt.Sprintf("%s", reprStr)
-
 }
 
 //[TODO]{priority:winter-break} test if this is reasonable
