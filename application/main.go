@@ -28,6 +28,8 @@ func getOriginalDst(fd uintptr) (net.IP, error) {
 	}
 }
 
+// Handle connection from client
+// NOTE: this is called as a goroutine
 func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) {
 	defer clientConn.Close()
 
@@ -53,9 +55,9 @@ func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) 
 
 	proxyHandler := dd.ProxyFactory(reg, 0)
 	if proxyHandler != nil {
-		proxyHandler(reg, clientConn, originalDstIP)
-		logger.Printf("New Connection: source: %s, phantom: %s, repr: %s\n",
+		logger.Printf("New Connection: source: %s, phantom: %s, shared secret: %s\n",
 			clientConn.RemoteAddr().String(), reg.DarkDecoy.String(), reg.IDString())
+		proxyHandler(reg, clientConn, originalDstIP)
 	} else {
 		logger.Printf("failed to initialize proxy, unknown or unimplemented protocol.\n")
 		return
@@ -169,7 +171,6 @@ func main() {
 			logger.Printf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
 			return // continue?
 		}
-		logger.Printf("[CONNECT] new connection from address: %v\n", ln.Addr())
 		go handleNewConn(regManager, newConn)
 	}
 }
