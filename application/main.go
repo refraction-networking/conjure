@@ -97,7 +97,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*
 	// var ipAddr []byte
 	// var covertAddrLen, maskedAddrLen [1]byte
 
-	var representative [32]byte
+	var sharedSecret [32]byte
 	var fixedSizePayload [6]byte
 	var flags [1]byte
 
@@ -113,7 +113,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*
 
 	msgReader := bytes.NewReader(msg)
 
-	msgReader.Read(representative[:])
+	msgReader.Read(sharedSecret[:])
 	msgReader.Read(fixedSizePayload[:])
 
 	vspSize := binary.BigEndian.Uint16(fixedSizePayload[0:2]) - 16
@@ -130,7 +130,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*
 		return nil, err
 	}
 
-	conjureKeys, err := dd.GenSharedKeys(representative[:])
+	conjureKeys, err := dd.GenSharedKeys(sharedSecret[:])
 
 	newReg, err := regManager.NewRegistration(clientToStation, &conjureKeys, flags)
 	if err != nil {
