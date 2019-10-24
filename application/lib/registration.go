@@ -101,11 +101,19 @@ func (reg *DecoyRegistration) IDString() string {
 // 8 syns which returns syn-acks from 99% of sites within 1 second.
 // see  ZMap: Fast Internet-wide Scanning  and Its Security Applications
 // https://www.usenix.org/system/files/conference/usenixsecurity13/sec13-paper_durumeric.pdf
+//
+// return:		true  - host is live
+// 				false - host is not life
 func (reg *DecoyRegistration) PhantomIsLive() bool {
-	dialError := make(chan error, 8)
+	return phantomIsLive(reg.DarkDecoy.String())
+}
+
+func phantomIsLive(address string) bool {
+	width := 8
+	dialError := make(chan error, width)
 
 	testConnect := func() {
-		conn, err := net.Dial("tcp", reg.DarkDecoy.String())
+		conn, err := net.Dial("tcp", address)
 		if err != nil {
 			dialError <- err
 			return
@@ -114,17 +122,19 @@ func (reg *DecoyRegistration) PhantomIsLive() bool {
 		dialError <- nil
 	}
 
-	for i := 0; i < 8; i++ {
+	for i := 0; i < width; i++ {
 		go testConnect()
 	}
 
-	time.Sleep(500 * time.Millisecond)
-	// The only error that would return before this is a network unreachable error
+	time.Sleep(750 * time.Millisecond)
+
+	// If any return errors or connect then return nil before deadline it is live
 	select {
 	case _ = <-dialError:
-		return false
-	default:
+		// fmt.Printf("Received: %v\n", err)
 		return true
+	default:
+		return false
 	}
 }
 

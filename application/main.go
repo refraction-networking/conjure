@@ -84,7 +84,7 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 			continue
 		}
 
-		if newReg.PhantomIsLive() {
+		if !newReg.PhantomIsLive() {
 			regManager.AddRegistration(newReg)
 
 			// log phantom IP, shared secret, ipv6 support

@@ -2,11 +2,12 @@ package lib
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/golang/protobuf/proto"
+	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
 func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys, [1]byte) {
@@ -123,5 +124,16 @@ func TestRegisterForDetector(t *testing.T) {
 	// check IP equality
 	if reg.DarkDecoy.Equal(net.ParseIP(ip_string)) == false {
 		t.Fatalf("Expected %v, got %v", reg.DarkDecoy, net.ParseIP(msg.Payload))
+	}
+}
+
+func TestLiveness(t *testing.T) {
+
+	if phantomIsLive("192.122.190.105:443") != true {
+		fmt.Printf("Host is live, detected as NOT live\n")
+	}
+
+	if phantomIsLive("192.122.190.210:443") != false {
+		fmt.Printf("Host is NOT live, detected as live\n")
 	}
 }

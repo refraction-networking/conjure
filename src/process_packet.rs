@@ -259,15 +259,15 @@ impl PerCoreGlobal
         self.stats.elligator_this_period += 1;
         match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
             Ok(res) => {
-                // res.0 => representative
+                // res.0 => shared secret
                 // res.1 => Fixed size payload
                 // res.2 => variable size payload (c2s)
 
                 // form message for zmq
                 let mut zmq_msg: Vec<u8> = Vec::new();
 
-                let mut representative = res.0.to_vec();
-                zmq_msg.append(&mut representative);
+                let mut shared_secret = res.0.to_vec();
+                zmq_msg.append(&mut shared_secret);
 
                 let mut fsp = res.1.to_vec(); 
                 zmq_msg.append(&mut fsp);
