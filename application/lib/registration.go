@@ -77,9 +77,35 @@ type DecoyRegistration struct {
 	Flags        uint8
 }
 
-// TODO
+// PhantomIsLive - Test whether the phantom is live using
+// 8 syns which returns syn-acks from 99% of sites within 1 second.
+// see  ZMap: Fast Internet-wide Scanning  and Its Security Applications
+// https://www.usenix.org/system/files/conference/usenixsecurity13/sec13-paper_durumeric.pdf
 func (reg *DecoyRegistration) PhantomIsLive() bool {
-	return true
+	dialError := make(chan error, 8)
+
+	testConnect := func() {
+		conn, err := net.Dial("tcp", reg.DarkDecoy.String())
+		if err != nil {
+			dialError <- err
+			return
+		}
+		conn.Close()
+		dialError <- nil
+	}
+
+	for i := 0; i < 8; i++ {
+		go testConnect()
+	}
+
+	time.Sleep(500 * time.Millisecond)
+	// The only error that would return before this is a network unreachable error
+	select {
+	case _ = <-dialError:
+		return false
+	default:
+		return true
+	}
 }
 
 type RegisteredDecoys struct {
