@@ -83,18 +83,29 @@ type DecoyRegistration struct {
 //[TODO]{priority:soon} Find a way to add the client IP to this logging for now it is logged
 // in the detector associating registrant IP with shared secret.
 func (reg *DecoyRegistration) String() string {
+	if reg == nil {
+		return fmt.Sprintf("%v", reg)
+	}
+
 	reprStr := make([]byte, hex.EncodedLen(len(reg.keys.SharedSecret)))
 	hex.Encode(reprStr, reg.keys.SharedSecret)
-	digest := fmt.Sprintf("{phantom=%v, covert=%v, mask=%v, flags=0x%02x, Shared Secret:%s}\n",
+	digest := fmt.Sprintf("{phantom=%v, covert=%v, mask=%v, flags=0x%02x, Shared Secret:%s}",
 		reg.DarkDecoy.String(), reg.Covert, reg.Mask, reg.Flags, reprStr)
 
 	return digest
 }
 
 func (reg *DecoyRegistration) IDString() string {
-	reprStr := make([]byte, hex.EncodedLen(len(reg.keys.SharedSecret[:8])))
-	hex.Encode(reprStr, reg.keys.SharedSecret[:8])
-	return fmt.Sprintf("%s", reprStr)
+	if reg == nil || reg.keys == nil {
+		return "000000"
+	}
+
+	secret := make([]byte, hex.EncodedLen(len(reg.keys.SharedSecret)))
+	n := hex.Encode(secret, reg.keys.SharedSecret)
+	if n < 6 {
+		return "000000"
+	}
+	return fmt.Sprintf("%s", secret[:6])
 }
 
 // PhantomIsLive - Test whether the phantom is live using
@@ -105,7 +116,7 @@ func (reg *DecoyRegistration) IDString() string {
 // return:		true  - host is live
 // 				false - host is not life
 func (reg *DecoyRegistration) PhantomIsLive() bool {
-	return phantomIsLive(reg.DarkDecoy.String())
+	return phantomIsLive(reg.DarkDecoy.String() + ":443")
 }
 
 func phantomIsLive(address string) bool {

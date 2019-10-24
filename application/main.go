@@ -81,11 +81,9 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 
 		newReg, err := recieve_zmq_message(sub, regManager)
 		if err != nil || newReg == nil {
+			logger.Printf("Encountered err when creating Reg: %v \n- %v\n", err, newReg.String())
 			continue
 		}
-
-		// log phantom IP, shared secret, ipv6 support
-		logger.Printf("New registration: %v\n", newReg.String())
 
 		if newReg.PhantomIsLive() == false {
 			regManager.AddRegistration(newReg)
@@ -104,13 +102,14 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*
 	var sharedSecret [32]byte
 	var fixedSizePayload [6]byte
 	var flags [1]byte
+	minMsgLen := 32 + 6 + 1 // + 16
 
 	msg, err := sub.RecvBytes(0)
 	if err != nil {
 		logger.Printf("error reading from ZMQ socket: %v\n", err)
 		return nil, err
 	}
-	if len(msg) < 32+6+1+16 {
+	if len(msg) < minMsgLen {
 		logger.Printf("short message of size %v\n", len(msg))
 		return nil, fmt.Errorf("short message of size %v", len(msg))
 	}
@@ -138,8 +137,12 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*
 
 	newReg, err := regManager.NewRegistration(clientToStation, &conjureKeys, flags)
 	if err != nil {
+		logger.Printf("Failed to create registration: %v", err)
 		return nil, err
 	}
+
+	// log phantom IP, shared secret, ipv6 support
+	logger.Printf("New registration: %v\n", newReg.String())
 
 	return newReg, nil
 }

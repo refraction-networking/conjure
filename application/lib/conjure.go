@@ -12,7 +12,7 @@ type ConjureSharedKeys struct {
 }
 
 func GenSharedKeys(sharedSecret []byte) (ConjureSharedKeys, error) {
-	tdHkdf := hkdf.New(sha256.New, sharedSecret, []byte("tapdancetapdancetapdancetapdance"), nil)
+	tdHkdf := hkdf.New(sha256.New, sharedSecret, []byte("conjureconjureconjureconjure"), nil)
 	keys := ConjureSharedKeys{
 		SharedSecret:  sharedSecret,
 		FspKey:        make([]byte, 16),
