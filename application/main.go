@@ -84,11 +84,15 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 			continue
 		}
 
-		if !newReg.PhantomIsLive() {
+		// log phantom IP, shared secret, ipv6 support
+		logger.Printf("New registration: %v\n", newReg.String())
+
+		if newReg.PhantomIsLive() == false {
 			regManager.AddRegistration(newReg)
 
-			// log phantom IP, shared secret, ipv6 support
-			logger.Printf("New registration: %v\n", newReg.String())
+			logger.Printf("Adding registration %v\n", newReg.IDString())
+		} else {
+			logger.Printf("Dropping registration %v -- live phantom\n", newReg.IDString())
 		}
 	}
 }
