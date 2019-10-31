@@ -123,7 +123,6 @@ func (reg *DecoyRegistration) PhantomIsLive() (bool, error) {
 }
 
 func phantomIsLive(address string) (bool, error) {
-	fmt.Printf("%v\n", address)
 	width := 8
 	dialError := make(chan error, width)
 

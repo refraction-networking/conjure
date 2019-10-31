@@ -81,7 +81,7 @@ func TestLivenessCheck(t *testing.T) {
 	}
 
 	// Is there any test address we know will never respond?
-	unreachableV6 := net.ParseIP("2001:48a8:687f:1:1122:105")
+	unreachableV6 := net.ParseIP("2001:48a8:687f:1:1122::105")
 	reg.DarkDecoy = &unreachableV6
 
 	liveness, response = reg.PhantomIsLive()
@@ -161,7 +161,7 @@ func TestLiveness(t *testing.T) {
 		t.Fatalf("Host is NOT live, detected as live: %v\n", response)
 	}
 
-	liveness, response = phantomIsLive("[2001:48a8:687f:1:1122::105]:443")
+	liveness, response = phantomIsLive("[2001:48a8:687f:1::105]:443")
 	if liveness != true {
 		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
