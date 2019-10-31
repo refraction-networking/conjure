@@ -84,7 +84,7 @@ type DecoyRegistration struct {
 // in the detector associating registrant IP with shared secret.
 func (reg *DecoyRegistration) String() string {
 	if reg == nil {
-		return fmt.Sprintf("%v", reg)
+		return fmt.Sprintf("%v", reg.String())
 	}
 
 	reprStr := make([]byte, hex.EncodedLen(len(reg.keys.SharedSecret)))
@@ -115,11 +115,15 @@ func (reg *DecoyRegistration) IDString() string {
 //
 // return:		true  - host is live
 // 				false - host is not life
-func (reg *DecoyRegistration) PhantomIsLive() bool {
-	return phantomIsLive(reg.DarkDecoy.String() + ":443")
+func (reg *DecoyRegistration) PhantomIsLive() (bool, error) {
+	if reg.DarkDecoy.To4() != nil {
+		return phantomIsLive(reg.DarkDecoy.String() + ":443")
+	}
+	return phantomIsLive("[" + reg.DarkDecoy.String() + "]:443")
 }
 
-func phantomIsLive(address string) bool {
+func phantomIsLive(address string) (bool, error) {
+	fmt.Printf("%v\n", address)
 	width := 8
 	dialError := make(chan error, width)
 
@@ -137,15 +141,20 @@ func phantomIsLive(address string) bool {
 		go testConnect()
 	}
 
-	time.Sleep(750 * time.Millisecond)
+	timeout := 750 * time.Millisecond
+
+	time.Sleep(timeout)
 
 	// If any return errors or connect then return nil before deadline it is live
 	select {
-	case _ = <-dialError:
+	case err := <-dialError:
 		// fmt.Printf("Received: %v\n", err)
-		return true
+		if err != nil {
+			return false, err
+		}
+		return true, nil
 	default:
-		return false
+		return false, fmt.Errorf("Reached statistical timeout %v ms", timeout)
 	}
 }
 

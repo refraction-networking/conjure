@@ -52,23 +52,42 @@ func TestCreateDecoyRegistration(t *testing.T) {
 }
 
 func TestLivenessCheck(t *testing.T) {
-
-	phantomAddr := net.ParseIP("54.44.73.6")
+	phantomAddr := net.ParseIP("52.44.73.6")
 	reg := DecoyRegistration{
 		DarkDecoy: &phantomAddr,
 	}
 
-	if reg.PhantomIsLive() != true {
-		t.Fatalf("Live host seen as non-responsive")
+	liveness, response := reg.PhantomIsLive()
+	if liveness != true {
+		t.Fatalf("Live host seen as non-responsive: %v\n", response)
 	}
 
-	// // Is there any test address we know will never respond?
-	// unroutableIP := net.ParseIP("0.0.0.0")
-	// reg.DarkDecoy = &unroutableIP
+	// Is there any test address we know will never respond?
+	unroutableIP := net.ParseIP("127.0.0.2")
+	reg.DarkDecoy = &unroutableIP
 
-	// if reg.PhantomIsLive() != false {
-	// 	t.Fatalf("Non-Responsive host seen as Live")
-	// }
+	liveness, response = reg.PhantomIsLive()
+	if liveness != false {
+		t.Fatalf("Unroutable host seen as Live: %v\n", response)
+	}
+
+	// Is there any test address we know will never respond?
+	phantomV6 := net.ParseIP("2001:48a8:687f:1::105")
+	reg.DarkDecoy = &phantomV6
+
+	liveness, response = reg.PhantomIsLive()
+	if liveness != true {
+		t.Fatalf("Live V6 host seen as non-responsive: %v\n", response)
+	}
+
+	// Is there any test address we know will never respond?
+	unreachableV6 := net.ParseIP("2001:48a8:687f:1:1122:105")
+	reg.DarkDecoy = &unreachableV6
+
+	liveness, response = reg.PhantomIsLive()
+	if liveness != false {
+		t.Fatalf("Non responsive V6 host seen as live: %v\n", response)
+	}
 }
 
 func TestManagerFunctionality(t *testing.T) {
@@ -85,7 +104,9 @@ func TestManagerFunctionality(t *testing.T) {
 
 	storedReg := rm.CheckRegistration(newReg.DarkDecoy)
 
-	fmt.Printf("%#v\n", storedReg)
+	if storedReg.DarkDecoy.String() != "192.122.190.81" || storedReg.Covert != "52.44.73.6:443" {
+		t.Fatalf("Improper registration returned: %v\n", storedReg.String())
+	}
 }
 
 func TestRegisterForDetector(t *testing.T) {
@@ -129,11 +150,19 @@ func TestRegisterForDetector(t *testing.T) {
 
 func TestLiveness(t *testing.T) {
 
-	if phantomIsLive("192.122.190.105:443") != true {
-		fmt.Printf("Host is live, detected as NOT live\n")
+	liveness, response := phantomIsLive("192.122.190.105:443")
+
+	if liveness != true {
+		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
 
-	if phantomIsLive("192.122.190.210:443") != false {
-		fmt.Printf("Host is NOT live, detected as live\n")
+	liveness, response = phantomIsLive("192.122.190.210:443")
+	if liveness != false {
+		t.Fatalf("Host is NOT live, detected as live: %v\n", response)
+	}
+
+	liveness, response = phantomIsLive("[2001:48a8:687f:1:1122::105]:443")
+	if liveness != true {
+		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
 }
