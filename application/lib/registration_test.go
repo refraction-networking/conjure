@@ -34,12 +34,13 @@ func testEqualRegistrations(reg1 *DecoyRegistration, reg2 *DecoyRegistration) bo
 	return true
 }
 
+// This is not actually working yet
 func TestCreateDecoyRegistration(t *testing.T) {
 	rm := NewRegistrationManager()
 
 	c2s, keys, flags := mockReceiveFromDetector()
 
-	newReg, err := rm.NewRegistration(&c2s, &keys, flags)
+	newReg, err := rm.NewRegistration(&c2s, &keys, flags, c2s.GetV6Support())
 	if err != nil {
 		t.Fatalf("Registration failed: %v", err)
 	}
@@ -95,7 +96,7 @@ func TestManagerFunctionality(t *testing.T) {
 
 	c2s, keys, flags := mockReceiveFromDetector()
 
-	newReg, err := rm.NewRegistration(&c2s, &keys, flags)
+	newReg, err := rm.NewRegistration(&c2s, &keys, flags, c2s.GetV6Support())
 	if err != nil {
 		t.Fatalf("Registration failed: %v", err)
 	}
