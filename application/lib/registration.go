@@ -39,7 +39,7 @@ func NewRegistrationManager() *RegistrationManager {
 func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, flags [1]byte, includeV6 bool) (*DecoyRegistration, error) {
 
 	darkDecoyAddr, err := regManager.DDSelector.Select(
-		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), c2s.GetV6Support())
+		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to select dark decoy IP address: %v", err)
