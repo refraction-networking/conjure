@@ -113,8 +113,9 @@ func (reg *DecoyRegistration) IDString() string {
 // see  ZMap: Fast Internet-wide Scanning  and Its Security Applications
 // https://www.usenix.org/system/files/conference/usenixsecurity13/sec13-paper_durumeric.pdf
 //
-// return:		true  - host is live
-// 				false - host is not life
+// return:	bool	true  - host is live
+// 					false - host is not life
+//			error	reason decision was made
 func (reg *DecoyRegistration) PhantomIsLive() (bool, error) {
 	if reg.DarkDecoy.To4() != nil {
 		return phantomIsLive(reg.DarkDecoy.String() + ":443")
