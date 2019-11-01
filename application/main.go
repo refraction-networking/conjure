@@ -81,25 +81,27 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 
 	for {
 
-		newReg, err := recieve_zmq_message(sub, regManager)
-		if err != nil || newReg == nil {
-			logger.Printf("Encountered err when creating Reg: %v \n- %v\n", err, newReg.String())
+		newRegs, err := recieve_zmq_message(sub, regManager)
+		if err != nil || len(newRegs) == 0 {
+			logger.Printf("Encountered err when creating Reg: %v\n", err)
 			continue
 		}
 
-		liveness, response := newReg.PhantomIsLive()
+		// Handle multiple
+		for _, reg := range newRegs {
+			liveness, response := reg.PhantomIsLive()
 
-		if liveness == false {
-			regManager.AddRegistration(newReg)
-
-			logger.Printf("Adding registration %v: phantom response: %v\n", newReg.IDString(), response)
-		} else {
-			logger.Printf("Dropping registration %v -- live phantom: %v\n", newReg.IDString(), response)
+			if liveness == false {
+				regManager.AddRegistration(reg)
+				logger.Printf("Adding registration %v: phantom response: %v\n", reg.IDString(), response)
+			} else {
+				logger.Printf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
+			}
 		}
 	}
 }
 
-func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, error) {
+func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) ([]*dd.DecoyRegistration, error) {
 	// var ipAddr []byte
 	// var covertAddrLen, maskedAddrLen [1]byte
 
@@ -139,16 +141,35 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) (*
 
 	conjureKeys, err := dd.GenSharedKeys(sharedSecret[:])
 
-	newReg, err := regManager.NewRegistration(clientToStation, &conjureKeys, flags)
-	if err != nil {
-		logger.Printf("Failed to create registration: %v", err)
-		return nil, err
+	// Register one or both of v4 and v6 based on support specified by the client
+	var newRegs []*dd.DecoyRegistration
+
+	if clientToStation.GetV4Support() {
+		reg, err := regManager.NewRegistration(clientToStation, &conjureKeys, flags, false)
+		if err != nil {
+			logger.Printf("Failed to create registration: %v", err)
+			return nil, err
+		}
+
+		// log phantom IP, shared secret, ipv6 support
+		logger.Printf("New registration: %v\n", reg.String())
+
+		newRegs = append(newRegs, reg)
 	}
 
-	// log phantom IP, shared secret, ipv6 support
-	logger.Printf("New registration: %v\n", newReg.String())
+	if clientToStation.GetV6Support() {
+		reg, err := regManager.NewRegistration(clientToStation, &conjureKeys, flags, true)
+		if err != nil {
+			logger.Printf("Failed to create registration: %v", err)
+			return nil, err
+		}
 
-	return newReg, nil
+		// log phantom IP, shared secret, ipv6 support
+		logger.Printf("New registration: %v\n", reg.String())
+		newRegs = append(newRegs, reg)
+	}
+
+	return newRegs, nil
 }
 
 var logger *log.Logger
