@@ -84,15 +84,17 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 			continue
 		}
 
-		liveness, response := newReg.PhantomIsLive()
+		go func() {
+			liveness, response := newReg.PhantomIsLive()
 
-		if liveness == false {
-			regManager.AddRegistration(newReg)
+			if liveness == false {
+				regManager.AddRegistration(newReg)
 
-			logger.Printf("Adding registration %v: phantom response: %v\n", newReg.IDString(), response)
-		} else {
-			logger.Printf("Dropping registration %v -- live phantom: %v\n", newReg.IDString(), response)
-		}
+				logger.Printf("Adding registration %v: phantom response: %v\n", newReg.IDString(), response)
+			} else {
+				logger.Printf("Dropping registration %v -- live phantom: %v\n", newReg.IDString(), response)
+			}
+		}()
 	}
 }
 
