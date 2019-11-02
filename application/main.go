@@ -47,21 +47,18 @@ func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) 
 		return
 	}
 
-	reg := regManager.CheckRegistration(&originalDstIP)
-	if reg == nil {
-		logger.Printf("registration for %v not found\n", originalDstIP)
-		return
-	}
+	dd.MinTransportProxy(regManager, clientConn, originalDstIP)
 
-	proxyHandler := dd.ProxyFactory(reg, 0)
-	if proxyHandler != nil {
-		logger.Printf("New Connection: source: %s, phantom: %s, shared secret: %s\n",
-			clientConn.RemoteAddr().String(), reg.DarkDecoy.String(), reg.IDString())
-		proxyHandler(reg, clientConn, originalDstIP)
-	} else {
-		logger.Printf("failed to initialize proxy, unknown or unimplemented protocol.\n")
-		return
-	}
+	/*
+		proxyHandler := dd.ProxyFactory(reg, 0)
+		if proxyHandler != nil {
+			logger.Printf("New Connection: source: %s, phantom: %s, shared secret: %s\n",
+				clientConn.RemoteAddr().String(), reg.DarkDecoy.String(), reg.IDString())
+			proxyHandler(reg, clientConn, originalDstIP)
+		} else {
+			logger.Printf("failed to initialize proxy, unknown or unimplemented protocol.\n")
+			return
+		}*/
 }
 
 func get_zmq_updates(regManager *dd.RegistrationManager) {
@@ -77,7 +74,7 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 	sub.Bind(bindAddr)
 	sub.SetSubscribe("")
 
-	logger.Printf("listening on %v\n", bindAddr)
+	logger.Printf("ZMQ listening on %v\n", bindAddr)
 
 	for {
 
