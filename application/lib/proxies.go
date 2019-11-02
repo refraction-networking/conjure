@@ -108,6 +108,18 @@ func halfPipe(src, dst net.Conn,
 	wg.Done()
 }
 
+func readAtMost(conn *net.TCPConn, buf []byte) (int, error) {
+	tot := 0
+	for tot < len(buf) {
+		n, err := conn.Read(buf[tot:])
+		if err != nil {
+			return n, err
+		}
+		tot += n
+	}
+	return tot, nil
+}
+
 func MinTransportProxy(regManager *RegistrationManager, clientConn *net.TCPConn, originalDstIP net.IP) {
 
 	originalDst := originalDstIP.String()
@@ -117,9 +129,8 @@ func MinTransportProxy(regManager *RegistrationManager, clientConn *net.TCPConn,
 
 	logger.Printf("new connection (%d potential registrations)", regManager.CountRegistrations(&originalDstIP))
 
-	//clientBufConn := makeBufferedReaderConn(clientConn, bufio.NewReader(clientConn))
 	possibleHmac := make([]byte, 32)
-	n, err := clientConn.Read(possibleHmac)
+	n, err := readAtMost(clientConn, possibleHmac)
 	if err != nil || n < 32 {
 		logger.Printf("failed to read hmacId, read %d bytes: %s", n, err)
 		return
