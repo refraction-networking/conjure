@@ -3,6 +3,7 @@ package lib
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -107,10 +108,71 @@ func halfPipe(src, dst net.Conn,
 	wg.Done()
 }
 
+func readAtMost(conn *net.TCPConn, buf []byte) (int, error) {
+	tot := 0
+	for tot < len(buf) {
+		n, err := conn.Read(buf[tot:])
+		if err != nil {
+			return n, err
+		}
+		tot += n
+	}
+	return tot, nil
+}
+
+func MinTransportProxy(regManager *RegistrationManager, clientConn *net.TCPConn, originalDstIP net.IP) {
+
+	originalDst := originalDstIP.String()
+	originalSrc := clientConn.RemoteAddr().String()
+	flowDescription := fmt.Sprintf("[%s -> %s] ", originalSrc, originalDst)
+	logger := log.New(os.Stdout, "[MIN] "+flowDescription, log.Lmicroseconds)
+
+	logger.Printf("new connection (%d potential registrations)", regManager.CountRegistrations(&originalDstIP))
+
+	possibleHmac := make([]byte, 32)
+	n, err := readAtMost(clientConn, possibleHmac)
+	if err != nil || n < 32 {
+		logger.Printf("failed to read hmacId, read %d bytes: %s", n, err)
+		return
+	}
+
+	reg := regManager.CheckRegistration(&originalDstIP, possibleHmac)
+	if reg == nil {
+		logger.Printf("registration for %v hmac %s not found\n", originalDstIP, hex.EncodeToString(possibleHmac))
+		return
+	}
+	// If we are here, this is our transport (TODO: signal in output channel for it)
+
+	logger.Printf("found registration for phantom %s hmac %s (covert: %s)", originalDstIP, hex.EncodeToString(possibleHmac), reg.Covert)
+
+	covertConn, err := net.Dial("tcp", reg.Covert)
+	if err != nil {
+		logger.Printf("failed to dial target: %s", err)
+		return
+	}
+	defer covertConn.Close()
+
+	if reg.Flags&TdFlagProxyHeader != 0 {
+		err = writePROXYHeader(covertConn, clientConn.RemoteAddr().String())
+		if err != nil {
+			logger.Printf("failed to send PROXY header to covert: %s", err)
+			return
+		}
+	}
+
+	wg := sync.WaitGroup{}
+	oncePrintErr := sync.Once{}
+	wg.Add(2)
+
+	go halfPipe(clientConn, covertConn, wg, oncePrintErr, logger)
+	go halfPipe(covertConn, clientConn, wg, oncePrintErr, logger)
+	wg.Wait()
+}
+
 func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
 	var err error
 	originalDst := originalDstIP.String()
-	notReallyOriginalSrc := clientConn.LocalAddr().String()
+	notReallyOriginalSrc := clientConn.RemoteAddr().String()
 	flowDescription := fmt.Sprintf("[%s -> %s (covert=%s)] ",
 		notReallyOriginalSrc, originalDst, reg.Covert)
 	logger := log.New(os.Stdout, "[2WP] "+flowDescription, log.Lmicroseconds)
