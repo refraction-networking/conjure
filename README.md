@@ -6,6 +6,9 @@
 
 ```sh
 sudo apt install libzmq3-dev redis-server
+go get -d -u -t github.com/refraction-networking/gotapdance/...
+go get -d github.com/go-redis/redis
+
 ```
 
 ### Install PF_RING
