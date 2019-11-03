@@ -22,7 +22,7 @@ type RegistrationManager struct {
 }
 
 func NewRegistrationManager() *RegistrationManager {
-	logger := log.New(os.Stdout, "", log.Lmicroseconds)
+	logger := log.New(os.Stdout, "[REG] ", log.Lmicroseconds)
 
 	d, err := NewDDIpSelector()
 	if err != nil {
@@ -51,6 +51,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		Covert:    c2s.GetCovertAddress(),
 		Mask:      c2s.GetMaskedDecoyServerName(),
 		Flags:     uint8(flags[0]),
+		Transport: uint(c2s.GetTransport()), // hack
 	}
 
 	return &reg, nil
@@ -61,22 +62,38 @@ func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 	registerForDetector(d)
 
 	darkDecoyAddr := d.DarkDecoy.String()
-	regManager.registeredDecoys.register(darkDecoyAddr, d)
+	err := regManager.registeredDecoys.register(darkDecoyAddr, d)
+	if err != nil {
+		regManager.Logger.Printf("Error registering decoy: %s", err)
+	}
 }
 
-func (regManager *RegistrationManager) CheckRegistration(darkDecoyAddr *net.IP) *DecoyRegistration {
-	return regManager.registeredDecoys.checkRegistration(darkDecoyAddr)
+func (regManager *RegistrationManager) CheckRegistration(darkDecoyAddr *net.IP, hmacId []byte) *DecoyRegistration {
+	return regManager.registeredDecoys.checkRegistration(darkDecoyAddr, hmacId)
+}
+
+func (regManager *RegistrationManager) CountRegistrations(darkDecoyAddr *net.IP) int {
+	return regManager.registeredDecoys.countRegistrations(darkDecoyAddr)
 }
 
 func (regManager *RegistrationManager) RemoveOldRegistrations() {
 	regManager.registeredDecoys.removeOldRegistrations()
 }
 
+// Note: These must match the order in the client tapdance/conjure.go transports
+// and the C2S protobuf
+const (
+	NullTransport uint = iota
+	MinTransport
+	Obfs4Transport
+)
+
 type DecoyRegistration struct {
 	DarkDecoy    *net.IP
 	keys         *ConjureSharedKeys
 	Covert, Mask string
 	Flags        uint8
+	Transport    uint
 }
 
 // String -- Print a digest of the important identifying information for this registration.
@@ -87,10 +104,9 @@ func (reg *DecoyRegistration) String() string {
 		return fmt.Sprintf("%v", reg.String())
 	}
 
-	reprStr := make([]byte, hex.EncodedLen(len(reg.keys.SharedSecret)))
-	hex.Encode(reprStr, reg.keys.SharedSecret)
-	digest := fmt.Sprintf("{phantom=%v, covert=%v, mask=%v, flags=0x%02x, Shared Secret:%s}",
-		reg.DarkDecoy.String(), reg.Covert, reg.Mask, reg.Flags, reprStr)
+	digest := fmt.Sprintf("{phantom=%v, covert=%v, mask=%v, flags=0x%02x, SharedSecret=%s, Transport=%d}",
+		reg.DarkDecoy.String(), reg.Covert, reg.Mask, reg.Flags,
+		hex.EncodeToString(reg.keys.SharedSecret), reg.Transport)
 
 	return digest
 }
@@ -158,39 +174,84 @@ func phantomIsLive(address string) (bool, error) {
 	}
 }
 
+type DecoyTimeout struct {
+	decoy            string
+	hmacId           string
+	registrationTime time.Time
+}
+
 type RegisteredDecoys struct {
-	decoys         map[string]*DecoyRegistration
-	decoysTimeouts []struct {
-		decoy            string
-		registrationTime time.Time
-	}
-	m sync.RWMutex
+	// decoys will be a map from decoy_ip to a:
+	//						map from 32-byte hmac identifier to decoy registration
+	// TODO: allow this to support things like obfs4 on one IP and min transport on another, etc
+	decoys map[string]map[string]*DecoyRegistration
+	//_null_decoys   map[string]*DecoyRegistration
+	decoysTimeouts []DecoyTimeout
+	m              sync.RWMutex
 }
 
 func NewRegisteredDecoys() *RegisteredDecoys {
 	return &RegisteredDecoys{
-		decoys: make(map[string]*DecoyRegistration),
+		decoys: make(map[string]map[string]*DecoyRegistration),
 	}
 }
 
-func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) {
+func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) error {
+
 	r.m.Lock()
+	defer r.m.Unlock()
+
 	if d != nil {
-		r.decoys[darkDecoyAddr] = d
-		r.decoysTimeouts = append(r.decoysTimeouts, struct {
-			decoy            string
-			registrationTime time.Time
-		}{decoy: darkDecoyAddr, registrationTime: time.Now()})
+		switch d.Transport {
+		case MinTransport:
+			hmacId := string(d.keys.conjureHMAC("MinTrasportHMACString"))
+
+			_, exists := r.decoys[darkDecoyAddr]
+			if exists == false {
+				r.decoys[darkDecoyAddr] = map[string]*DecoyRegistration{}
+			}
+			r.decoys[darkDecoyAddr][hmacId] = d
+
+			r.decoysTimeouts = append(r.decoysTimeouts,
+				DecoyTimeout{
+					decoy:            darkDecoyAddr,
+					hmacId:           hmacId,
+					registrationTime: time.Now(),
+				})
+		case Obfs4Transport:
+			fallthrough
+		case NullTransport:
+			fallthrough
+		default:
+			return fmt.Errorf("Unsupported transport %d for decoy %s", d.Transport, darkDecoyAddr)
+		}
 	}
-	r.m.Unlock()
+	return nil
 }
 
-func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP) *DecoyRegistration {
+func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byte) *DecoyRegistration {
 	darkDecoyAddrStatic := darkDecoyAddr.String()
 	r.m.RLock()
-	d := r.decoys[darkDecoyAddrStatic]
-	r.m.RUnlock()
+	defer r.m.RUnlock()
+
+	regs, exists := r.decoys[darkDecoyAddrStatic]
+	if !exists {
+		return nil
+	}
+	d := regs[string(hmacId)]
 	return d
+}
+
+func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr *net.IP) int {
+	ddAddrStr := darkDecoyAddr.String()
+	r.m.RLock()
+	defer r.m.RUnlock()
+
+	regs, exists := r.decoys[ddAddrStr]
+	if !exists {
+		return 0
+	}
+	return len(regs)
 }
 
 // TODO log registration expiration
@@ -203,7 +264,9 @@ func (r *RegisteredDecoys) removeOldRegistrations() {
 		if cutoff.After(r.decoysTimeouts[idx].registrationTime) {
 			break
 		}
-		delete(r.decoys, r.decoysTimeouts[idx].decoy)
+		decoyAddr := r.decoysTimeouts[idx].decoy
+		hmacId := r.decoysTimeouts[idx].hmacId
+		delete(r.decoys[decoyAddr], hmacId)
 		idx += 1
 	}
 	r.decoysTimeouts = r.decoysTimeouts[idx:]

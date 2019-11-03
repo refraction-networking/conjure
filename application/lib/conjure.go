@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 
 	"golang.org/x/crypto/hkdf"
@@ -42,4 +43,15 @@ func GenSharedKeys(sharedSecret []byte) (ConjureSharedKeys, error) {
 		return keys, err
 	}
 	return keys, nil
+}
+
+// from client tapdance/conjure.go
+func conjureHMAC(key []byte, str string) []byte {
+	hash := hmac.New(sha256.New, key)
+	hash.Write([]byte(str))
+	return hash.Sum(nil)
+}
+
+func (k *ConjureSharedKeys) conjureHMAC(str string) []byte {
+	return conjureHMAC(k.SharedSecret, str)
 }
