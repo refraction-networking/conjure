@@ -166,7 +166,7 @@ func phantomIsLive(address string) (bool, error) {
 	case err := <-dialError:
 		// fmt.Printf("Received: %v\n", err)
 		if err != nil {
-			return false, err
+			return true, err
 		}
 		return true, nil
 	default:
