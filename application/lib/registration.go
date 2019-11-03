@@ -260,6 +260,8 @@ func (r *RegisteredDecoys) removeOldRegistrations() {
 	cutoff := time.Now().Add(timeout)
 	idx := 0
 	r.m.Lock()
+	defer r.m.Unlock()
+
 	for idx < len(r.decoysTimeouts) {
 		if cutoff.After(r.decoysTimeouts[idx].registrationTime) {
 			break
@@ -270,7 +272,6 @@ func (r *RegisteredDecoys) removeOldRegistrations() {
 		idx += 1
 	}
 	r.decoysTimeouts = r.decoysTimeouts[idx:]
-	r.m.Unlock()
 }
 
 func registerForDetector(reg *DecoyRegistration) {
@@ -278,7 +279,11 @@ func registerForDetector(reg *DecoyRegistration) {
 	if err != nil {
 		fmt.Printf("couldn't connect to redis")
 	} else {
-		client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To4()))
+		if reg.DarkDecoy.To4() != nil {
+			client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To4()))
+		} else {
+			client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To16()))
+		}
 		client.Close()
 	}
 }
