@@ -103,7 +103,7 @@ func TestManagerFunctionality(t *testing.T) {
 
 	rm.AddRegistration(newReg)
 
-	storedReg := rm.CheckRegistration(newReg.DarkDecoy)
+	storedReg := rm.CheckRegistration(newReg.DarkDecoy, conjureHMAC([]byte("1abcd2efgh3ijkl4"), "customString"))
 
 	if storedReg.DarkDecoy.String() != "192.122.190.81" || storedReg.Covert != "52.44.73.6:443" {
 		t.Fatalf("Improper registration returned: %v\n", storedReg.String())

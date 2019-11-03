@@ -38,7 +38,7 @@ func NewRegistrationManager() *RegistrationManager {
 
 func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, flags [1]byte, includeV6 bool) (*DecoyRegistration, error) {
 
-	darkDecoyAddr, err := regManager.DDSelector.Select(
+	phantomAddr, err := regManager.DDSelector.Select(
 		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
 
 	if err != nil {
@@ -46,7 +46,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	}
 
 	reg := DecoyRegistration{
-		DarkDecoy: darkDecoyAddr,
+		DarkDecoy: phantomAddr,
 		keys:      conjureKeys,
 		Covert:    c2s.GetCovertAddress(),
 		Mask:      c2s.GetMaskedDecoyServerName(),
@@ -133,10 +133,7 @@ func (reg *DecoyRegistration) IDString() string {
 // 					false - host is not life
 //			error	reason decision was made
 func (reg *DecoyRegistration) PhantomIsLive() (bool, error) {
-	if reg.DarkDecoy.To4() != nil {
-		return phantomIsLive(reg.DarkDecoy.String() + ":443")
-	}
-	return phantomIsLive("[" + reg.DarkDecoy.String() + "]:443")
+	return phantomIsLive(net.JoinHostPort(reg.DarkDecoy.String(), "443"))
 }
 
 func phantomIsLive(address string) (bool, error) {
