@@ -36,17 +36,17 @@ func NewRegistrationManager() *RegistrationManager {
 	}
 }
 
-func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, flags [1]byte) (*DecoyRegistration, error) {
+func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, flags [1]byte, includeV6 bool) (*DecoyRegistration, error) {
 
-	darkDecoyAddr, err := regManager.DDSelector.Select(
-		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), c2s.GetV6Support())
+	phantomAddr, err := regManager.DDSelector.Select(
+		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to select dark decoy IP address: %v", err)
 	}
 
 	reg := DecoyRegistration{
-		DarkDecoy: darkDecoyAddr,
+		DarkDecoy: phantomAddr,
 		keys:      conjureKeys,
 		Covert:    c2s.GetCovertAddress(),
 		Mask:      c2s.GetMaskedDecoyServerName(),
@@ -133,10 +133,7 @@ func (reg *DecoyRegistration) IDString() string {
 // 					false - host is not life
 //			error	reason decision was made
 func (reg *DecoyRegistration) PhantomIsLive() (bool, error) {
-	if reg.DarkDecoy.To4() != nil {
-		return phantomIsLive(reg.DarkDecoy.String() + ":443")
-	}
-	return phantomIsLive("[" + reg.DarkDecoy.String() + "]:443")
+	return phantomIsLive(net.JoinHostPort(reg.DarkDecoy.String(), "443"))
 }
 
 func phantomIsLive(address string) (bool, error) {
@@ -166,7 +163,7 @@ func phantomIsLive(address string) (bool, error) {
 	case err := <-dialError:
 		// fmt.Printf("Received: %v\n", err)
 		if err != nil {
-			return false, err
+			return true, err
 		}
 		return true, nil
 	default:
@@ -260,6 +257,8 @@ func (r *RegisteredDecoys) removeOldRegistrations() {
 	cutoff := time.Now().Add(timeout)
 	idx := 0
 	r.m.Lock()
+	defer r.m.Unlock()
+
 	for idx < len(r.decoysTimeouts) {
 		if cutoff.After(r.decoysTimeouts[idx].registrationTime) {
 			break
@@ -270,7 +269,6 @@ func (r *RegisteredDecoys) removeOldRegistrations() {
 		idx += 1
 	}
 	r.decoysTimeouts = r.decoysTimeouts[idx:]
-	r.m.Unlock()
 }
 
 func registerForDetector(reg *DecoyRegistration) {
@@ -278,7 +276,11 @@ func registerForDetector(reg *DecoyRegistration) {
 	if err != nil {
 		fmt.Printf("couldn't connect to redis")
 	} else {
-		client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To4()))
+		if reg.DarkDecoy.To4() != nil {
+			client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To4()))
+		} else {
+			client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To16()))
+		}
 		client.Close()
 	}
 }
