@@ -76,7 +76,7 @@ func ProxyFactory(reg *DecoyRegistration, proxyProtocol uint) func(*DecoyRegistr
 // this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to pass around
 // TODO: refactor
 func halfPipe(src, dst net.Conn,
-	wg sync.WaitGroup,
+	wg *sync.WaitGroup,
 	oncePrintErr sync.Once,
 	logger *log.Logger) {
 
@@ -164,8 +164,8 @@ func MinTransportProxy(regManager *RegistrationManager, clientConn *net.TCPConn,
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(clientConn, covertConn, wg, oncePrintErr, logger)
-	go halfPipe(covertConn, clientConn, wg, oncePrintErr, logger)
+	go halfPipe(clientConn, covertConn, &wg, oncePrintErr, logger)
+	go halfPipe(covertConn, clientConn, &wg, oncePrintErr, logger)
 	wg.Wait()
 }
 
@@ -197,8 +197,8 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(clientConn, covertConn, wg, oncePrintErr, logger)
-	go halfPipe(covertConn, clientConn, wg, oncePrintErr, logger)
+	go halfPipe(clientConn, covertConn, &wg, oncePrintErr, logger)
+	go halfPipe(covertConn, clientConn, &wg, oncePrintErr, logger)
 	wg.Wait()
 }
 
@@ -410,13 +410,13 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(finalClientConn, finalTargetConn, wg, oncePrintErr, logger)
+	go halfPipe(finalClientConn, finalTargetConn, &wg, oncePrintErr, logger)
 
 	go func() {
 		// wait for readFromServerAndParse to exit first, as it probably haven't seen appdata yet
 		select {
 		case _ = <-serverErrChan:
-			halfPipe(finalClientConn, finalTargetConn, wg, oncePrintErr, logger)
+			halfPipe(finalClientConn, finalTargetConn, &wg, oncePrintErr, logger)
 		case <-time.After(10 * time.Second):
 			finalClientConn.Close()
 			wg.Done()
