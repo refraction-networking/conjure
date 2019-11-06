@@ -8,6 +8,7 @@ extern crate pnet;
 extern crate rand;
 extern crate time;
 extern crate errno;
+extern crate hex;
 
 extern crate radix; // https://github.com/refraction-networking/radix
 extern crate tuntap; // https://github.com/ewust/tuntap.rs
@@ -34,6 +35,7 @@ pub mod logging;
 pub mod c_api;
 pub mod elligator;
 pub mod flow_tracker;
+pub mod dd_selector;
 pub mod process_packet;
 pub mod util;
 pub mod session;
@@ -42,6 +44,8 @@ pub mod signalling;
 use session::SessionState;
 
 use flow_tracker::{Flow,FlowTracker};
+use dd_selector::{DDIpSelector};
+
 
 // Global program state for one instance of a TapDance station process.
 pub struct PerCoreGlobal
@@ -55,6 +59,8 @@ pub struct PerCoreGlobal
     pub sessions: HashMap<Flow, SessionState>,
     // Just some scratch space for mio.
     //events_buf: Events,
+
+    pub dd_ip_selector: DDIpSelector,
 
     pub tun: TunTap,
 
@@ -115,6 +121,7 @@ impl PerCoreGlobal
             lcore: the_lcore,
             sessions: HashMap::new(),
             flow_tracker: FlowTracker::new(),
+            dd_ip_selector: DDIpSelector::new(),
             tun: tun,
             stats: PerCoreStats::new(),
             ip_tree: PrefixTree::new(),

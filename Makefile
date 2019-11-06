@@ -12,7 +12,7 @@ CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_R
 PROTO_RS_PATH=src/signalling.rs
 
 
-all: rust dark-decoy libtd app ${PROTO_RS_PATH}
+all: rust libtd dark-decoy app ${PROTO_RS_PATH}
 
 rust: ./src/*.rs
 	cargo build --${DEBUG_OR_RELEASE}
@@ -24,7 +24,7 @@ app:
 	cd ./application/ && make
 
 libtd:
-	cd ./libtapdance/ && make
+	cd ./libtapdance/ && make libtapdance.a
 
 dark-decoy: detect.c loadkey.c rust_util.c rust libtapdance
 	${CC} ${CFLAGS} -o $@ detect.c loadkey.c rust_util.c ${LIBS}

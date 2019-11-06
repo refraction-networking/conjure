@@ -83,10 +83,15 @@ message ClientConf {
     optional DecoyList decoy_list = 1;
     optional uint32 generation = 2;
     optional PubKey default_pubkey = 3;
+    optional DarkDecoyBlocks dark_decoy_blocks = 4;
 }
 
 message DecoyList {
     repeated TLSDecoySpec tls_decoys = 1;
+}
+
+message DarkDecoyBlocks{
+    repeated string blocks = 1;
 }
 
 // State transitions of the client
@@ -182,6 +187,13 @@ message ClientToStation {
 
     // Used in dark decoys to signal which dark decoy it will connect to.
     optional string masked_decoy_server_name = 21;
+
+    // Used to indicate to server if client is registering v4, v6 or both
+    optional bool v6_support = 22;
+    optional bool v4_support = 23;
+
+    // Protocol Type -> protocol used in client to proxy station
+    optional uint32 c2s_transport = 24;
 
     // Random-sized junk to defeat packet size fingerprinting.
     optional bytes padding = 100;

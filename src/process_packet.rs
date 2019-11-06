@@ -2,6 +2,7 @@ use libc::size_t;
 use std::os::raw::c_void;
 use std::panic;
 use std::slice;
+use std:: str;
 
 use pnet::packet::Packet;
 use pnet::packet::ethernet::{EthernetPacket, EtherTypes};
@@ -14,14 +15,16 @@ use std::net::IpAddr;
 use std::u8;
 //use elligator;
 use flow_tracker::{Flow, FlowNoSrcPort};
+use dd_selector::DDIpSelector;
 use PerCoreGlobal;
-use util::{IpPacket, DDIpSelector};
+use util::{IpPacket, FSP};
 use elligator;
 use protobuf;
 use signalling::ClientToStation;
 
 
 const TLS_TYPE_APPLICATION_DATA: u8 = 0x17;
+const SPECIAL_PACKET_PAYLOAD: &'static str = "'This must be Thursday,' said Arthur to himself, sinking low over his beer. 'I never could get the hang of Thursdays.'";
 //const SQUID_PROXY_ADDR: &'static str = "127.0.0.1";
 //const SQUID_PROXY_PORT: u16 = 1234;
 
@@ -62,7 +65,6 @@ fn get_ip_packet<'p>(eth_pkt: &'p EthernetPacket) -> Option<IpPacket<'p>>
         _ => None,
     }
 }
-
 
 // The jumping off point for all of our logic. This function inspects a packet
 // that has come in the tap interface. We do not yet have any idea if we care
@@ -211,15 +213,17 @@ impl PerCoreGlobal
 
         if  is_tls_app_pkt(&tcp_pkt) {
             match self.check_dark_decoy_tag(&flow, &tcp_pkt) {
-                Some(dd_flow) => {
-                    debug!("New Dark Decoy Flow {} negotiated in {},", dd_flow, flow);
-                    self.flow_tracker.mark_dark_decoy(&dd_flow);
+                true => {
+                    // debug!("New Conjure registration detected in {},", flow);
+                    // self.flow_tracker.mark_dark_decoy(&dd_flow);
                     // not removing flow from stale_tracked_flows for optimization reasons:
                     // it will be removed later
                 },
-                None => {}
+                false => {}
             };
             self.flow_tracker.stop_tracking_flow(&flow);
+        }else {
+            self.check_connect_test_str(&flow, &tcp_pkt);
         }
     }
 
@@ -237,8 +241,8 @@ impl PerCoreGlobal
         // looks like the tun setup has its own type of header, rather than just
         // making up a fake Ethernet header.
         let raw_hdr = match ip_pkt {
-            IpPacket::V4(p) => [0x00, 0x01, 0x08, 0x00],
-            IpPacket::V6(p) => [0x00, 0x01, 0x86, 0xdd],
+            IpPacket::V4(_p) => [0x00, 0x01, 0x08, 0x00],
+            IpPacket::V6(_p) => [0x00, 0x01, 0x86, 0xdd],
         };
         tun_pkt.extend_from_slice(&raw_hdr);
         tun_pkt.extend_from_slice(data);
@@ -250,90 +254,54 @@ impl PerCoreGlobal
 
     fn check_dark_decoy_tag(&mut self,
                             flow: &Flow,
-                            tcp_pkt: &TcpPacket) -> Option<FlowNoSrcPort>
+                            tcp_pkt: &TcpPacket) -> bool
     {
         self.stats.elligator_this_period += 1;
         match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
             Ok(res) => {
-                let dd_ip_selector = match DDIpSelector::new(&vec![String::from("192.122.190.0/24"),
-                                                                   String::from("2001:48a8:687f:1::/64")]) {
-                    // TODO: move this initialization up
-                    Ok(dd) => dd,
-                    Err(e) => {
-                        error!("failed to make Dark Decoy IP selector: {}", e);
-                        return None;
-                    }
-                };
-
-                let dst_ip = match dd_ip_selector.select(res.0.dark_decoy_seed){
-                    Some(ip) => ip,
-                    None => {
-                        error!("failed to select dark decoy IP address");
-                        return None;
-                    }
-                };
-
-                let mut c2s = match protobuf::parse_from_bytes::<ClientToStation>
-                    (&res.2) {
-                    Ok(pb) => pb,
-                    Err(e) => {
-                        error!("Error parsing protobuf from VSP: {:?}", e);
-                        return None;
-                    }
-                };
-                if !c2s.has_covert_address() {
-                    error!("ClientToStation has no covert: {:?}", c2s);
-                    return None;
-                }
-
-                let covert_bytes = c2s.get_covert_address().as_bytes();
-                let masked_decoy_bytes = c2s.get_masked_decoy_server_name().as_bytes();
+                // res.0 => shared secret
+                // res.1 => Fixed size payload
+                // res.2 => variable size payload (c2s)
 
                 // form message for zmq
                 let mut zmq_msg: Vec<u8> = Vec::new();
 
-                zmq_msg.append(&mut res.0.new_master_secret.to_vec());
+                let mut shared_secret = res.0.to_vec();
+                zmq_msg.append(&mut shared_secret);
 
-                let mut ip_as_bytes = match dst_ip {
-                    IpAddr::V6(ip) => ip.octets().to_vec(),
-                    IpAddr::V4(ip) => {
-                        // Convert to Ipv6-mapped v4 address
-                        let mut v6 = vec![0; 16];
-                        v6[10] = 0xff;
-                        v6[11] = 0xff;
-                        v6[12..].clone_from_slice(&ip.octets());
-                        v6
+                let mut fsp = res.1.to_vec(); 
+                zmq_msg.append(&mut fsp);
+
+                // VSP --> ClientToStation
+                let mut vsp = res.2.to_vec();
+                zmq_msg.append(&mut vsp);
+                
+                let repr_str = hex::encode(res.0);
+                debug!("New registration {}, {}", flow, repr_str);
+
+                match self.zmq_sock.send(&zmq_msg, 0){
+                    Ok(_)=> return true,
+                    Err(e) => {
+                        warn!("Failed to send registration information over ZMQ: {}", e);
+                        return false
                     },
-                };
-                zmq_msg.append(&mut ip_as_bytes);
-
-                let covert_bytes_len: u8 = match usize_to_u8(covert_bytes.len()) {
-                    Some(len) => len,
-                    None => {
-                        error!("covert address too long");
-                        return None;
-                    }
-                };
-                zmq_msg.push(covert_bytes_len);
-                zmq_msg.append(&mut covert_bytes.to_vec());
-
-                let masked_decoy_bytes_len: u8 = match usize_to_u8(masked_decoy_bytes.len()) {
-                    Some(len) => len,
-                    None => {
-                        error!("covert address too long");
-                        return None;
-                    }
-                };
-                zmq_msg.push(masked_decoy_bytes_len);
-                zmq_msg.append(&mut masked_decoy_bytes.to_vec());
-
-                self.zmq_sock.send(&zmq_msg, 0);
-
-                return Some(FlowNoSrcPort::from_parts(flow.src_ip, dst_ip, 443));
+                }
             },
             Err(_e) => {
-                return None;
+                return false;
             }
+        }
+    }
+
+    fn check_connect_test_str(&mut self, flow: &Flow, tcp_pkt: &TcpPacket) {
+        match str::from_utf8(tcp_pkt.payload()) {
+            Ok(payload) => {
+                if payload == SPECIAL_PACKET_PAYLOAD {
+                    debug!("Validated traffic from {}:{} to {}:{}", 
+                        flow.src_ip, flow.src_port, flow.dst_ip, flow.dst_port)
+                }
+            },
+            Err(_) => {},
         }
     }
 } // impl PerCoreGlobal
@@ -345,3 +313,6 @@ fn usize_to_u8(a: usize) -> Option<u8> {
         Some(a as u8)
     }
 }
+
+
+
