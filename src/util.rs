@@ -7,15 +7,13 @@ extern crate ipnetwork;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
-use std::collections::LinkedList;
+use std::error::Error;
 
 use pnet::packet::Packet;
 use pnet::packet::tcp::{TcpOptionNumbers, TcpPacket};
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
 
-use self::ipnetwork::{IpNetwork};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 pub enum IpPacket<'p> {
     V4(Ipv4Packet<'p>),
@@ -153,8 +151,8 @@ impl HKDFKeys
 {
     pub fn new(shared_secret: &[u8]) -> Result<HKDFKeys, Box<hkdf::InvalidLength>>
     {
-        // const salt: &'static str = "tapdancetapdancetapdancetapdance";
-        let salt = "tapdancetapdancetapdancetapdance".as_bytes();
+        // let salt = "tapdancetapdancetapdancetapdance".as_bytes();
+        let salt = "conjureconjureconjureconjure".as_bytes();
         let kdf = hkdf::Hkdf::<sha2::Sha256>::extract(Some(salt), shared_secret);
         let info = [0u8; 0];
 
@@ -179,108 +177,72 @@ impl HKDFKeys
     }
 }
 
-#[derive(Debug)]
-pub struct DDIpSelector {
-    pub networks: LinkedList<IpNetwork>,
+
+pub struct FSP {
+    pub vsp_size: u16,
+    pub flags: u8,
+    unassigned: [u8; FSP::UNUSED_BYTES],
+    bytes: Vec<u8>,
 }
 
-impl DDIpSelector {
-    pub fn new(subnets: &Vec<String>) -> Result<DDIpSelector, self::ipnetwork::IpNetworkError> {
-        let mut net_list = LinkedList::new();
-        for str_net in subnets.iter() {
-            let net: IpNetwork = str_net.parse()?;
-            net_list.push_back(net.clone());
+impl FSP {
+    const UNUSED_BYTES: usize = 3;
+    const USED_BYTES: usize = 3;
+    pub const LENGTH: usize = 6;
+    pub const FLAG_PROXY_HEADER: u8 = 0x4;
+    pub const FLAG_UPLOAD_ONLY:  u8 = (1 << 7);
+	pub const FLAG_USE_TIL:      u8 = (1 << 0);
+    
+    pub fn fromVec(fixed_size_payload: Vec<u8>) -> Result<FSP, Box<Error>> {
+        if fixed_size_payload.len() < FSP::USED_BYTES {
+            let err: Box<Error> = From::from("Not Enough bytes to parse FSP".to_string());
+            return Err(err)
+        } else {
+            let vsp_size = ((fixed_size_payload[0] as u16) << 8) + (fixed_size_payload[1] as u16);
+            return Ok( FSP{vsp_size, flags: fixed_size_payload[2], unassigned: [0u8; FSP::UNUSED_BYTES], bytes: fixed_size_payload} )
         }
-        Ok(DDIpSelector { networks: net_list })
     }
 
-    pub fn select(&self, seed: [u8; 16]) -> Option<IpAddr> {
-        // todo: move this to ::new() and keep static table
-        let mut addresses_total: u128 = 0;
-        let mut id_net = LinkedList::new(); // (min_id, max_id, subnet)
-        for net in self.networks.iter() {
-            match *net {
-                IpNetwork::V4(_) => {
-                    let old_addresses_total = addresses_total;
-                    addresses_total += 2u128.pow((32 - net.prefix()).into()) - 1;
-                    id_net.push_back((old_addresses_total, addresses_total, net));
-                }
-                IpNetwork::V6(_) => {
-                    let old_addresses_total = addresses_total;
-                    addresses_total += 2u128.pow((128 - net.prefix()).into()) - 1;
-                    id_net.push_back((old_addresses_total, addresses_total, net));
-                }
-            }
+    pub fn check_flag(&self, flag: u8) -> bool {
+        if self.flags & flag != 0 {
+            return true
+        } else {
+            return false
         }
-
-        let mut id = array_as_u128_be(&seed);
-        if id >= addresses_total {
-            id = id % addresses_total;
-        }
-
-        for elem in id_net.iter() {
-            if elem.0 < id && elem.1 >= id {
-                match elem.2 {
-                    IpNetwork::V4(netv4) => {
-                        let min_ip_u32: u32 = array_as_u32_be(&netv4.ip().octets());
-                        let ip_u32 = min_ip_u32 + ((id - elem.0) as u32);
-                        return Some(IpAddr::from(Ipv4Addr::from(ip_u32)));
-                    }
-                    IpNetwork::V6(netv6) => {
-                        let min_ip_u128 = array_as_u128_be(&netv6.ip().octets());
-                        let ip_u128 = min_ip_u128 + (id - elem.0);
-                        return Some(IpAddr::from(Ipv6Addr::from(ip_u128)));
-                    }
-                }
-            }
-        }
-        error!("failed to pick dark decoy IP with seed={:?}, in {:?}", seed, id_net);
-        None
     }
-}
 
+    pub fn to_vec(&self) -> &Vec<u8> {
+        let vec = &self.bytes;
+        return vec
+    }
 
-fn array_as_u128_be(a: &[u8; 16]) -> u128 {
-    ((a[0] as u128) << 120) +
-        ((a[1] as u128) << 112) +
-        ((a[2] as u128) << 104) +
-        ((a[3] as u128) << 96) +
-        ((a[4] as u128) << 88) +
-        ((a[5] as u128) << 80) +
-        ((a[6] as u128) << 72) +
-        ((a[7] as u128) << 64) +
-        ((a[8] as u128) << 56) +
-        ((a[9] as u128) << 48) +
-        ((a[10] as u128) << 40) +
-        ((a[11] as u128) << 32) +
-        ((a[12] as u128) << 24) +
-        ((a[13] as u128) << 16) +
-        ((a[14] as u128) << 8) +
-        ((a[15] as u128) << 0)
-}
+    pub fn to_bytes(&self)-> [u8; FSP::LENGTH] {
+        let mut array = [0; FSP::LENGTH];
+        array.copy_from_slice(&self.bytes);
+        return array
+    }
 
-fn array_as_u32_be(a: &[u8; 4]) -> u32 {
-    ((a[0] as u32) << 24) +
-        ((a[1] as u32) << 16) +
-        ((a[2] as u32) << 8) +
-        ((a[3] as u32) << 0)
+    pub fn use_proxy_header(&self) -> bool {
+        return self.check_flag(FSP::FLAG_PROXY_HEADER)
+    }
+
+    pub fn upload_only(&self) -> bool {
+        return self.check_flag(FSP::FLAG_UPLOAD_ONLY)
+    }
+
+    pub fn use_til(&self) -> bool {
+        return self.check_flag(FSP::FLAG_USE_TIL)
+    }
 }
 
 
 #[cfg(test)]
 mod tests {
-    use util;
-    use util::DDIpSelector;
+    use super::*;
 
     #[test]
     fn mem_used_kb_parses_something()
     {
-        assert!(util::mem_used_kb() > 0);
-    }
-
-    #[test]
-    fn test_dd_ip_selector() {
-        let s1 = DDIpSelector::new(&vec![String::from("2001:48a8:8000::/33"),
-                                         String::from("192.122.200.0/24")]);
+        assert!(mem_used_kb() > 0);
     }
 }
