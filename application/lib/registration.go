@@ -77,7 +77,7 @@ func (regManager *RegistrationManager) CountRegistrations(darkDecoyAddr *net.IP)
 }
 
 func (regManager *RegistrationManager) RemoveOldRegistrations() {
-	regManager.registeredDecoys.removeOldRegistrations()
+	regManager.registeredDecoys.removeOldRegistrations(regManager.Logger)
 }
 
 // Note: These must match the order in the client tapdance/conjure.go transports
@@ -252,7 +252,7 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr *net.IP) int {
 }
 
 // TODO log registration expiration
-func (r *RegisteredDecoys) removeOldRegistrations() {
+func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 	const timeout = -time.Minute * 5
 	cutoff := time.Now().Add(timeout)
 	idx := 0
@@ -265,7 +265,9 @@ func (r *RegisteredDecoys) removeOldRegistrations() {
 		}
 		decoyAddr := r.decoysTimeouts[idx].decoy
 		hmacId := r.decoysTimeouts[idx].hmacId
+		regTime := r.decoysTimeouts[idx].registrationTime
 		delete(r.decoys[decoyAddr], hmacId)
+		logger.Printf("expired registration for %v, %v, duration: %v", decoyAddr, hmacId, time.Now().Sub(regTime))
 		idx += 1
 	}
 	r.decoysTimeouts = r.decoysTimeouts[idx:]
