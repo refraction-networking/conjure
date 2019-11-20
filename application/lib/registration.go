@@ -251,7 +251,6 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr *net.IP) int {
 	return len(regs)
 }
 
-// TODO log registration expiration
 func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 	const timeout = -time.Minute * 5
 	cutoff := time.Now().Add(timeout)
