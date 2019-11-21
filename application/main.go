@@ -62,7 +62,7 @@ func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) 
 }
 
 func get_zmq_updates(regManager *dd.RegistrationManager) {
-	logger := log.New(os.Stdout, "[ZMQ] ", log.Lmicroseconds)
+	logger := log.New(os.Stdout, "[ZMQ] ", log.Ldate|log.Lmicroseconds)
 	sub, err := zmq.NewSocket(zmq.SUB)
 	if err != nil {
 		logger.Printf("could not create new ZMQ socket: %v\n", err)

@@ -130,7 +130,7 @@ func MinTransportProxy(regManager *RegistrationManager, clientConn *net.TCPConn,
 	originalDst := originalDstIP.String()
 	originalSrc := clientConn.RemoteAddr().String()
 	flowDescription := fmt.Sprintf("[%s -> %s] ", originalSrc, originalDst)
-	logger := log.New(os.Stdout, "[MIN] "+flowDescription, log.Lmicroseconds)
+	logger := log.New(os.Stdout, "[MIN] "+flowDescription, log.Ldate|log.Lmicroseconds)
 
 	logger.Printf("new connection (%d potential registrations)", regManager.CountRegistrations(&originalDstIP))
 
