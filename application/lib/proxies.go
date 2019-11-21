@@ -80,14 +80,19 @@ func halfPipe(src, dst net.Conn,
 	oncePrintErr sync.Once,
 	logger *log.Logger) {
 
+	var proxyStartTime = time.Now()
+
 	buf := bufferPool.Get().([]byte)
-	_, err := io.CopyBuffer(dst, src, buf)
+	written, err := io.CopyBuffer(dst, src, buf)
 	oncePrintErr.Do(
 		func() {
+			proxyEndTime := time.Since(proxyStartTime) * time.Millisecond
 			if err == nil {
-				logger.Printf("gracefully stopping forwarding from %v", src.RemoteAddr())
+				logger.Printf("gracefully stopping forwarding from %v {duration; %v, bytes_written: %v}",
+					src.RemoteAddr(), proxyEndTime, written)
 			} else {
-				logger.Printf("stopping forwarding from %v due to error: %v", src.RemoteAddr(), err)
+				logger.Printf("stopping forwarding from %v due to error: %v {duration; %v, bytes_written: %v}",
+					src.RemoteAddr(), err, proxyEndTime, written)
 			}
 		})
 	if closeWriter, ok := dst.(interface {
