@@ -86,7 +86,7 @@ func halfPipe(src, dst net.Conn,
 	written, err := io.CopyBuffer(dst, src, buf)
 	oncePrintErr.Do(
 		func() {
-			proxyEndTime := time.Since(proxyStartTime) 
+			proxyEndTime := time.Since(proxyStartTime)
 			if err == nil {
 				logger.Printf("gracefully stopping forwarding from %v {duration; %v, bytes_written: %v}",
 					src.RemoteAddr(), proxyEndTime, written)
@@ -130,7 +130,7 @@ func MinTransportProxy(regManager *RegistrationManager, clientConn *net.TCPConn,
 	originalDst := originalDstIP.String()
 	originalSrc := clientConn.RemoteAddr().String()
 	flowDescription := fmt.Sprintf("[%s -> %s] ", originalSrc, originalDst)
-	logger := log.New(os.Stdout, "[MIN] "+flowDescription, log.Lmicroseconds)
+	logger := log.New(os.Stdout, "[MIN] "+flowDescription, log.Ldate|log.Lmicroseconds)
 
 	logger.Printf("new connection (%d potential registrations)", regManager.CountRegistrations(&originalDstIP))
 
@@ -180,7 +180,7 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 	notReallyOriginalSrc := clientConn.RemoteAddr().String()
 	flowDescription := fmt.Sprintf("[%s -> %s (covert=%s)] ",
 		notReallyOriginalSrc, originalDst, reg.Covert)
-	logger := log.New(os.Stdout, "[2WP] "+flowDescription, log.Lmicroseconds)
+	logger := log.New(os.Stdout, "[2WP] "+flowDescription, log.Ldate|log.Lmicroseconds)
 	logger.Println("new flow")
 
 	covertConn, err := net.Dial("tcp", reg.Covert)
@@ -208,7 +208,7 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 }
 
 func writePROXYHeader(conn net.Conn, originalIPPort string) error {
-	logger := log.New(os.Stdout, "[2WP] ", log.Lmicroseconds)
+	logger := log.New(os.Stdout, "[2WP] ", log.Ldate|log.Lmicroseconds)
 	logger.Println("Writing Proxy Header")
 	if len(originalIPPort) == 0 {
 		return errors.New("can't write PROXY header: empty IP")
@@ -235,7 +235,7 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 
 	flowDescription := fmt.Sprintf("[%s -> %s(%v) -> %s] ",
 		notReallyOriginalSrc, originalDst, maskHostPort, targetHostPort)
-	logger := log.New(os.Stdout, "[3WP] "+flowDescription, log.Lmicroseconds)
+	logger := log.New(os.Stdout, "[3WP] "+flowDescription, log.Ldate|log.Lmicroseconds)
 
 	if _, mPort, err := net.SplitHostPort(maskHostPort); err != nil {
 		maskHostPort = net.JoinHostPort(maskHostPort, "443")
