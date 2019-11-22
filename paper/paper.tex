@@ -1,6 +1,6 @@
 \documentclass[sigconf]{acmart}
 
-\settopmatter{printacmref=true}
+\settopmatter{printacmref=true,printfolios=true}
 
 \usepackage[utf8]{inputenc}
 \usepackage{microtype}
@@ -12,7 +12,7 @@
 \usepackage{xspace}
 \usepackage{dblfloatfix} % magic
 \usepackage{balance}
-\usepackage{paralist}
+%\usepackage{paralist}
 \usepackage{wasysym}
 \usepackage{xparse}
 \NewDocumentCommand{\rot}{O{45} O{1em} m}{\makebox[#2][l]{\rotatebox{#1}{#3}}}%
@@ -48,7 +48,7 @@
 
 \begin{document}
 
-\fancyhead{} % From CCS template.
+%\fancyhead{} % From CCS template.
 
 \title{Conjure: Summoning Proxies from Unused Address Space}
 
@@ -125,7 +125,6 @@ and offers substantially better network performance.
 
 \FigHighLevel
 
-
 %Censorship circumvention still important
 %-More countries blocking
 %-Existing countries blocking more
@@ -139,7 +138,7 @@ online~\cite{fotn2018}.
 %-active probing of existing proxies
 %-Cenosrs fingerprinting known protocols
 Meanwhile, many popular tools and techniques for circumventing such censorship
-have ceased to function, because censors have evolved new ways to block them~\cite{ensafi-tor,great-cannon}
+become ineffective, because censors have evolved new ways to block them~\cite{ensafi-tor,great-cannon}
 or infrastructure they rely on has become unavailable.
 
 
@@ -166,6 +165,7 @@ as Decoy Routing, has made promising steps towards that goal.
 These techniques operate in the network's core, at cooperating Internet Service Providers
 (ISPs) outside censoring countries~\cite{refraction-site}.  Clients access circumvention services by connecting to a ``decoy site''---any uncensored website for which the connection travels over a participating ISP\@.  Upon recognizing a steganographic signal from the client, the ISP modifies the connection response to return censored content requested by the user.
 Censors cannot easily block access without also blocking legitimate connections to the decoy sites---collateral damage that may be prohibitive for censors if Refraction Networking is widely deployed~\cite{robinson2013collateral}.
+\looseness=-1
 
 However, deploying such schemes is more difficult than with most
 edge-based circumvention techniques, since ISPs must be convinced to
@@ -178,8 +178,9 @@ Instead of in-line network devices required by earlier schemes, it
 calls for only a passive tap.
 This ``on-the-side'' approach, though much friendlier from an ISP's
 perspective, leads to major challenges when interposing in an ongoing
-client-to--decoy connection:
-\begin{compactitem}
+client-to-decoy connection:
+
+\begin{itemize}
 \item Implementation is complex and error-prone, requiring kernel
   patches or a custom TCP stack.
 \item To avoid detection, the system must carefully mimic
@@ -192,7 +193,7 @@ client-to--decoy connection:
   long-lived proxy connections over many shorter decoy
   connections. This adds overhead and creates a traffic pattern
   that is challenging to conceal.
-\end{compactitem}
+\end{itemize}
 
 %Challenges remain in Tapdance:
 %-Censor can fingerprint decoy sites
@@ -213,12 +214,10 @@ client-to--decoy connection:
 %-Connect to custom IP address, talk whatever protocol client/station agrees on
 
 \smallskip
-
-In this paper, we present \textbf{\scheme}, a Refraction
+\noindent\textbf{Conjure}\enskip
+In this paper, we present \scheme, a Refraction
 Networking protocol that overcomes these challenges while retaining
-TapDance's ISP-friendly deployment requirements\footnote{
-We have released the open source implementation of the Conjure client at 
-\url{https://github.com/refraction-networking/gotapdance/tree/dark-decoy}.}.
+TapDance's ISP-friendly deployment requirements
 Our key innovation is an architecture that avoids
 having to actively participate in client-to-decoy connections.
 
@@ -283,11 +282,14 @@ deployment~\cite{frolov2017isp}.  Compared to TapDance, we find that
 \scheme has reduced complexity and substantially improved performance
 (Section~\ref{sec:evaluation}): on average, \scheme has 20\% lower latency,
 14\% faster download bandwidth, and over 1400 times faster upload bandwidth.
-In addition, \scheme provides significantly
-more flexibility than existing Refraction Networking protocols, allowing maintainers to
-respond to future censor techniques.
-We believe that these advantages
+In addition, \scheme is significantly more
+flexible than existing Refraction Networking protocols, allowing maintainers to
+respond to future censor techniques with greater agility.
+We believe that these advantages will
 make \scheme a strong choice for future Refraction Networking deployments.
+
+We have released the open source implementation of the Conjure client at 
+\url{https://github.com/refraction-networking/gotapdance/tree/dark-decoy}.
 
 %download: dd - td: 5947790000 - 5219112999 = 14% faster down
 % upload:  5088330000/3500000.0 = 1453x upload
@@ -309,7 +311,6 @@ client).
 However, we assume a stronger threat model for the adversary than
 TapDance, as our design resists active attacks.
 
-
 We assume the censor can block arbitrary IP addresses and networks, but faces a
 cost in doing so if it blocks potentially useful resources. In particular, we
 assume it is difficult for the censor to have complete knowledge of legitimate
@@ -318,7 +319,6 @@ proxies and objectionable content.
 Whitelists are expensive for censors to maintain and can stifle
 innovation, and are rarely employed by country-level censors.
 %TODO: cite OONI? censored planet?
-
 
 We assume that the censor can know what network the \scheme station(s) are
 deployed in and the prefixes phantom hosts are selected from, but that blocking those
@@ -340,7 +340,7 @@ However, the censor wishes to avoid disrupting any connections before it
 knows for certain they are from \scheme clients, lest they disrupt legitimate
 connections. This means that injecting false data or corrupting TLS sessions is
 outside the scope of the censor, but that the censor can send non-disruptive
-probes (such as stale TCP acknowledgements) that would normally
+probes (such as stale TCP acknowledgments) that would normally
 be ignored. We emphasize that TapDance is observable by censors that can send
 TCP packets in suspected connections, but that our protocol is robust against
 this class of censor.
@@ -378,9 +378,9 @@ deployment in Section~\ref{sec:implementation}.
 
 \subsection{Registration}
 \label{sec:registration}
-We use a form of Refraction Networking similar to Tapdance to register directly with
+We use a form of Refraction Networking similar to TapDance to register directly with
 the station, though \scheme registration is significantly simpler and more difficult
-to detect than vanilla Tapdance. This is because registration flows are unidirectional; 
+to detect than vanilla TapDance. This is because registration flows are unidirectional; 
 a client communicates their intent to register to the station without any 
 response from the station itself. This makes registration flows very difficult to detect as they 
 can be sent to any site hosted behind the ISP, and display no evidence of proxy behavior. 
@@ -392,12 +392,10 @@ and expect that one gets through. Alternatively clients can register intent to u
 proxy in other covert ways. For instance, they could use email~\cite{SWEET-ToN} or any 
 other existing intermittently available proxies to register.
 
-\medskip
-
 A registration connection is sent to a \textbf{registration decoy}: any site that 
 supports TLS behind the ISP relative to the client. The client completes the handshake,
 and sends a normal HTTPS request that embeds a ciphertext tag in the payload. 
-\scheme leverages the same steganographic technique as Tapdance to encode the 
+\scheme leverages the same steganographic technique as TapDance to encode the 
 ciphertext~\cite[\S3]{tapdance14}, however we send a complete request allowing the
 registration decoy to respond or close the connection. The tag is encrypted such 
 that it is only visible to the station. The \scheme station passively observes
@@ -451,7 +449,7 @@ single vantage point would not reveal hosts that only respond to specific IPs
 
 
 \subsection{Transports}
-
+%\TODO{The organization of this into subsubsections and paragraphs is a mess.  Can we flatten it a bit or divide into two sections?}
 
 Once the client has registered, packets sent to the phantom host IP address are
 detected at the station and passed to the local \textbf{application} which provides
@@ -545,9 +543,7 @@ either in the clear (e.g. using session resumption), censors could actively prob
 the server in a way that would normally elicit a certificate.
 
 
-\paragraph{Encrypted SNI}
-\label{esni}
-
+\paragraph{Encrypted SNI}\label{esni}
 TLS~1.3~\cite{tls13} offers several features that may greatly simplify 
 \scheme transport design. For instance, TLS~1.3 handshakes include encrypted
 certificates, removing a strong traffic classification feature.
@@ -564,9 +560,7 @@ but servers could respond with generic ``Unknown SNI'' errors. If such responses
 were common for incorrect SNI, the censor's efforts to identify phantom hosts
 would be frustrated.
 
-\paragraph{Mask Sites}
-\label{sec:mask-sites}
-
+\paragraph{Mask Sites}\label{sec:mask-sites}
 Another option to overcome active and passive probing attacks is to mimic existing TLS sites.
 In this application, we simply forward traffic between any connecting clients
 and a real TLS site. To a censor, our phantom site
@@ -598,9 +592,7 @@ a censor after registration. As the censor does not have knowledge of
 the \textbf{seed} used in registration, it cannot coerce the application to
 appear as anything besides the mask site.
 
-
 \paragraph{Mask Site Selection}
-
 Selecting which sites to masquerade as must be done carefully to avoid censors
 being able to detect obvious choices. For example, if a small university network
 has a phantom host in their network that appears to be \texttt{apple.com}, it
@@ -608,13 +600,15 @@ would be easy for a censor to block as a likely non-legitimate host. Likewise,
 if a phantom host at an IP address pretends to be a domain that
 globally resolves to a single (different) IP address, the censor could also trivially
 identify and block the phantom host.
+Several approaches are possible:
 
-\textit{Nearby sites ---} pick websites that are
+\begin{description}
+\item[\rm\em Nearby sites:] pick websites that are
 legitimately hosted in or near the network of the phantom host addresses
 effectively creating copies of legitimate sites. However, other signals such as 
 DNS may reveal the true mask site.
 
-\textit{Popular sites ---} choose mask sites from a list such as the Alexa
+\item[\rm\em Popular sites:] choose mask sites from a list such as the Alexa
 top site~\cite{alexa-top500} list. Although it may be wise to avoid
 sites that are obviously not hosted in the phantom host address range, such as
 large companies that run their own data centers and own their own ASN.
@@ -622,10 +616,12 @@ The list could also be filtered to domains that resolve to different IP
 addresses from different vantage points, making it harder for a censor to know
 if a phantom host corresponds to a domain's IP.
 
-\textit{Passive observation ---} collect sites by passively observing DNS requests, TLS
+\item[\rm\em Passive observation:] collect sites by passively observing DNS requests, TLS
 SNI, or certificates that pass by at the network tap. This would allow for building a realistic set
 of sites that are plausibly in the vicinity of the phantom host addresses
 that pass by the tap. 
+
+\end{description}
 
 In practice, clients can often try multiple phantom hosts/mask sites over
 several attempts, as blocking the client outright may negatively impact other
@@ -660,13 +656,13 @@ is detected the local application is notified via an
 out-of-band ZMQ~\cite{zmq} connection, which provides the
 registering client's IP address, the seed, and other configuration
 information. We note that this is not along a critical timing path for 
-proxying connections and no client packets are sent over ZMQ.
+proxying connections and no client packets are sent over ZMQ\@.
 
 The detectors forwards all packets destined for a (registered) phantom host address to the local
 \textbf{application} via tun interfaces and \texttt{iptables} DNAT rules that rewrite the destination IP,
 allowing the local application to accept and respond to connections using the native
 operating system's interface. Figure~\ref{fig:implementation} shows the overall
-architecture of our implementation, which we describe next.
+architecture of our implementation, which we describe in the following subsections.
 % Along with the client?
 
 \FigImplementation
@@ -675,9 +671,8 @@ architecture of our implementation, which we describe next.
 
 % Our detector is a modified fork of the open source TapDance
 % implementation~\cite{tapdance-source}.
-We implemented our detector in approximately 1,800 lines of Rust (compared to
-over 5,000 lines for TapDance)\footnote{excluding (from both) about 3,000 lines
-of auto-generated protobuf code}.
+We implemented our detector in approximately 1,800 lines of Rust, compared to
+over 5,000 lines for TapDance (excluding from both auto-generated protobuf code).
 
 To achieve performance needed to operate at 20~Gbps, we used
 PF\_RING~\cite{pfring} to load balance incoming packets across 4~CPU cores,
@@ -749,7 +744,7 @@ station or Psiphon's backend servers. A SOCKS connection can be initiated throug
 this tunnel to allow for connection multiplexing.
 
 
-\subsection{Application \& Transports} 
+\subsection{Application and Transports} 
 
 We implemented our station-side application in about 500~lines of Golang. This includes
 support for OSSH (via integration with Psiphon) and Mask Sites, both specifiable by the client
@@ -970,8 +965,8 @@ IPv6 prefix routed by the ISP (out of 32,817 total observed). To confirm the
 hypothesis that 0 bits are more common in IPv6 addresses, we counted the number
 of bits set in each address. Figure~\ref{fig:ipbits} shows a histogram of the
 number of bits set and compares it to the histogram of a uniformly random set of
-addresses.\footnote{The random distribution's center is skewed from 64 due to
-the number of set bits in our fixed /32 network prefix.} Although these
+addresses. (The random distribution's center is skewed from 64 due to
+the number of set bits in our fixed /32 network prefix.) Although these
 distributions are distinguishable, they do have significant overlap. Given
 enough samples, a censor could trivially tell if the addresses were chosen
 randomly or were legitimate hosts. However, a censor's job is significantly
@@ -980,8 +975,6 @@ from. The presence of random-looking addresses makes it difficult for censors to
 block such hosts outright.
 
 % 7 bits set in 2001:48a8:: (would expect 16)
-
-\FigIpEntropy
 
 Prior work by Foremski et al.~\cite{foremski2016entropy} has developed models to
 generate likely IPv6 addresses from a set of known addresses, useful for
@@ -994,6 +987,7 @@ equally span the range of values have maximum entropy (normalized to 1). In our
 addresses, we observe an entropy of over 75~bits, with more entropy in the later
 segments of the address. While not quite the full 96~bits that uniformly random
 would produce, this is still a significant amount for phantom hosts to hide in.
+\looseness=-1
 
 For a specific deployment, operators should be careful to observe the distribution of
 addresses in the subnets they use, and possibly limit to randomizing ``realistic''
@@ -1021,7 +1015,7 @@ nodes~\cite{tor-bridge-blocking-blog,active-probe,ensafi-tor,china-blocking-tor}
 In response to China's active probing, Tor and other circumvention tool developers have developed
 \emph{probe-resistant} protocols, such as \texttt{obfs4}~\cite{obfs4}, Obfuscated SSH
 (OSSH)~\cite{ossh}, and Shadowsocks~\cite{shadowsocks}. Each of these protocols
-require the client to know a special secret distributed alongside the original
+require the client to know a secret distributed alongside the original
 proxy address. Without knowledge of this secret, active-probing censors will not
 receive any response from these hosts, making it difficult for censors to tell if
 a server is a proxy or a non-responsive legitimate host.
@@ -1042,7 +1036,7 @@ be other ways to differentiate OSSH servers from others online, our tests
 suggest censors could face steep false-positive rates in identifying OSSH
 servers with active probing.
 
-
+\FigIpEntropy
 
 %TODO: how many servers in zmap look like OSSH? e.g. we send them 23 random
 %bytes and then they don't respond with data. 99.46% (793789 out of 798032)
@@ -1079,6 +1073,7 @@ mask sites by those that have identical TCP/IP stacks to ours, as we use a
 common Linux implementation. We also note that this attack only applies when we
 use the mask site as an application, and that \scheme can support other
 applications (e.g. obfsproxy, WebRTC, etc) that do not have this issue.
+\looseness=-1
 
 We acknowledge that perfect mimicry of the real site is likely infeasible:
 Houmansadr et al.~\cite{houmansadr-parrot} demonstrated the difficulty in fully
@@ -1163,7 +1158,6 @@ the station, that would be more difficult for the censor to block.
 %generally requires clients to have root access to their device to control the
 %initial sequence numbers. Since most mobile users do not have such control, we
 %suggest other methods be used instead.
-
 
 
 \subsection{ICMP}

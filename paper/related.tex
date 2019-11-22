@@ -19,11 +19,12 @@ and potentially violate their contractual obligations (SLAs).
 TapDance~\cite{tapdance14} solves the issue of inline-blocking by coercing the
 decoy into staying silent, and allowing the station to respond instead. However,
 as previously described, this trick comes at a cost: the decoy only stays silent
-for a short timeout (typically 30-120 seconds), and limits the amount of data
+for a short timeout (typically 30--120\,s), and limits the amount of data
 the client can send before it responds. TapDance clients must keep connections
 short and repeatedly reconnect to decoys, increasing overhead and potentially
 alerting censors with this pattern. \scheme addresses this issue and allows
 clients to maintain long-lived connections to the phantom host.
+\looseness=-1
 
 Rebound~\cite{rebound15} and Waterfall~\cite{waterfall17} both focus on routing
 asymmetries and routing attacks by the censor. Rebound modifies the client's

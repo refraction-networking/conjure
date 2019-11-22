@@ -14,10 +14,9 @@
         and destination port (client IP, phantom IP and port respectively). The traffic is passed 
         to a proxy server handling the specific proxy protocol, which ultimately proxies traffic to
         the covert address.
-        \\\hspace{\textwidth}
         Secrets for the individual application proxy service are shared out of band or derived from the secret seed shared
-        between client and station during registration, preventing an adversary from being
-        able to successfully connect to the application in follow up probes.
+        between client and station during registration, preventing an adversary from 
+        successfully connecting to the application in follow up probes.
     }
     \label{fig:overview}
 \end{figure}
@@ -26,7 +25,6 @@
 \newcommand{\FigHighLevel}{
 \begin{figure}[]
     \centering
-    %\vspace{-0.54in}
     \includegraphics[width=\linewidth,clip]{figures/high-level.png}
     \caption{\textbf{\scheme Overview}\,---\,\rm%
       An ISP deploys a \scheme station, which sees a passive tap of passing traffic.
@@ -41,11 +39,11 @@
 \newcommand{\FigUpload}{
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.95\linewidth,clip]{figures/bandwidth-up.pdf}
+    \includegraphics[width=0.95\linewidth,clip]{figures/bandwidth-up.pdf}\vspace{-2pt}
     \caption{\textbf{Upload Performance}\,---\,\rm%
         We used iperf to measure the upload bandwidth for a direct connection, TapDance, and \scheme.
         As expected, TapDance's upload performance is several orders of magnitude lower than
-        the link capacity, due to the overhead of frequent reconnects to the decoy.
+        the link capacity, due to the overhead of making frequent reconnects to the decoy site.
     }
     \label{fig:upload}
 \end{figure}
@@ -54,12 +52,12 @@
 \newcommand{\FigDownload}{
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.95\linewidth,clip]{figures/bandwidth-down.pdf}
+    \includegraphics[width=0.95\linewidth,clip]{figures/bandwidth-down.pdf}\vspace{-2pt}
     \caption{\textbf{Download Performance}\,---\,\rm%
         Using iperf, we compare the download performance of a direct connection, TapDance, and \scheme.
-        While TapDance can achieve link capacity download, it still has to occasionally reconnect
+        While TapDance can achieve link-capacity download, it still has to occasionally reconnect
         to the decoy, as seen by the periodic dips. These reconnects are more common the more data
-        the client sends (e.g. requests or any upload data).
+        the client sends (e.g. requests or uploads).
     }
     \label{fig:download}
 \end{figure}
@@ -93,9 +91,9 @@
     \centering
     \includegraphics[width=0.75\linewidth,clip]{figures/decoy-tap-bandwidth.png}
     \caption{\textbf{Tap Bandwidth}\,---\,\rm%
-        We deployed our \scheme implementation in a realistic ISP testbed on a
-        tap of a 20~Gbps router. As shown in a typical week, traffic
-        ranges from 2-17~Gbps.
+        We deployed \scheme in a realistic ISP testbed on a
+        tap of a 20~Gbps router. In a typical week, traffic
+        ranges from 2--17~Gbps.
     }
     \label{fig:tap-bandwidth}
 \end{figure*}
@@ -106,7 +104,7 @@
 \begin{figure}[t]
     \centering
     %\includegraphics[width=\linewidth,clip]{figures/entropy_curveball_1hr.png}
-    \includegraphics[width=\linewidth,clip]{figures/entropy-ip-16hr.png}
+    \includegraphics[width=0.95\linewidth,clip]{figures/entropy-ip-16hr.png}
     \caption{\textbf{IPv6 Entropy}\,---\,\rm%
         Censors may be able to distinguish random-looking phantom host IPv6 addresses
         from legitimately used ones based on the address's entropy.
@@ -119,7 +117,7 @@
         significant false positives / negatives. While distinguishable from random
         given enough samples,
         we can also use the Entropy/IP tool to generate addresses from the Bayesian Network
-        model it produces.}
+        model it produces.\vspace{-5pt}}
     \label{fig:ipentropy}
 \end{figure}
 }
@@ -128,7 +126,7 @@
 \begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth,clip]{figures/ip-bits-set-pdf.pdf}
-    \caption{\textbf{IPv6 bits set}\,---\,\rm%
+    \caption{\textbf{IPv6 Bits Set}\,---\,\rm%
         We measure the number of bits set to 1 in IPv6 addresses in our ISP's /32
         and observed by our tap,
         and compare it to the Binomial distribution (Random) we would expect to see
@@ -172,7 +170,7 @@
             %ISP Deployment           &\no  & \no  & \no  & \yes & \no  & \no  & \no  & \yes \\
     \end{tabular}
     \medskip
-    \caption{\textbf{Comparing Refraction Networking schemes}\,---\,\rm%
+    \caption{\textbf{Comparing Refraction Networking Schemes}\,---\,\rm%
         ``No inline blocking'' corresponds to schemes that can operate as a passive tap on the side
         without needing an inline element in the ISP network.
         ``Handles asymmetric routes'' refers to schemes that work when only one direction (either client to decoy or decoy to server) is seen by the station.
@@ -180,7 +178,7 @@
         the protocol.
         ``Traffic analysis'' includes latency, inter-packet timing, and website fingerprinting.
         ``Unlimited Sessions'' shows schemes that do not need to repeatedly reconnect to download
-        or upload arbitrarily large content.}
+        or upload arbitrarily large content.\vspace{-10pt}}
     \label{tab:compare}
 \end{table*}
 }
@@ -189,21 +187,22 @@
 \newcommand{\TabApplications}{
 \begin{table}[t]
     \centering
-    \begin{tabular}{l|ccccc}
+    \begin{tabular}{lccccc}
             & \rot{OSSH~\cite{ossh}} &
               \rot{\texttt{obfs4}~\cite{obfs4}} &
               \rot{Mask Sites} &
               \rot{TLS eSNI} & \rot{WebRTC} \\
-            \hline
+            \toprule
             Active probe resistant  & \yes  & \yes & \yes & \yes & \yes \\
             Randomized or Tunneling & R    & R    & T    &  T   & T \\
             Known passive attack    & \cite{Fifield2017a} & \cite{wang2015seeing} & - & - & - \\
             \scheme implementation  & \yes & \no  & \yes  & \no & \no \\
+            \bottomrule
     \end{tabular}
     \medskip
     \caption{\textbf{\scheme Applications}\,---\,\rm%
-    ``Active probe resistant`` protocols are designed to look innocuous even if scanned by a censor.
-    ``Tunneling`` (T) protocols use another protocol (e.g. TLS) to blend in, while ``Randomized`` (R)
+    ``Active probe resistant'' protocols are designed to look innocuous even if scanned by a censor.
+    ``Tunneling'' (T) protocols use another protocol (e.g. TLS) to blend in, while ``Randomized'' (R)
         ones attempt to have no discernable protocol fingerprint or headers.
         For existing protocols, we list any known attacks suggested in the literature that let censors
         passively detect them. We also list if we have implemented the application in our prototype.}
@@ -219,12 +218,11 @@
         We used PF\_RING to receive packets from a 20~Gbps tap which we load balance
         across 4~CPU cores. The detector processes identify registrations, sending notification to
         all other cores via redis and to the local application 
-        via ZMQ when a new registration is received . The detector also
+        via ZMQ when a new registration is received. The detector also
         identifies packets associated with registered flows and diverts them
         to the local application which handles proxying connections. The local 
         application determines which transport the flow should use based on a parameter specified in
         the client's registration and initializes a goroutine to handle forwarding. 
-        \\\hspace{\textwidth}
         A censor trying to interfere in this
         connection would need to take over the clients IP address in a precise window (after the 
         registration but before the client connects to the phantom) and correctly guess the phantom host's 
@@ -239,33 +237,31 @@
 \begin{figure}
   \centering
   \begin{subfigure}{\columnwidth}
+    \centering
     \includegraphics[width=\columnwidth]{figures/refraction-v1}
-    \vspace{-3pt}
 
     \caption{\textbf{First generation systems}\rm\ for Refraction Networking, such as Telex and Cirripede, operated as inline network elements, with the ability to observe traffic and block specific flows. ISPs worried that if the inline element failed, it could bring down the network.\looseness=-1}
     \label{fig:refraction-v1}
   \end{subfigure}
-  \vspace{16pt}
+  \vspace{12pt}
 
   \begin{subfigure}{\columnwidth}
+    \centering
     \includegraphics[width=\columnwidth]{figures/tapdance}
-    \vspace{-3pt}
 
     \caption{\textbf{TapDance}\rm\ is a second-generation Refraction Network scheme that operates without flow blocking, needing only to passively observe traffic and inject packets. TapDance has recently been deployed at a mid-size ISP, but the techniques used to silence the decoy site and participate in the client--decoy TCP connection mid-stream add significant complexity, performance bottlenecks, and detection risk.}
     \label{fig:tapdance}
   \end{subfigure}
-  \vspace{16pt}
+  \vspace{12pt}
 
   \begin{subfigure}{\columnwidth}
-    \label{fig:evolutionconjure}
+    \centering
     \includegraphics[width=\columnwidth]{figures/dark-decoys}
-    \vspace{-3pt}
 
     \caption{\textbf{\scheme}\rm, our third-generation Refraction Networking design, overcomes these limitations.  It uses two sessions. First, the client connects to a decoy site and embeds a steganographic registration message, which the station receives using only a passive tap.  Second, the client connects to a ``phantom host'' where there is no running server, and the station proxies the connection in its entirety.}
+    \label{fig:evolutionconjure}
     \label{fig:dark-decoys}
   \end{subfigure}
-
-  \vspace{12pt}
   \caption{\textbf{Evolution of Refraction Networking}}
 \end{figure}
 }
