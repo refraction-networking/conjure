@@ -78,7 +78,8 @@ func ProxyFactory(reg *DecoyRegistration, proxyProtocol uint) func(*DecoyRegistr
 func halfPipe(src, dst net.Conn,
 	wg *sync.WaitGroup,
 	oncePrintErr sync.Once,
-	logger *log.Logger) {
+	logger *log.Logger,
+	tag string) {
 
 	var proxyStartTime = time.Now()
 
@@ -88,11 +89,11 @@ func halfPipe(src, dst net.Conn,
 		func() {
 			proxyEndTime := time.Since(proxyStartTime)
 			if err == nil {
-				logger.Printf("gracefully stopping forwarding from %v {duration; %v, bytes_written: %v}",
-					src.RemoteAddr(), proxyEndTime, written)
+				logger.Printf("gracefully stopping forwarding {from: %v duration; %v, bytes_written: %v, tag: %s }",
+					src.RemoteAddr(), int64(proxyEndTime/time.Millisecond), written, tag)
 			} else {
-				logger.Printf("stopping forwarding from %v due to error: %v {duration; %v, bytes_written: %v}",
-					src.RemoteAddr(), err, proxyEndTime, written)
+				logger.Printf("stopping forwarding due to err {from: %v, duration; %v, bytes_written: %v, tag: %v}  error: %v",
+					src.RemoteAddr(), int64(proxyEndTime/time.Millisecond), written, tag, err)
 			}
 		})
 	if closeWriter, ok := dst.(interface {
@@ -129,7 +130,7 @@ func MinTransportProxy(regManager *RegistrationManager, clientConn *net.TCPConn,
 
 	originalDst := originalDstIP.String()
 	originalSrc := clientConn.RemoteAddr().String()
-	flowDescription := fmt.Sprintf("[%s -> %s] ", originalSrc, originalDst)
+	flowDescription := fmt.Sprintf("%s -> %s ", originalSrc, originalDst)
 	logger := log.New(os.Stdout, "[MIN] "+flowDescription, log.Ldate|log.Lmicroseconds)
 
 	logger.Printf("new connection (%d potential registrations)", regManager.CountRegistrations(&originalDstIP))
@@ -137,18 +138,18 @@ func MinTransportProxy(regManager *RegistrationManager, clientConn *net.TCPConn,
 	possibleHmac := make([]byte, 32)
 	n, err := readAtMost(clientConn, possibleHmac)
 	if err != nil || n < 32 {
-		logger.Printf("failed to read hmacId, read %d bytes: %s", n, err)
+		logger.Printf("failed to read hmacId, read_bytes: %d, error: %s", n, err)
 		return
 	}
 
 	reg := regManager.CheckRegistration(&originalDstIP, possibleHmac)
 	if reg == nil {
-		logger.Printf("registration for %v hmac %s not found\n", originalDstIP, hex.EncodeToString(possibleHmac))
+		logger.Printf("registration not found {phantom: %v, hmac: %s}\n", originalDstIP, hex.EncodeToString(possibleHmac))
 		return
 	}
 	// If we are here, this is our transport (TODO: signal in output channel for it)
-
-	logger.Printf("found registration for phantom %s hmac %s (covert: %s)", originalDstIP, hex.EncodeToString(possibleHmac), reg.Covert)
+	logger.Printf("registration found {reg_id: %s, phantom: %s, hmac: %s, covert: %s}\n", reg.IDString(), originalDstIP, hex.EncodeToString(possibleHmac), reg.Covert)
+	logger.SetPrefix(fmt.Sprintf("%s ", reg.IDString()))
 
 	covertConn, err := net.Dial("tcp", reg.Covert)
 	if err != nil {
@@ -169,8 +170,8 @@ func MinTransportProxy(regManager *RegistrationManager, clientConn *net.TCPConn,
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(clientConn, covertConn, &wg, oncePrintErr, logger)
-	go halfPipe(covertConn, clientConn, &wg, oncePrintErr, logger)
+	go halfPipe(clientConn, covertConn, &wg, oncePrintErr, logger, "Up")
+	go halfPipe(covertConn, clientConn, &wg, oncePrintErr, logger, "Down")
 	wg.Wait()
 }
 
@@ -202,8 +203,8 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(clientConn, covertConn, &wg, oncePrintErr, logger)
-	go halfPipe(covertConn, clientConn, &wg, oncePrintErr, logger)
+	go halfPipe(clientConn, covertConn, &wg, oncePrintErr, logger, "Up")
+	go halfPipe(covertConn, clientConn, &wg, oncePrintErr, logger, "Down")
 	wg.Wait()
 }
 
@@ -415,13 +416,13 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(finalClientConn, finalTargetConn, &wg, oncePrintErr, logger)
+	go halfPipe(finalClientConn, finalTargetConn, &wg, oncePrintErr, logger, "Up")
 
 	go func() {
 		// wait for readFromServerAndParse to exit first, as it probably haven't seen appdata yet
 		select {
 		case _ = <-serverErrChan:
-			halfPipe(finalClientConn, finalTargetConn, &wg, oncePrintErr, logger)
+			halfPipe(finalClientConn, finalTargetConn, &wg, oncePrintErr, logger, "Down")
 		case <-time.After(10 * time.Second):
 			finalClientConn.Close()
 			wg.Done()
