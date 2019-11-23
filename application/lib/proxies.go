@@ -89,7 +89,7 @@ func halfPipe(src, dst net.Conn,
 		func() {
 			proxyEndTime := time.Since(proxyStartTime)
 			if err == nil {
-				logger.Printf("gracefully stopping forwarding {from: %v duration; %v, bytes_written: %v, tag: %s }",
+				logger.Printf("gracefully stopping forwarding {from: %v, duration; %v, bytes_written: %v, tag: %s}",
 					src.RemoteAddr(), int64(proxyEndTime/time.Millisecond), written, tag)
 			} else {
 				logger.Printf("stopping forwarding due to err {from: %v, duration; %v, bytes_written: %v, tag: %v}  error: %v",
@@ -149,7 +149,7 @@ func MinTransportProxy(regManager *RegistrationManager, clientConn *net.TCPConn,
 	}
 	// If we are here, this is our transport (TODO: signal in output channel for it)
 	logger.Printf("registration found {reg_id: %s, phantom: %s, hmac: %s, covert: %s}\n", reg.IDString(), originalDstIP, hex.EncodeToString(possibleHmac), reg.Covert)
-	logger.SetPrefix(fmt.Sprintf("%s ", reg.IDString()))
+	logger.SetPrefix(fmt.Sprintf("[MIN] %s ", reg.IDString()))
 
 	covertConn, err := net.Dial("tcp", reg.Covert)
 	if err != nil {
