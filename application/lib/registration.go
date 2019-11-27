@@ -22,7 +22,7 @@ type RegistrationManager struct {
 }
 
 func NewRegistrationManager() *RegistrationManager {
-	logger := log.New(os.Stdout, "[REG] ", log.Lmicroseconds)
+	logger := log.New(os.Stdout, "[REG] ", log.Ldate|log.Lmicroseconds)
 
 	d, err := NewDDIpSelector()
 	if err != nil {
