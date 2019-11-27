@@ -69,7 +69,7 @@ func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 }
 
 func (regManager *RegistrationManager) CheckRegistration(darkDecoyAddr *net.IP, hmacId []byte) *DecoyRegistration {
-	return regManager.registeredDecoys.checkRegistration(darkDecoyAddr, hmacId)
+	return regManager.registeredDecoys.checkRegistration(darkDecoyAddr, hmacId, regManager.Logger)
 }
 
 func (regManager *RegistrationManager) CountRegistrations(darkDecoyAddr *net.IP) int {
@@ -89,11 +89,12 @@ const (
 )
 
 type DecoyRegistration struct {
-	DarkDecoy    *net.IP
-	keys         *ConjureSharedKeys
-	Covert, Mask string
-	Flags        uint8
-	Transport    uint
+	DarkDecoy        *net.IP
+	keys             *ConjureSharedKeys
+	Covert, Mask     string
+	Flags            uint8
+	Transport        uint
+	registrationTime time.Time
 }
 
 // String -- Print a digest of the important identifying information for this registration.
@@ -199,6 +200,8 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 	defer r.m.Unlock()
 
 	if d != nil {
+		// Update decoy registration time
+		d.registrationTime = time.Now()
 		switch d.Transport {
 		case MinTransport:
 			hmacId := string(d.keys.conjureHMAC("MinTrasportHMACString"))
@@ -226,7 +229,7 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 	return nil
 }
 
-func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byte) *DecoyRegistration {
+func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byte, logger *log.Logger) *DecoyRegistration {
 	darkDecoyAddrStatic := darkDecoyAddr.String()
 	r.m.RLock()
 	defer r.m.RUnlock()
@@ -236,6 +239,9 @@ func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byt
 		return nil
 	}
 	d := regs[string(hmacId)]
+	// Calculate time delta between registration and connection
+	reg_delta := time.Now().Sub(d.registrationTime)
+	logger.Printf("connection to registration %v, %v took %v", darkDecoyAddr, hmacId, reg_delta)
 	return d
 }
 
