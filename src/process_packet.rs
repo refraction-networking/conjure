@@ -10,7 +10,7 @@ use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::{TcpPacket,TcpFlags};
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use std::u8;
 //use elligator;
@@ -176,6 +176,7 @@ impl PerCoreGlobal
         };
 
         let flow = Flow::new(&ip_pkt, &tcp_pkt);
+        let tcp_flags = tcp_pkt.get_flags();
 
         if panic::catch_unwind(||{ tcp_pkt.payload(); }).is_err() {
             return;
@@ -184,8 +185,13 @@ impl PerCoreGlobal
         let dd_flow = FlowNoSrcPort::from_flow(&flow);
         if self.flow_tracker.is_registered_dark_decoy(&dd_flow) {
             // Tagged flow! Forward packet to whatever
-            //debug!("Tagged flow packet {}", flow);
-
+            if  (tcp_flags & TcpFlags::SYN) != 0  && (tcp_flags & TcpFlags::ACK) == 0 {
+                if flow.src_ip != Ipv4Addr::new(192, 122, 200, 231) &&
+                   flow.src_ip !=  IpAddr::V6(Ipv6Addr::new(0x2001,0x48a8,0x687f,2,0,0,0,2)) 
+                {
+                    debug!("Connection for registered Phantom {}", flow);
+                }
+            }
             // Update expire time
             self.flow_tracker.mark_dark_decoy(&dd_flow);
 
@@ -195,7 +201,6 @@ impl PerCoreGlobal
             return;
         }
 
-        let tcp_flags = tcp_pkt.get_flags();
         if (tcp_flags & TcpFlags::SYN) != 0 && (tcp_flags & TcpFlags::ACK) == 0
         {
             self.stats.port_443_syns_this_period += 1;
