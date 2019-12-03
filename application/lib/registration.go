@@ -22,6 +22,14 @@ type RegistrationManager struct {
 }
 
 func NewRegistrationManager() *RegistrationManager {
+	// flush redis db
+	client, err := getRedisClient()
+	if err != nil {
+		fmt.Printf("couldn't connect to redis")
+	} else {
+		client.FlushDB()
+	}
+
 	logger := log.New(os.Stdout, "[REG] ", log.Ldate|log.Lmicroseconds)
 
 	d, err := NewDDIpSelector()
@@ -78,6 +86,16 @@ func (regManager *RegistrationManager) CountRegistrations(darkDecoyAddr *net.IP)
 
 func (regManager *RegistrationManager) RemoveOldRegistrations() {
 	regManager.registeredDecoys.removeOldRegistrations(regManager.Logger)
+}
+
+func (regManager *RegistrationManager) CleanUp() {
+	// flush redis db
+	client, err := getRedisClient()
+	if err != nil {
+		fmt.Printf("couldn't connect to redis")
+	} else {
+		client.FlushDB()
+	}
 }
 
 // Note: These must match the order in the client tapdance/conjure.go transports

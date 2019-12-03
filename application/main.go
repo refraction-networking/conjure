@@ -177,6 +177,7 @@ var logger *log.Logger
 
 func main() {
 	regManager := dd.NewRegistrationManager()
+	defer regManager.CleanUp()
 	logger = regManager.Logger
 	go get_zmq_updates(regManager)
 
