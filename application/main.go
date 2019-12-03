@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"syscall"
+	"time"
 
 	dd "./lib"
 	"github.com/golang/protobuf/proto"
@@ -178,6 +179,13 @@ func main() {
 	regManager := dd.NewRegistrationManager()
 	logger = regManager.Logger
 	go get_zmq_updates(regManager)
+
+	go func() {
+		for {
+			time.Sleep(3 * time.Minute)
+			regManager.RemoveOldRegistrations()
+		}
+	}()
 
 	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
 	ln, err := net.ListenTCP("tcp", listenAddr)

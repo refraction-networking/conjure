@@ -69,7 +69,7 @@ func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 }
 
 func (regManager *RegistrationManager) CheckRegistration(darkDecoyAddr *net.IP, hmacId []byte) *DecoyRegistration {
-	return regManager.registeredDecoys.checkRegistration(darkDecoyAddr, hmacId)
+	return regManager.registeredDecoys.checkRegistration(darkDecoyAddr, hmacId, regManager.Logger)
 }
 
 func (regManager *RegistrationManager) CountRegistrations(darkDecoyAddr *net.IP) int {
@@ -77,7 +77,7 @@ func (regManager *RegistrationManager) CountRegistrations(darkDecoyAddr *net.IP)
 }
 
 func (regManager *RegistrationManager) RemoveOldRegistrations() {
-	regManager.registeredDecoys.removeOldRegistrations()
+	regManager.registeredDecoys.removeOldRegistrations(regManager.Logger)
 }
 
 // Note: These must match the order in the client tapdance/conjure.go transports
@@ -89,11 +89,12 @@ const (
 )
 
 type DecoyRegistration struct {
-	DarkDecoy    *net.IP
-	keys         *ConjureSharedKeys
-	Covert, Mask string
-	Flags        uint8
-	Transport    uint
+	DarkDecoy        *net.IP
+	keys             *ConjureSharedKeys
+	Covert, Mask     string
+	Flags            uint8
+	Transport        uint
+	registrationTime time.Time
 }
 
 // String -- Print a digest of the important identifying information for this registration.
@@ -199,6 +200,8 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 	defer r.m.Unlock()
 
 	if d != nil {
+		// Update decoy registration time
+		d.registrationTime = time.Now()
 		switch d.Transport {
 		case MinTransport:
 			hmacId := string(d.keys.conjureHMAC("MinTrasportHMACString"))
@@ -226,7 +229,7 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 	return nil
 }
 
-func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byte) *DecoyRegistration {
+func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byte, logger *log.Logger) *DecoyRegistration {
 	darkDecoyAddrStatic := darkDecoyAddr.String()
 	r.m.RLock()
 	defer r.m.RUnlock()
@@ -236,6 +239,12 @@ func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byt
 		return nil
 	}
 	d := regs[string(hmacId)]
+	// Calculate time delta between registration and connection
+        if d == nil {
+            return nil
+        }
+	reg_delta := time.Now().Sub(d.registrationTime)
+	logger.Printf("connection to registration %v, %s took %v", darkDecoyAddr, hex.EncodeToString(hmacId), reg_delta)
 	return d
 }
 
@@ -251,21 +260,23 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr *net.IP) int {
 	return len(regs)
 }
 
-// TODO log registration expiration
-func (r *RegisteredDecoys) removeOldRegistrations() {
+func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 	const timeout = -time.Minute * 5
 	cutoff := time.Now().Add(timeout)
 	idx := 0
 	r.m.Lock()
 	defer r.m.Unlock()
 
+	logger.Printf("cleansing registrations")
 	for idx < len(r.decoysTimeouts) {
 		if cutoff.After(r.decoysTimeouts[idx].registrationTime) {
 			break
 		}
 		decoyAddr := r.decoysTimeouts[idx].decoy
 		hmacId := r.decoysTimeouts[idx].hmacId
+		regTime := r.decoysTimeouts[idx].registrationTime
 		delete(r.decoys[decoyAddr], hmacId)
+		logger.Printf("expired registration for %v, %s, duration: %v", decoyAddr, hex.EncodeToString([]byte(hmacId)), time.Now().Sub(regTime))
 		idx += 1
 	}
 	r.decoysTimeouts = r.decoysTimeouts[idx:]
