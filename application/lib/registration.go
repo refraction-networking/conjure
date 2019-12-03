@@ -88,6 +88,16 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 	regManager.registeredDecoys.removeOldRegistrations()
 }
 
+func (regManager *RegistrationManager) CleanUp() {
+	// flush redis db
+	client, err := getRedisClient()
+	if err != nil {
+		fmt.Printf("couldn't connect to redis")
+	} else {
+		client.FlushDB()
+	}
+}
+
 // Note: These must match the order in the client tapdance/conjure.go transports
 // and the C2S protobuf
 const (
