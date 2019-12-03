@@ -240,6 +240,9 @@ func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byt
 	}
 	d := regs[string(hmacId)]
 	// Calculate time delta between registration and connection
+        if d == nil {
+            return nil
+        }
 	reg_delta := time.Now().Sub(d.registrationTime)
 	logger.Printf("connection to registration %v, %v took %v", darkDecoyAddr, hmacId, reg_delta)
 	return d
