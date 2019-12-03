@@ -275,7 +275,7 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 		hmacId := r.decoysTimeouts[idx].hmacId
 		regTime := r.decoysTimeouts[idx].registrationTime
 		delete(r.decoys[decoyAddr], hmacId)
-		logger.Printf("expired registration for %v, %s, duration: %v", decoyAddr, hex.EncodeToString(hmacId), time.Now().Sub(regTime))
+		logger.Printf("expired registration for %v, %s, duration: %v", decoyAddr, hmacId, time.Now().Sub(regTime))
 		idx += 1
 	}
 	r.decoysTimeouts = r.decoysTimeouts[idx:]
