@@ -244,7 +244,7 @@ func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byt
             return nil
         }
 	reg_delta := time.Now().Sub(d.registrationTime)
-	logger.Printf("connection to registration %v, %v took %v", darkDecoyAddr, hmacId, reg_delta)
+	logger.Printf("connection to registration %v, %v took %v", darkDecoyAddr, hex.EncodeToString(hmacId), reg_delta)
 	return d
 }
 
@@ -275,7 +275,7 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 		hmacId := r.decoysTimeouts[idx].hmacId
 		regTime := r.decoysTimeouts[idx].registrationTime
 		delete(r.decoys[decoyAddr], hmacId)
-		logger.Printf("expired registration for %v, %v, duration: %v", decoyAddr, hmacId, time.Now().Sub(regTime))
+		logger.Printf("expired registration for %v, %v, duration: %v", decoyAddr, hex.EncodeToString(hmacId), time.Now().Sub(regTime))
 		idx += 1
 	}
 	r.decoysTimeouts = r.decoysTimeouts[idx:]
