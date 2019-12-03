@@ -22,6 +22,14 @@ type RegistrationManager struct {
 }
 
 func NewRegistrationManager() *RegistrationManager {
+	// flush redis db
+	client, err := getRedisClient()
+	if err != nil {
+		fmt.Printf("couldn't connect to redis")
+	} else {
+		client.FlushDB()
+	}
+
 	logger := log.New(os.Stdout, "[REG] ", log.Ldate|log.Lmicroseconds)
 
 	d, err := NewDDIpSelector()
