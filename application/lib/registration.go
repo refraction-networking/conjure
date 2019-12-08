@@ -206,6 +206,7 @@ type DecoyTimeout struct {
 	decoy            string
 	hmacId           string
 	registrationTime time.Time
+	regID            string
 }
 
 type RegisteredDecoys struct {
@@ -247,6 +248,7 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 					decoy:            darkDecoyAddr,
 					hmacId:           hmacId,
 					registrationTime: time.Now(),
+					regID:            d.IDString(),
 				})
 		case Obfs4Transport:
 			fallthrough
@@ -274,7 +276,7 @@ func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byt
 		return nil
 	}
 	reg_delta := time.Now().Sub(d.registrationTime)
-	logger.Printf("connection to registration %v, %s took %v", darkDecoyAddr, hex.EncodeToString(hmacId), reg_delta)
+	logger.Printf("connection to registration %v, %s took %v", darkDecoyAddr, hex.EncodeToString(hmacId)[:regIDLen], reg_delta)
 	return d
 }
 
@@ -314,7 +316,7 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 		stats := regExpireLogMsg{
 			decoyAddr:  expiredReg.decoy,
 			reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
-			regID:      hex.EncodeToString([]byte(expiredReg.hmacId))[:regIDLen],
+			regID:      expiredReg.regID,
 		}
 		statsStr, _ := json.Marshal(stats)
 		logger.Printf("expired registration %s", statsStr)
