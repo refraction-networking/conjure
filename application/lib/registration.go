@@ -2,10 +2,12 @@ package lib
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,7 +44,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to select dark decoy IP address: %v", err)
+		return nil, fmt.Errorf("Failed to select phantom IP address: %v", err)
 	}
 
 	reg := DecoyRegistration{
@@ -112,17 +114,29 @@ func (reg *DecoyRegistration) String() string {
 	return digest
 }
 
+// Length of the registration ID for logging
+var regIDLen = 16
+
+// IDString - return a short version of the id (HMAC-ID) of a registration for logging
 func (reg *DecoyRegistration) IDString() string {
+	var xid []string
+
+	for i := 0; i < regIDLen; i++ {
+		xid = append(xid, "0")
+	}
+	nilID := strings.Join(xid, "")
+
 	if reg == nil || reg.keys == nil {
-		return "000000"
+
+		return nilID
 	}
 
 	secret := make([]byte, hex.EncodedLen(len(reg.keys.SharedSecret)))
 	n := hex.Encode(secret, reg.keys.SharedSecret)
-	if n < 6 {
-		return "000000"
+	if n < 16 {
+		return nilID
 	}
-	return fmt.Sprintf("%s", secret[:6])
+	return fmt.Sprintf("%s", secret[:regIDLen])
 }
 
 // PhantomIsLive - Test whether the phantom is live using
@@ -240,9 +254,9 @@ func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byt
 	}
 	d := regs[string(hmacId)]
 	// Calculate time delta between registration and connection
-        if d == nil {
-            return nil
-        }
+	if d == nil {
+		return nil
+	}
 	reg_delta := time.Now().Sub(d.registrationTime)
 	logger.Printf("connection to registration %v, %s took %v", darkDecoyAddr, hex.EncodeToString(hmacId), reg_delta)
 	return d
@@ -260,6 +274,13 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr *net.IP) int {
 	return len(regs)
 }
 
+type regExpireLogMsg struct {
+	decoyAddr  string
+	reg2Conn   int64
+	reg2expire int64
+	regID      string
+}
+
 func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 	const timeout = -time.Minute * 5
 	cutoff := time.Now().Add(timeout)
@@ -272,12 +293,16 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 		if cutoff.After(r.decoysTimeouts[idx].registrationTime) {
 			break
 		}
-		decoyAddr := r.decoysTimeouts[idx].decoy
-		hmacId := r.decoysTimeouts[idx].hmacId
-		regTime := r.decoysTimeouts[idx].registrationTime
-		delete(r.decoys[decoyAddr], hmacId)
-		logger.Printf("expired registration for %v, %s, duration: %v", decoyAddr, hex.EncodeToString([]byte(hmacId)), time.Now().Sub(regTime))
-		idx += 1
+		expiredReg := r.decoysTimeouts[idx]
+		delete(r.decoys[expiredReg.decoy], expiredReg.hmacId)
+		stats := regExpireLogMsg{
+			decoyAddr:  expiredReg.decoy,
+			reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
+			regID:      hex.EncodeToString([]byte(expiredReg.hmacId))[:REG_ID_LEN],
+		}
+		statsStr, _ := json.Marshal(stats)
+		logger.Printf("expired registration %s", statsStr)
+		idx++
 	}
 	r.decoysTimeouts = r.decoysTimeouts[idx:]
 }
