@@ -61,8 +61,6 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 
 func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 
-	registerForDetector(d)
-
 	darkDecoyAddr := d.DarkDecoy.String()
 	err := regManager.registeredDecoys.register(darkDecoyAddr, d)
 	if err != nil {
@@ -241,15 +239,24 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 			if exists == false {
 				r.decoys[darkDecoyAddr] = map[string]*DecoyRegistration{}
 			}
-			r.decoys[darkDecoyAddr][hmacId] = d
+			reg, exists := r.decoys[darkDecoyAddr][hmacId]
+			if reg == nil {
+				// New Registration not known to the Manager
+				r.decoys[darkDecoyAddr][hmacId] = d
 
-			r.decoysTimeouts = append(r.decoysTimeouts,
-				DecoyTimeout{
-					decoy:            darkDecoyAddr,
-					hmacId:           hmacId,
-					registrationTime: time.Now(),
-					regID:            d.IDString(),
-				})
+				r.decoysTimeouts = append(r.decoysTimeouts,
+					DecoyTimeout{
+						decoy:            darkDecoyAddr,
+						hmacId:           hmacId,
+						registrationTime: time.Now(),
+						regID:            d.IDString(),
+					})
+
+				//[TODO]{priority:5} track what registration decoys are seen for a given session
+
+				registerForDetector(d)
+
+			}
 		case Obfs4Transport:
 			fallthrough
 		case NullTransport:
