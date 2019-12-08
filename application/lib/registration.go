@@ -107,11 +107,27 @@ func (reg *DecoyRegistration) String() string {
 		return fmt.Sprintf("%v", reg.String())
 	}
 
-	digest := fmt.Sprintf("{phantom=%v, covert=%v, mask=%v, flags=0x%02x, SharedSecret=%s, Transport=%d}",
-		reg.DarkDecoy.String(), reg.Covert, reg.Mask, reg.Flags,
-		hex.EncodeToString(reg.keys.SharedSecret), reg.Transport)
-
-	return digest
+	stats := struct {
+		phantom      string
+		sharedSecret string
+		Covert, Mask string
+		Flags        uint8
+		Transport    uint
+		regTime      time.Time
+	}{
+		phantom:      reg.DarkDecoy.String(),
+		sharedSecret: hex.EncodeToString(reg.keys.SharedSecret),
+		Covert:       reg.Covert,
+		Mask:         reg.Mask,
+		Flags:        reg.Flags,
+		Transport:    reg.Transport,
+		regTime:      reg.registrationTime,
+	}
+	regStats, err := json.Marshal(stats)
+	if err != nil {
+		return fmt.Sprintf("%v", reg.String())
+	}
+	return string(regStats)
 }
 
 // Length of the registration ID for logging
@@ -298,7 +314,7 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 		stats := regExpireLogMsg{
 			decoyAddr:  expiredReg.decoy,
 			reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
-			regID:      hex.EncodeToString([]byte(expiredReg.hmacId))[:REG_ID_LEN],
+			regID:      hex.EncodeToString([]byte(expiredReg.hmacId))[:regIDLen],
 		}
 		statsStr, _ := json.Marshal(stats)
 		logger.Printf("expired registration %s", statsStr)
