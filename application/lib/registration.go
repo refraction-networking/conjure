@@ -286,8 +286,8 @@ func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byt
 	if d == nil {
 		return nil
 	}
-	reg_delta := time.Now().Sub(d.registrationTime)
-	logger.Printf("connection to registration %v, %s took %v", darkDecoyAddr, hex.EncodeToString(hmacId)[:regIDLen], reg_delta)
+	reg_delta := int64(time.Since(d.registrationTime) / time.Millisecond)
+	logger.Printf("connection to registration %s, %v, %s took %v", d.IDString(), darkDecoyAddr, hex.EncodeToString(hmacId), reg_delta)
 	return d
 }
 
