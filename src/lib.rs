@@ -16,6 +16,9 @@ extern crate zmq;
 extern crate protobuf;
 #[macro_use]
 extern crate redis;
+extern crate regex;
+#[macro_use]
+extern crate lazy_static;
 
 use std::mem::transmute;
 use std::collections::HashMap;

@@ -2,21 +2,16 @@ package main
 
 import (
 	"bufio"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
 	"strconv"
 	"time"
 
+	"./decoys"
 	"./rx"
 )
-
-// Decoy -- Registration decoy from ClientConf
-type Decoy struct {
-	ip        string
-	sni       string
-	ccVersion int
-}
 
 // SessionStats -- Tracked items associated with one client session lifecycle
 type SessionStats struct {
@@ -26,12 +21,14 @@ type SessionStats struct {
 	Transport    int
 	SharedSecret []byte
 	Liveness     string
+	ccVersion    int // NOT CURRENTLY IMPLEMENTED
+	width        int // NOT CURRENTLY IMPLEMENTED
 
 	BytesUp int64
 	BytesDn int64
 
-	RegConns    []Decoy
-	ExpRegConns []Decoy
+	RegConns    []string
+	ExpRegConns []string
 
 	RegTime  time.Time
 	ConnTime time.Time
@@ -71,10 +68,10 @@ type OperationStats struct {
 // Trial -- Cumulative metrics and stats from a set of logs
 type Trial struct {
 	//Sessions -- Map of RegistrationID (truncated shared secret) to session stats
-	Sessions map[string]SessionStats
+	Sessions map[string]*SessionStats
 
 	//Metrics --Map of interval end time to interval metrics
-	Metrics map[time.Time]OperationStats
+	Metrics map[time.Time]*OperationStats
 }
 
 func (tr *Trial) ParseApplication(fname string) {
@@ -117,6 +114,14 @@ func (tr *Trial) ParseApplication(fname string) {
 	}
 }
 
+// GetDecoySelections -- Gets the deterministically selected decoys that should be seen registering
+//		for this sression.
+//
+// 	Note: Can only be used if SessionStats has the SharedSecret defined ([upcoming] and registration width )
+func (s *SessionStats) GetDecoySelections(width uint, ccVersion uint) []*decoys.Decoy {
+	return decoys.SelectDecoys(s.SharedSecret, ccVersion, width) // add v6support
+}
+
 func (tr *Trial) ParseDetector(fname string) {
 	dr := rx.GetDetectorRx()
 
@@ -131,7 +136,17 @@ func (tr *Trial) ParseDetector(fname string) {
 		key, match := dr.Check(scanner.Text())
 		switch key {
 		case "stats-logline":
-			fmt.Printf("%v -- %v\n", key, match)
+			//fmt.Printf("%v -- %v\n", key, match)
+		case "new-registration":
+			if tr.Sessions[match[3]] == nil {
+				tr.Sessions[match[3]] = &SessionStats{RegConns: []string{match[2]}}
+				tr.Sessions[match[3]].SharedSecret, _ = hex.DecodeString(match[3])
+				tr.Sessions[match[3]].GetDecoySelections(5, 0) // static width and ClientConf Version for now.
+
+			} else {
+				tr.Sessions[match[3]].RegConns = append(tr.Sessions[match[3]].RegConns, match[2])
+			}
+			//fmt.Printf("%v -- %v\n", match[3][:16], tr.Sessions[match[3]].RegConns)
 		case "no-match":
 			continue
 		default:
@@ -145,8 +160,12 @@ func (tr *Trial) ParseDetector(fname string) {
 }
 
 func main() {
-	tr := Trial{Sessions: make(map[string]SessionStats)}
+	tr := Trial{Sessions: make(map[string]*SessionStats)}
 
-	tr.ParseApplication("./application.log")
-	// tr.ParseDetector("./detector.log")
+	// tr.ParseApplication("./application.log")
+	tr.ParseDetector("./detector.log")
+
+	for _, session := range tr.Sessions {
+		fmt.Println(len(session.RegConns))
+	}
 }

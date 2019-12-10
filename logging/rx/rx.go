@@ -10,7 +10,9 @@ var appRules = map[string]string{
 }
 
 var detectorRules = map[string]string{
-	"stats-logline": `stats (\d+)`,
+	"stats-logline":    `stats (\d+)`,
+	"new-registration": `New registration ([^\s]+) -> ([^(,\s)]+), ([a-fA-F0-9]+)`,
+	//Dec 03, 2019 16:23:43.510437 (Core 2) DEBUG: New registration 128.138.244.89:43324 -> 192.122.190.105:443, e34b2f8c34a24f36c3862458e1a909decd7d2ac5b6fa5286eed491f85ecd912d
 }
 
 type RX struct {
