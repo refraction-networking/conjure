@@ -75,11 +75,11 @@ func ProxyFactory(reg *DecoyRegistration, proxyProtocol uint) func(*DecoyRegistr
 }
 
 type sessionStats struct {
-	from     string
-	duration int64
-	written  int64
-	tag      string
-	err      string
+	From     string
+	Duration int64
+	Written  int64
+	Tag      string
+	Err      string
 }
 
 // this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to pass around
@@ -99,20 +99,20 @@ func halfPipe(src, dst net.Conn,
 			proxyEndTime := time.Since(proxyStartTime)
 			if err == nil {
 				stats := sessionStats{
-					from:     src.RemoteAddr().String(),
-					duration: int64(proxyEndTime / time.Millisecond),
-					written:  written,
-					tag:      tag,
-					err:      ""}
+					From:     src.RemoteAddr().String(),
+					Duration: int64(proxyEndTime / time.Millisecond),
+					Written:  written,
+					Tag:      tag,
+					Err:      ""}
 				stats_str, _ := json.Marshal(stats)
 				logger.Printf("gracefully stopping forwarding %s", stats_str)
 			} else {
 				stats := sessionStats{
-					from:     src.RemoteAddr().String(),
-					duration: int64(proxyEndTime / time.Millisecond),
-					written:  written,
-					tag:      tag,
-					err:      err.Error()}
+					From:     src.RemoteAddr().String(),
+					Duration: int64(proxyEndTime / time.Millisecond),
+					Written:  written,
+					Tag:      tag,
+					Err:      err.Error()}
 				stats_str, _ := json.Marshal(stats)
 				logger.Printf("stopping forwarding due to err %s", stats_str)
 			}

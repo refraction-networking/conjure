@@ -200,7 +200,7 @@ func phantomIsLive(address string) (bool, error) {
 		}
 		return true, nil
 	default:
-		return false, fmt.Errorf("Reached statistical timeout %v ms", timeout)
+		return false, fmt.Errorf("Reached statistical timeout %v", timeout)
 	}
 }
 
@@ -304,10 +304,9 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr *net.IP) int {
 }
 
 type regExpireLogMsg struct {
-	decoyAddr  string
-	reg2Conn   int64
-	reg2expire int64
-	regID      string
+	DecoyAddr  string
+	Reg2expire int64
+	RegID      string
 }
 
 func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
@@ -325,9 +324,9 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 		expiredReg := r.decoysTimeouts[idx]
 		delete(r.decoys[expiredReg.decoy], expiredReg.hmacId)
 		stats := regExpireLogMsg{
-			decoyAddr:  expiredReg.decoy,
-			reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
-			regID:      expiredReg.regID,
+			DecoyAddr:  expiredReg.decoy,
+			Reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
+			RegID:      expiredReg.regID,
 		}
 		statsStr, _ := json.Marshal(stats)
 		logger.Printf("expired registration %s", statsStr)
