@@ -54,7 +54,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		Mask:             c2s.GetMaskedDecoyServerName(),
 		Flags:            uint8(flags[0]),
 		Transport:        uint(c2s.GetTransport()), // hack
-		decoyListVersion: c2s.GetDecoyListGeneration(),
+		DecoyListVersion: c2s.GetDecoyListGeneration(),
 	}
 
 	return &reg, nil
@@ -95,8 +95,8 @@ type DecoyRegistration struct {
 	Covert, Mask     string
 	Flags            uint8
 	Transport        uint
-	registrationTime time.Time
-	decoyListVersion uint32
+	RegistrationTime time.Time
+	DecoyListVersion uint32
 }
 
 // String -- Print a digest of the important identifying information for this registration.
@@ -108,22 +108,22 @@ func (reg *DecoyRegistration) String() string {
 	}
 
 	stats := struct {
-		phantom          string
-		sharedSecret     string
+		Phantom          string
+		SharedSecret     string
 		Covert, Mask     string
 		Flags            uint8
 		Transport        uint
-		regTime          time.Time
-		decoyListVersion uint32
+		RegTime          time.Time
+		DecoyListVersion uint32
 	}{
-		phantom:          reg.DarkDecoy.String(),
-		sharedSecret:     hex.EncodeToString(reg.keys.SharedSecret),
+		Phantom:          reg.DarkDecoy.String(),
+		SharedSecret:     hex.EncodeToString(reg.keys.SharedSecret),
 		Covert:           reg.Covert,
 		Mask:             reg.Mask,
 		Flags:            reg.Flags,
 		Transport:        reg.Transport,
-		regTime:          reg.registrationTime,
-		decoyListVersion: reg.decoyListVersion,
+		RegTime:          reg.registrationTime,
+		DecoyListVersion: reg.decoyListVersion,
 	}
 	regStats, err := json.Marshal(stats)
 	if err != nil {
