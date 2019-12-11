@@ -55,6 +55,8 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		Flags:            uint8(flags[0]),
 		Transport:        uint(c2s.GetTransport()), // hack
 		DecoyListVersion: c2s.GetDecoyListGeneration(),
+		RegistrationTime: time.Now(),
+		regCount:         0,
 	}
 
 	return &reg, nil
@@ -97,6 +99,7 @@ type DecoyRegistration struct {
 	Transport        uint
 	RegistrationTime time.Time
 	DecoyListVersion uint32
+	regCount         int32
 }
 
 // String -- Print a digest of the important identifying information for this registration.
@@ -234,7 +237,6 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 
 	if d != nil {
 		// Update decoy registration time
-		d.RegistrationTime = time.Now()
 		switch d.Transport {
 		case MinTransport:
 			hmacId := string(d.keys.conjureHMAC("MinTrasportHMACString"))
@@ -244,7 +246,7 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 				r.decoys[darkDecoyAddr] = map[string]*DecoyRegistration{}
 			}
 			reg, exists := r.decoys[darkDecoyAddr][hmacId]
-			if reg == nil {
+			if exists == false {
 				// New Registration not known to the Manager
 				r.decoys[darkDecoyAddr][hmacId] = d
 
@@ -257,9 +259,10 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 					})
 
 				//[TODO]{priority:5} track what registration decoys are seen for a given session
-
+				reg.regCount = 1
 				registerForDetector(d)
-
+			} else {
+				reg.regCount++
 			}
 		case Obfs4Transport:
 			fallthrough
@@ -307,6 +310,7 @@ type regExpireLogMsg struct {
 	DecoyAddr  string
 	Reg2expire int64
 	RegID      string
+	RegCount   int32
 }
 
 func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
@@ -317,20 +321,24 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 	defer r.m.Unlock()
 
 	logger.Printf("cleansing registrations")
-	for idx < len(r.decoysTimeouts) {
+	for idx := 0; idx < len(r.decoysTimeouts); idx++ {
 		if cutoff.After(r.decoysTimeouts[idx].registrationTime) {
 			break
 		}
 		expiredReg := r.decoysTimeouts[idx]
+		expiredRegObj, ok := r.decoys[expiredReg.decoy][expiredReg.hmacId]
+		if !ok {
+			continue
+		}
 		delete(r.decoys[expiredReg.decoy], expiredReg.hmacId)
 		stats := regExpireLogMsg{
 			DecoyAddr:  expiredReg.decoy,
 			Reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
 			RegID:      expiredReg.regID,
+			RegCount:   expiredRegObj.regCount,
 		}
 		statsStr, _ := json.Marshal(stats)
 		logger.Printf("expired registration %s", statsStr)
-		idx++
 	}
 	r.decoysTimeouts = r.decoysTimeouts[idx:]
 }
