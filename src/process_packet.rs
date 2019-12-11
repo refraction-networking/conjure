@@ -1,10 +1,8 @@
 use libc::size_t;
-use regex::Regex;
 use std::os::raw::c_void;
 use std::panic;
 use std::slice;
 use std:: str;
-use std::collections::HashSet;
 
 use pnet::packet::Packet;
 use pnet::packet::ethernet::{EthernetPacket, EtherTypes};
@@ -31,10 +29,6 @@ const SPECIAL_PACKET_PAYLOAD: &'static str = "'This must be Thursday,' said Arth
 //const SQUID_PROXY_PORT: u16 = 1234;
 
 //const STREAM_TIMEOUT_NS: u64 = 120*1000*1000*1000; // 120 seconds
-
-lazy_static! {
-    static ref HOSTNAME_RE : Regex = Regex::new(r"Host: (?P<hostname>[^(\r\n)]+)").unwrap();
-}
 
 fn get_ip_packet<'p>(eth_pkt: &'p EthernetPacket) -> Option<IpPacket<'p>>
 {
@@ -274,14 +268,6 @@ impl PerCoreGlobal
                 // res.1 => Fixed size payload
                 // res.2 => variable size payload (c2s)
 
-                // Get Reg Decoy hostname from HTTP request in tcp payload
-
-                let http_req = str::from_utf8(tcp_pkt.payload()).unwrap();
-                let reg_decoy_hostname = match HOSTNAME_RE.captures(http_req) {
-                    Some(cap) => cap.name("hostname").map_or("", |m| m.as_str()),
-                    None => "",
-                };
-
                 // form message for zmq
                 let mut zmq_msg: Vec<u8> = Vec::new();
 
@@ -296,8 +282,7 @@ impl PerCoreGlobal
                 zmq_msg.append(&mut vsp);
                 
                 let repr_str = hex::encode(res.0);
-                // Log new registration with shared reg decoy ip, reg decoy hostname, and shared secret, 
-                debug!("New registration {}, {}, {}", flow, reg_decoy_hostname, repr_str);
+                debug!("New registration {}, {}", flow, repr_str);
 
                 match self.zmq_sock.send(&zmq_msg, 0){
                     Ok(_)=> return true,
