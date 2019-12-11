@@ -122,8 +122,8 @@ func (reg *DecoyRegistration) String() string {
 		Mask:             reg.Mask,
 		Flags:            reg.Flags,
 		Transport:        reg.Transport,
-		RegTime:          reg.registrationTime,
-		DecoyListVersion: reg.decoyListVersion,
+		RegTime:          reg.RegistrationTime,
+		DecoyListVersion: reg.DecoyListVersion,
 	}
 	regStats, err := json.Marshal(stats)
 	if err != nil {
@@ -234,7 +234,7 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 
 	if d != nil {
 		// Update decoy registration time
-		d.registrationTime = time.Now()
+		d.RegistrationTime = time.Now()
 		switch d.Transport {
 		case MinTransport:
 			hmacId := string(d.keys.conjureHMAC("MinTrasportHMACString"))
@@ -286,7 +286,7 @@ func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byt
 	if d == nil {
 		return nil
 	}
-	reg_delta := int64(time.Since(d.registrationTime) / time.Millisecond)
+	reg_delta := int64(time.Since(d.RegistrationTime) / time.Millisecond)
 	logger.Printf("connection to registration %s, %v, %s took %v", d.IDString(), darkDecoyAddr, hex.EncodeToString(hmacId), reg_delta)
 	return d
 }
