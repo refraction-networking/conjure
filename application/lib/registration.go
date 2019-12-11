@@ -259,7 +259,7 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 					})
 
 				//[TODO]{priority:5} track what registration decoys are seen for a given session
-				reg.regCount = 1
+				d.regCount = 1
 				registerForDetector(d)
 			} else {
 				reg.regCount++
