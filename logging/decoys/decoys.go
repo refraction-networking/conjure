@@ -25,9 +25,9 @@ type Decoy struct {
 }
 
 const (
-	v4 uint = iota
-	v6
-	both
+	V4 uint = iota
+	V6
+	Both
 )
 
 var assetsOnce sync.Once
@@ -101,11 +101,11 @@ func SelectDecoys(sharedSecret []byte, ccv uint, width uint, ipv uint) []*Decoy 
 	//[reference] prune to v6 only decoys if useV6 is true
 	var allDecoys []*Decoy
 	switch ipv {
-	case v6:
+	case V6:
 		allDecoys = Assets().GetV6Decoys(ccv)
-	case v4:
+	case V4:
 		allDecoys = Assets().GetV4Decoys(ccv)
-	case both:
+	case Both:
 		allDecoys = Assets().GetAllDecoys(ccv)
 	default:
 		allDecoys = Assets().GetAllDecoys(ccv)

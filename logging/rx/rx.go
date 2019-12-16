@@ -6,7 +6,8 @@ import (
 
 var appRules = map[string]string{
 	"new-registration": `\sNew\s(registration):\s`,
-	"valid-connection": `took (\d+\.\d+)s`,
+	"valid-connection": `took (\d+)`,
+	"session-end":      `(stopping forwarding due to err|gracefully stopping forwarding) (.*)$`,
 }
 
 var detectorRules = map[string]string{

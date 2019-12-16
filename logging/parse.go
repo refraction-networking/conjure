@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -74,6 +75,14 @@ type Trial struct {
 	Metrics map[time.Time]*OperationStats
 }
 
+type sessionEnd struct {
+	From     string
+	Duration int64
+	Written  int64
+	Tag      string
+	Err      string
+}
+
 func (tr *Trial) ParseApplication(fname string) {
 	ar := rx.GetAppRx()
 
@@ -95,9 +104,15 @@ func (tr *Trial) ParseApplication(fname string) {
 			//fmt.Printf("%v -- %v\n", key, match)
 			f, err := strconv.ParseFloat(match[1], 64)
 			if err == nil {
-				reg2conn = append(reg2conn, f)
+				reg2conn = append(reg2conn, f/1000)
 			}
 		case "new-registration":
+		case "session-end":
+			var sessionStats sessionEnd
+			err = json.Unmarshal([]byte(match[2]), &sessionStats)
+			// if sessionStats.Duration > 0 {
+			// 	fmt.Printf("%v\n", sessionStats.Duration)
+			// }
 		case "no-match":
 			continue
 		default:
@@ -119,7 +134,7 @@ func (tr *Trial) ParseApplication(fname string) {
 //
 // 	Note: Can only be used if SessionStats has the SharedSecret defined ([upcoming] and registration width )
 func (s *SessionStats) GetDecoySelections(width uint, ccVersion uint) []*decoys.Decoy {
-	return decoys.SelectDecoys(s.SharedSecret, ccVersion, width) // add v6support
+	return decoys.SelectDecoys(s.SharedSecret, ccVersion, width, decoys.Both) // add v6support
 }
 
 func (tr *Trial) ParseDetector(fname string) {
@@ -162,8 +177,8 @@ func (tr *Trial) ParseDetector(fname string) {
 func main() {
 	tr := Trial{Sessions: make(map[string]*SessionStats)}
 
-	// tr.ParseApplication("./application.log")
-	tr.ParseDetector("./detector.log")
+	tr.ParseApplication("./application_12-16.log")
+	// tr.ParseDetector("./detector_12-16.log")
 
 	for _, session := range tr.Sessions {
 		fmt.Println(len(session.RegConns))
