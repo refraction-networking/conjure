@@ -2,10 +2,12 @@ package lib
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,24 +44,25 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to select dark decoy IP address: %v", err)
+		return nil, fmt.Errorf("Failed to select phantom IP address: %v", err)
 	}
 
 	reg := DecoyRegistration{
-		DarkDecoy: phantomAddr,
-		keys:      conjureKeys,
-		Covert:    c2s.GetCovertAddress(),
-		Mask:      c2s.GetMaskedDecoyServerName(),
-		Flags:     uint8(flags[0]),
-		Transport: uint(c2s.GetTransport()), // hack
+		DarkDecoy:        phantomAddr,
+		keys:             conjureKeys,
+		Covert:           c2s.GetCovertAddress(),
+		Mask:             c2s.GetMaskedDecoyServerName(),
+		Flags:            uint8(flags[0]),
+		Transport:        uint(c2s.GetTransport()), // hack
+		DecoyListVersion: c2s.GetDecoyListGeneration(),
+		RegistrationTime: time.Now(),
+		regCount:         0,
 	}
 
 	return &reg, nil
 }
 
 func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
-
-	registerForDetector(d)
 
 	darkDecoyAddr := d.DarkDecoy.String()
 	err := regManager.registeredDecoys.register(darkDecoyAddr, d)
@@ -94,7 +97,9 @@ type DecoyRegistration struct {
 	Covert, Mask     string
 	Flags            uint8
 	Transport        uint
-	registrationTime time.Time
+	RegistrationTime time.Time
+	DecoyListVersion uint32
+	regCount         int32
 }
 
 // String -- Print a digest of the important identifying information for this registration.
@@ -105,24 +110,54 @@ func (reg *DecoyRegistration) String() string {
 		return fmt.Sprintf("%v", reg.String())
 	}
 
-	digest := fmt.Sprintf("{phantom=%v, covert=%v, mask=%v, flags=0x%02x, SharedSecret=%s, Transport=%d}",
-		reg.DarkDecoy.String(), reg.Covert, reg.Mask, reg.Flags,
-		hex.EncodeToString(reg.keys.SharedSecret), reg.Transport)
-
-	return digest
+	stats := struct {
+		Phantom          string
+		SharedSecret     string
+		Covert, Mask     string
+		Flags            uint8
+		Transport        uint
+		RegTime          time.Time
+		DecoyListVersion uint32
+	}{
+		Phantom:          reg.DarkDecoy.String(),
+		SharedSecret:     hex.EncodeToString(reg.keys.SharedSecret),
+		Covert:           reg.Covert,
+		Mask:             reg.Mask,
+		Flags:            reg.Flags,
+		Transport:        reg.Transport,
+		RegTime:          reg.RegistrationTime,
+		DecoyListVersion: reg.DecoyListVersion,
+	}
+	regStats, err := json.Marshal(stats)
+	if err != nil {
+		return fmt.Sprintf("%v", reg.String())
+	}
+	return string(regStats)
 }
 
+// Length of the registration ID for logging
+var regIDLen = 16
+
+// IDString - return a short version of the id (HMAC-ID) of a registration for logging
 func (reg *DecoyRegistration) IDString() string {
+	var xid []string
+
+	for i := 0; i < regIDLen; i++ {
+		xid = append(xid, "0")
+	}
+	nilID := strings.Join(xid, "")
+
 	if reg == nil || reg.keys == nil {
-		return "000000"
+
+		return nilID
 	}
 
 	secret := make([]byte, hex.EncodedLen(len(reg.keys.SharedSecret)))
 	n := hex.Encode(secret, reg.keys.SharedSecret)
-	if n < 6 {
-		return "000000"
+	if n < 16 {
+		return nilID
 	}
-	return fmt.Sprintf("%s", secret[:6])
+	return fmt.Sprintf("%s", secret[:regIDLen])
 }
 
 // PhantomIsLive - Test whether the phantom is live using
@@ -168,7 +203,7 @@ func phantomIsLive(address string) (bool, error) {
 		}
 		return true, nil
 	default:
-		return false, fmt.Errorf("Reached statistical timeout %v ms", timeout)
+		return false, fmt.Errorf("Reached statistical timeout %v", timeout)
 	}
 }
 
@@ -176,6 +211,7 @@ type DecoyTimeout struct {
 	decoy            string
 	hmacId           string
 	registrationTime time.Time
+	regID            string
 }
 
 type RegisteredDecoys struct {
@@ -201,7 +237,6 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 
 	if d != nil {
 		// Update decoy registration time
-		d.registrationTime = time.Now()
 		switch d.Transport {
 		case MinTransport:
 			hmacId := string(d.keys.conjureHMAC("MinTrasportHMACString"))
@@ -210,14 +245,25 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 			if exists == false {
 				r.decoys[darkDecoyAddr] = map[string]*DecoyRegistration{}
 			}
-			r.decoys[darkDecoyAddr][hmacId] = d
+			reg, exists := r.decoys[darkDecoyAddr][hmacId]
+			if exists == false {
+				// New Registration not known to the Manager
+				r.decoys[darkDecoyAddr][hmacId] = d
 
-			r.decoysTimeouts = append(r.decoysTimeouts,
-				DecoyTimeout{
-					decoy:            darkDecoyAddr,
-					hmacId:           hmacId,
-					registrationTime: time.Now(),
-				})
+				r.decoysTimeouts = append(r.decoysTimeouts,
+					DecoyTimeout{
+						decoy:            darkDecoyAddr,
+						hmacId:           hmacId,
+						registrationTime: time.Now(),
+						regID:            d.IDString(),
+					})
+
+				//[TODO]{priority:5} track what registration decoys are seen for a given session
+				d.regCount = 1
+				registerForDetector(d)
+			} else {
+				reg.regCount++
+			}
 		case Obfs4Transport:
 			fallthrough
 		case NullTransport:
@@ -240,11 +286,11 @@ func (r *RegisteredDecoys) checkRegistration(darkDecoyAddr *net.IP, hmacId []byt
 	}
 	d := regs[string(hmacId)]
 	// Calculate time delta between registration and connection
-        if d == nil {
-            return nil
-        }
-	reg_delta := time.Now().Sub(d.registrationTime)
-	logger.Printf("connection to registration %v, %s took %v", darkDecoyAddr, hex.EncodeToString(hmacId), reg_delta)
+	if d == nil {
+		return nil
+	}
+	reg_delta := int64(time.Since(d.RegistrationTime) / time.Millisecond)
+	logger.Printf("connection to registration %s, %v, %s took %v", d.IDString(), darkDecoyAddr, hex.EncodeToString(hmacId), reg_delta)
 	return d
 }
 
@@ -260,6 +306,13 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr *net.IP) int {
 	return len(regs)
 }
 
+type regExpireLogMsg struct {
+	DecoyAddr  string
+	Reg2expire int64
+	RegID      string
+	RegCount   int32
+}
+
 func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 	const timeout = -time.Minute * 5
 	cutoff := time.Now().Add(timeout)
@@ -268,16 +321,24 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 	defer r.m.Unlock()
 
 	logger.Printf("cleansing registrations")
-	for idx < len(r.decoysTimeouts) {
+	for idx := 0; idx < len(r.decoysTimeouts); idx++ {
 		if cutoff.After(r.decoysTimeouts[idx].registrationTime) {
 			break
 		}
-		decoyAddr := r.decoysTimeouts[idx].decoy
-		hmacId := r.decoysTimeouts[idx].hmacId
-		regTime := r.decoysTimeouts[idx].registrationTime
-		delete(r.decoys[decoyAddr], hmacId)
-		logger.Printf("expired registration for %v, %s, duration: %v", decoyAddr, hex.EncodeToString([]byte(hmacId)), time.Now().Sub(regTime))
-		idx += 1
+		expiredReg := r.decoysTimeouts[idx]
+		expiredRegObj, ok := r.decoys[expiredReg.decoy][expiredReg.hmacId]
+		if !ok {
+			continue
+		}
+		delete(r.decoys[expiredReg.decoy], expiredReg.hmacId)
+		stats := regExpireLogMsg{
+			DecoyAddr:  expiredReg.decoy,
+			Reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
+			RegID:      expiredReg.regID,
+			RegCount:   expiredRegObj.regCount,
+		}
+		statsStr, _ := json.Marshal(stats)
+		logger.Printf("expired registration %s", statsStr)
 	}
 	r.decoysTimeouts = r.decoysTimeouts[idx:]
 }
