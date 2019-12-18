@@ -368,6 +368,10 @@ struct cmd_options
     // entirely (which rust likes), and with different cluster_ids.
     uint8_t         core_affinity_offset;
 
+    // instead of connecting to zbalance $cluster_id@0, $cluster_id@1, ... 
+    // start at $cluster_id@$pfring_offset.
+    uint8_t         pfring_offset;
+
     // In seconds, interval between logging of bandwidth, tag checks/s, etc.
     unsigned int    log_interval;
     uint8_t*        station_key;  // the station key
@@ -392,6 +396,7 @@ void parse_cmd_args(int argc, char* argv[], struct cmd_options* options)
     int32_t cpu_procs_i32 = 1; // struct member is a u8! catch overflow!
     options->cluster_id = 987654321;
     options->core_affinity_offset = 0;
+    options->pfring_offset = 0;
     options->log_interval = 1000; // milliseconds
     int skip_core = -1; // If >0, skip this core when incrementing
 
@@ -401,7 +406,7 @@ void parse_cmd_args(int argc, char* argv[], struct cmd_options* options)
     options->public_key = public_key;
 
     char c;
-    while ((c = getopt(argc,argv,"i:n:c:o:l:K:s:a:")) != -1)
+    while ((c = getopt(argc,argv,"i:n:c:o:l:K:s:a:z:")) != -1)
     {
         switch (c)
         {
@@ -434,6 +439,9 @@ void parse_cmd_args(int argc, char* argv[], struct cmd_options* options)
 				options->zmq_address = malloc(strlen(optarg));
 				strcpy(options->zmq_address, optarg);
               	break;
+            case 'z':
+                options->pfring_offset = atoi(optarg);
+                break;
             default:
                 fprintf(stderr, "Unknown option %c\n", c);
                 break;
@@ -460,6 +468,7 @@ void parse_cmd_args(int argc, char* argv[], struct cmd_options* options)
             printf("Using public key: ");
             td_print_key(options->public_key);
             printf("\n");
+			fflush(stdout);
         }
     }
     else
@@ -508,6 +517,7 @@ void parse_cmd_args(int argc, char* argv[], struct cmd_options* options)
 #endif
     options->cpu_procs = cpu_procs_i32;
     options->skip_core = skip_core;
+    fflush(stdout);
 }
 
 // id is a 1-byte identifier that uniquely determines which proxy process it will go to
@@ -537,7 +547,10 @@ int main(int argc, char* argv[])
     struct cmd_options options;
     parse_cmd_args(argc, argv, &options);
 
+    fflush(stdout);
+
     g_num_worker_procs = options.cpu_procs;
+    int pfring_offset = options.pfring_offset;
 
     // To keep it simple, we will let the parent and children all have this same
     // handler. All the handler does is set a global flag to 1, so no big deal.
@@ -564,7 +577,7 @@ int main(int argc, char* argv[])
         if (core_num == options.skip_core) core_num++;
         g_forked_pids[i] =
             start_tapdance_process(core_num,
-                                   options.cluster_id, i, options.log_interval,
+                                   options.cluster_id, i+pfring_offset, options.log_interval,
                                    options.station_key, options.zmq_address);
         core_num++;
     }
@@ -586,7 +599,10 @@ int main(int argc, char* argv[])
         if (WIFEXITED(wait_status))
             printf("exited, status=%d\n", WEXITSTATUS(wait_status));
         else if (WIFSIGNALED(wait_status))
-            printf("killed by signal %d\n", WTERMSIG(wait_status));
+            if (WCOREDUMP(wait_status))
+                printf("killed by signal %d -- Coredump created\n", WTERMSIG(wait_status));
+            else
+                printf("killed by signal %d\n", WTERMSIG(wait_status));
         else if (WIFSTOPPED(wait_status))
             printf("stopped by signal %d\n", WSTOPSIG(wait_status));
         else if (WIFCONTINUED(wait_status))
