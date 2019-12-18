@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -73,6 +74,14 @@ func ProxyFactory(reg *DecoyRegistration, proxyProtocol uint) func(*DecoyRegistr
 	}
 }
 
+type sessionStats struct {
+	From     string
+	Duration int64
+	Written  int64
+	Tag      string
+	Err      string
+}
+
 // this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to pass around
 // TODO: refactor
 func halfPipe(src, dst net.Conn,
@@ -89,11 +98,23 @@ func halfPipe(src, dst net.Conn,
 		func() {
 			proxyEndTime := time.Since(proxyStartTime)
 			if err == nil {
-				logger.Printf("gracefully stopping forwarding {from: %v, duration; %v, bytes_written: %v, tag: %s}",
-					src.RemoteAddr(), int64(proxyEndTime/time.Millisecond), written, tag)
+				stats := sessionStats{
+					From:     src.RemoteAddr().String(),
+					Duration: int64(proxyEndTime / time.Millisecond),
+					Written:  written,
+					Tag:      tag,
+					Err:      ""}
+				stats_str, _ := json.Marshal(stats)
+				logger.Printf("gracefully stopping forwarding %s", stats_str)
 			} else {
-				logger.Printf("stopping forwarding due to err {from: %v, duration; %v, bytes_written: %v, tag: %v}  error: %v",
-					src.RemoteAddr(), int64(proxyEndTime/time.Millisecond), written, tag, err)
+				stats := sessionStats{
+					From:     src.RemoteAddr().String(),
+					Duration: int64(proxyEndTime / time.Millisecond),
+					Written:  written,
+					Tag:      tag,
+					Err:      err.Error()}
+				stats_str, _ := json.Marshal(stats)
+				logger.Printf("stopping forwarding due to err %s", stats_str)
 			}
 		})
 	if closeWriter, ok := dst.(interface {
