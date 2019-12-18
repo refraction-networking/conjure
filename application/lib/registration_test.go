@@ -167,3 +167,16 @@ func TestLiveness(t *testing.T) {
 		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
 }
+
+func TestRegString(t *testing.T) {
+	rm := NewRegistrationManager()
+
+	c2s, keys, flags := mockReceiveFromDetector()
+
+	newReg, err := rm.NewRegistration(&c2s, &keys, flags, c2s.GetV6Support())
+	if err != nil {
+		t.Fatalf("Registration failed: %v", err)
+	}
+
+	t.Logf("%s - %s", newReg.IDString(), newReg.String())
+}
