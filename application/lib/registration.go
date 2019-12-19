@@ -201,7 +201,7 @@ func phantomIsLive(address string) (bool, error) {
 		if err != nil {
 			return true, err
 		}
-		return true, nil
+		return true,  fmt.Errorf("Phantom picked up the connection")
 	default:
 		return false, fmt.Errorf("Reached statistical timeout %v", timeout)
 	}
