@@ -11,15 +11,24 @@ type DDIpSelector struct {
 	Networks map[uint][]*net.IPNet
 }
 
+var phantomSubnets = []string{
+	"192.122.190.0/24",      // Curveball Merit
+	"2001:48a8:687f:1::/64", // Curveball Merit
+	"141.219.0.0/16",
+	"35.8.0.0/16",
+	// "2001:48a8::/32",		 // WindyEgret Merit
+}
+
 func defaultSubnets() []*net.IPNet {
-	defaultSubnets := []string{"192.122.190.0/24", "2001:48a8:687f:1::/64"}
+	defaultSubnets := phantomSubnets
 	return subnetListFromStrList(defaultSubnets)
 }
 
 func getStaticSubnets() map[uint][]*net.IPNet {
 	nets := map[uint][]string{
-		1: []string{"192.122.190.0/24", "2001:48a8:687f:1::/64"},
-		2: []string{"192.122.190.0/28", "2001:48a8:687f:1::/96"},
+		1:   []string{"192.122.190.0/24", "2001:48a8:687f:1::/64"},
+		2:   []string{"192.122.190.0/28", "2001:48a8:687f:1::/96"},
+		538: phantomSubnets,
 	}
 
 	networks := make(map[uint][]*net.IPNet)
