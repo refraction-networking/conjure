@@ -28,9 +28,8 @@ impl log::Log for SimpleLogger
              && !s.starts_with("ticking")) {
                 let t = time::now();
                 // unwrap relies on "%b %d, %Y %T" being a valid format string.
-                let t_s = time::strftime("%b %d, %Y %T", &t).unwrap();
-                println!("{}.{:06} (Core {}) {}: {}", t_s, t.tm_nsec/1000,
-                                            self.lcore_id, record.level(), s);
+                let t_s = time::strftime("%Y-%m-%d %H:%M:%S.%f %z", &t).unwrap();
+                println!("{} (Core {}) {}: {}", t_s, self.lcore_id, record.level(), s);
             }
         }
     }
