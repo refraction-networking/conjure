@@ -20,27 +20,27 @@ const DETECTOR_REG_CHANNEL string = "dark_decoy_map"
 type RegistrationManager struct {
 	registeredDecoys *RegisteredDecoys
 	Logger           *log.Logger
-	DDSelector       *DDIpSelector
+	PhantomSelector  *PhantomIPSelector
 }
 
 func NewRegistrationManager() *RegistrationManager {
 	logger := log.New(os.Stdout, "[REG] ", log.Ldate|log.Lmicroseconds)
 
-	d, err := NewDDIpSelector()
+	p, err := NewPhantomIPSelector()
 	if err != nil {
-		fmt.Errorf("Failed to create the DDIpSelector Object: %v\n", err)
+		// fmt.Errorf("failed to create the PhantomIPSelector object: %v", err)
 		return nil
 	}
 	return &RegistrationManager{
 		Logger:           logger,
 		registeredDecoys: NewRegisteredDecoys(),
-		DDSelector:       d,
+		PhantomSelector:  p,
 	}
 }
 
 func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, flags [1]byte, includeV6 bool) (*DecoyRegistration, error) {
 
-	phantomAddr, err := regManager.DDSelector.Select(
+	phantomAddr, err := regManager.PhantomSelector.Select(
 		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
 
 	if err != nil {
@@ -107,7 +107,7 @@ type DecoyRegistration struct {
 // in the detector associating registrant IP with shared secret.
 func (reg *DecoyRegistration) String() string {
 	if reg == nil {
-		return fmt.Sprintf("%v", reg.String())
+		return "{}"
 	}
 
 	stats := struct {
@@ -201,7 +201,7 @@ func phantomIsLive(address string) (bool, error) {
 		if err != nil {
 			return true, err
 		}
-		return true,  fmt.Errorf("Phantom picked up the connection")
+		return true, fmt.Errorf("Phantom picked up the connection")
 	default:
 		return false, fmt.Errorf("Reached statistical timeout %v", timeout)
 	}

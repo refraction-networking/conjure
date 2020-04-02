@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net"
 	"testing"
@@ -11,16 +12,12 @@ import (
 )
 
 func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys, [1]byte) {
-	clientToStationBytes := []byte{
-		0x10, 0x9a, 0x04, 0x18, 0x0b, 0xa2, 0x01, 0x0e, 0x35, 0x32, 0x2e, 0x34, 0x34, 0x2e, 0x37,
-		0x33, 0x2e, 0x36, 0x3a, 0x34, 0x34, 0x33, 0xb0, 0x01, 0x00, 0xa2, 0x06, 0x01, 0x00}
-	sharedSecret := []byte{
-		0x54, 0x14, 0xc7, 0x34, 0xad, 0x5d, 0xc5, 0x3e, 0x6b, 0x56, 0xa7, 0xbb, 0x47, 0xce, 0x69, 0x5a,
-		0x14, 0xa3, 0xef, 0x07, 0x6a, 0x3d, 0x5a, 0xce, 0x9c, 0xbf, 0x3b, 0x4d, 0x12, 0x70, 0x6b, 0x73}
+	clientToStationBytes, err := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
+	sharedSecret, err := hex.DecodeString("5414c734ad5dc53e6b56a7bb47ce695a14a3ef076a3d5ace9cbf3b4d12706b73")
 	flags := [1]byte{0x01}
 
 	clientToStation := &pb.ClientToStation{}
-	err := proto.Unmarshal(clientToStationBytes, clientToStation)
+	err = proto.Unmarshal(clientToStationBytes, clientToStation)
 	if err != nil {
 		fmt.Printf("Failed to unmarshal ClientToStation protobuf\n")
 	}
@@ -96,6 +93,9 @@ func TestManagerFunctionality(t *testing.T) {
 
 	c2s, keys, flags := mockReceiveFromDetector()
 
+	transport := pb.TransportType(1)
+	c2s.Transport = &transport
+
 	newReg, err := rm.NewRegistration(&c2s, &keys, flags, c2s.GetV6Support())
 	if err != nil {
 		t.Fatalf("Registration failed: %v", err)
@@ -103,9 +103,9 @@ func TestManagerFunctionality(t *testing.T) {
 
 	rm.AddRegistration(newReg)
 
-	storedReg := rm.CheckRegistration(newReg.DarkDecoy, conjureHMAC([]byte("1abcd2efgh3ijkl4"), "customString"))
+	storedReg := rm.CheckRegistration(newReg.DarkDecoy, newReg.keys.conjureHMAC("MinTrasportHMACString"))
 
-	if storedReg.DarkDecoy.String() != "192.122.190.81" || storedReg.Covert != "52.44.73.6:443" {
+	if storedReg.DarkDecoy.String() != "141.219.56.148" || storedReg.Covert != "52.44.73.6:443" {
 		t.Fatalf("Improper registration returned: %v\n", storedReg.String())
 	}
 }
