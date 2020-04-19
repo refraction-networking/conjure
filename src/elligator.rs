@@ -63,6 +63,8 @@ pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> (Result<([u8; 3
             // stego'd data from each block of 4 bytes (if the payload length isn't
             // a multiple of 4, just ignore the tail). Continue until we have run
             // out of input data, or room in the output buffer.
+            //     See Registration-Tagging-and-Signaling on the wiki for an explanation
+            //  of the 92 byte magic number here.
             let mut stego_repr_and_fsp: [u8; REPRESENTATIVE_AND_FSP_LEN] = [0; REPRESENTATIVE_AND_FSP_LEN];
             let mut in_offset: usize = tls_payload.len() as usize - 92;
             let mut out_offset: usize = 0;
@@ -75,8 +77,11 @@ pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> (Result<([u8; 3
                     out_offset += 3;
                 }
 
-            // client should randomize first bit, here we set it back to 0
-            stego_repr_and_fsp[31] &= 0x7f;
+            // let b: Vec<u8> = stego_repr_and_fsp.iter().cloned().collect();
+            // debug!("repr: {:}", hex::encode(b));
+
+            // client should randomize first (and second) bit, here we set it back to 0
+            stego_repr_and_fsp[31] &= 0x3f;
 
             let mut shared_secret: [u8; 32] = [0; 32];
             c_api::c_get_shared_secret_from_tag(secret_key, &mut stego_repr_and_fsp, &mut shared_secret);

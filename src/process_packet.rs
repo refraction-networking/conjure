@@ -185,20 +185,20 @@ impl PerCoreGlobal
         let dd_flow = FlowNoSrcPort::from_flow(&flow);
         if self.flow_tracker.is_registered_dark_decoy(&dd_flow) {
             // Tagged flow! Forward packet to whatever
-            if  (tcp_flags & TcpFlags::SYN) != 0  && (tcp_flags & TcpFlags::ACK) == 0 {
-                if flow.src_ip != Ipv4Addr::new(192, 122, 200, 231) &&
-                   flow.src_ip !=  IpAddr::V6(Ipv6Addr::new(0x2001,0x48a8,0x687f,2,0,0,0,2)) 
-                {
+            if flow.src_ip != Ipv4Addr::new(192, 122, 200, 231) &&
+               flow.src_ip !=  IpAddr::V6(Ipv6Addr::new(0x2001,0x48a8,0x687f,2,0,0,0,2)) 
+            {
+                if  (tcp_flags & TcpFlags::SYN) != 0  && (tcp_flags & TcpFlags::ACK) == 0 {
                     debug!("Connection for registered Phantom {}", flow);
                 }
-            }
-            // Update expire time
-            self.flow_tracker.mark_dark_decoy(&dd_flow);
+                // Update expire time
+                self.flow_tracker.mark_dark_decoy(&dd_flow);
 
-            // Forward packet...
-            self.forward_pkt(&ip_pkt);
-            // TODO: if it was RST or FIN, close things
-            return;
+                // Forward packet...
+                self.forward_pkt(&ip_pkt);
+                // TODO: if it was RST or FIN, close things
+                return;
+            }
         }
 
         if (tcp_flags & TcpFlags::SYN) != 0 && (tcp_flags & TcpFlags::ACK) == 0
