@@ -182,6 +182,10 @@ impl PerCoreGlobal
             return;
         }
 
+        // if flow.dst_ip != Ipv4Addr::new(192, 122, 190, 105)  {
+        //     debug!("SAW PACKET FOR DECOY2")
+        // }
+
         let dd_flow = FlowNoSrcPort::from_flow(&flow);
         if self.flow_tracker.is_registered_dark_decoy(&dd_flow) {
             // Tagged flow! Forward packet to whatever
@@ -192,6 +196,7 @@ impl PerCoreGlobal
                     debug!("Connection for registered Phantom {}", flow);
                 }
             }
+            
             // Update expire time
             self.flow_tracker.mark_dark_decoy(&dd_flow);
 
