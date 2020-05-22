@@ -337,7 +337,7 @@ fn usize_to_u8(a: usize) -> Option<u8> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```compile_fail
 /// let flow_src_station = String::from("192.122.200.231");
 /// let flow_src_client = String::from("128.138.89.172");
 /// 
@@ -367,3 +367,18 @@ fn filter_station_traffic(src: String) -> Option<()> {
     Some(())
 }
 
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_filter_station_traffic() {
+        let flow_src_station = String::from("192.122.200.231");
+        let flow_src_client = String::from("128.138.89.172");
+        
+        let station = super::filter_station_traffic(flow_src_station);
+        let client = super::filter_station_traffic(flow_src_client);
+        
+        assert_eq!(None, station);
+        assert_eq!(Some(()), client);
+    }
+}
