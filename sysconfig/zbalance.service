@@ -1,0 +1,23 @@
+[Unit]
+Description=zero-copy packet balancer for multiple consumer processes
+
+Before=tapdance.service
+
+[Service]
+Type=simple
+
+WorkingDirectory=/opt/conjure/
+
+SyslogIdentifier=zbalance
+EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
+
+# makes if binary doesn't exist
+ExecStartPre=/usr/bin/make zbalance
+
+ExecStart=/bin/bash /opt/conjure/start_zbalance_ipc.sh
+
+# on stop processes will get SIGTERM, and after 10 secs - SIGKILL (default 90)
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
