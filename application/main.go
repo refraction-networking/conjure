@@ -127,6 +127,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) ([
 	msgReader.Read(fixedSizePayload[:])
 
 	vspSize := binary.BigEndian.Uint16(fixedSizePayload[0:2]) - 16
+	flags = [1]byte{fixedSizePayload[2]}
 
 	clientToStationBytes := make([]byte, vspSize)
 
