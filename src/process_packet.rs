@@ -182,27 +182,28 @@ impl PerCoreGlobal
             return;
         }
 
-        // if flow.dst_ip != Ipv4Addr::new(192, 122, 190, 105)  {
-        //     debug!("SAW PACKET FOR DECOY2")
-        // }
-
         let dd_flow = FlowNoSrcPort::from_flow(&flow);
         if self.flow_tracker.is_registered_dark_decoy(&dd_flow) {
-            // Tagged flow! Forward packet to whatever
-            if flow.src_ip != Ipv4Addr::new(192, 122, 200, 231) &&
-               flow.src_ip !=  IpAddr::V6(Ipv6Addr::new(0x2001,0x48a8,0x687f,2,0,0,0,2)) 
-            {
-                if  (tcp_flags & TcpFlags::SYN) != 0  && (tcp_flags & TcpFlags::ACK) == 0 {
-                    debug!("Connection for registered Phantom {}", flow);
-                }
-            
-                // Update expire time
-                self.flow_tracker.mark_dark_decoy(&dd_flow);
 
-                // Forward packet...
-                self.forward_pkt(&ip_pkt);
-                // TODO: if it was RST or FIN, close things
-                return;
+            // Handle packet destined for registered IP
+            match filter_station_traffic(flow.src_ip.to_string()) {
+                // traffic was sent by another station, likely liveness testing.
+                None => {},
+
+                // Non station traffic, forward to application to handle
+                Some(_) => {
+                    if  (tcp_flags & TcpFlags::SYN) != 0  && (tcp_flags & TcpFlags::ACK) == 0 {
+                        debug!("Connection for registered Phantom {}", flow);
+                    }
+                
+                    // Update expire time
+                    self.flow_tracker.mark_dark_decoy(&dd_flow);
+    
+                    // Forward packet...
+                    self.forward_pkt(&ip_pkt);
+                    // TODO: if it was RST or FIN, close things
+                    return;
+                }
             }
         }
 
@@ -326,3 +327,58 @@ fn usize_to_u8(a: usize) -> Option<u8> {
 
 
 
+/// Checks if the traffic seen is from a participating station byt checking the
+/// source address. Returns Some if traffic is from anything other that a station.
+/// 
+/// This exists to prevent the detector from forwarding liveness check traffic 
+/// to the application wasting resources in the process.
+/// 
+/// Todo -> Move address list to some external config
+///
+/// # Examples
+///
+/// ```compile_fail
+/// let flow_src_station = String::from("192.122.200.231");
+/// let flow_src_client = String::from("128.138.89.172");
+/// 
+/// let station = filter_station_traffic(flow_src_station);
+/// let client = filter_station_traffic(flow_src_client);
+///
+/// assert_eq!(None, station);
+/// assert_eq!(Some(()), client);
+/// ```
+fn filter_station_traffic(src: String) -> Option<()> {
+
+    let station_addrs: [&str; 6] = [
+        "198.108.63.121",       // artemis
+        "192.122.200.188",      // windyheron
+        "192.122.200.253",      // windyegret
+        "192.122.200.166",      // decoy-tap
+        "192.122.200.231",      // curveball
+        "2001:48a8:687f:2::2",  // curveball
+    ];
+
+    for addr in station_addrs.iter() {
+        if src == *addr {
+            return None
+        }
+    }
+
+    Some(())
+}
+
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_filter_station_traffic() {
+        let flow_src_station = String::from("192.122.200.231");
+        let flow_src_client = String::from("128.138.89.172");
+        
+        let station = super::filter_station_traffic(flow_src_station);
+        let client = super::filter_station_traffic(flow_src_client);
+        
+        assert_eq!(None, station);
+        assert_eq!(Some(()), client);
+    }
+}
