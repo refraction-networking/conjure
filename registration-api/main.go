@@ -32,7 +32,7 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	spec := &pb.TLSDecoySpec{}
+	spec := &pb.ClientToStation{}
 	if err := proto.Unmarshal(in, spec); err != nil {
 		s.logger.Println("failed to decode protobuf body:", err)
 		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
