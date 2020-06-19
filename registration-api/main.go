@@ -20,8 +20,14 @@ type server struct {
 }
 
 func (s *server) register(w http.ResponseWriter, r *http.Request) {
+	const MINIMUM_REQUEST_LENGTH = 32 + 6 + 1 // shared_secret + FSP + VSP
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.ContentLength < MINIMUM_REQUEST_LENGTH {
+		http.Error(w, "Payload too small", http.StatusBadRequest)
 		return
 	}
 
@@ -32,8 +38,10 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Extract VSP from payload, skipping shared secret and FSP
+	vsp := in[32+6:]
 	payload := &pb.ClientToStation{}
-	if err := proto.Unmarshal(in, payload); err != nil {
+	if err := proto.Unmarshal(vsp, payload); err != nil {
 		s.logger.Println("failed to decode protobuf body:", err)
 		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
 		return
