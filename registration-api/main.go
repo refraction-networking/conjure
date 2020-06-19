@@ -52,28 +52,25 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	var serv server
-	serv.logger = log.New(os.Stdout, "[API] ", log.Ldate|log.Lmicroseconds)
+	var s server
+	s.logger = log.New(os.Stdout, "[API] ", log.Ldate|log.Lmicroseconds)
 
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		log.Fatalf("failed to create zmq socket: %v\n", err)
 	}
 
-	// TODO: the fact that this is a connection rather than a bind
-	// is due to how the application and detector relationship is
-	// set up; we should form a more robust zmq architecture
-	// that allows both multiple publishers and multiple subscribers
-	err = sock.Connect("tcp://127.0.0.1:5591")
+	// TODO: add more robust zmq handling (auth)
+	err = sock.Bind("tcp://*:5591")
 	if err != nil {
-		log.Fatalf("failed to connect to zmq socket: %v\n", err)
+		log.Fatalf("failed to bind zmq socket: %v\n", err)
 	}
-	serv.sock = sock
+	s.sock = sock
 
-	serv.logger.Println("connected to zmq socket")
+	s.logger.Println("bound zmq socket")
 
 	// TODO: possibly use router with more complex features?
 	// For now net/http does the job
-	http.HandleFunc("/register", serv.register)
-	serv.logger.Fatal(http.ListenAndServe(":8080", nil))
+	http.HandleFunc("/register", s.register)
+	s.logger.Fatal(http.ListenAndServe(":8080", nil))
 }
