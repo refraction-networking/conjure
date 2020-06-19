@@ -29,7 +29,7 @@ libtd:
 dark-decoy: detect.c loadkey.c rust_util.c rust libtapdance
 	${CC} ${CFLAGS} -o $@ detect.c loadkey.c rust_util.c ${LIBS}
 
-registration-api: 
+registration-api:
 	cd ./registration-api/ && make
 
 zmq-proxy:
@@ -42,3 +42,4 @@ clean:
 ${PROTO_RS_PATH}:
 	cd ./proto/ && make
 
+.PHONY: registration-api zmq-proxy
