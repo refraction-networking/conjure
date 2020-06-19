@@ -1,0 +1,22 @@
+# Port to bind on
+port = 5591
+
+# Absolute path to private key to use when authenticating with servers.
+# Can be either privkey or privkey || pubkey; only first 32 bytes will
+# be used.
+privkey_path = ""
+
+# ZMQ servers to connect to and subscribe
+[[servers]]
+
+# Address of the server to connect to
+address = "" # TODO: add actual address
+
+# Type of authenticaton method to use when connecting. Can be NULL or CURVE
+type = "CURVE"
+
+# Public key of server to use if using CURVE authentication
+pubkey = "" # TODO: add server public key
+
+# ZMQ subscription prefix for this server. Leave as "" to receive all messages
+subscription = ""
