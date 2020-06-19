@@ -32,15 +32,14 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	spec := &pb.ClientToStation{}
-	if err := proto.Unmarshal(in, spec); err != nil {
+	payload := &pb.ClientToStation{}
+	if err := proto.Unmarshal(in, payload); err != nil {
 		s.logger.Println("failed to decode protobuf body:", err)
 		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
 
-	s.logger.Println("received successful HTTP request")
+	s.logger.Printf("received successful registration for covert address %s\n", payload.GetCovertAddress())
 
 	s.Lock()
 	_, err = s.sock.SendBytes(in, zmq.DONTWAIT)
@@ -48,7 +47,14 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		s.logger.Println("failed to send registration info to zmq socket:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
+
+	// We could send an HTTP response earlier to avoid waiting
+	// while the zmq socket is locked, but this ensures that
+	// a 204 truly indicates registration success.
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func main() {
