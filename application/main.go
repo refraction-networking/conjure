@@ -71,11 +71,11 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 	}
 	defer sub.Close()
 
-	bindAddr := "tcp://*:5591"
-	sub.Bind(bindAddr)
+	connectAddr := "tcp://127.0.0.1:5591"
+	sub.Connect(connectAddr)
 	sub.SetSubscribe("")
 
-	logger.Printf("ZMQ listening on %v\n", bindAddr)
+	logger.Printf("ZMQ connected to %v\n", connectAddr)
 
 	for {
 
