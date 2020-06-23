@@ -10,13 +10,14 @@ privkey_path = ""
 [[servers]]
 
 # Address of the server to connect to
-address = "" # TODO: add actual address
+address = "tcp://registration.refraction.network:5591"
 
 # Type of authenticaton method to use when connecting. Can be NULL or CURVE
 type = "CURVE"
 
 # Public key of server to use if using CURVE authentication
-pubkey = "" # TODO: add server public key
+# The default value is the public key for the API hosted at registration.refraction.network
+pubkey = "s5gkB.U$dl]gO=F{Qo3=4Api-T$5#tpwaT/bSOr@"
 
 # ZMQ subscription prefix for this server. Leave as "" to receive all messages
 subscription = ""
