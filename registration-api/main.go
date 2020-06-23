@@ -1,19 +1,31 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"sync"
 
+	"github.com/BurntSushi/toml"
 	"github.com/golang/protobuf/proto"
 	zmq "github.com/pebbe/zmq4"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
+type config struct {
+	APIPort           uint16   `toml:"api_port"`
+	ZMQPort           uint16   `toml:"zmq_port"`
+	PrivateKeyPath    string   `toml:"privkey_path"`
+	AuthType          string   `toml:"auth_type"`
+	AuthVerbose       bool     `toml:"auth_verbose"`
+	StationPublicKeys []string `toml:"station_pubkeys"`
+}
+
 type server struct {
 	sync.Mutex
+	config
 
 	logger *log.Logger
 	sock   *zmq.Socket
@@ -69,15 +81,43 @@ func main() {
 	var s server
 	s.logger = log.New(os.Stdout, "[API] ", log.Ldate|log.Lmicroseconds)
 
+	_, err := toml.DecodeFile(os.Getenv("CJ_API_CONFIG"), &s)
+	if err != nil {
+		s.logger.Fatalln("failed to load config:", err)
+	}
+
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
-		log.Fatalf("failed to create zmq socket: %v\n", err)
+		s.logger.Fatalln("failed to create zmq socket:", err)
+	}
+
+	if s.AuthType == "CURVE" {
+		privkeyBytes, err := ioutil.ReadFile(s.PrivateKeyPath)
+		if err != nil {
+			s.logger.Fatalln("failed to get private key:", err)
+		}
+
+		privkey := zmq.Z85encode(string(privkeyBytes[:32]))
+
+		zmq.AuthSetVerbose(s.AuthVerbose)
+		err = zmq.AuthStart()
+		if err != nil {
+			s.logger.Fatalln("failed to start zmq auth:", err)
+		}
+
+		zmq.AuthAllow("*")
+		zmq.AuthCurveAdd("*", s.StationPublicKeys...)
+
+		err = sock.ServerAuthCurve("*", privkey)
+		if err != nil {
+			s.logger.Fatalln("failed to set up auth on zmq socket:", err)
+		}
 	}
 
 	// TODO: add more robust zmq handling (auth)
-	err = sock.Bind("tcp://*:5591")
+	err = sock.Bind(fmt.Sprintf("tcp://*:%d", s.ZMQPort))
 	if err != nil {
-		log.Fatalf("failed to bind zmq socket: %v\n", err)
+		s.logger.Fatalln("failed to bind zmq socket:", err)
 	}
 	s.sock = sock
 
@@ -86,5 +126,5 @@ func main() {
 	// TODO: possibly use router with more complex features?
 	// For now net/http does the job
 	http.HandleFunc("/register", s.register)
-	s.logger.Fatal(http.ListenAndServe(":8080", nil))
+	s.logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", s.APIPort), nil))
 }
