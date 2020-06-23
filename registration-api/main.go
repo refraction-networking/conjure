@@ -114,7 +114,6 @@ func main() {
 		}
 	}
 
-	// TODO: add more robust zmq handling (auth)
 	err = sock.Bind(fmt.Sprintf("tcp://*:%d", s.ZMQPort))
 	if err != nil {
 		s.logger.Fatalln("failed to bind zmq socket:", err)
