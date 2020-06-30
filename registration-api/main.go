@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -32,7 +33,7 @@ type server struct {
 }
 
 func (s *server) register(w http.ResponseWriter, r *http.Request) {
-	const MINIMUM_REQUEST_LENGTH = 32 + 6 + 1 // shared_secret + FSP + VSP
+	const MINIMUM_REQUEST_LENGTH = 32 + 1 // shared_secret + VSP
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -50,19 +51,38 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract VSP from payload, skipping shared secret and FSP
-	vsp := in[32+6:]
-	payload := &pb.ClientToStation{}
-	if err := proto.Unmarshal(vsp, payload); err != nil {
+	payload := &pb.ClientToAPI{}
+	if err = proto.Unmarshal(in, payload); err != nil {
 		s.logger.Println("failed to decode protobuf body:", err)
 		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
 		return
 	}
 
-	s.logger.Printf("received successful registration for covert address %s\n", payload.GetCovertAddress())
+	s.logger.Printf("received successful registration for covert address %s\n", payload.RegistrationPayload.GetCovertAddress())
+
+	// Marshal the ClientToStation message from the request body. Although
+	// it was already sent as marshaled in the body, this keeps us from
+	// relying on the specific position in the generated protobuf.
+	// We also need its size to generate the FSP for the application.
+	vsp, err := proto.Marshal(payload.RegistrationPayload)
+	if err != nil {
+		s.logger.Println("failed to marshal CleintToStation into VSP:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Adding 16 to simulate the presence of the AEC-GCM tag. The application
+	// subtracts this value before parsing the VSP.
+	vspSize := uint16(len(vsp) + 16)
+	fsp := make([]byte, 6)
+	binary.BigEndian.PutUint16(fsp[:2], vspSize)
+
+	zmqPayload := payload.GetSecret()
+	zmqPayload = append(zmqPayload, fsp...)
+	zmqPayload = append(zmqPayload, vsp...)
 
 	s.Lock()
-	_, err = s.sock.SendBytes(in, zmq.DONTWAIT)
+	_, err = s.sock.SendBytes(zmqPayload, zmq.DONTWAIT)
 	s.Unlock()
 
 	if err != nil {
