@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	dd "./lib"
 	"github.com/golang/protobuf/proto"
 	zmq "github.com/pebbe/zmq4"
+	dd "github.com/refraction-networking/conjure/application/lib"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
