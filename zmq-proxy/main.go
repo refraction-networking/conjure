@@ -10,15 +10,18 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	zmq "github.com/pebbe/zmq4"
 )
 
 type config struct {
-	Port           uint16         `toml:"port"`
-	Servers        []serverConfig `toml:"servers"`
-	PrivateKeyPath string         `toml:"privkey_path"`
+	Port              uint16         `toml:"port"`
+	Servers           []serverConfig `toml:"servers"`
+	PrivateKeyPath    string         `toml:"privkey_path"`
+	HeartbeatInterval int            `toml:"heartbeat_interval"`
+	HeartbeatTimeout  int            `toml:"heartbeat_timeout"`
 }
 
 type serverConfig struct {
@@ -88,6 +91,18 @@ func main() {
 		connectSock, err := zmq.NewSocket(zmq.SUB)
 		if err != nil {
 			p.logger.Printf("failed to create connecting zmq socket for %s: %v\n", server.Address, err)
+			continue
+		}
+
+		err = connectSock.SetHeartbeatIvl(time.Duration(c.HeartbeatInterval) * time.Millisecond)
+		if err != nil {
+			p.logger.Printf("failed to set heartbeat interval of %d for %s: %v\n", c.HeartbeatInterval, server.Address, err)
+			continue
+		}
+
+		err = connectSock.SetHeartbeatTimeout(time.Duration(c.HeartbeatTimeout) * time.Millisecond)
+		if err != nil {
+			p.logger.Printf("failed to set heartbeat timeout of %d for %s: %v\n", c.HeartbeatTimeout, server.Address, err)
 			continue
 		}
 
