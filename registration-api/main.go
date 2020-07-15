@@ -33,6 +33,10 @@ type server struct {
 	sync.Mutex
 	config
 
+	// Function to accept message into processing queue. Abstracted
+	// to allow mocking of ZMQ send flow
+	messageAccepter func([]byte) error
+
 	logger *log.Logger
 	sock   *zmq.Socket
 }
@@ -81,12 +85,9 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.Lock()
-	_, err = s.sock.SendBytes(zmqPayload, zmq.DONTWAIT)
-	s.Unlock()
-
+	err = s.messageAccepter(zmqPayload)
 	if err != nil {
-		s.logger.Println("failed to send registration info to zmq socket:", err)
+		s.logger.Println("failed to publish registration:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -95,6 +96,14 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	// while the zmq socket is locked, but this ensures that
 	// a 204 truly indicates registration success.
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *server) sendToZMQ(message []byte) error {
+	s.Lock()
+	_, err := s.sock.SendBytes(message, zmq.DONTWAIT)
+	s.Unlock()
+
+	return err
 }
 
 func generateZMQPayload(clientToAPIProto *pb.ClientToAPI) ([]byte, error) {
@@ -123,6 +132,7 @@ func generateZMQPayload(clientToAPIProto *pb.ClientToAPI) ([]byte, error) {
 func main() {
 	var s server
 	s.logger = log.New(os.Stdout, "[API] ", log.Ldate|log.Lmicroseconds)
+	s.messageAccepter = s.sendToZMQ
 
 	_, err := toml.DecodeFile(os.Getenv("CJ_API_CONFIG"), &s)
 	if err != nil {
