@@ -33,13 +33,22 @@ type server struct {
 }
 
 func (s *server) register(w http.ResponseWriter, r *http.Request) {
+	requestIP := r.RemoteAddr
+	if r.Header.Get("X-Forwarded-For") != "" {
+		requestIP = r.Header.Get("X-Forwarded-For")
+	}
+
+	s.logger.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
+
 	const MINIMUM_REQUEST_LENGTH = 32 + 1 // shared_secret + VSP
 	if r.Method != "POST" {
+		s.logger.Printf("rejecting request due to incorrect method %s\n", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
 	if r.ContentLength < MINIMUM_REQUEST_LENGTH {
+		s.logger.Printf("rejecting request due to short content-length of %d, expecting at least %d\n", r.ContentLength, MINIMUM_REQUEST_LENGTH)
 		http.Error(w, "Payload too small", http.StatusBadRequest)
 		return
 	}
@@ -66,7 +75,7 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	// We also need its size to generate the FSP for the application.
 	vsp, err := proto.Marshal(payload.RegistrationPayload)
 	if err != nil {
-		s.logger.Println("failed to marshal CleintToStation into VSP:", err)
+		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -142,6 +151,7 @@ func main() {
 
 	s.logger.Println("bound zmq socket")
 
+	s.logger.Printf("starting HTTP API on port %d\n", s.APIPort)
 	// TODO: possibly use router with more complex features?
 	// For now net/http does the job
 	http.HandleFunc("/register", s.register)
