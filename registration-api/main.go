@@ -15,6 +15,11 @@ import (
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
+const (
+	// The length of the shared secret sent by the client in bytes.
+	SecretLength = 32
+)
+
 type config struct {
 	APIPort           uint16   `toml:"api_port"`
 	ZMQPort           uint16   `toml:"zmq_port"`
@@ -40,15 +45,15 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 
 	s.logger.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
 
-	const MINIMUM_REQUEST_LENGTH = 32 + 1 // shared_secret + VSP
+	const MinimumRequestLength = SecretLength + 1 // shared_secret + VSP
 	if r.Method != "POST" {
 		s.logger.Printf("rejecting request due to incorrect method %s\n", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	if r.ContentLength < MINIMUM_REQUEST_LENGTH {
-		s.logger.Printf("rejecting request due to short content-length of %d, expecting at least %d\n", r.ContentLength, MINIMUM_REQUEST_LENGTH)
+	if r.ContentLength < MinimumRequestLength {
+		s.logger.Printf("rejecting request due to short content-length of %d, expecting at least %d\n", r.ContentLength, MinimumRequestLength)
 		http.Error(w, "Payload too small", http.StatusBadRequest)
 		return
 	}
@@ -69,26 +74,12 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 
 	s.logger.Printf("received successful registration for covert address %s\n", payload.RegistrationPayload.GetCovertAddress())
 
-	// Marshal the ClientToStation message from the request body. Although
-	// it was already sent as marshaled in the body, this keeps us from
-	// relying on the specific position in the generated protobuf.
-	// We also need its size to generate the FSP for the application.
-	vsp, err := proto.Marshal(payload.RegistrationPayload)
+	zmqPayload, err := generateZMQPayload(payload)
 	if err != nil {
 		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	// Adding 16 to simulate the presence of the AEC-GCM tag. The application
-	// subtracts this value before parsing the VSP.
-	vspSize := uint16(len(vsp) + 16)
-	fsp := make([]byte, 6)
-	binary.BigEndian.PutUint16(fsp[:2], vspSize)
-
-	zmqPayload := payload.GetSecret()
-	zmqPayload = append(zmqPayload, fsp...)
-	zmqPayload = append(zmqPayload, vsp...)
 
 	s.Lock()
 	_, err = s.sock.SendBytes(zmqPayload, zmq.DONTWAIT)
@@ -104,6 +95,29 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	// while the zmq socket is locked, but this ensures that
 	// a 204 truly indicates registration success.
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func generateZMQPayload(clientToAPIProto *pb.ClientToAPI) ([]byte, error) {
+	// Marshal the ClientToStation message from the request body. Although
+	// it was already sent as marshaled in the body, this keeps us from
+	// relying on the specific position in the generated protobuf.
+	// We also need its size to generate the FSP for the application.
+	vsp, err := proto.Marshal(clientToAPIProto.RegistrationPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal VSP: %w", err)
+	}
+
+	// Adding 16 to simulate the presence of the AEC-GCM tag. The application
+	// subtracts this value before parsing the VSP.
+	vspSize := uint16(len(vsp) + 16)
+	fsp := make([]byte, 6)
+	binary.BigEndian.PutUint16(fsp[:2], vspSize)
+
+	zmqPayload := clientToAPIProto.GetSecret()
+	zmqPayload = append(zmqPayload, fsp...)
+	zmqPayload = append(zmqPayload, vsp...)
+
+	return zmqPayload, nil
 }
 
 func main() {
