@@ -71,7 +71,7 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 	}
 	defer sub.Close()
 
-	connectAddr := "tcp://127.0.0.1:5591"
+	connectAddr := "ipc://@zmq-proxy"
 	sub.Connect(connectAddr)
 	sub.SetSubscribe("")
 

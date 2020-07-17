@@ -114,7 +114,7 @@ impl PerCoreGlobal
         // Setup ZMQ
         let zmq_ctx = zmq::Context::new();
         let zmq_sock = zmq_ctx.socket(zmq::PUB).unwrap();
-        zmq_sock.connect("tcp://localhost:5591").expect("failed connecting to ZMQ");
+        zmq_sock.connect("ipc://@detector-workers").expect("failed connecting to ZMQ");
 
         PerCoreGlobal {
             priv_key: priv_key,

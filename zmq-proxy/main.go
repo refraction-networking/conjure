@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -17,14 +18,14 @@ import (
 )
 
 type config struct {
-	Port              uint16         `toml:"port"`
-	Servers           []serverConfig `toml:"servers"`
+	SocketName        string         `toml:"socket_name"`
+	ConnectSockets    []socketConfig `toml:"connect_sockets"`
 	PrivateKeyPath    string         `toml:"privkey_path"`
 	HeartbeatInterval int            `toml:"heartbeat_interval"`
 	HeartbeatTimeout  int            `toml:"heartbeat_timeout"`
 }
 
-type serverConfig struct {
+type socketConfig struct {
 	Address            string `toml:"address"`
 	AuthenticationType string `toml:"type"`
 	PublicKey          string `toml:"pubkey"`
@@ -33,18 +34,6 @@ type serverConfig struct {
 
 type proxy struct {
 	logger *log.Logger
-
-	pubSocket *zmq.Socket
-	pubChan   chan ([]byte)
-}
-
-func (p *proxy) pubChanMessages() {
-	for m := range p.pubChan {
-		_, err := p.pubSocket.SendBytes(m, zmq.DONTWAIT)
-		if err != nil {
-			p.logger.Println("failed to publish message to channel:", err)
-		}
-	}
 }
 
 func main() {
@@ -74,71 +63,69 @@ func main() {
 		p.logger.Fatalln("failed to generate client public key from private key:", err)
 	}
 
-	bindSock, err := zmq.NewSocket(zmq.PUB)
+	pubSock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		p.logger.Fatalln("failed to create binding zmq socket:", err)
 	}
 
-	err = bindSock.Bind(fmt.Sprintf("tcp://*:%d", c.Port))
+	err = pubSock.Bind(fmt.Sprintf("ipc://@%s", c.SocketName))
 	if err != nil {
 		p.logger.Fatalln("failed to bind zmq socket:", err)
 	}
 
-	p.pubSocket = bindSock
-	p.pubChan = make(chan []byte)
+	wg := sync.WaitGroup{}
 
-	for _, server := range c.Servers {
-		connectSock, err := zmq.NewSocket(zmq.SUB)
+	// Create a socket for each socket we're connecting to. I would've
+	// liked to use a single socket for all connections, and ZMQ actually
+	// does support connecting to multiple sockets from a single socket,
+	// but it appears that it doesn't support setting different auth
+	// parameters for each connection.
+	for _, connectSocket := range c.ConnectSockets {
+		sock, err := zmq.NewSocket(zmq.SUB)
 		if err != nil {
-			p.logger.Printf("failed to create connecting zmq socket for %s: %v\n", server.Address, err)
-			continue
+			p.logger.Printf("failed to create subscriber zmq socket for %s: %v\n", connectSocket.Address, err)
 		}
 
-		err = connectSock.SetHeartbeatIvl(time.Duration(c.HeartbeatInterval) * time.Millisecond)
+		err = sock.SetHeartbeatIvl(time.Duration(c.HeartbeatInterval) * time.Millisecond)
 		if err != nil {
-			p.logger.Printf("failed to set heartbeat interval of %d for %s: %v\n", c.HeartbeatInterval, server.Address, err)
-			continue
+			p.logger.Printf("failed to set heartbeat interval of %v for %s: %v\n", c.HeartbeatInterval, connectSocket.Address, err)
 		}
 
-		err = connectSock.SetHeartbeatTimeout(time.Duration(c.HeartbeatTimeout) * time.Millisecond)
+		err = sock.SetHeartbeatTimeout(time.Duration(c.HeartbeatTimeout) * time.Millisecond)
 		if err != nil {
-			p.logger.Printf("failed to set heartbeat timeout of %d for %s: %v\n", c.HeartbeatTimeout, server.Address, err)
-			continue
+			p.logger.Printf("failed to set heartbeat timeout of %v for %s: %v\n", c.HeartbeatTimeout, connectSocket.Address, err)
 		}
 
-		if server.AuthenticationType == "CURVE" {
-			err = connectSock.ClientAuthCurve(server.PublicKey, pubkey_z85, privkey_z85)
+		if connectSocket.AuthenticationType == "CURVE" {
+			err = sock.ClientAuthCurve(connectSocket.PublicKey, pubkey_z85, privkey_z85)
 			if err != nil {
-				p.logger.Printf("failed to set up CURVE authentication for %s: %v\n", server.Address, err)
+				p.logger.Printf("failed to set up CURVE authentication for %s: %v\n", connectSocket.Address, err)
 				continue
 			}
 		}
 
-		err = connectSock.SetSubscribe(server.SubscriptionPrefix)
+		err = sock.SetSubscribe(connectSocket.SubscriptionPrefix)
 		if err != nil {
-			p.logger.Printf("failed to set subscription prefix for %s: %v\n", server.Address, err)
+			p.logger.Printf("failed to set subscription prefix for %s: %v\n", connectSocket.Address, err)
 			continue
 		}
 
-		err = connectSock.Connect(server.Address)
+		err = sock.Connect(connectSocket.Address)
 		if err != nil {
-			p.logger.Printf("failed to connect to %s: %v\n", server.Address, err)
+			p.logger.Printf("failed to connect to %s: %v\n", connectSocket.Address, err)
 			continue
 		}
 
-		go func(sock *zmq.Socket, s serverConfig, toPub chan<- ([]byte)) {
-			for {
-				m, err := sock.RecvBytes(0)
-				if err != nil {
-					p.logger.Printf("failed to read message on %s: %v\n", s.Address, err)
-					return
-				}
+		wg.Add(1)
 
-				p.logger.Println("received message from", s.Address)
-				toPub <- m
+		go func(frontend *zmq.Socket, config socketConfig) {
+			p.logger.Printf("proxying for %s\n", config.Address)
+			e := zmq.Proxy(frontend, pubSock, nil)
+			if e != nil {
+				p.logger.Printf("proxy for %s failed: %v\n", config.Address, e)
 			}
-		}(connectSock, server, p.pubChan)
+		}(sock, connectSocket)
 	}
 
-	p.pubChanMessages()
+	wg.Wait()
 }

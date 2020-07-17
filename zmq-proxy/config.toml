@@ -1,5 +1,5 @@
-# Port to bind on
-port = 5591
+# Name of abstract socket to bind proxy to
+socket_name = "zmq-proxy"
 
 # Absolute path to private key to use when authenticating with servers.
 # Can be either privkey or privkey || pubkey; only first 32 bytes will
@@ -16,18 +16,27 @@ heartbeat_interval = 30000
 # a response before the connection is assumed to be dead.
 heartbeat_timeout = 1000
 
-# ZMQ servers to connect to and subscribe
-[[servers]]
+### ZMQ sockets to connect to and subscribe
 
-# Address of the server to connect to
+## Registration API
+[[connect_sockets]]
+
+# Address of the socket to connect to
 address = "tcp://registration.refraction.network:5591"
 
-# Type of authenticaton method to use when connecting. Can be NULL or CURVE
+# Type of authenticaton method to use when connecting. Can be NULL for no
+# authentication or CURVE for public key-based authentication.
 type = "CURVE"
 
-# Public key of server to use if using CURVE authentication
+# Public key of socket to use if using CURVE authentication
 # The default value is the public key for the API hosted at registration.refraction.network
 pubkey = "s5gkB.U$dl]gO=F{Qo3=4Api-T$5#tpwaT/bSOr@"
 
-# ZMQ subscription prefix for this server. Leave as "" to receive all messages
+# ZMQ subscription prefix for this socket. Leave as "" or omit to receive all messages
 subscription = ""
+
+## Detector
+[[connect_sockets]]
+
+address = "ipc://@detector"
+type = "NULL"
