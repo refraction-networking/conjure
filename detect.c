@@ -11,7 +11,6 @@
 #include <time.h>
 #include <pthread.h>
 #include <unistd.h>
-#include <assert.h>
 #include <zmq.h>
 
 // The Makefile in this directory provides a `make tapdance` and a
@@ -512,44 +511,44 @@ void parse_cmd_args(int argc, char* argv[], struct cmd_options* options)
 // the worker threads and the outgoing ZMQ socket.
 int handle_zmq_proxy()
 {
-	int pid = fork();
-	if (pid == 0) {
-		// Set up ZMQ sockets, one for publishing to the proxy and one for taking in
-		// messages from other threads
-		void *ctx = zmq_ctx_new();
-		void *pub = zmq_socket(ctx, ZMQ_PUB);
+    int pid = fork();
+    if (pid == 0) {
+        // Set up ZMQ sockets, one for publishing to the proxy and one for taking in
+        // messages from other threads
+        void *ctx = zmq_ctx_new();
+        void *pub = zmq_socket(ctx, ZMQ_PUB);
 
-		// Bind the socket for publishing to the proxy
-		int rc = zmq_bind(pub, "ipc://@detector");
-		if (rc != 0) {
-			printf("bind on pub socket failed: %s\n", zmq_strerror(errno));
-			return rc;
-		}
+        // Bind the socket for publishing to the proxy
+        int rc = zmq_bind(pub, "ipc://@detector");
+        if (rc != 0) {
+            printf("bind on pub socket failed: %s\n", zmq_strerror(errno));
+            return rc;
+        }
 
-		void *sub = zmq_socket(ctx, ZMQ_SUB);
-		rc = zmq_setsockopt(sub, ZMQ_SUBSCRIBE, NULL, 0);
-		if (rc != 0) {
-			printf("failed to set sock opt: %s\n", zmq_strerror(errno));
-			return rc;
-		}
+        void *sub = zmq_socket(ctx, ZMQ_SUB);
+        rc = zmq_setsockopt(sub, ZMQ_SUBSCRIBE, NULL, 0);
+        if (rc != 0) {
+            printf("failed to set sock opt: %s\n", zmq_strerror(errno));
+            return rc;
+        }
 
-		// Bind the socket for communication between worker threads
-		// (they're actually set up as separate processes, so we
-		// need to use IPC rather than inproc communication)
-		rc = zmq_bind(sub, "ipc://@detector-workers");
-		if (rc != 0) {
-			printf("bind on sub socket failed: %s\n", zmq_strerror(errno));
-			return rc;
-		}
+        // Bind the socket for communication between worker threads
+        // (they're actually set up as separate processes, so we
+        // need to use IPC rather than inproc communication)
+        rc = zmq_bind(sub, "ipc://@detector-workers");
+        if (rc != 0) {
+            printf("bind on sub socket failed: %s\n", zmq_strerror(errno));
+            return rc;
+        }
 
-		// Proxy traffic between worker threads and the outgoing socket
-		rc = zmq_proxy(sub, pub, NULL);
-		if (rc != 0) {
-			printf("proxy returned error: %s\n", zmq_strerror(errno));
-			return rc;
-		}
-	}
-	return 0;
+        // Proxy traffic between worker threads and the outgoing socket
+        rc = zmq_proxy(sub, pub, NULL);
+        if (rc != 0) {
+            printf("proxy returned error: %s\n", zmq_strerror(errno));
+            return rc;
+        }
+    }
+    return 0;
 }
 
 int main(int argc, char* argv[])
@@ -579,7 +578,7 @@ int main(int argc, char* argv[])
     sa2.sa_sigaction = notify_overloaded_decoys_file_update;
     sigaction(SIGUSR2, &sa2, NULL);
 
-	handle_zmq_proxy();
+    handle_zmq_proxy();
 
     int i;
     int core_num = options.core_affinity_offset;
