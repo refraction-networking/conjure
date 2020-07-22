@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"os"
 	"syscall"
@@ -14,6 +16,10 @@ import (
 	zmq "github.com/pebbe/zmq4"
 	dd "github.com/refraction-networking/conjure/application/lib"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+
+	"github.com/refraction-networking/conjure/application/transports"
+	"github.com/refraction-networking/conjure/application/transports/min"
+	"github.com/refraction-networking/conjure/application/transports/obfs4"
 )
 
 func getOriginalDst(fd uintptr) (net.IP, error) {
@@ -32,34 +38,119 @@ func getOriginalDst(fd uintptr) (net.IP, error) {
 // Handle connection from client
 // NOTE: this is called as a goroutine
 func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) {
+	const timeout = 30 * time.Second
+
 	defer clientConn.Close()
 
 	fd, err := clientConn.File()
 	if err != nil {
-		logger.Printf("failed to get file descriptor on clientConn: %v\n", err)
+		logger.Println("failed to get file descriptor on clientConn:", err)
 		return
 	}
 
 	// TODO: if NOT mPort 443: just forward things and return
-
-	originalDstIP, err := getOriginalDst(fd.Fd())
+	fdPtr := fd.Fd()
+	originalDstIP, err := getOriginalDst(fdPtr)
 	if err != nil {
 		logger.Println("failed to getOriginalDst from fd:", err)
 		return
 	}
 
-	dd.MinTransportProxy(regManager, clientConn, originalDstIP)
+	// We need to set the underlying file descriptor back into
+	// non-blocking mode after calling Fd (which puts it into blocking
+	// mode), or else deadlines won't work.
+	err = syscall.SetNonblock(int(fdPtr), true)
+	if err != nil {
+		logger.Println("failed to set non-blocking mode on fd:", err)
+	}
+	fd.Close()
 
-	/*
-		proxyHandler := dd.ProxyFactory(reg, 0)
-		if proxyHandler != nil {
-			logger.Printf("New Connection: source: %s, phantom: %s, shared secret: %s\n",
-				clientConn.RemoteAddr().String(), reg.DarkDecoy.String(), reg.IDString())
-			proxyHandler(reg, clientConn, originalDstIP)
-		} else {
-			logger.Printf("failed to initialize proxy, unknown or unimplemented protocol.\n")
+	originalDst := originalDstIP.String()
+	originalSrc := clientConn.RemoteAddr().String()
+	flowDescription := fmt.Sprintf("%s -> %s ", originalSrc, originalDst)
+	logger := log.New(os.Stdout, "[CONN] "+flowDescription, log.Ldate|log.Lmicroseconds)
+
+	count := regManager.CountRegistrations(originalDstIP)
+	logger.Printf("new connection (%d potential registrations)\n", count)
+
+	if count < 1 {
+		// Here, reading from the connection would be pointless, but
+		// since the kernel already ACK'd this connection, we gain no
+		// benefit from instantly dropping the connection; the jig is
+		// already up. We should sleep in line with other code paths
+		// so the initiator of the connection gains no information
+		// about the correctness of their connection.
+		//
+		// Possible TODO: use NFQUEUE to be able to drop the connection
+		// in userspace before the SYN-ACK is sent, increasing probe
+		// resistance.
+		logger.Printf("no possible registrations, sleeping %v then dropping connection\n", timeout)
+		time.Sleep(timeout)
+		return
+	}
+
+	var buf [4096]byte
+	received := bytes.Buffer{}
+	possibleTransports := regManager.GetTransports()
+
+	var reg *dd.DecoyRegistration
+	var wrapped net.Conn
+
+	// Give the client a timeout to send enough data to identify a transport.
+	// This can be reset by transports to give more time for handshakes
+	// after a transport is identified.
+	deadline := time.Now().Add(timeout)
+	clientConn.SetDeadline(deadline)
+
+readLoop:
+	for {
+		if len(possibleTransports) < 1 {
+			// Here, we delay until precisely the original deadline.
+			// This means that the connection always dies at the timeout
+			// even if we've determined that we shouldn't pick up the connection;
+			// this should help resist against active probes.
+			d := time.Until(deadline)
+			logger.Printf("ran out of possible transports, sleeping %v then giving up\n", d)
+			time.Sleep(d)
 			return
-		}*/
+		}
+
+		n, err := clientConn.Read(buf[:])
+		if err != nil {
+			logger.Printf("got error while reading from connection, giving up: %v\n", err)
+			return
+		}
+		received.Write(buf[:n])
+		logger.Printf("read %d bytes so far", received.Len())
+
+	transports:
+		for i, t := range possibleTransports {
+			reg, wrapped, err = t.WrapConnection(&received, clientConn, originalDstIP, regManager)
+			if errors.Is(err, transports.ErrTryAgain) {
+				continue transports
+			} else if errors.Is(err, transports.ErrNotTransport) {
+				logger.Printf("not transport %s, removing from checks\n", t.Name())
+				delete(possibleTransports, i)
+				continue transports
+			} else if err != nil {
+				// If we got here, the error might have been produced while attemtping
+				// to wrap the connection, which means received and the connection
+				// may no longer be valid. We should just give up on this connection.
+				d := time.Until(deadline)
+				logger.Printf("got unexpected error from transport %s, sleeping %v then giving up: %v\n", t.Name(), d, err)
+				time.Sleep(d)
+				return
+			}
+
+			// We found our transport! First order of business: disable deadline
+			wrapped.SetDeadline(time.Time{})
+			logger.SetPrefix(fmt.Sprintf("[%s] %s ", t.LogPrefix(), reg.IDString()))
+			logger.Printf("registration found {reg_id: %s, phantom: %s, transport: %s, covert: %s}\n", reg.IDString(), originalDstIP, t.Name(), reg.Covert)
+			break readLoop
+		}
+	}
+
+	dd.Proxy(reg, wrapped, logger)
 }
 
 func get_zmq_updates(regManager *dd.RegistrationManager) {
@@ -176,8 +267,13 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) ([
 var logger *log.Logger
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 	regManager := dd.NewRegistrationManager()
 	logger = regManager.Logger
+
+	regManager.AddTransport(pb.TransportType_MinTransport, min.Transport{})
+	regManager.AddTransport(pb.TransportType_Obfs4Transport, obfs4.Transport{})
+
 	go get_zmq_updates(regManager)
 
 	go func() {

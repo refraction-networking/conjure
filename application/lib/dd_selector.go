@@ -156,7 +156,7 @@ func NewPhantomIPSelector() (*PhantomIPSelector, error) {
 }
 
 // Select - select an ip address from the list of subnets associated with the specified generation
-func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool) (*net.IP, error) {
+func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool) (net.IP, error) {
 
 	type idNet struct {
 		min, max big.Int
@@ -229,7 +229,7 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool)
 	if result == nil {
 		return nil, errors.New("let's rewrite the phantom address selector")
 	}
-	return &result, nil
+	return result, nil
 }
 
 // SelectAddrFromSubnet - given a seed and a CIDR block choose an address.
