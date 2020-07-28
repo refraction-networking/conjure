@@ -154,7 +154,7 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	}
 	defer covertConn.Close()
 
-	if reg.Flags&TdFlagProxyHeader != 0 {
+	if reg.Flags.GetProxyHeader() {
 		err = writePROXYHeader(covertConn, clientConn.RemoteAddr().String())
 		if err != nil {
 			logger.Printf("failed to send PROXY header to covert: %s", err)
@@ -187,7 +187,7 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 	}
 	defer covertConn.Close()
 
-	if reg.Flags&TdFlagProxyHeader != 0 {
+	if reg.Flags.GetProxyHeader() {
 		err = writePROXYHeader(covertConn, clientConn.RemoteAddr().String())
 		if err != nil {
 			logger.Printf("failed to send PROXY header to covert: %s", err)

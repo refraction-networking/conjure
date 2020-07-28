@@ -9,6 +9,8 @@ use util::{HKDFKeys, FSP};
 use elligator::crypto::aes_gcm::AesGcm;
 use elligator::crypto::aead::AeadDecryptor;
 use elligator::crypto::aes;
+use signalling::ClientToStation;
+use protobuf::parse_from_bytes;
 
 //pub mod rust_tapdance;
 
@@ -40,7 +42,7 @@ fn extract_stego_bytes(in_buf: &[u8], out_buf: &mut [u8])
 
 // Returns either (Shared Secret, Fixed Size Payload, Variable Size Payload) or Box<Error>
 //      Boxed error becuase size of return isn't known at compile time 
-pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> (Result<([u8; 32], [u8; FSP::LENGTH], Vec<u8>), Box<Error>>)
+pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> (Result<([u8; 32], [u8; FSP::LENGTH], ClientToStation), Box<Error>>)
 {
     if tls_record.len() < 112 // (conservatively) smaller than minimum request
     {
@@ -142,7 +144,11 @@ pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> (Result<([u8; 3
                 return Err(err);
             }
 
-            Ok((shared_secret, fixed_size_payload.to_bytes(), variable_size_payload.to_vec()))
+            let c2s = match protobuf::parse_from_bytes::<ClientToStation>(&variable_size_payload) {
+                Ok(c2s) => c2s,
+                Err(err) => return Err(Box::new(err)),
+            };
+            Ok((shared_secret, fixed_size_payload.to_bytes(), c2s))
         });
     match result {
         Ok(res) => return res,

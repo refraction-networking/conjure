@@ -84,6 +84,7 @@ message ClientConf {
     optional uint32 generation = 2;
     optional PubKey default_pubkey = 3;
     optional DarkDecoyBlocks dark_decoy_blocks = 4;
+    optional PubKey conjure_pubkey = 5;
 }
 
 message DecoyList {
@@ -131,6 +132,12 @@ enum ErrorReasonS2C {
     CLIENT_TIMEOUT = 101; // You never came back. (This is impossible to send)
 }
 
+enum TransportType {
+    NullTransport = 0;
+    MinTransport = 1;   // Send a 32-byte HMAC id to let the station distinguish registrations to same host
+    Obfs4Transport = 2; // Not implemented yet?
+}
+
 message StationToClient {
     // Should accompany (at least) SESSION_INIT and CONFIRM_RECONNECT.
     optional uint32 protocol_version = 1;
@@ -156,6 +163,13 @@ message StationToClient {
     optional bytes padding = 100;
 }
 
+message RegistrationFlags {
+	optional bool upload_only = 1;
+	optional bool dark_decoy = 2;
+	optional bool proxy_header = 3;
+	optional bool use_TIL = 4;
+}
+
 message ClientToStation {
     optional uint32 protocol_version = 1;
 
@@ -177,6 +191,9 @@ message ClientToStation {
 
     optional SessionStats stats = 11;
 
+    // NullTransport, MinTransport, Obfs4Transport, etc. Transport type we want from phantom proxy
+    optional TransportType transport = 12;
+
     // Station is only required to check this variable during session initialization.
     // If set, station must facilitate connection to said target by itself, i.e. write into squid
     // socket an HTTP/SOCKS/any other connection request.
@@ -192,11 +209,26 @@ message ClientToStation {
     optional bool v6_support = 22;
     optional bool v4_support = 23;
 
-    // Protocol Type -> protocol used in client to proxy station
-    optional uint32 c2s_transport = 24;
+	// A collection of optional flags for the registration.
+	optional RegistrationFlags flags = 24;
 
     // Random-sized junk to defeat packet size fingerprinting.
     optional bytes padding = 100;
+}
+
+// Message type used as the request body when registering via the HTTP API.
+// This message is assumed to be sent via TLS, meaning that sending the secret outright is acceptable.
+message ClientToAPI {
+    // The secret that will be used when forming phantom connections.
+    optional bytes secret = 1;
+
+    // The ClientToStation payload; the same as used in decoy registrations.
+    optional ClientToStation registration_payload = 2;
+}
+
+message ZMQPayload {
+	optional bytes shared_secret = 1;
+	optional ClientToStation registration_payload = 3;
 }
 
 message SessionStats {

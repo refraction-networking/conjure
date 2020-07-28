@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -107,26 +106,12 @@ func (s *server) sendToZMQ(message []byte) error {
 }
 
 func generateZMQPayload(clientToAPIProto *pb.ClientToAPI) ([]byte, error) {
-	// Marshal the ClientToStation message from the request body. Although
-	// it was already sent as marshaled in the body, this keeps us from
-	// relying on the specific position in the generated protobuf.
-	// We also need its size to generate the FSP for the application.
-	vsp, err := proto.Marshal(clientToAPIProto.RegistrationPayload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal VSP: %w", err)
-	}
+	payload := &pb.ZMQPayload{}
 
-	// Adding 16 to simulate the presence of the AEC-GCM tag. The application
-	// subtracts this value before parsing the VSP.
-	vspSize := uint16(len(vsp) + 16)
-	fsp := make([]byte, 6)
-	binary.BigEndian.PutUint16(fsp[:2], vspSize)
+	payload.SharedSecret = clientToAPIProto.Secret
+	payload.RegistrationPayload = clientToAPIProto.RegistrationPayload
 
-	zmqPayload := clientToAPIProto.GetSecret()
-	zmqPayload = append(zmqPayload, fsp...)
-	zmqPayload = append(zmqPayload, vsp...)
-
-	return zmqPayload, nil
+	return proto.Marshal(payload)
 }
 
 func main() {
