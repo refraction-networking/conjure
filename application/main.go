@@ -1,9 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -103,51 +100,26 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 }
 
 func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) ([]*dd.DecoyRegistration, error) {
-	// var ipAddr []byte
-	// var covertAddrLen, maskedAddrLen [1]byte
-
-	var sharedSecret [32]byte
-	var fixedSizePayload [6]byte
-	var flags [1]byte
-	minMsgLen := 32 + 6 + 1 // + 16
-
 	msg, err := sub.RecvBytes(0)
 	if err != nil {
 		logger.Printf("error reading from ZMQ socket: %v\n", err)
 		return nil, err
 	}
-	if len(msg) < minMsgLen {
-		logger.Printf("short message of size %v\n", len(msg))
-		return nil, fmt.Errorf("short message of size %v", len(msg))
-	}
 
-	msgReader := bytes.NewReader(msg)
-
-	msgReader.Read(sharedSecret[:])
-	msgReader.Read(fixedSizePayload[:])
-
-	vspSize := binary.BigEndian.Uint16(fixedSizePayload[0:2]) - 16
-	flags = [1]byte{fixedSizePayload[2]}
-
-	clientToStationBytes := make([]byte, vspSize)
-
-	msgReader.Read(clientToStationBytes)
-
-	// parse c2s
-	clientToStation := &pb.ClientToStation{}
-	err = proto.Unmarshal(clientToStationBytes, clientToStation)
+	parsed := &pb.ZMQPayload{}
+	err = proto.Unmarshal(msg, parsed)
 	if err != nil {
 		logger.Printf("Failed to unmarshall ClientToStation: %v", err)
 		return nil, err
 	}
 
-	conjureKeys, err := dd.GenSharedKeys(sharedSecret[:])
+	conjureKeys, err := dd.GenSharedKeys(parsed.SharedSecret)
 
 	// Register one or both of v4 and v6 based on support specified by the client
 	var newRegs []*dd.DecoyRegistration
 
-	if clientToStation.GetV4Support() {
-		reg, err := regManager.NewRegistration(clientToStation, &conjureKeys, flags, false)
+	if parsed.RegistrationPayload.GetV4Support() {
+		reg, err := regManager.NewRegistration(parsed.RegistrationPayload, &conjureKeys, false)
 		if err != nil {
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err
@@ -159,8 +131,8 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) ([
 		newRegs = append(newRegs, reg)
 	}
 
-	if clientToStation.GetV6Support() {
-		reg, err := regManager.NewRegistration(clientToStation, &conjureKeys, flags, true)
+	if parsed.RegistrationPayload.GetV6Support() {
+		reg, err := regManager.NewRegistration(parsed.RegistrationPayload, &conjureKeys, true)
 		if err != nil {
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err

@@ -27,7 +27,7 @@ errno = "0.2.3"
 radix = { git = "https://github.com/refraction-networking/radix" }
 tuntap = { git = "https://github.com/ewust/tuntap.rs" }
 ipnetwork = "^0.14.0"
-protobuf = "2.6"
+protobuf = "2.16.2"
 hkdf = "0.7"
 sha2 = "0.8.*"
 hex = "0.3.*"

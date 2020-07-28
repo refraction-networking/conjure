@@ -2,9 +2,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -32,27 +29,25 @@ func init() {
 	hex.Decode(secret, secretHex)
 }
 
-func generateClientToAPIPayload() (c2API *pb.ClientToAPI, marshaledc2API []byte, encryptedc2s []byte) {
+func generateClientToAPIPayload() (c2API *pb.ClientToAPI, marshaledc2API []byte) {
 	generation := uint32(0)
 	covert := "1.2.3.4:1234"
-	v4Support := true
-	v6Support := false
+
+	// We need pointers to bools. This is nasty D:
+	true_bool := true
+	false_bool := false
+
 	c2s := pb.ClientToStation{
 		DecoyListGeneration: &generation,
 		CovertAddress:       &covert,
-		V4Support:           &v4Support,
-		V6Support:           &v6Support,
+		V4Support:           &true_bool,
+		V6Support:           &false_bool,
+		Flags: &pb.RegistrationFlags{
+			ProxyHeader: &true_bool,
+			Use_TIL:     &true_bool,
+			UploadOnly:  &false_bool,
+		},
 	}
-
-	c2sBytes, err := proto.Marshal(&c2s)
-	if err != nil {
-		log.Fatalf("failed to marshal ClientToStation proto: expected nil, got %v", err)
-	}
-
-	block, _ := aes.NewCipher(secret)
-	gcm, _ := cipher.NewGCM(block)
-	iv := make([]byte, 12)
-	encryptedc2s = gcm.Seal(nil, iv, c2sBytes, nil)
 
 	c2API = &pb.ClientToAPI{
 		Secret:              secret,
@@ -65,48 +60,33 @@ func generateClientToAPIPayload() (c2API *pb.ClientToAPI, marshaledc2API []byte,
 }
 
 func TestZMQPayloadGeneration(t *testing.T) {
-	c2API, _, encryptedc2s := generateClientToAPIPayload()
+	c2API, _ := generateClientToAPIPayload()
 
 	zmqPayload, err := generateZMQPayload(c2API)
 	if err != nil {
 		t.Fatalf("failed to generate ZMQ payload: expected nil, got %v", err)
 	}
 
-	if !bytes.Equal(zmqPayload[:SecretLength], secret) {
-		t.Fatalf("secret in ZMQ payload doesn't match: expected %v, got %v", secret, zmqPayload[:32])
-	}
-
-	fsp := zmqPayload[SecretLength : SecretLength+6]
-	var payloadLength uint16
-	err = binary.Read(bytes.NewReader(fsp[:2]), binary.BigEndian, &payloadLength)
-	if err != nil {
-		t.Fatalf("failed to read payload length from FSP: expected nil, got %v", err)
-	}
-
-	if int(payloadLength) != len(encryptedc2s) {
-		t.Fatalf("payload length in FSP doesn't math: expected %d, got %d", len(encryptedc2s), payloadLength)
-	}
-
-	var retrievedc2s pb.ClientToStation
-	err = proto.Unmarshal(zmqPayload[SecretLength+6:], &retrievedc2s)
+	var retrievedPayload pb.ZMQPayload
+	err = proto.Unmarshal(zmqPayload, &retrievedPayload)
 	if err != nil {
 		t.Fatalf("failed to unmarshal ClientToStation from ZMQ payload: expected nil, got %v", err)
 	}
 
-	if retrievedc2s.GetDecoyListGeneration() != c2API.RegistrationPayload.GetDecoyListGeneration() {
-		t.Fatalf("decoy list generation in retrieved ClientToStation doesn't match: expected %d, got %d", c2API.RegistrationPayload.GetDecoyListGeneration(), retrievedc2s.GetDecoyListGeneration())
+	if retrievedPayload.RegistrationPayload.GetDecoyListGeneration() != c2API.RegistrationPayload.GetDecoyListGeneration() {
+		t.Fatalf("decoy list generation in retrieved ClientToStation doesn't match: expected %d, got %d", c2API.RegistrationPayload.GetDecoyListGeneration(), retrievedPayload.RegistrationPayload.GetDecoyListGeneration())
 	}
 
-	if retrievedc2s.GetCovertAddress() != c2API.RegistrationPayload.GetCovertAddress() {
-		t.Fatalf("covert address in retrieved ClientToStation doesn't match: expected %s, got %s", c2API.RegistrationPayload.GetCovertAddress(), retrievedc2s.GetCovertAddress())
+	if retrievedPayload.RegistrationPayload.GetCovertAddress() != c2API.RegistrationPayload.GetCovertAddress() {
+		t.Fatalf("covert address in retrieved ClientToStation doesn't match: expected %s, got %s", c2API.RegistrationPayload.GetCovertAddress(), retrievedPayload.RegistrationPayload.GetCovertAddress())
 	}
 
-	if retrievedc2s.GetV4Support() != c2API.RegistrationPayload.GetV4Support() {
-		t.Fatalf("v4 support in retrieved ClientToStation doesn't match: expected %v, got %v", c2API.RegistrationPayload.GetV4Support(), retrievedc2s.GetV4Support())
+	if retrievedPayload.RegistrationPayload.GetV4Support() != c2API.RegistrationPayload.GetV4Support() {
+		t.Fatalf("v4 support in retrieved ClientToStation doesn't match: expected %v, got %v", c2API.RegistrationPayload.GetV4Support(), retrievedPayload.RegistrationPayload.GetV4Support())
 	}
 
-	if retrievedc2s.GetV6Support() != c2API.RegistrationPayload.GetV6Support() {
-		t.Fatalf("v6 support in retrieved ClientToStation doesn't match: expected %v, got %v", c2API.RegistrationPayload.GetV6Support(), retrievedc2s.GetV6Support())
+	if retrievedPayload.RegistrationPayload.GetV6Support() != c2API.RegistrationPayload.GetV6Support() {
+		t.Fatalf("v6 support in retrieved ClientToStation doesn't match: expected %v, got %v", c2API.RegistrationPayload.GetV6Support(), retrievedPayload.RegistrationPayload.GetV6Support())
 	}
 }
 
@@ -122,7 +102,7 @@ func TestCorrectRegistration(t *testing.T) {
 		logger:          logger,
 	}
 
-	_, body, _ := generateClientToAPIPayload()
+	_, body := generateClientToAPIPayload()
 	r := httptest.NewRequest("POST", "/register", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -183,7 +163,7 @@ func TestBadAccepter(t *testing.T) {
 		logger:          logger,
 	}
 
-	_, body, _ := generateClientToAPIPayload()
+	_, body := generateClientToAPIPayload()
 	r := httptest.NewRequest("POST", "/register", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -215,7 +195,7 @@ func BenchmarkRegistration(b *testing.B) {
 	}
 	s.messageAccepter = s.sendToZMQ
 
-	_, body, _ := generateClientToAPIPayload()
+	_, body := generateClientToAPIPayload()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
