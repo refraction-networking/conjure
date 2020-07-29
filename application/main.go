@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net"
 	"os"
@@ -59,7 +60,7 @@ func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) 
 		}*/
 }
 
-func get_zmq_updates(regManager *dd.RegistrationManager) {
+func get_zmq_updates(connectAddr string, regManager *dd.RegistrationManager) {
 	logger := log.New(os.Stdout, "[ZMQ] ", log.Ldate|log.Lmicroseconds)
 	sub, err := zmq.NewSocket(zmq.SUB)
 	if err != nil {
@@ -68,7 +69,6 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 	}
 	defer sub.Close()
 
-	connectAddr := "ipc://@zmq-proxy"
 	sub.Connect(connectAddr)
 	sub.SetSubscribe("")
 
@@ -149,9 +149,13 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) ([
 var logger *log.Logger
 
 func main() {
+	var zmqAddress string
+	flag.StringVar(&zmqAddress, "zmq-address", "ipc://@zmq-proxy", "Address of ZMQ proxy")
+	flag.Parse()
+
 	regManager := dd.NewRegistrationManager()
 	logger = regManager.Logger
-	go get_zmq_updates(regManager)
+	go get_zmq_updates(zmqAddress, regManager)
 
 	go func() {
 		for {
