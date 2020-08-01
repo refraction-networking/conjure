@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"math/rand"
@@ -152,7 +153,7 @@ readLoop:
 	dd.Proxy(reg, wrapped, logger)
 }
 
-func get_zmq_updates(regManager *dd.RegistrationManager) {
+func get_zmq_updates(connectAddr string, regManager *dd.RegistrationManager) {
 	logger := log.New(os.Stdout, "[ZMQ] ", log.Ldate|log.Lmicroseconds)
 	sub, err := zmq.NewSocket(zmq.SUB)
 	if err != nil {
@@ -161,7 +162,6 @@ func get_zmq_updates(regManager *dd.RegistrationManager) {
 	}
 	defer sub.Close()
 
-	connectAddr := "ipc://@zmq-proxy"
 	sub.Connect(connectAddr)
 	sub.SetSubscribe("")
 
@@ -243,13 +243,18 @@ var logger *log.Logger
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+
+	var zmqAddress string
+	flag.StringVar(&zmqAddress, "zmq-address", "ipc://@zmq-proxy", "Address of ZMQ proxy")
+	flag.Parse()
+
 	regManager := dd.NewRegistrationManager()
 	logger = regManager.Logger
 
 	regManager.AddTransport(pb.TransportType_MinTransport, min.Transport{})
 	regManager.AddTransport(pb.TransportType_Obfs4Transport, obfs4.Transport{})
 
-	go get_zmq_updates(regManager)
+	go get_zmq_updates(zmqAddress, regManager)
 
 	go func() {
 		for {
