@@ -251,8 +251,8 @@ func main() {
 	regManager := dd.NewRegistrationManager()
 	logger = regManager.Logger
 
-	regManager.AddTransport(pb.TransportType_MinTransport, min.Transport{})
-	regManager.AddTransport(pb.TransportType_Obfs4Transport, obfs4.Transport{})
+	regManager.AddTransport(pb.TransportType_Min, min.Transport{})
+	regManager.AddTransport(pb.TransportType_Obfs4, obfs4.Transport{})
 
 	go get_zmq_updates(zmqAddress, regManager)
 
