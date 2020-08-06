@@ -7,6 +7,7 @@ import (
 
 	dd "github.com/refraction-networking/conjure/application/lib"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 type Transport struct {
@@ -16,17 +17,14 @@ type Transport struct {
 
 var SharedSecret = []byte(`6a328b8ec2024dd92dd64332164cc0425ddbde40cb7b81e055bf7b099096d068`)
 
-func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.TransportType) (clientToPhantom net.Conn, serverFromPhantom *net.TCPConn, reg *dd.DecoyRegistration) {
-	phantom, err := net.ListenTCP("tcp", nil)
-	if err != nil {
-		log.Fatalln("failed to set up phantom listener:", err)
-	}
+func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.TransportType) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
+	phantom := bufconn.Listen(65535)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 
 	go func() {
-		c, err := phantom.AcceptTCP()
+		c, err := phantom.Accept()
 		if err != nil {
 			log.Fatalln("failed to accept:", err)
 		}
@@ -34,7 +32,7 @@ func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.Trans
 		wg.Done()
 	}()
 
-	c, err := net.Dial("tcp", phantom.Addr().String())
+	c, err := phantom.Dial()
 	if err != nil {
 		log.Fatalln("failed to dial phantom:", err)
 	}
