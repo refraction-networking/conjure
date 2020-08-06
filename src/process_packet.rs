@@ -19,8 +19,8 @@ use dd_selector::DDIpSelector;
 use PerCoreGlobal;
 use util::{IpPacket, FSP};
 use elligator;
-use protobuf;
-use signalling::ClientToStation;
+use protobuf::{Message, SingularPtrField};
+use signalling::{ClientToStation, ZMQPayload};
 
 
 const TLS_TYPE_APPLICATION_DATA: u8 = 0x17;
@@ -275,22 +275,25 @@ impl PerCoreGlobal
                 // res.2 => variable size payload (c2s)
 
                 // form message for zmq
-                let mut zmq_msg: Vec<u8> = Vec::new();
+                let mut zmq_msg = ZMQPayload::new();
 
                 let mut shared_secret = res.0.to_vec();
-                zmq_msg.append(&mut shared_secret);
+                let mut vsp = res.2;
+                zmq_msg.set_shared_secret(shared_secret);
+                zmq_msg.registration_payload = SingularPtrField::some(vsp);
 
-                let mut fsp = res.1.to_vec(); 
-                zmq_msg.append(&mut fsp);
-
-                // VSP --> ClientToStation
-                let mut vsp = res.2.to_vec();
-                zmq_msg.append(&mut vsp);
-                
                 let repr_str = hex::encode(res.0);
                 debug!("New registration {}, {}", flow, repr_str);
 
-                match self.zmq_sock.send(&zmq_msg, 0){
+                let zmq_payload = match zmq_msg.write_to_bytes() {
+                    Ok(b) => b,
+                    Err(e) => {
+                        warn!("Failed to generate ZMQ payload: {}", e);
+                        return false
+                    },
+                };
+
+                match self.zmq_sock.send(&zmq_payload, 0){
                     Ok(_)=> return true,
                     Err(e) => {
                         warn!("Failed to send registration information over ZMQ: {}", e);

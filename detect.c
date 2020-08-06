@@ -11,7 +11,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <unistd.h>
-//#include <zmq.h>
+#include <zmq.h>
 
 // The Makefile in this directory provides a `make tapdance` and a
 // `make zc_tapdance` rule. The latter causes the following #define to happen.
@@ -68,21 +68,13 @@ void* g_rust_failed_map = 0;
 int g_update_cli_conf_when_convenient = 0;
 int g_update_overloaded_decoys_when_convenient = 0;
 
-//void *g_zmq_ctx;
-//void *g_zmq_socket;
-
 #define TIMESPEC_DIFF(a, b) ((a.tv_sec - b.tv_sec)*1000000000LL + \
                              ((int64_t)a.tv_nsec - (int64_t)b.tv_nsec))
 
 void the_program(uint8_t core_id, unsigned int log_interval,
-                 uint8_t* station_key, char* zmq_listener)
+                 uint8_t* station_key, char* workers_socket_addr)
 {
-    struct RustGlobalsStruct rust_globals = rust_detect_init(core_id, station_key);
-
-    // init zeromq
-    //g_zmq_ctx = zmq_ctx_new();
-    //g_zmq_socket = zmq_socket(g_zmq_ctx, ZMQ_PUB);
-    //zmq_connect(g_zmq_socket, zmq_listener);
+    struct RustGlobalsStruct rust_globals = rust_detect_init(core_id, station_key, workers_socket_addr);
 
     //g_rust_failed_map = rust_globals.fail_map;
     //g_rust_cli_conf_proto_ptr = rust_globals.cli_conf;
@@ -333,7 +325,7 @@ void startup_pfring_maybezc(unsigned int cluster_id, int proc_ind)
 
 pid_t start_tapdance_process(int core_affinity, unsigned int cluster_id,
                              int proc_ind, unsigned int log_interval,
-                             uint8_t* station_key, char* zmq_listener)
+                             uint8_t* station_key, char* workers_socket_addr)
 {
     pid_t the_pid = fork();
     if(the_pid == 0)
@@ -345,7 +337,7 @@ pid_t start_tapdance_process(int core_affinity, unsigned int cluster_id,
         signal(SIGINT, sigproc_child);
         signal(SIGTERM, sigproc_child);
         signal(SIGPIPE, ignore_sigpipe);
-        the_program(proc_ind, log_interval, station_key, zmq_listener);
+        the_program(proc_ind, log_interval, station_key, workers_socket_addr);
     }
     printf("Core %d: PID %d, lcore %d\n", proc_ind, the_pid, core_affinity);
     return the_pid;
@@ -378,7 +370,8 @@ struct cmd_options
     uint8_t*        public_key;   // the public key, used only for diagnostic
                                   // (all nuls if not provided)
     int             skip_core;    // -1 if not skipping any core, otherwise the core to skip
-	char*           zmq_address;
+    char*           zmq_address;  // address of output ZMQ socket to bind
+    char*           zmq_worker_address;  // address of ZMQ socket to bind for communication between threads
 };
 
 static uint8_t station_key[TD_KEYLEN_BYTES] = {
@@ -399,6 +392,8 @@ void parse_cmd_args(int argc, char* argv[], struct cmd_options* options)
     options->pfring_offset = 0;
     options->log_interval = 1000; // milliseconds
     int skip_core = -1; // If >0, skip this core when incrementing
+    options->zmq_address = "ipc://@detector";
+    options->zmq_worker_address = "ipc://@detector-workers";
 
     char* keyfile_name = 0;
 
@@ -406,7 +401,7 @@ void parse_cmd_args(int argc, char* argv[], struct cmd_options* options)
     options->public_key = public_key;
 
     char c;
-    while ((c = getopt(argc,argv,"i:n:c:o:l:K:s:a:z:")) != -1)
+    while ((c = getopt(argc,argv,"i:n:c:o:l:K:s:a:w:z:")) != -1)
     {
         switch (c)
         {
@@ -435,10 +430,14 @@ void parse_cmd_args(int argc, char* argv[], struct cmd_options* options)
             case 's':
                 skip_core = atoi(optarg);
                 break;
-			case 'a':
-				options->zmq_address = malloc(strlen(optarg));
-				strcpy(options->zmq_address, optarg);
-              	break;
+            case 'a':
+                options->zmq_address = malloc(strlen(optarg));
+                strcpy(options->zmq_address, optarg);
+                break;
+            case 'w':
+                options->zmq_worker_address = malloc(strlen(optarg));
+                strcpy(options->zmq_worker_address, optarg);
+                break;
             case 'z':
                 options->pfring_offset = atoi(optarg);
                 break;
@@ -520,25 +519,49 @@ void parse_cmd_args(int argc, char* argv[], struct cmd_options* options)
     fflush(stdout);
 }
 
-// id is a 1-byte identifier that uniquely determines which proxy process it will go to
-// should be the first byte of the session (alternatively, hash of the client IP)
-//extern void *g_zmq_socket;  // Provided by zc_tapdance
-int send_packet_to_proxy(uint8_t id, uint8_t *pkt, size_t len)
+// Start a new process to proxy messages between
+// the worker threads and the outgoing ZMQ socket.
+int handle_zmq_proxy(char *socket_addr, char *workers_socket_addr)
 {
-    /*
-    zmq_msg_t msg;
-    int rc = zmq_msg_init_size (&msg, len+1);
-    if (rc != 0) {
-        return rc;
+    int pid = fork();
+    if (pid == 0) {
+        // Set up ZMQ sockets, one for publishing to the proxy and one for taking in
+        // messages from other threads
+        void *ctx = zmq_ctx_new();
+        void *pub = zmq_socket(ctx, ZMQ_PUB);
+
+        // Bind the socket for publishing to the proxy
+        printf("binding zmq socket to %s\n", socket_addr);
+        int rc = zmq_bind(pub, socket_addr);
+        if (rc != 0) {
+            printf("bind on pub socket failed: %s\n", zmq_strerror(errno));
+            return rc;
+        }
+
+        void *sub = zmq_socket(ctx, ZMQ_SUB);
+        rc = zmq_setsockopt(sub, ZMQ_SUBSCRIBE, NULL, 0);
+        if (rc != 0) {
+            printf("failed to set sock opt: %s\n", zmq_strerror(errno));
+            return rc;
+        }
+
+        // Bind the socket for communication between worker threads
+        // (they're actually set up as separate processes, so we
+        // need to use IPC rather than inproc communication)
+        printf("binding zmq worker socket to %s\n", workers_socket_addr);
+        rc = zmq_bind(sub, workers_socket_addr);
+        if (rc != 0) {
+            printf("bind on sub socket failed: %s\n", zmq_strerror(errno));
+            return rc;
+        }
+
+        // Proxy traffic between worker threads and the outgoing socket
+        rc = zmq_proxy(sub, pub, NULL);
+        if (rc != 0) {
+            printf("proxy returned error: %s\n", zmq_strerror(errno));
+            return rc;
+        }
     }
-    // TODO: can we do this without memcpy? Maybe setup msg
-    // or even just use zmq_send directly?
-    memcpy(zmq_msg_data(&msg), &id, 1);
-    memcpy(&(((char*)zmq_msg_data(&msg))[1]), pkt, len);
-    // TODO: use ZMQ_DONTWAIT to make this non-blocking
-    return zmq_msg_send(&msg, g_zmq_socket, 0);
-    */
-    // Not implemented
     return 0;
 }
 
@@ -569,6 +592,8 @@ int main(int argc, char* argv[])
     sa2.sa_sigaction = notify_overloaded_decoys_file_update;
     sigaction(SIGUSR2, &sa2, NULL);
 
+    handle_zmq_proxy(options.zmq_address, options.zmq_worker_address);
+
     int i;
     int core_num = options.core_affinity_offset;
     for (i=0; i<g_num_worker_procs; i++)
@@ -578,7 +603,7 @@ int main(int argc, char* argv[])
         g_forked_pids[i] =
             start_tapdance_process(core_num,
                                    options.cluster_id, i+pfring_offset, options.log_interval,
-                                   options.station_key, options.zmq_address);
+                                   options.station_key, options.zmq_worker_address);
         core_num++;
     }
     signal(SIGINT, sigproc_parent);

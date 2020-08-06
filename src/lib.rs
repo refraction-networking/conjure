@@ -26,6 +26,9 @@ use std::io::BufReader;
 use std::io::BufRead;
 use std::fs::File;
 
+use std::ffi::CStr;
+use std::os::raw::c_char;
+
 use tuntap::{IFF_TUN,TunTap};
 
 // Must go before all other modules so that the report! macro will be visible.
@@ -105,7 +108,7 @@ const IP_LIST_PATH: &'static str = "/var/lib/dark-decoy.prefixes";
 
 impl PerCoreGlobal
 {
-    fn new(priv_key: [u8; 32], the_lcore: i32) -> PerCoreGlobal
+    fn new(priv_key: [u8; 32], the_lcore: i32, workers_socket_addr: &str) -> PerCoreGlobal
     {
 
         let mut tun = TunTap::new(IFF_TUN, &format!("tun{}", the_lcore)).unwrap();
@@ -114,7 +117,7 @@ impl PerCoreGlobal
         // Setup ZMQ
         let zmq_ctx = zmq::Context::new();
         let zmq_sock = zmq_ctx.socket(zmq::PUB).unwrap();
-        zmq_sock.connect("tcp://localhost:5591").expect("failed connecting to ZMQ");
+        zmq_sock.connect(workers_socket_addr).expect("failed connecting to ZMQ");
 
         PerCoreGlobal {
             priv_key: priv_key,
@@ -252,7 +255,7 @@ pub struct RustGlobalsStruct
 }
 
 #[no_mangle]
-pub extern "C" fn rust_detect_init(lcore_id: i32, ckey: *const u8)
+pub extern "C" fn rust_detect_init(lcore_id: i32, ckey: *const u8, workers_socket_addr: *const c_char)
 -> RustGlobalsStruct
 {
 
@@ -265,7 +268,9 @@ pub extern "C" fn rust_detect_init(lcore_id: i32, ckey: *const u8)
     c_api::c_open_reporter(s);
     report!("reset");
 
-    let mut global = PerCoreGlobal::new(key, lcore_id);
+    let addr: &CStr = unsafe { CStr::from_ptr(workers_socket_addr) };
+
+    let mut global = PerCoreGlobal::new(key, lcore_id, addr.to_str().unwrap());
     global.read_ip_list();
 
     debug!("Initialized rust core {}", lcore_id);

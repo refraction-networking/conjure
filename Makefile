@@ -12,7 +12,7 @@ CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_R
 PROTO_RS_PATH=src/signalling.rs
 
 
-all: rust libtd dark-decoy app ${PROTO_RS_PATH}
+all: rust libtd dark-decoy app registration-api zmq-proxy ${PROTO_RS_PATH}
 
 rust: ./src/*.rs
 	cargo build --${DEBUG_OR_RELEASE}
@@ -29,6 +29,12 @@ libtd:
 dark-decoy: detect.c loadkey.c rust_util.c rust libtapdance
 	${CC} ${CFLAGS} -o $@ detect.c loadkey.c rust_util.c ${LIBS}
 
+registration-api:
+	cd ./registration-api/ && make
+
+zmq-proxy:
+	cd ./zmq-proxy/ && make
+
 clean:
 	cargo clean
 	rm -f ${TARGETS} *.o *~
@@ -36,3 +42,4 @@ clean:
 ${PROTO_RS_PATH}:
 	cd ./proto/ && make
 
+.PHONY: registration-api zmq-proxy

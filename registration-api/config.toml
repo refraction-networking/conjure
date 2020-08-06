@@ -1,0 +1,24 @@
+# The port on which to host the API
+api_port = 8080
+
+# The port on which to bind the ZMQ port
+zmq_port = 5591
+
+# The path on disk to the private key used for the ZMQ socket
+privkey_path = ""
+
+# The type of authentication to use on the ZMQ socket.
+# Can be set to "NULL" which allows all connections, or "CURVE"
+# which only allows clients presenting public keys listed in
+# station_pubkeys below.
+auth_type = "CURVE"
+
+# Whether ZMQ should emit verbose logs pertaining to auth (successful connections, failed connections, etc.)
+auth_verbose = true
+
+# The public keys used to authorize ZMQ connections in the CURVE type.
+# These should be the Z85-encoded versions of the 32-byte public keys,
+# giving 40-character strings.
+station_pubkeys = [
+	"",
+]

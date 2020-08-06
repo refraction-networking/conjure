@@ -1,0 +1,42 @@
+# Name of abstract socket to bind proxy to
+socket_name = "zmq-proxy"
+
+# Absolute path to private key to use when authenticating with servers.
+# Can be either privkey or privkey || pubkey; only first 32 bytes will
+# be used.
+privkey_path = ""
+
+# Time in milliseconds to wait between sending heartbeats.
+# Heartbeats are only sent when other traffic doesn't come through;
+# i.e. normal messages can "act" as a heartbeat by confirming
+# that the connection is alive.
+heartbeat_interval = 30000
+
+# Time in milliseconds after sending a heartbeat to wait for
+# a response before the connection is assumed to be dead.
+heartbeat_timeout = 1000
+
+### ZMQ sockets to connect to and subscribe
+
+## Registration API
+[[connect_sockets]]
+
+# Address of the socket to connect to
+address = "tcp://registration.refraction.network:5591"
+
+# Type of authenticaton method to use when connecting. Can be NULL for no
+# authentication or CURVE for public key-based authentication.
+type = "CURVE"
+
+# Public key of socket to use if using CURVE authentication
+# The default value is the public key for the API hosted at registration.refraction.network
+pubkey = "s5gkB.U$dl]gO=F{Qo3=4Api-T$5#tpwaT/bSOr@"
+
+# ZMQ subscription prefix for this socket. Leave as "" or omit to receive all messages
+subscription = ""
+
+## Detector
+[[connect_sockets]]
+
+address = "ipc://@detector"
+type = "NULL"

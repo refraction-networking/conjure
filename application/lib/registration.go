@@ -38,7 +38,7 @@ func NewRegistrationManager() *RegistrationManager {
 	}
 }
 
-func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, flags [1]byte, includeV6 bool) (*DecoyRegistration, error) {
+func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool) (*DecoyRegistration, error) {
 
 	phantomAddr, err := regManager.PhantomSelector.Select(
 		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
@@ -52,7 +52,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		keys:             conjureKeys,
 		Covert:           c2s.GetCovertAddress(),
 		Mask:             c2s.GetMaskedDecoyServerName(),
-		Flags:            uint8(flags[0]),
+		Flags:            c2s.Flags,
 		Transport:        uint(c2s.GetTransport()), // hack
 		DecoyListVersion: c2s.GetDecoyListGeneration(),
 		RegistrationTime: time.Now(),
@@ -95,7 +95,7 @@ type DecoyRegistration struct {
 	DarkDecoy        *net.IP
 	keys             *ConjureSharedKeys
 	Covert, Mask     string
-	Flags            uint8
+	Flags            *pb.RegistrationFlags
 	Transport        uint
 	RegistrationTime time.Time
 	DecoyListVersion uint32
@@ -114,7 +114,7 @@ func (reg *DecoyRegistration) String() string {
 		Phantom          string
 		SharedSecret     string
 		Covert, Mask     string
-		Flags            uint8
+		Flags            *pb.RegistrationFlags
 		Transport        uint
 		RegTime          time.Time
 		DecoyListVersion uint32
