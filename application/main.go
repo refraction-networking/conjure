@@ -137,7 +137,7 @@ readLoop:
 				delete(possibleTransports, i)
 				continue transports
 			} else if err != nil {
-				// If we got here, the error might have been produced while attemtping
+				// If we got here, the error might have been produced while attempting
 				// to wrap the connection, which means received and the connection
 				// may no longer be valid. We should just give up on this connection.
 				d := time.Until(deadline)
