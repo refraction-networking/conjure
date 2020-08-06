@@ -85,7 +85,7 @@ type sessionStats struct {
 // TODO: refactor
 func halfPipe(src, dst net.Conn,
 	wg *sync.WaitGroup,
-	oncePrintErr sync.Once,
+	oncePrintErr *sync.Once,
 	logger *log.Logger,
 	tag string) {
 
@@ -166,8 +166,8 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(clientConn, covertConn, &wg, oncePrintErr, logger, "Up")
-	go halfPipe(covertConn, clientConn, &wg, oncePrintErr, logger, "Down")
+	go halfPipe(clientConn, covertConn, &wg, &oncePrintErr, logger, "Up")
+	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down")
 	wg.Wait()
 }
 
@@ -199,8 +199,8 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(clientConn, covertConn, &wg, oncePrintErr, logger, "Up")
-	go halfPipe(covertConn, clientConn, &wg, oncePrintErr, logger, "Down")
+	go halfPipe(clientConn, covertConn, &wg, &oncePrintErr, logger, "Up")
+	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down")
 	wg.Wait()
 }
 
@@ -412,13 +412,13 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(finalClientConn, finalTargetConn, &wg, oncePrintErr, logger, "Up")
+	go halfPipe(finalClientConn, finalTargetConn, &wg, &oncePrintErr, logger, "Up")
 
 	go func() {
 		// wait for readFromServerAndParse to exit first, as it probably haven't seen appdata yet
 		select {
 		case _ = <-serverErrChan:
-			halfPipe(finalClientConn, finalTargetConn, &wg, oncePrintErr, logger, "Down")
+			halfPipe(finalClientConn, finalTargetConn, &wg, &oncePrintErr, logger, "Down")
 		case <-time.After(10 * time.Second):
 			finalClientConn.Close()
 			wg.Done()
