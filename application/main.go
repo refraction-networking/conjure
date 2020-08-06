@@ -20,8 +20,8 @@ import (
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 
 	"github.com/refraction-networking/conjure/application/transports"
-	"github.com/refraction-networking/conjure/application/transports/min"
-	"github.com/refraction-networking/conjure/application/transports/obfs4"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
 )
 
 func getOriginalDst(fd uintptr) (net.IP, error) {
@@ -106,7 +106,7 @@ func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) 
 
 	var buf [4096]byte
 	received := bytes.Buffer{}
-	possibleTransports := regManager.GetTransports()
+	possibleTransports := regManager.GetWrappingTransports()
 
 	var reg *dd.DecoyRegistration
 	var wrapped net.Conn

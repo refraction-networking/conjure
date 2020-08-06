@@ -2,6 +2,7 @@ package lib
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -30,6 +31,13 @@ type Transport interface {
 	// a given phantom; registrations on different phantoms can have the
 	// same identifier.
 	GetIdentifier(*DecoyRegistration) string
+}
+
+// WrappingTransport describes any transport that is able to passively
+// listen to incoming network connections and identify itself, then actively
+// wrap the connection.
+type WrappingTransport interface {
+	Transport
 
 	// WrapConnection attempts to wrap the given connection in the transport.
 	// It takes the information gathered so far on the connection in data, attempts
@@ -51,6 +59,16 @@ type Transport interface {
 	// transports.ErrTryAgain. If the transport can be conclusively determined to not
 	// exist on the connection, implementations should return transports.ErrNotTransport.
 	WrapConnection(data *bytes.Buffer, conn net.Conn, phantom net.IP, rm *RegistrationManager) (reg *DecoyRegistration, wrapped net.Conn, err error)
+}
+
+// ConnectingTransport describes transports that actively form an
+// outgoing connection to clients to initiate the conversation.
+type ConnectingTransport interface {
+	Transport
+
+	// Connect attempts to connect to the client from the phantom address
+	// derived in the registration.
+	Connect(context.Context, *DecoyRegistration) (net.Conn, error)
 }
 
 type RegistrationManager struct {
@@ -81,16 +99,20 @@ func (regManager *RegistrationManager) AddTransport(index pb.TransportType, t Tr
 	regManager.registeredDecoys.transports[index] = t
 }
 
-// Returns a map of the transport types to their transports. This return value
+// Returns a map of the wrapping transport types to their transports. This return value
 // can be mutated freely.
-func (regManager *RegistrationManager) GetTransports() map[pb.TransportType]Transport {
-	m := make(map[pb.TransportType]Transport)
+func (regManager *RegistrationManager) GetWrappingTransports() map[pb.TransportType]WrappingTransport {
+	m := make(map[pb.TransportType]WrappingTransport)
 	regManager.registeredDecoys.m.RLock()
 	defer regManager.registeredDecoys.m.RUnlock()
 
 	for k, v := range regManager.registeredDecoys.transports {
-		m[k] = v
+		wt, ok := v.(WrappingTransport)
+		if ok {
+			m[k] = wt
+		}
 	}
+
 	return m
 }
 
