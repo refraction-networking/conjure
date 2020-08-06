@@ -5,6 +5,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
@@ -38,8 +40,6 @@ func getOriginalDst(fd uintptr) (net.IP, error) {
 // Handle connection from client
 // NOTE: this is called as a goroutine
 func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) {
-	const timeout = 30 * time.Second
-
 	defer clientConn.Close()
 
 	fd, err := clientConn.File()
@@ -73,19 +73,34 @@ func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) 
 	count := regManager.CountRegistrations(originalDstIP)
 	logger.Printf("new connection (%d potential registrations)\n", count)
 
+	// Pick random timeout between 10 and 60 seconds, down to millisecond precision
+	ms := rand.Int63n(50000) + 10000
+	timeout := time.Duration(ms) * time.Millisecond
+
+	// Give the client a deadline to send enough data to identify a transport.
+	// This can be reset by transports to give more time for handshakes
+	// after a transport is identified.
+	deadline := time.Now().Add(timeout)
+	clientConn.SetDeadline(deadline)
+
 	if count < 1 {
 		// Here, reading from the connection would be pointless, but
 		// since the kernel already ACK'd this connection, we gain no
 		// benefit from instantly dropping the connection; the jig is
-		// already up. We should sleep in line with other code paths
+		// already up. We should keep reading in line with other code paths
 		// so the initiator of the connection gains no information
 		// about the correctness of their connection.
 		//
 		// Possible TODO: use NFQUEUE to be able to drop the connection
 		// in userspace before the SYN-ACK is sent, increasing probe
 		// resistance.
-		logger.Printf("no possible registrations, sleeping %v then dropping connection\n", timeout)
-		time.Sleep(timeout)
+		logger.Printf("no possible registrations, reading for %v then dropping connection\n", timeout)
+
+		// Copy into ioutil.Discard to keep ACKing until the deadline.
+		// This should help prevent fingerprinting; if we let the read
+		// buffer fill up and stopped ACKing after 8192 + (buffer size)
+		// bytes for obfs4, as an example, that would be quite clear.
+		io.Copy(ioutil.Discard, clientConn)
 		return
 	}
 
@@ -96,22 +111,11 @@ func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) 
 	var reg *dd.DecoyRegistration
 	var wrapped net.Conn
 
-	// Give the client a timeout to send enough data to identify a transport.
-	// This can be reset by transports to give more time for handshakes
-	// after a transport is identified.
-	deadline := time.Now().Add(timeout)
-	clientConn.SetDeadline(deadline)
-
 readLoop:
 	for {
 		if len(possibleTransports) < 1 {
-			// Here, we delay until precisely the original deadline.
-			// This means that the connection always dies at the timeout
-			// even if we've determined that we shouldn't pick up the connection;
-			// this should help resist against active probes.
-			d := time.Until(deadline)
-			logger.Printf("ran out of possible transports, sleeping %v then giving up\n", d)
-			time.Sleep(d)
+			logger.Printf("ran out of possible transports, reading for %v then giving up\n", time.Until(deadline))
+			io.Copy(ioutil.Discard, clientConn)
 			return
 		}
 
