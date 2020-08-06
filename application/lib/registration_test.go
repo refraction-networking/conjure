@@ -11,10 +11,9 @@ import (
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
-func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys, [1]byte) {
+func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 	clientToStationBytes, err := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
 	sharedSecret, err := hex.DecodeString("5414c734ad5dc53e6b56a7bb47ce695a14a3ef076a3d5ace9cbf3b4d12706b73")
-	flags := [1]byte{0x01}
 
 	clientToStation := &pb.ClientToStation{}
 	err = proto.Unmarshal(clientToStationBytes, clientToStation)
@@ -22,9 +21,12 @@ func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys, [1]byte) 
 		fmt.Printf("Failed to unmarshal ClientToStation protobuf\n")
 	}
 
+	t := true
+	clientToStation.Flags = &pb.RegistrationFlags{Use_TIL: &t}
+
 	conjureKeys, err := GenSharedKeys(sharedSecret)
 
-	return *clientToStation, conjureKeys, flags
+	return *clientToStation, conjureKeys
 }
 
 func testEqualRegistrations(reg1 *DecoyRegistration, reg2 *DecoyRegistration) bool {
@@ -35,9 +37,9 @@ func testEqualRegistrations(reg1 *DecoyRegistration, reg2 *DecoyRegistration) bo
 func TestCreateDecoyRegistration(t *testing.T) {
 	rm := NewRegistrationManager()
 
-	c2s, keys, flags := mockReceiveFromDetector()
+	c2s, keys := mockReceiveFromDetector()
 
-	newReg, err := rm.NewRegistration(&c2s, &keys, flags, c2s.GetV6Support())
+	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support())
 	if err != nil {
 		t.Fatalf("Registration failed: %v", err)
 	}
@@ -52,7 +54,7 @@ func TestCreateDecoyRegistration(t *testing.T) {
 func TestLivenessCheck(t *testing.T) {
 	phantomAddr := net.ParseIP("52.44.73.6")
 	reg := DecoyRegistration{
-		DarkDecoy: &phantomAddr,
+		DarkDecoy: phantomAddr,
 	}
 
 	liveness, response := reg.PhantomIsLive()
@@ -62,7 +64,7 @@ func TestLivenessCheck(t *testing.T) {
 
 	// Is there any test address we know will never respond?
 	unroutableIP := net.ParseIP("127.0.0.2")
-	reg.DarkDecoy = &unroutableIP
+	reg.DarkDecoy = unroutableIP
 
 	liveness, response = reg.PhantomIsLive()
 	if liveness != false {
@@ -71,7 +73,7 @@ func TestLivenessCheck(t *testing.T) {
 
 	// Is there any test address we know will never respond?
 	phantomV6 := net.ParseIP("2001:48a8:687f:1::105")
-	reg.DarkDecoy = &phantomV6
+	reg.DarkDecoy = phantomV6
 
 	liveness, response = reg.PhantomIsLive()
 	if liveness != true {
@@ -80,7 +82,7 @@ func TestLivenessCheck(t *testing.T) {
 
 	// Is there any test address we know will never respond?
 	unreachableV6 := net.ParseIP("2001:48a8:687f:1:1122::105")
-	reg.DarkDecoy = &unreachableV6
+	reg.DarkDecoy = unreachableV6
 
 	liveness, response = reg.PhantomIsLive()
 	if liveness != false {
@@ -88,32 +90,10 @@ func TestLivenessCheck(t *testing.T) {
 	}
 }
 
-func TestManagerFunctionality(t *testing.T) {
-	rm := NewRegistrationManager()
-
-	c2s, keys, flags := mockReceiveFromDetector()
-
-	transport := pb.TransportType(1)
-	c2s.Transport = &transport
-
-	newReg, err := rm.NewRegistration(&c2s, &keys, flags, c2s.GetV6Support())
-	if err != nil {
-		t.Fatalf("Registration failed: %v", err)
-	}
-
-	rm.AddRegistration(newReg)
-
-	storedReg := rm.CheckRegistration(newReg.DarkDecoy, newReg.keys.conjureHMAC("MinTrasportHMACString"))
-
-	if storedReg.DarkDecoy.String() != "141.219.56.148" || storedReg.Covert != "52.44.73.6:443" {
-		t.Fatalf("Improper registration returned: %v\n", storedReg.String())
-	}
-}
-
 func TestRegisterForDetector(t *testing.T) {
 	darkDecoyAddr := net.ParseIP("1.2.3.4")
 	reg := DecoyRegistration{
-		DarkDecoy: &darkDecoyAddr,
+		DarkDecoy: darkDecoyAddr,
 	}
 
 	client, err := getRedisClient()
@@ -171,9 +151,9 @@ func TestLiveness(t *testing.T) {
 func TestRegString(t *testing.T) {
 	rm := NewRegistrationManager()
 
-	c2s, keys, flags := mockReceiveFromDetector()
+	c2s, keys := mockReceiveFromDetector()
 
-	newReg, err := rm.NewRegistration(&c2s, &keys, flags, c2s.GetV6Support())
+	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support())
 	if err != nil {
 		t.Fatalf("Registration failed: %v", err)
 	}
