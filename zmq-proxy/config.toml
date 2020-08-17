@@ -4,7 +4,7 @@ socket_name = "zmq-proxy"
 # Absolute path to private key to use when authenticating with servers.
 # Can be either privkey or privkey || pubkey; only first 32 bytes will
 # be used.
-privkey_path = ""
+privkey_path = "/opt/conjure/sysconfig/privkey"
 
 # Time in milliseconds to wait between sending heartbeats.
 # Heartbeats are only sent when other traffic doesn't come through;
