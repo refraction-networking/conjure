@@ -1,0 +1,18 @@
+[Unit]
+Description=Conjure Registration API
+
+[Service]
+Type=simple
+
+WorkingDirectory=/opt/conjure/
+
+SyslogIdentifier=conjure
+EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
+
+ExecStart=/opt/conjure/registration-api/registration-api
+
+# on stop processes will get SIGTERM, and after 10 secs - SIGKILL (default 90)
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
