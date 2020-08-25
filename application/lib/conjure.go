@@ -3,13 +3,49 @@ package lib
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"io"
 
+	"gitlab.com/yawning/obfs4.git/common/ntor"
+	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
 )
+
+type Obfs4Keys struct {
+	PrivateKey *ntor.PrivateKey
+	PublicKey  *ntor.PublicKey
+	NodeID     *ntor.NodeID
+}
+
+func generateObfs4Keys(rand io.Reader) (Obfs4Keys, error) {
+	keys := Obfs4Keys{
+		PrivateKey: new(ntor.PrivateKey),
+		PublicKey:  new(ntor.PublicKey),
+		NodeID:     new(ntor.NodeID),
+	}
+
+	_, err := rand.Read(keys.PrivateKey[:])
+	if err != nil {
+		return keys, err
+	}
+
+	keys.PrivateKey[0] &= 248
+	keys.PrivateKey[31] &= 127
+	keys.PrivateKey[31] |= 64
+
+	pub, err := curve25519.X25519(keys.PrivateKey[:], curve25519.Basepoint)
+	if err != nil {
+		return keys, err
+	}
+	copy(keys.PublicKey[:], pub)
+
+	_, err = rand.Read(keys.NodeID[:])
+	return keys, err
+}
 
 type ConjureSharedKeys struct {
 	SharedSecret                                              []byte
 	FspKey, FspIv, VspKey, VspIv, MasterSecret, DarkDecoySeed []byte
+	Obfs4Keys                                                 Obfs4Keys
 }
 
 func GenSharedKeys(sharedSecret []byte) (ConjureSharedKeys, error) {
@@ -42,7 +78,9 @@ func GenSharedKeys(sharedSecret []byte) (ConjureSharedKeys, error) {
 	if _, err := tdHkdf.Read(keys.DarkDecoySeed); err != nil {
 		return keys, err
 	}
-	return keys, nil
+	var err error
+	keys.Obfs4Keys, err = generateObfs4Keys(tdHkdf)
+	return keys, err
 }
 
 // from client tapdance/conjure.go
@@ -52,6 +90,6 @@ func conjureHMAC(key []byte, str string) []byte {
 	return hash.Sum(nil)
 }
 
-func (k *ConjureSharedKeys) conjureHMAC(str string) []byte {
+func (k *ConjureSharedKeys) ConjureHMAC(str string) []byte {
 	return conjureHMAC(k.SharedSecret, str)
 }

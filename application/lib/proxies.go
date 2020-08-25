@@ -3,7 +3,6 @@ package lib
 import (
 	"bufio"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -86,7 +85,7 @@ type sessionStats struct {
 // TODO: refactor
 func halfPipe(src, dst net.Conn,
 	wg *sync.WaitGroup,
-	oncePrintErr sync.Once,
+	oncePrintErr *sync.Once,
 	logger *log.Logger,
 	tag string) {
 
@@ -147,31 +146,7 @@ func readAtMost(conn *net.TCPConn, buf []byte) (int, error) {
 	return tot, nil
 }
 
-func MinTransportProxy(regManager *RegistrationManager, clientConn *net.TCPConn, originalDstIP net.IP) {
-
-	originalDst := originalDstIP.String()
-	originalSrc := clientConn.RemoteAddr().String()
-	flowDescription := fmt.Sprintf("%s -> %s ", originalSrc, originalDst)
-	logger := log.New(os.Stdout, "[MIN] "+flowDescription, log.Ldate|log.Lmicroseconds)
-
-	logger.Printf("new connection (%d potential registrations)", regManager.CountRegistrations(&originalDstIP))
-
-	possibleHmac := make([]byte, 32)
-	n, err := readAtMost(clientConn, possibleHmac)
-	if err != nil || n < 32 {
-		logger.Printf("failed to read hmacId, read_bytes: %d, error: %s", n, err)
-		return
-	}
-
-	reg := regManager.CheckRegistration(&originalDstIP, possibleHmac)
-	if reg == nil {
-		logger.Printf("registration not found {phantom: %v, hmac: %s}\n", originalDstIP, hex.EncodeToString(possibleHmac))
-		return
-	}
-	// If we are here, this is our transport (TODO: signal in output channel for it)
-	logger.Printf("registration found {reg_id: %s, phantom: %s, hmac: %s, covert: %s}\n", reg.IDString(), originalDstIP, hex.EncodeToString(possibleHmac), reg.Covert)
-	logger.SetPrefix(fmt.Sprintf("[MIN] %s ", reg.IDString()))
-
+func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	covertConn, err := net.Dial("tcp", reg.Covert)
 	if err != nil {
 		logger.Printf("failed to dial target: %s", err)
@@ -191,8 +166,8 @@ func MinTransportProxy(regManager *RegistrationManager, clientConn *net.TCPConn,
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(clientConn, covertConn, &wg, oncePrintErr, logger, "Up")
-	go halfPipe(covertConn, clientConn, &wg, oncePrintErr, logger, "Down")
+	go halfPipe(clientConn, covertConn, &wg, &oncePrintErr, logger, "Up")
+	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down")
 	wg.Wait()
 }
 
@@ -224,8 +199,8 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(clientConn, covertConn, &wg, oncePrintErr, logger, "Up")
-	go halfPipe(covertConn, clientConn, &wg, oncePrintErr, logger, "Down")
+	go halfPipe(clientConn, covertConn, &wg, &oncePrintErr, logger, "Up")
+	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down")
 	wg.Wait()
 }
 
@@ -251,7 +226,7 @@ func writePROXYHeader(conn net.Conn, originalIPPort string) error {
 func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
 	maskHostPort := reg.Mask
 	targetHostPort := reg.Covert
-	masterSecret := reg.keys.MasterSecret[:]
+	masterSecret := reg.Keys.MasterSecret[:]
 	originalDst := originalDstIP.String()
 	notReallyOriginalSrc := clientConn.LocalAddr().String()
 
@@ -437,13 +412,13 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(finalClientConn, finalTargetConn, &wg, oncePrintErr, logger, "Up")
+	go halfPipe(finalClientConn, finalTargetConn, &wg, &oncePrintErr, logger, "Up")
 
 	go func() {
 		// wait for readFromServerAndParse to exit first, as it probably haven't seen appdata yet
 		select {
 		case _ = <-serverErrChan:
-			halfPipe(finalClientConn, finalTargetConn, &wg, oncePrintErr, logger, "Down")
+			halfPipe(finalClientConn, finalTargetConn, &wg, &oncePrintErr, logger, "Down")
 		case <-time.After(10 * time.Second):
 			finalClientConn.Close()
 			wg.Done()
