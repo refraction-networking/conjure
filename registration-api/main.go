@@ -110,6 +110,7 @@ func generateZMQPayload(clientToAPIProto *pb.ClientToAPI) ([]byte, error) {
 
 	payload.SharedSecret = clientToAPIProto.Secret
 	payload.RegistrationPayload = clientToAPIProto.RegistrationPayload
+	payload.RegistrationSource = pb.RegistrationSource_API.Enum()
 
 	return proto.Marshal(payload)
 }
