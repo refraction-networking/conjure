@@ -216,7 +216,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) ([
 	var newRegs []*dd.DecoyRegistration
 
 	if parsed.RegistrationPayload.GetV4Support() {
-		reg, err := regManager.NewRegistration(parsed.RegistrationPayload, &conjureKeys, false)
+		reg, err := regManager.NewRegistration(parsed.RegistrationPayload, &conjureKeys, false, parsed.RegistrationSource)
 		if err != nil {
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err
@@ -229,7 +229,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) ([
 	}
 
 	if parsed.RegistrationPayload.GetV6Support() {
-		reg, err := regManager.NewRegistration(parsed.RegistrationPayload, &conjureKeys, true)
+		reg, err := regManager.NewRegistration(parsed.RegistrationPayload, &conjureKeys, true, parsed.RegistrationSource)
 		if err != nil {
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err

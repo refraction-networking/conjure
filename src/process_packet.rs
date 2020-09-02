@@ -20,7 +20,7 @@ use PerCoreGlobal;
 use util::{IpPacket, FSP};
 use elligator;
 use protobuf::{Message, SingularPtrField};
-use signalling::{ClientToStation, ZMQPayload};
+use signalling::{ClientToStation, ZMQPayload, RegistrationSource};
 
 
 const TLS_TYPE_APPLICATION_DATA: u8 = 0x17;
@@ -281,6 +281,7 @@ impl PerCoreGlobal
                 let mut vsp = res.2;
                 zmq_msg.set_shared_secret(shared_secret);
                 zmq_msg.registration_payload = SingularPtrField::some(vsp);
+                zmq_msg.set_registration_source(RegistrationSource::Detector);
 
                 let repr_str = hex::encode(res.0);
                 debug!("New registration {}, {}", flow, repr_str);

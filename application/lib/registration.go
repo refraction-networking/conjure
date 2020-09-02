@@ -116,7 +116,7 @@ func (regManager *RegistrationManager) GetWrappingTransports() map[pb.TransportT
 	return m
 }
 
-func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool) (*DecoyRegistration, error) {
+func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
 
 	phantomAddr, err := regManager.PhantomSelector.Select(
 		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
@@ -126,15 +126,16 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	}
 
 	reg := DecoyRegistration{
-		DarkDecoy:        phantomAddr,
-		Keys:             conjureKeys,
-		Covert:           c2s.GetCovertAddress(),
-		Mask:             c2s.GetMaskedDecoyServerName(),
-		Flags:            c2s.Flags,
-		Transport:        c2s.GetTransport(),
-		DecoyListVersion: c2s.GetDecoyListGeneration(),
-		RegistrationTime: time.Now(),
-		regCount:         0,
+		DarkDecoy:          phantomAddr,
+		Keys:               conjureKeys,
+		Covert:             c2s.GetCovertAddress(),
+		Mask:               c2s.GetMaskedDecoyServerName(),
+		Flags:              c2s.Flags,
+		Transport:          c2s.GetTransport(),
+		DecoyListVersion:   c2s.GetDecoyListGeneration(),
+		RegistrationTime:   time.Now(),
+		RegistrationSource: registrationSource,
+		regCount:           0,
 	}
 
 	return &reg, nil
@@ -162,14 +163,15 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 }
 
 type DecoyRegistration struct {
-	DarkDecoy        net.IP
-	Keys             *ConjureSharedKeys
-	Covert, Mask     string
-	Flags            *pb.RegistrationFlags
-	Transport        pb.TransportType
-	RegistrationTime time.Time
-	DecoyListVersion uint32
-	regCount         int32
+	DarkDecoy          net.IP
+	Keys               *ConjureSharedKeys
+	Covert, Mask       string
+	Flags              *pb.RegistrationFlags
+	Transport          pb.TransportType
+	RegistrationTime   time.Time
+	RegistrationSource *pb.RegistrationSource
+	DecoyListVersion   uint32
+	regCount           int32
 }
 
 // String -- Print a digest of the important identifying information for this registration.
@@ -188,6 +190,7 @@ func (reg *DecoyRegistration) String() string {
 		Transport        pb.TransportType
 		RegTime          time.Time
 		DecoyListVersion uint32
+		Source           *pb.RegistrationSource
 	}{
 		Phantom:          reg.DarkDecoy.String(),
 		SharedSecret:     hex.EncodeToString(reg.Keys.SharedSecret),
@@ -197,6 +200,7 @@ func (reg *DecoyRegistration) String() string {
 		Transport:        reg.Transport,
 		RegTime:          reg.RegistrationTime,
 		DecoyListVersion: reg.DecoyListVersion,
+		Source:           reg.RegistrationSource,
 	}
 	regStats, err := json.Marshal(stats)
 	if err != nil {
