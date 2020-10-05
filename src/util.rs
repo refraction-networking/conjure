@@ -11,6 +11,7 @@ use std::error::Error;
 
 use pnet::packet::Packet;
 use pnet::packet::tcp::{TcpOptionNumbers, TcpPacket};
+use pnet::packet::udp::UdpPacket;
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
 
@@ -27,6 +28,14 @@ impl<'p> IpPacket<'p> {
             IpPacket::V6(v6) => v6.payload(),
         };
         TcpPacket::new(payload)
+    }
+
+    pub fn udp(&'p self) -> Option<UdpPacket<'p>> {
+        let payload = match self {
+            IpPacket::V4(v4) => v4.payload(),
+            IpPacket::V6(v6) => v6.payload(),
+        };
+        UdpPacket::new(payload)
     }
 }
 

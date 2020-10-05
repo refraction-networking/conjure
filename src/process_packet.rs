@@ -10,6 +10,7 @@ use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::{TcpPacket,TcpFlags};
+use pnet::packet::udp::UdpPacket;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use std::u8;
@@ -25,6 +26,8 @@ use signalling::{ClientToStation, ZMQPayload, RegistrationSource};
 
 const TLS_TYPE_APPLICATION_DATA: u8 = 0x17;
 const SPECIAL_PACKET_PAYLOAD: &'static str = "'This must be Thursday,' said Arthur to himself, sinking low over his beer. 'I never could get the hang of Thursdays.'";
+// Domain which this DNS encoding is representing: "xCKe9ECO5lNwXgd5Q25w0C2qUR7whltkA8BbyNokGIp5rzzm0hc7yqbR.FAP3S9w7oLrvvei7IphdwZEKUvF5iZeSdtDFEDc6cIDiv11aTNkOp08k.mRISHvoeSWSgMOjkbR2un5XKpJEZIK31Bc2obUGRIoY2tpxm6RUV5nOU.SuifuqZYAud9A8Mehg70242NyvWi5XDYU1ng2Q5SnFOeNS1GpFMNmobK"
+const SPECIAL_UDP_PAYLOAD: &'static [u8] = b"\x38xCKe9ECO5lNwXgd5Q25w0C2qUR7whltkA8BbyNokGIp5rzzm0hc7yqbR\x38FAP3S9w7oLrvvei7IphdwZEKUvF5iZeSdtDFEDc6cIDiv11aTNkOp08k\x38mRISHvoeSWSgMOjkbR2un5XKpJEZIK31Bc2obUGRIoY2tpxm6RUV5nOU\x38SuifuqZYAud9A8Mehg70242NyvWi5XDYU1ng2Q5SnFOeNS1GpFMNmobK";
 //const SQUID_PROXY_ADDR: &'static str = "127.0.0.1";
 //const SQUID_PROXY_PORT: u16 = 1234;
 
@@ -110,8 +113,21 @@ impl PerCoreGlobal
     {
         self.stats.ipv4_packets_this_period += 1;
 
-        // Ignore packets that aren't TCP
+        // If the packet isn't TCP, first check for a UDP special payload, then return
         if ip_pkt.get_next_level_protocol() != IpNextHeaderProtocols::Tcp {
+            let ip = IpPacket::V4(ip_pkt);
+            match ip.udp() {
+                Some(pkt) => {
+                    // Special payloads are only sent as DNS on port 53
+                    if pkt.get_destination() != 53 {
+                        return;
+                    }
+
+                    let flow = Flow::new_udp(&ip, &pkt);
+                    self.check_udp_test_str(&flow, &pkt);
+                }
+                None => return,
+            }
             return;
         }
         let ip = IpPacket::V4(ip_pkt);
@@ -140,7 +156,21 @@ impl PerCoreGlobal
     {
         self.stats.ipv6_packets_this_period += 1;
 
+        // If the packet isn't TCP, first check for a UDP special payload, then return
         if ip_pkt.get_next_header() != IpNextHeaderProtocols::Tcp {
+            let ip = IpPacket::V6(ip_pkt);
+            match ip.udp() {
+                Some(pkt) => {
+                    // Special payloads are only sent as DNS on port 53
+                    if pkt.get_destination() != 53 {
+                        return;
+                    }
+
+                    let flow = Flow::new_udp(&ip, &pkt);
+                    self.check_udp_test_str(&flow, &pkt);
+                }
+                None => return,
+            }
             return;
         }
         let ip = IpPacket::V6(ip_pkt);
@@ -318,6 +348,14 @@ impl PerCoreGlobal
             },
             Err(_) => {},
         }
+    }
+
+    fn check_udp_test_str(&mut self, flow: &Flow, udp_pkt: &UdpPacket) {
+        if udp_pkt.payload().windows(SPECIAL_UDP_PAYLOAD.len())
+            .any(|sub| sub == SPECIAL_UDP_PAYLOAD) {
+                debug!("Validated UDP traffic from {}:{} to {}:{}",
+                    flow.src_ip, flow.src_port, flow.dst_ip, flow.dst_port)
+            }
     }
 } // impl PerCoreGlobal
 

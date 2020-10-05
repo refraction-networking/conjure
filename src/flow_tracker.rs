@@ -6,6 +6,7 @@ use redis;
 
 use std::net::IpAddr;
 use pnet::packet::tcp::TcpPacket;
+use pnet::packet::udp::UdpPacket;
 
 use util::IpPacket;
 use std::fmt;
@@ -46,6 +47,25 @@ impl Flow
             },
         }
     }
+
+    pub fn new_udp(ip_pkt: &IpPacket, udp_pkt: &UdpPacket) -> Flow
+    {
+        match ip_pkt {
+            IpPacket::V4(pkt) => Flow {
+                src_ip: IpAddr::V4(pkt.get_source()),
+                dst_ip: IpAddr::V4(pkt.get_destination()),
+                src_port: udp_pkt.get_source(),
+                dst_port: udp_pkt.get_destination(),
+            },
+            IpPacket::V6(pkt) => Flow {
+                src_ip: IpAddr::V6(pkt.get_source()),
+                dst_ip: IpAddr::V6(pkt.get_destination()),
+                src_port: udp_pkt.get_source(),
+                dst_port: udp_pkt.get_destination(),
+            },
+        }
+    }
+
     pub fn from_parts(sip: IpAddr, dip: IpAddr, sport: u16, dport: u16) -> Flow
     {
         Flow { src_ip: sip, dst_ip: dip, src_port: sport, dst_port: dport }
