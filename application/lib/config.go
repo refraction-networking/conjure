@@ -19,11 +19,11 @@ type Config struct {
 }
 
 func ParseConfig() (*Config, error) {
-	var c *Config
-	_, err := toml.DecodeFile(os.Getenv("CJ_STATION_CONFIG"), c)
+	var c Config
+	_, err := toml.DecodeFile(os.Getenv("CJ_STATION_CONFIG"), &c)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %v", err)
 	}
 
-	return c, nil
+	return &c, nil
 }

@@ -26,6 +26,9 @@ func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 
 	conjureKeys, err := GenSharedKeys(sharedSecret)
 
+	var testGeneration uint32 = 1119
+	clientToStation.DecoyListGeneration = &testGeneration
+
 	return *clientToStation, conjureKeys
 }
 
@@ -39,7 +42,9 @@ func TestCreateDecoyRegistration(t *testing.T) {
 
 	c2s, keys := mockReceiveFromDetector()
 
-	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support())
+	regSource := pb.RegistrationSource_Detector
+
+	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support(), &regSource)
 	if err != nil {
 		t.Fatalf("Registration failed: %v", err)
 	}
@@ -67,7 +72,7 @@ func TestLivenessCheck(t *testing.T) {
 	reg.DarkDecoy = unroutableIP
 
 	liveness, response = reg.PhantomIsLive()
-	if liveness != false {
+	if liveness == false {
 		t.Fatalf("Unroutable host seen as Live: %v\n", response)
 	}
 
@@ -153,7 +158,9 @@ func TestRegString(t *testing.T) {
 
 	c2s, keys := mockReceiveFromDetector()
 
-	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support())
+	regSource := pb.RegistrationSource_Detector
+
+	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support(), &regSource)
 	if err != nil {
 		t.Fatalf("Registration failed: %v", err)
 	}
