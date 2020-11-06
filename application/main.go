@@ -10,13 +10,14 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"net/http"
 	"os"
 	"syscall"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	zmq "github.com/pebbe/zmq4"
-	dd "github.com/refraction-networking/conjure/application/lib"
+	cj "github.com/refraction-networking/conjure/application/lib"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 
 	"github.com/refraction-networking/conjure/application/transports"
@@ -39,7 +40,7 @@ func getOriginalDst(fd uintptr) (net.IP, error) {
 
 // Handle connection from client
 // NOTE: this is called as a goroutine
-func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) {
+func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) {
 	defer clientConn.Close()
 
 	fd, err := clientConn.File()
@@ -108,7 +109,7 @@ func handleNewConn(regManager *dd.RegistrationManager, clientConn *net.TCPConn) 
 	received := bytes.Buffer{}
 	possibleTransports := regManager.GetWrappingTransports()
 
-	var reg *dd.DecoyRegistration
+	var reg *cj.DecoyRegistration
 	var wrapped net.Conn
 
 readLoop:
@@ -154,10 +155,10 @@ readLoop:
 		}
 	}
 
-	dd.Proxy(reg, wrapped, logger)
+	cj.Proxy(reg, wrapped, logger)
 }
 
-func get_zmq_updates(connectAddr string, regManager *dd.RegistrationManager) {
+func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, conf *cj.Config) {
 	logger := log.New(os.Stdout, "[ZMQ] ", log.Ldate|log.Lmicroseconds)
 	sub, err := zmq.NewSocket(zmq.SUB)
 	if err != nil {
@@ -180,23 +181,65 @@ func get_zmq_updates(connectAddr string, regManager *dd.RegistrationManager) {
 		}
 
 		go func() {
-			// Handle multiple
+			// Handle multiple as receive_zmq_messages returns separate registrations for v4 and v6
 			for _, reg := range newRegs {
-				liveness, response := reg.PhantomIsLive()
-
-				if liveness == false {
-					regManager.AddRegistration(reg)
-					logger.Printf("Adding registration %v: phantom response: %v\n", reg.IDString(), response)
-				} else {
-					logger.Printf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
+				if *reg.RegistrationSource != pb.RegistrationSource_DetectorPrescan {
+					// New registration received over channel that requires liveness scan for the phantom
+					liveness, response := reg.PhantomIsLive()
+					if liveness == true {
+						logger.Printf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
+						continue
+					}
 				}
+
+				if conf.EnableShareOverAPI && *reg.RegistrationSource == pb.RegistrationSource_Detector {
+					// Registration received from decoy-registrar, share over API if enabled.
+					go tryShareRegistrationOverAPI(reg, conf.PreshareEndpoint)
+				}
+
+				// track new registration
+				regManager.AddRegistration(reg)
+				logger.Printf("Adding registration %v, from %s\n", reg.IDString(), *reg.RegistrationSource)
 			}
 		}()
 
 	}
 }
 
-func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) ([]*dd.DecoyRegistration, error) {
+func tryShareRegistrationOverAPI(reg *cj.DecoyRegistration, apiEndpoint string) {
+	c2a := reg.GenerateClientToAPI()
+
+	payload, err := proto.Marshal(c2a)
+	if err != nil {
+		logger.Printf("%v failed to marshal ClientToAPI payload: %v", reg.IDString(), err)
+		return
+	}
+
+	err = executeHTTPRequest(reg, payload, apiEndpoint)
+	if err != nil {
+		logger.Printf("%v failed to share Registration over API: %v", reg.IDString(), err)
+		return
+	}
+	return
+}
+
+func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint string) error {
+	resp, err := http.Post(apiEndpoint, "", bytes.NewReader(payload))
+	if err != nil {
+		logger.Printf("%v failed to do HTTP request to registration endpoint %s: %v", reg.IDString(), apiEndpoint, err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		logger.Printf("%v got non-success response code %d from registration endpoint %v", reg.IDString(), resp.StatusCode, apiEndpoint)
+		return fmt.Errorf("non-success response code %d on %s", resp.StatusCode, apiEndpoint)
+	}
+
+	return nil
+}
+
+func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([]*cj.DecoyRegistration, error) {
 	msg, err := sub.RecvBytes(0)
 	if err != nil {
 		logger.Printf("error reading from ZMQ socket: %v\n", err)
@@ -210,10 +253,10 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *dd.RegistrationManager) ([
 		return nil, err
 	}
 
-	conjureKeys, err := dd.GenSharedKeys(parsed.SharedSecret)
+	conjureKeys, err := cj.GenSharedKeys(parsed.SharedSecret)
 
 	// Register one or both of v4 and v6 based on support specified by the client
-	var newRegs []*dd.DecoyRegistration
+	var newRegs []*cj.DecoyRegistration
 
 	if parsed.RegistrationPayload.GetV4Support() {
 		reg, err := regManager.NewRegistration(parsed.RegistrationPayload, &conjureKeys, false, parsed.RegistrationSource)
@@ -252,14 +295,25 @@ func main() {
 	flag.StringVar(&zmqAddress, "zmq-address", "ipc://@zmq-proxy", "Address of ZMQ proxy")
 	flag.Parse()
 
-	regManager := dd.NewRegistrationManager()
+	regManager := cj.NewRegistrationManager()
 	logger = regManager.Logger
 
+	conf, err := cj.ParseConfig()
+	if err != nil {
+		logger.Fatalf("failed to parse app config: %v", err)
+	}
+
+	// Launch local ZMQ proxy
+	go cj.ZMQProxy(conf.ZMQConfig)
+
+	// Add registration channel options
 	regManager.AddTransport(pb.TransportType_Min, min.Transport{})
 	regManager.AddTransport(pb.TransportType_Obfs4, obfs4.Transport{})
 
-	go get_zmq_updates(zmqAddress, regManager)
+	// Receive registration updates from ZMQ Proxy as subscriber
+	go get_zmq_updates(zmqAddress, regManager, conf)
 
+	// Periodically clean old registrations
 	go func() {
 		for {
 			time.Sleep(3 * time.Minute)
@@ -267,6 +321,7 @@ func main() {
 		}
 	}()
 
+	// listen for and handle incoming proxy traffic
 	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
 	ln, err := net.ListenTCP("tcp", listenAddr)
 	if err != nil {

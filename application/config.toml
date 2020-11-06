@@ -1,3 +1,10 @@
+
+# Bool to enable or disable sharing of registrations over API when received over decoy registrar
+enable_share_over_api = false
+
+# REST endpoint to share decoy registrations.
+preshare_endpoint = ""
+
 # Name of abstract socket to bind proxy to
 socket_name = "zmq-proxy"
 
@@ -15,6 +22,7 @@ heartbeat_interval = 30000
 # Time in milliseconds after sending a heartbeat to wait for
 # a response before the connection is assumed to be dead.
 heartbeat_timeout = 1000
+
 
 ### ZMQ sockets to connect to and subscribe
 

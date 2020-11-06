@@ -14,10 +14,12 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
+	"github.com/gogo/protobuf/proto"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
 const DETECTOR_REG_CHANNEL string = "dark_decoy_map"
+const AES_GCM_TAG_SIZE = 16
 
 type Transport interface {
 	// The human-friendly name of the transport.
@@ -232,6 +234,40 @@ func (reg *DecoyRegistration) IDString() string {
 		return nilID
 	}
 	return fmt.Sprintf("%s", secret[:regIDLen])
+}
+
+func (reg *DecoyRegistration) GenerateClientToStation() *pb.ClientToStation {
+	v4 := false
+	if reg.DarkDecoy.To4() != nil {
+		v4 = true
+	}
+	v6 := !v4
+
+	//[reference] Generate ClientToStation protobuf
+	// transition := pb.C2S_Transition_C2S_SESSION_INIT
+	initProto := &pb.ClientToStation{
+		CovertAddress:       &reg.Covert,
+		DecoyListGeneration: &reg.DecoyListVersion,
+		V6Support:           &v6,
+		V4Support:           &v4,
+		Transport:           &reg.Transport,
+		Flags:               reg.Flags,
+	}
+
+	for (proto.Size(initProto)+AES_GCM_TAG_SIZE)%3 != 0 {
+		initProto.Padding = append(initProto.Padding, byte(0))
+	}
+
+	return initProto
+}
+
+func (reg *DecoyRegistration) GenerateClientToAPI() *pb.ClientToAPI {
+	c2s := reg.GenerateClientToStation()
+	protoPayload := &pb.ClientToAPI{
+		Secret:              reg.Keys.SharedSecret,
+		RegistrationPayload: c2s,
+	}
+	return protoPayload
 }
 
 // PhantomIsLive - Test whether the phantom is live using
