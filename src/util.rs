@@ -160,7 +160,6 @@ impl HKDFKeys
 {
     pub fn new(shared_secret: &[u8]) -> Result<HKDFKeys, Box<hkdf::InvalidLength>>
     {
-        // let salt = "tapdancetapdancetapdancetapdance".as_bytes();
         let salt = "conjureconjureconjureconjure".as_bytes();
         let kdf = hkdf::Hkdf::<sha2::Sha256>::extract(Some(salt), shared_secret);
         let info = [0u8; 0];
@@ -190,12 +189,12 @@ impl HKDFKeys
 pub struct FSP {
     pub vsp_size: u16,
     pub flags: u8,
-    unassigned: [u8; FSP::UNUSED_BYTES],
+    // unassigned: [u8; FSP::UNUSED_BYTES],
     bytes: Vec<u8>,
 }
 
 impl FSP {
-    const UNUSED_BYTES: usize = 3;
+    // const UNUSED_BYTES: usize = 3;
     const USED_BYTES: usize = 3;
     pub const LENGTH: usize = 6;
     pub const FLAG_PROXY_HEADER: u8 = 0x4;
@@ -208,7 +207,7 @@ impl FSP {
             return Err(err)
         } else {
             let vsp_size = ((fixed_size_payload[0] as u16) << 8) + (fixed_size_payload[1] as u16);
-            return Ok( FSP{vsp_size, flags: fixed_size_payload[2], unassigned: [0u8; FSP::UNUSED_BYTES], bytes: fixed_size_payload} )
+            return Ok( FSP{vsp_size, flags: fixed_size_payload[2], bytes: fixed_size_payload} )
         }
     }
 

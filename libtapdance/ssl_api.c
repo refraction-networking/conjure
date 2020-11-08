@@ -47,7 +47,7 @@ int ssl_shutdown(SSL *s, char **out)
     return fetch_data_from_bio(s, out);
 }
 
-int ssl_decrypt(SSL *s, const char *in, int len, char *out)
+int ssl_decrypt(SSL *s, const uint8_t *in, int len, uint8_t *out)
 {
     // WARNING: we expect this to be a memory bio...
     BIO *rbio = SSL_get_rbio(s);
