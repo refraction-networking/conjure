@@ -11,17 +11,17 @@ use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::{TcpPacket,TcpFlags};
 use pnet::packet::udp::UdpPacket;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+// use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use std::u8;
 //use elligator;
 use flow_tracker::{Flow, FlowNoSrcPort};
-use dd_selector::DDIpSelector;
+// use dd_selector::DDIpSelector;
 use PerCoreGlobal;
-use util::{IpPacket, FSP};
+use util::IpPacket;
 use elligator;
 use protobuf::{Message, SingularPtrField};
-use signalling::{ClientToStation, ZMQPayload, RegistrationSource};
+use signalling::{ZMQPayload, RegistrationSource};
 
 
 const TLS_TYPE_APPLICATION_DATA: u8 = 0x17;
@@ -307,8 +307,8 @@ impl PerCoreGlobal
                 // form message for zmq
                 let mut zmq_msg = ZMQPayload::new();
 
-                let mut shared_secret = res.0.to_vec();
-                let mut vsp = res.2;
+                let shared_secret = res.0.to_vec();
+                let vsp = res.2;
                 zmq_msg.set_shared_secret(shared_secret);
                 zmq_msg.registration_payload = SingularPtrField::some(vsp);
                 zmq_msg.set_registration_source(RegistrationSource::Detector);
@@ -358,15 +358,6 @@ impl PerCoreGlobal
             }
     }
 } // impl PerCoreGlobal
-
-fn usize_to_u8(a: usize) -> Option<u8> {
-    if a > u8::MAX as usize {
-        None
-    } else {
-        Some(a as u8)
-    }
-}
-
 
 
 /// Checks if the traffic seen is from a participating station byt checking the

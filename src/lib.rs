@@ -9,12 +9,12 @@ extern crate rand;
 extern crate time;
 extern crate errno;
 extern crate hex;
+extern crate aes_gcm;
 
 extern crate radix; // https://github.com/refraction-networking/radix
 extern crate tuntap; // https://github.com/ewust/tuntap.rs
 extern crate zmq;
 extern crate protobuf;
-#[macro_use]
 extern crate redis;
 
 use std::mem::transmute;
@@ -38,7 +38,7 @@ pub mod logging;
 pub mod c_api;
 pub mod elligator;
 pub mod flow_tracker;
-pub mod dd_selector;
+// pub mod dd_selector;
 pub mod process_packet;
 pub mod util;
 pub mod session;
@@ -47,7 +47,7 @@ pub mod signalling;
 use session::SessionState;
 
 use flow_tracker::{Flow,FlowTracker};
-use dd_selector::{DDIpSelector};
+// use dd_selector::{DDIpSelector};
 
 
 // Global program state for one instance of a TapDance station process.
@@ -63,7 +63,7 @@ pub struct PerCoreGlobal
     // Just some scratch space for mio.
     //events_buf: Events,
 
-    pub dd_ip_selector: DDIpSelector,
+    // pub dd_ip_selector: DDIpSelector,
 
     pub tun: TunTap,
 
@@ -111,7 +111,7 @@ impl PerCoreGlobal
     fn new(priv_key: [u8; 32], the_lcore: i32, workers_socket_addr: &str) -> PerCoreGlobal
     {
 
-        let mut tun = TunTap::new(IFF_TUN, &format!("tun{}", the_lcore)).unwrap();
+        let tun = TunTap::new(IFF_TUN, &format!("tun{}", the_lcore)).unwrap();
         tun.set_up().unwrap();
 
         // Setup ZMQ
@@ -124,7 +124,7 @@ impl PerCoreGlobal
             lcore: the_lcore,
             sessions: HashMap::new(),
             flow_tracker: FlowTracker::new(),
-            dd_ip_selector: DDIpSelector::new(),
+            // dd_ip_selector: DDIpSelector::new(),
             tun: tun,
             stats: PerCoreStats::new(),
             ip_tree: PrefixTree::new(),
@@ -273,7 +273,7 @@ pub extern "C" fn rust_detect_init(lcore_id: i32, ckey: *const u8, workers_socke
     let mut global = PerCoreGlobal::new(key, lcore_id, addr.to_str().unwrap());
     global.read_ip_list();
 
-    debug!("Initialized rust core {}", lcore_id);
+    debug!("Initialized rust core {}", global.lcore);
 
     RustGlobalsStruct { global: unsafe { transmute(Box::new(global)) } }
                         //fail_map: unsafe { transmute(Box::new(fail_map)) },
