@@ -145,6 +145,7 @@ func main() {
 			s.logger.Fatalln("failed to start zmq auth:", err)
 		}
 
+		s.logger.Println(s.StationPublicKeys)
 		zmq.AuthAllow("*")
 		zmq.AuthCurveAdd("*", s.StationPublicKeys...)
 
