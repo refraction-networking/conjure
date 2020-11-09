@@ -1,9 +1,6 @@
-// Proxy used to channel multiple registration sources into
-// one PUB socket for consumption by the application.
-// Specify the absolute location of the config file with
-// the CJ_PROXY_CONFIG environment variable.
+package lib
 
-package main
+//
 
 import (
 	"fmt"
@@ -13,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	zmq "github.com/pebbe/zmq4"
 )
 
-type config struct {
+// ZMQConfig - Configuration options relevant to the ZMQ Proxy utility
+type ZMQConfig struct {
 	SocketName        string         `toml:"socket_name"`
 	ConnectSockets    []socketConfig `toml:"connect_sockets"`
 	PrivateKeyPath    string         `toml:"privkey_path"`
@@ -36,19 +33,13 @@ type proxy struct {
 	logger *log.Logger
 }
 
-func main() {
+// ZMQProxy - centralizing proxy used to channel multiple registration sources into
+// one PUB socket for consumption by the application.
+// Specify the absolute location of the config file with
+// the CJ_PROXY_CONFIG environment variable.
+func ZMQProxy(c ZMQConfig) {
 	var p proxy
 	p.logger = log.New(os.Stdout, "[ZMQ_PROXY] ", log.Ldate|log.Lmicroseconds)
-	configFile, err := ioutil.ReadFile(os.Getenv("CJ_PROXY_CONFIG"))
-	if err != nil {
-		p.logger.Fatalln("failed to open config file:", err)
-	}
-
-	var c config
-	err = toml.Unmarshal(configFile, &c)
-	if err != nil {
-		p.logger.Fatalln("failed to parse config file:", err)
-	}
 
 	privkey, err := ioutil.ReadFile(c.PrivateKeyPath)
 	if err != nil {
