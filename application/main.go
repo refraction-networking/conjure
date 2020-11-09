@@ -183,6 +183,9 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 		go func() {
 			// Handle multiple as receive_zmq_messages returns separate registrations for v4 and v6
 			for _, reg := range newRegs {
+				if reg == nil || reg.RegistrationSource == nil {
+					continue
+				}
 				if *reg.RegistrationSource != pb.RegistrationSource_DetectorPrescan {
 					// New registration received over channel that requires liveness scan for the phantom
 					liveness, response := reg.PhantomIsLive()
