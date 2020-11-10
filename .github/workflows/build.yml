@@ -56,7 +56,7 @@ jobs:
           echo "--------------------------------------"
 
           # Install Golang
-          sudo rm -rf /usr/local/go
+          sudo rm -rf /usr/local/go /usr/bin/go
           wget -q https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz
           sudo tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
           export PATH=$PATH:/usr/local/go/bin
@@ -72,6 +72,8 @@ jobs:
           echo "--------------------------------------"
 
           # Build it
+          pwd
+          cd $GOPATH/src/github.com/refraction-networking/conjure
           make
           echo "Station successfully built"
 
