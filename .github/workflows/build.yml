@@ -29,9 +29,9 @@ jobs:
           GO_VERSION: 1.15.4
           # RUSTVERSION: 1.47.0
         run: |
-          ls -la
+          cd go/src/github.com/refraction-networking/conjure
+          
           # Apt deps
-          pwd
           sudo apt-get update
           sudo apt-get install protobuf-compiler gcc curl git wget -y -q
           sudo apt-get install libzmq3-dev redis-server libssl-dev pkg-config libgmp3-dev -y -q
