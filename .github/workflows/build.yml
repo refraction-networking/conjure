@@ -29,6 +29,7 @@ jobs:
           GO_VERSION: 1.15.4
           # RUSTVERSION: 1.47.0
         run: |
+          echo "HOME=$HOME"
           export GOPATH=`pwd`/go
           echo "GOPATH=$GOPATH"
           cd go/src/github.com/refraction-networking/conjure
@@ -36,13 +37,11 @@ jobs:
           # Apt deps
           sudo apt-get update
           sudo apt-get install protobuf-compiler gcc curl git wget -y -q
-          sudo apt-get install libzmq3-dev redis-server libssl-dev pkg-config libgmp3-dev -y -q
+          sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
           echo "Apt dependencies installed"
           echo "--------------------------------------"
           
           # Build PF_Ring libraries
-          ls -la .
-          ls PF_RING
           cd PF_RING/userland/lib && ./configure && make
           cd PF_RING/userland/libpcap && ./configure && make
           echo "PF_Ring libraries successfully built"
@@ -63,8 +62,9 @@ jobs:
           export PATH=$PATH:/usr/local/go/bin
           export GOROOT="/usr/local/go"
           go version
+          which go
           # temp fix before transition to redis v8
-          go get -u github.com/go-redis/redis || true && cd $GOPATH/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master
+          # go get -u github.com/go-redis/redis || true && cd $GOPATH/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master
           go get -u github.com/BurntSushi/toml || true
           go get -u github.com/refraction-networking/conjure/application/... || true 
           go get -u github.com/refraction-networking/conjure/registration-api/... || true 
