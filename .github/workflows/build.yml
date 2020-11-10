@@ -30,8 +30,9 @@ jobs:
           # RUSTVERSION: 1.47.0
         run: |
           # Apt deps
+          sudo apt-get update
           sudo apt-get install protobuf-compiler gcc curl git wget -y -q
-          sudo apt-get update && apt-get install libzmq3-dev redis-server libssl-dev pkg-config libgmp3-dev -y -q
+          sudo apt-get install libzmq3-dev redis-server libssl-dev pkg-config libgmp3-dev -y -q
           
           # Build PF_Ring libraries
           cd PF_RING/userland/lib && ./configure && make
