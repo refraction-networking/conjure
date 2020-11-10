@@ -20,7 +20,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
         with:
-          path: '$GOPATH/src/github.com/refraction-networking/conjure'
+          path: '$HOME/go/src/github.com/refraction-networking/conjure'
           submodules: 'recursive'
         
       # Build the conjure station
@@ -30,6 +30,7 @@ jobs:
           # RUSTVERSION: 1.47.0
         run: |
           # Apt deps
+          pwd
           sudo apt-get update
           sudo apt-get install protobuf-compiler gcc curl git wget -y -q
           sudo apt-get install libzmq3-dev redis-server libssl-dev pkg-config libgmp3-dev -y -q
