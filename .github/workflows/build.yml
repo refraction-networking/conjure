@@ -36,6 +36,8 @@ jobs:
           echo "Apt dependencies installed\n--------------------------------------"
           
           # Build PF_Ring libraries
+          ls
+          ls PF_RING
           cd PF_RING/userland/lib && ./configure && make
           cd PF_RING/userland/libpcap && ./configure && make
           echo "PF_Ring libraries successfully built\n--------------------------------------"
@@ -48,6 +50,7 @@ jobs:
           echo "Rust successfully installed\n--------------------------------------"
           
           # Install Golang
+          sudo rm -rf /usr/local/go
           wget -q https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz
           sudo tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
           export PATH=$PATH:/usr/local/go/bin
@@ -57,11 +60,8 @@ jobs:
           go version
           # temp fix before transition to redis v8
           go get -u github.com/go-redis/redis || true && cd /root/go/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master
-          echo "test location 1"
           go get -u github.com/BurntSushi/toml || true
-          echo "test location 2"
           go get -u github.com/refraction-networking/conjure/application/... || true 
-          echo "test location 3"
           go get -u github.com/refraction-networking/conjure/registration-api/... || true 
           echo "Golang and go dependencies successfully installed\n--------------------------------------"
     
