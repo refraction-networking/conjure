@@ -20,7 +20,6 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
         with:
-          path: go/src/github.com/refraction-networking/
           submodules: recursive
         
       # Build the conjure station
@@ -29,6 +28,10 @@ jobs:
           GO_VERSION: 1.15.4
           # RUSTVERSION: 1.47.0
         run: |
+          export GOPATH=`pwd`
+          echo $GOPATH
+          mkdir -p go/src/github.com/refraction-networking/
+          cp -r . go/src/github.com/refraction-networking/
           cd go/src/github.com/refraction-networking/conjure
           
           # Apt deps
@@ -60,8 +63,6 @@ jobs:
           sudo tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
           export PATH=$PATH:/usr/local/go/bin
           export GOROOT="/usr/local/go"
-          mkdir -p $HOME/go
-          export GOPATH=$HOME/go
           go version
           # temp fix before transition to redis v8
           go get -u github.com/go-redis/redis || true && cd /root/go/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master
