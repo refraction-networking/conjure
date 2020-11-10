@@ -29,7 +29,7 @@ jobs:
           GO_VERSION: 1.15.4
           # RUSTVERSION: 1.47.0
         run: |
-          cd $HOME/go/src/github.com/refraction-networking/
+          ls -la
           # Apt deps
           pwd
           sudo apt-get update
