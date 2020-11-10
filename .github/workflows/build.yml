@@ -20,6 +20,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
         with:
+          path: go/src/github.com/refraction-networking/
           submodules: recursive
         
       # Build the conjure station
@@ -28,11 +29,10 @@ jobs:
           GO_VERSION: 1.15.4
           # RUSTVERSION: 1.47.0
         run: |
+          sudo apt install tree
+          tree
           export GOPATH=`pwd`
           echo $GOPATH
-          mkdir -p go/src/github.com/refraction-networking/
-          cp -r . go/src/github.com/refraction-networking/
-          cd go/src/github.com/refraction-networking/conjure
           
           # Apt deps
           sudo apt-get update
