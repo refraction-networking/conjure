@@ -30,18 +30,24 @@ jobs:
           # RUSTVERSION: 1.47.0
         run: |
           # Apt deps
+          pwd
           sudo apt-get update
           sudo apt-get install protobuf-compiler gcc curl git wget -y -q
           sudo apt-get install libzmq3-dev redis-server libssl-dev pkg-config libgmp3-dev -y -q
+          echo "Apt dependencies installed"
           
           # Build PF_Ring libraries
           cd PF_RING/userland/lib && ./configure && make
           cd PF_RING/userland/libpcap && ./configure && make
+          pwd
+          echo "PF_Ring libraries successfully built"
           
           # Install rust
           curl https://sh.rustup.rs -sSf -o install_rust.sh; sh install_rust.sh -y;          
           cargo install protobuf-codegen
           export PATH=$PATH:$HOME/.cargo/bin
+          source $HOME/.cargo/env
+          echo "Rust successfully installed"
           
           # Install Golang
           wget -q https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz
@@ -55,9 +61,12 @@ jobs:
           go get -u github.com/go-redis/redis || true && cd /root/go/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master
           go get -u github.com/BurntSushi/toml || true
           go get -u github.com/refraction-networking/conjure/... || true 
-          
+          echo "Golang and go dependencies successfully installed"
+    
           # Build it
           make
+          echo "Station successfully built"
+
       
       - name: Save Build artifacts
         uses: actions/upload-artifact@v2
