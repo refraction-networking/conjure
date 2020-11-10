@@ -30,24 +30,22 @@ jobs:
           # RUSTVERSION: 1.47.0
         run: |
           # Apt deps
-          pwd
           sudo apt-get update
           sudo apt-get install protobuf-compiler gcc curl git wget -y -q
           sudo apt-get install libzmq3-dev redis-server libssl-dev pkg-config libgmp3-dev -y -q
-          echo "Apt dependencies installed"
+          echo "Apt dependencies installed\n--------------------------------------"
           
           # Build PF_Ring libraries
           cd PF_RING/userland/lib && ./configure && make
           cd PF_RING/userland/libpcap && ./configure && make
-          pwd
-          echo "PF_Ring libraries successfully built"
+          echo "PF_Ring libraries successfully built\n--------------------------------------"
           
           # Install rust
           curl https://sh.rustup.rs -sSf -o install_rust.sh; sh install_rust.sh -y;          
           cargo install protobuf-codegen
           export PATH=$PATH:$HOME/.cargo/bin
           source $HOME/.cargo/env
-          echo "Rust successfully installed"
+          echo "Rust successfully installed\n--------------------------------------"
           
           # Install Golang
           wget -q https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz
@@ -59,9 +57,13 @@ jobs:
           go version
           # temp fix before transition to redis v8
           go get -u github.com/go-redis/redis || true && cd /root/go/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master
+          echo "test location 1"
           go get -u github.com/BurntSushi/toml || true
-          go get -u github.com/refraction-networking/conjure/... || true 
-          echo "Golang and go dependencies successfully installed"
+          echo "test location 2"
+          go get -u github.com/refraction-networking/conjure/application/... || true 
+          echo "test location 3"
+          go get -u github.com/refraction-networking/conjure/registration-api/... || true 
+          echo "Golang and go dependencies successfully installed\n--------------------------------------"
     
           # Build it
           make
