@@ -29,10 +29,8 @@ jobs:
           GO_VERSION: 1.15.4
           # RUSTVERSION: 1.47.0
         run: |
-          sudo apt install tree
-          tree -I PF_RING
-          export GOPATH=`pwd`
-          echo $GOPATH
+          export GOPATH=`pwd`/go
+          echo "GOPATH=$GOPATH"
           cd go/src/github.com/refraction-networking/conjure
           
           # Apt deps
@@ -66,7 +64,7 @@ jobs:
           export GOROOT="/usr/local/go"
           go version
           # temp fix before transition to redis v8
-          go get -u github.com/go-redis/redis || true && cd /root/go/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master
+          go get -u github.com/go-redis/redis || true && cd $GOPATH/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master
           go get -u github.com/BurntSushi/toml || true
           go get -u github.com/refraction-networking/conjure/application/... || true 
           go get -u github.com/refraction-networking/conjure/registration-api/... || true 
