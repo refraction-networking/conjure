@@ -42,8 +42,9 @@ jobs:
           echo "--------------------------------------"
           
           # Build PF_Ring libraries
-          cd PF_RING/userland/lib && ./configure && make
-          cd PF_RING/userland/libpcap && ./configure && make
+          cd $GOPATH/src/github.com/refraction-networking/conjure/PF_RING/userland/lib && ./configure && make
+          cd $GOPATH/src/github.com/refraction-networking/conjure/PF_RING/userland/libpcap && ./configure && make
+          cd $GOPATH/src/github.com/refraction-networking/conjure
           echo "PF_Ring libraries successfully built"
           echo "--------------------------------------"
 
@@ -64,8 +65,10 @@ jobs:
           go version
           which go
           # temp fix before transition to redis v8
-          # go get -u github.com/go-redis/redis || true && cd $GOPATH/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master
+          go get -u github.com/go-redis/redis || true && cd $GOPATH/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master && cd -
+          pwd
           go get -u github.com/BurntSushi/toml || true
+          go get -d -u -t github.com/refraction-networking/gotapdance/... || true
           go get -u github.com/refraction-networking/conjure/application/... || true 
           go get -u github.com/refraction-networking/conjure/registration-api/... || true 
           echo "Golang and go dependencies successfully installed"
