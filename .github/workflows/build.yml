@@ -20,8 +20,8 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
         with:
-          path: '$HOME/go/src/github.com/refraction-networking/conjure'
-          submodules: 'recursive'
+          path: ${HOME}/go/src/github.com/refraction-networking/
+          submodules: recursive
         
       # Build the conjure station
       - name: Install Conjure build dependencies 
@@ -34,22 +34,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install protobuf-compiler gcc curl git wget -y -q
           sudo apt-get install libzmq3-dev redis-server libssl-dev pkg-config libgmp3-dev -y -q
-          echo "Apt dependencies installed\n--------------------------------------"
+          echo "Apt dependencies installed"
+          echo "--------------------------------------"
           
           # Build PF_Ring libraries
-          ls
+          ls -la .
           ls PF_RING
           cd PF_RING/userland/lib && ./configure && make
           cd PF_RING/userland/libpcap && ./configure && make
-          echo "PF_Ring libraries successfully built\n--------------------------------------"
-          
+          echo "PF_Ring libraries successfully built"
+          echo "--------------------------------------"
+
           # Install rust
           curl https://sh.rustup.rs -sSf -o install_rust.sh; sh install_rust.sh -y;          
           cargo install protobuf-codegen
           export PATH=$PATH:$HOME/.cargo/bin
           source $HOME/.cargo/env
-          echo "Rust successfully installed\n--------------------------------------"
-          
+          echo "Rust successfully installed"
+          echo "--------------------------------------"
+
           # Install Golang
           sudo rm -rf /usr/local/go
           wget -q https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz
@@ -64,8 +67,9 @@ jobs:
           go get -u github.com/BurntSushi/toml || true
           go get -u github.com/refraction-networking/conjure/application/... || true 
           go get -u github.com/refraction-networking/conjure/registration-api/... || true 
-          echo "Golang and go dependencies successfully installed\n--------------------------------------"
-    
+          echo "Golang and go dependencies successfully installed"
+          echo "--------------------------------------"
+
           # Build it
           make
           echo "Station successfully built"
