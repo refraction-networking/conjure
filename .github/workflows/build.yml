@@ -74,6 +74,7 @@ jobs:
 
           # Build it
           cd $GOPATH/src/github.com/refraction-networking/conjure
+          make
           echo "Station successfully built"
           cp dark-decoy application/application registration-api/registration-api $GITHUB_WORKSPACE
           
