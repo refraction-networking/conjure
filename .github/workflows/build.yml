@@ -76,15 +76,15 @@ jobs:
           cd $GOPATH/src/github.com/refraction-networking/conjure
           make
           echo "Station successfully built"
-          cp dark-decoy application/application registration-api/registration-api $GITHUB_WORKSPACE
+          mkdir -p  $GITHUB_WORKSPACE/bin
+          cp dark-decoy application/application registration-api/registration-api $GITHUB_WORKSPACE/bin
+          cd $GITHUB_WORKSPACE && tar -czf conjure-station_${{ github.ref }}.tar.gz bin
           
-
       
       - name: Save Build artifacts
         uses: actions/upload-artifact@v2
         with:
+          name: conjure-${{ github.ref }}
           path: |
-            dark-decoy
-            application
-            registration-api
+            conjure-station_${{ github.ref }}.tar.gz
             
