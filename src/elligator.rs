@@ -92,7 +92,7 @@ pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> Result<([u8; 32
             };
 
 
-            // Initialize AES cipher
+            // Initialize FSP AES cipher
             let key = GenericArray::from_slice(&keys.fsp_key);
             let cipher = Aes128Gcm::new(key);
             let nonce = GenericArray::from_slice(&keys.fsp_iv);
@@ -135,6 +135,11 @@ pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> Result<([u8; 32
                     in_offset += 4;
                     out_offset += 3;
                 }
+
+            // Initialize VSP AES cipher
+            let key = GenericArray::from_slice(&keys.vsp_key);
+            let cipher = Aes128Gcm::new(key);
+            let nonce = GenericArray::from_slice(&keys.vsp_iv);
 
             // Decrypt the Variable size payload using the size specified in the fixed sized payload
             let variable_size_payload = match cipher.decrypt(nonce, &encrypted_variable_size_payload[0..vsp_size as usize]) {
