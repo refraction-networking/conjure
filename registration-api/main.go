@@ -10,6 +10,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/golang/protobuf/proto"
+	"github.com/gorilla/mux"
 	zmq "github.com/pebbe/zmq4"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
@@ -75,7 +76,7 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.logger.Printf("received successful registration for covert address %s\n", payload.RegistrationPayload.GetCovertAddress())
+	// s.logger.Printf("received successful registration for covert address %s\n", payload.RegistrationPayload.GetCovertAddress())
 
 	zmqPayload, err := generateZMQPayload(payload)
 	if err != nil {
@@ -144,6 +145,7 @@ func main() {
 			s.logger.Fatalln("failed to start zmq auth:", err)
 		}
 
+		s.logger.Println(s.StationPublicKeys)
 		zmq.AuthAllow("*")
 		zmq.AuthCurveAdd("*", s.StationPublicKeys...)
 
@@ -162,8 +164,10 @@ func main() {
 	s.logger.Println("bound zmq socket")
 
 	s.logger.Printf("starting HTTP API on port %d\n", s.APIPort)
-	// TODO: possibly use router with more complex features?
-	// For now net/http does the job
-	http.HandleFunc("/register", s.register)
+
+	r := mux.NewRouter()
+	r.HandleFunc("/register", s.register)
+	http.Handle("/", r)
+
 	s.logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", s.APIPort), nil))
 }

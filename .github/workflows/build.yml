@@ -1,0 +1,90 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the master branch
+on:
+  push:
+    branches: [ master, staging ]
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-18.04
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+        with:
+          path: go/src/github.com/refraction-networking/conjure
+          submodules: recursive
+        
+      # Build the conjure station
+      - name: Install Conjure build dependencies and Build Station Elements
+        env: 
+          GO_VERSION: 1.15.4
+          # RUSTVERSION: 1.47.0
+        run: |
+          echo "HOME=$HOME"
+          export GOPATH=`pwd`/go
+          echo "GOPATH=$GOPATH"
+          cd go/src/github.com/refraction-networking/conjure
+          
+          # Apt deps
+          sudo apt-get update
+          sudo apt-get install protobuf-compiler gcc curl git wget -y -q
+          sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
+          echo "Apt dependencies installed"
+          echo "--------------------------------------"
+          
+          # Build PF_Ring libraries
+          cd $GOPATH/src/github.com/refraction-networking/conjure/PF_RING/userland/lib && ./configure && make
+          cd $GOPATH/src/github.com/refraction-networking/conjure/PF_RING/userland/libpcap && ./configure && make
+          cd $GOPATH/src/github.com/refraction-networking/conjure
+          echo "PF_Ring libraries successfully built"
+          echo "--------------------------------------"
+
+          # Install rust
+          curl https://sh.rustup.rs -sSf -o install_rust.sh; sh install_rust.sh -y;          
+          cargo install protobuf-codegen
+          export PATH=$PATH:$HOME/.cargo/bin
+          source $HOME/.cargo/env
+          echo "Rust successfully installed"
+          echo "--------------------------------------"
+
+          # Install Golang
+          sudo rm -rf /usr/local/go /usr/bin/go
+          wget -q https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz
+          sudo tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
+          export PATH=$PATH:/usr/local/go/bin
+          export GOROOT="/usr/local/go"
+          go version
+          # temp fix before transition to redis v8
+          go get -u github.com/go-redis/redis || true && cd $GOPATH/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master && cd -
+          go get -u github.com/BurntSushi/toml || true
+          go get -d -u -t github.com/refraction-networking/gotapdance/... || true
+          go get -u github.com/refraction-networking/conjure/application/... || true 
+          go get -u github.com/refraction-networking/conjure/registration-api/... || true 
+          echo "Golang and go dependencies successfully installed"
+          echo "--------------------------------------"
+
+          # Build it
+          cd $GOPATH/src/github.com/refraction-networking/conjure
+          make
+          echo "Station successfully built"
+          mkdir -p  $GITHUB_WORKSPACE/bin
+          cp dark-decoy application/application registration-api/registration-api $GITHUB_WORKSPACE/bin
+          cd $GITHUB_WORKSPACE && tar -czf conjure-station.tar.gz bin
+          
+      
+      - name: Save Build artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: conjure-station.tar.gz
+          path: |
+            conjure-station.tar.gz
+            

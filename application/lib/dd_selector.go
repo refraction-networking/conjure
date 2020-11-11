@@ -42,7 +42,11 @@ func (sc *SubnetConfig) getSubnets(seed []byte, weighted bool) []string {
 		for _, cjSubnet := range sc.WeightedSubnets {
 			choices = append(choices, wr.Choice{Item: cjSubnet.Subnets, Weight: uint(cjSubnet.Weight)})
 		}
-		c := wr.NewChooser(choices...)
+		c, err := wr.NewChooser(choices...)
+		if err != nil {
+			return out
+		}
+
 		out = c.Pick().([]string)
 	} else {
 
