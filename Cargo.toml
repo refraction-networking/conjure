@@ -17,7 +17,7 @@ crate-type = ["rlib", "staticlib"]
 [dependencies]
 lazycell = "^0.5"
 libc = "~0.2"
-rust-crypto = "^0.2"
+aes-gcm = "0.8.0"
 time = "0.1.*"
 pnet = "0.26.0"
 arrayref = "0.3.2"

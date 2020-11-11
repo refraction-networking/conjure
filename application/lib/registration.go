@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 

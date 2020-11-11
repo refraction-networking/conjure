@@ -144,7 +144,7 @@ const TIMEOUT_DARK_DECOYS_NS: u64 = 300 * 1000 * 1000 * 1000;
 fn get_redis_conn() -> redis::Connection
 {
     let client = redis::Client::open("redis://127.0.0.1/").expect("Can't open Redis");
-    let mut con = client.get_connection().expect("Can't get Redis connection");;
+    let con = client.get_connection().expect("Can't get Redis connection");
     con
 }
 

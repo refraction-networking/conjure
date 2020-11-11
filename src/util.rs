@@ -128,10 +128,10 @@ pub fn mem_used_kb() -> u64
         if let Ok(line) = l {
             if line.contains("VmRSS") {
                 let (_, vmrss_gone) = line.split_at(6);
-                let starts_at_number = vmrss_gone.trim_left();
+                let starts_at_number = vmrss_gone.trim_start();
                 if let Some(kb_ind) = starts_at_number.find("kB") {
                     let (kb_gone, _) = starts_at_number.split_at(kb_ind);
-                    let just_number = kb_gone.trim_right();
+                    let just_number = kb_gone.trim_end();
                     if let Ok(as_u64) = just_number.parse::<u64>() {
                         return as_u64;
                     }
@@ -160,7 +160,6 @@ impl HKDFKeys
 {
     pub fn new(shared_secret: &[u8]) -> Result<HKDFKeys, Box<hkdf::InvalidLength>>
     {
-        // let salt = "tapdancetapdancetapdancetapdance".as_bytes();
         let salt = "conjureconjureconjureconjure".as_bytes();
         let kdf = hkdf::Hkdf::<sha2::Sha256>::extract(Some(salt), shared_secret);
         let info = [0u8; 0];
@@ -190,25 +189,25 @@ impl HKDFKeys
 pub struct FSP {
     pub vsp_size: u16,
     pub flags: u8,
-    unassigned: [u8; FSP::UNUSED_BYTES],
+    // unassigned: [u8; FSP::UNUSED_BYTES],
     bytes: Vec<u8>,
 }
 
 impl FSP {
-    const UNUSED_BYTES: usize = 3;
+    // const UNUSED_BYTES: usize = 3;
     const USED_BYTES: usize = 3;
     pub const LENGTH: usize = 6;
     pub const FLAG_PROXY_HEADER: u8 = 0x4;
     pub const FLAG_UPLOAD_ONLY:  u8 = (1 << 7);
 	pub const FLAG_USE_TIL:      u8 = (1 << 0);
     
-    pub fn fromVec(fixed_size_payload: Vec<u8>) -> Result<FSP, Box<Error>> {
+    pub fn from_vec(fixed_size_payload: Vec<u8>) -> Result<FSP, Box<dyn Error>> {
         if fixed_size_payload.len() < FSP::USED_BYTES {
-            let err: Box<Error> = From::from("Not Enough bytes to parse FSP".to_string());
+            let err: Box<dyn Error> = From::from("Not Enough bytes to parse FSP".to_string());
             return Err(err)
         } else {
             let vsp_size = ((fixed_size_payload[0] as u16) << 8) + (fixed_size_payload[1] as u16);
-            return Ok( FSP{vsp_size, flags: fixed_size_payload[2], unassigned: [0u8; FSP::UNUSED_BYTES], bytes: fixed_size_payload} )
+            return Ok( FSP{vsp_size, flags: fixed_size_payload[2], bytes: fixed_size_payload} )
         }
     }
 

@@ -35,9 +35,9 @@ int ssl_encrypt(SSL *s, const char *in, int len, char **out);
 
 int ssl_shutdown(SSL *s, char **out);
 
-int ssl_decrypt(SSL *s, const char *in, int len, char *out);
+int ssl_decrypt(SSL *s, const uint8_t *in, int len, uint8_t *out);
 
-#define SSL_ST_OK TLS_ST_OK
+// #define SSL_ST_OK TLS_ST_OK
 
 #ifdef __cplusplus
 }
