@@ -24,7 +24,7 @@ jobs:
           submodules: recursive
         
       # Build the conjure station
-      - name: Install Conjure build dependencies 
+      - name: Install Conjure build dependencies and Build Station Elements
         env: 
           GO_VERSION: 1.15.4
           # RUSTVERSION: 1.47.0
@@ -63,10 +63,8 @@ jobs:
           export PATH=$PATH:/usr/local/go/bin
           export GOROOT="/usr/local/go"
           go version
-          which go
           # temp fix before transition to redis v8
           go get -u github.com/go-redis/redis || true && cd $GOPATH/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master && cd -
-          pwd
           go get -u github.com/BurntSushi/toml || true
           go get -d -u -t github.com/refraction-networking/gotapdance/... || true
           go get -u github.com/refraction-networking/conjure/application/... || true 
@@ -75,10 +73,10 @@ jobs:
           echo "--------------------------------------"
 
           # Build it
-          pwd
           cd $GOPATH/src/github.com/refraction-networking/conjure
-          make
           echo "Station successfully built"
+          cp dark-decoy application/application registration-api/registration-api $GITHUB_WORKSPACE
+          
 
       
       - name: Save Build artifacts
@@ -86,6 +84,6 @@ jobs:
         with:
           path: |
             dark-decoy
-            application/application
-            registration-api/registration-api
+            application
+            registration-api
             
