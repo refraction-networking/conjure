@@ -78,13 +78,13 @@ jobs:
           echo "Station successfully built"
           mkdir -p  $GITHUB_WORKSPACE/bin
           cp dark-decoy application/application registration-api/registration-api $GITHUB_WORKSPACE/bin
-          cd $GITHUB_WORKSPACE && tar -czf conjure-station_${{ github.ref }}.tar.gz bin
+          cd $GITHUB_WORKSPACE && tar -czf conjure-station.tar.gz bin
           
       
       - name: Save Build artifacts
         uses: actions/upload-artifact@v2
         with:
-          name: conjure-${{ github.ref }}
+          name: ${{ github.ref }}/conjure-station
           path: |
-            conjure-station_${{ github.ref }}.tar.gz
+            conjure-station.tar.gz
             
