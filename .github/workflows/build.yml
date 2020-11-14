@@ -37,8 +37,9 @@ jobs:
           sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
           sudo add-apt-repository universe 
           wget https://packages.ntop.org/apt-stable/18.04/all/apt-ntop-stable.deb 
-          sudo apt install ./apt-ntop-stable.deb 
-          sudo apt install pfring
+          sudo apt-get install ./apt-ntop-stable.deb 
+          sudo apt-get update
+          sudo apt-get install pfring
           echo "Apt dependencies installed"
           echo "--------------------------------------"
           
