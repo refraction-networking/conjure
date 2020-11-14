@@ -31,24 +31,21 @@ jobs:
           GO_VERSION: 1.15.4
           # RUSTVERSION: 1.47.0
         run: |
-          echo "HOME=$HOME"
-          export GOPATH=`pwd`/go
-          echo "GOPATH=$GOPATH"
-          cd go/src/github.com/refraction-networking/conjure
-          
           # Apt deps
           sudo apt-get update
           sudo apt-get install protobuf-compiler gcc curl git wget -y -q
           sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
+          apt-get install software-properties-common wget add-apt-repository universe 
+          wget https://packages.ntop.org/apt-stable/18.04/all/apt-ntop-stable.deb 
+          sudo apt install ./apt-ntop-stable.deb 
+          sudo apt install pfring
           echo "Apt dependencies installed"
           echo "--------------------------------------"
           
-          # Build PF_Ring libraries
-          cd $GOPATH/src/github.com/refraction-networking/conjure/PF_RING/userland/lib && ./configure && make
-          cd $GOPATH/src/github.com/refraction-networking/conjure/PF_RING/userland/libpcap && ./configure && make
-          cd $GOPATH/src/github.com/refraction-networking/conjure
-          echo "PF_Ring libraries successfully built"
-          echo "--------------------------------------"
+          echo "HOME=$HOME"
+          export GOPATH=`pwd`/go
+          echo "GOPATH=$GOPATH"
+          cd go/src/github.com/refraction-networking/conjure
 
           # Install rust
           curl https://sh.rustup.rs -sSf -o install_rust.sh; sh install_rust.sh -y;          
