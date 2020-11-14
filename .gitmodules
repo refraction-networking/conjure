@@ -1,4 +1,0 @@
-[submodule "PF_RING"]
-	branch = 7.4.0-stable
-	path = PF_RING
-	url = https://github.com/ntop/PF_RING.git
