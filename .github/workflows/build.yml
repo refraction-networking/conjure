@@ -78,7 +78,7 @@ jobs:
           make
           echo "Station successfully built"
           mkdir -p  $GITHUB_WORKSPACE/bin
-          cp dark-decoy application/application registration-api/registration-api $GITHUB_WORKSPACE/bin
+          cp conjure application/application registration-api/registration-api $GITHUB_WORKSPACE/bin
           cd $GITHUB_WORKSPACE && tar -czf conjure-station.tar.gz bin
           
       
