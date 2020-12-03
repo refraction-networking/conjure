@@ -108,10 +108,11 @@ func (s *server) sendToZMQ(message []byte) error {
 
 func generateZMQPayload(clientToAPIProto *pb.ClientToAPI) ([]byte, error) {
 	payload := &pb.ZMQPayload{}
+	source := pb.RegistrationSource_API
 
 	payload.SharedSecret = clientToAPIProto.Secret
 	payload.RegistrationPayload = clientToAPIProto.RegistrationPayload
-	payload.RegistrationSource = pb.RegistrationSource_API.Enum()
+	payload.RegistrationSource = &source
 
 	return proto.Marshal(payload)
 }
