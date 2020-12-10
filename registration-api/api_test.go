@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -29,7 +30,7 @@ func init() {
 	hex.Decode(secret, secretHex)
 }
 
-func generateClientToAPIPayload() (c2API *pb.ClientToAPI, marshaledc2API []byte) {
+func generateC2SWrapperPayload() (c2API *pb.C2SWrapper, marshaledc2API []byte) {
 	generation := uint32(0)
 	covert := "1.2.3.4:1234"
 
@@ -49,8 +50,8 @@ func generateClientToAPIPayload() (c2API *pb.ClientToAPI, marshaledc2API []byte)
 		},
 	}
 
-	c2API = &pb.ClientToAPI{
-		Secret:              secret,
+	c2API = &pb.C2SWrapper{
+		SharedSecret:        secret,
 		RegistrationPayload: &c2s,
 	}
 
@@ -59,15 +60,15 @@ func generateClientToAPIPayload() (c2API *pb.ClientToAPI, marshaledc2API []byte)
 	return
 }
 
-func TestZMQPayloadGeneration(t *testing.T) {
-	c2API, _ := generateClientToAPIPayload()
+func TestC2SWrapperProcessing(t *testing.T) {
+	c2API, _ := generateC2SWrapperPayload()
 
-	zmqPayload, err := generateZMQPayload(c2API)
+	zmqPayload, err := processC2SWrapper(c2API, []byte(net.ParseIP("127.0.0.1").To16()))
 	if err != nil {
 		t.Fatalf("failed to generate ZMQ payload: expected nil, got %v", err)
 	}
 
-	var retrievedPayload pb.ZMQPayload
+	var retrievedPayload pb.C2SWrapper
 	err = proto.Unmarshal(zmqPayload, &retrievedPayload)
 	if err != nil {
 		t.Fatalf("failed to unmarshal ClientToStation from ZMQ payload: expected nil, got %v", err)
@@ -88,6 +89,31 @@ func TestZMQPayloadGeneration(t *testing.T) {
 	if retrievedPayload.RegistrationPayload.GetV6Support() != c2API.RegistrationPayload.GetV6Support() {
 		t.Fatalf("v6 support in retrieved ClientToStation doesn't match: expected %v, got %v", c2API.RegistrationPayload.GetV6Support(), retrievedPayload.RegistrationPayload.GetV6Support())
 	}
+
+	if net.IP(retrievedPayload.GetRegistrationAddress()).String() != "127.0.0.1" {
+		t.Fatalf("source address in retrieved C2Swrapper doesn't match: expected %v, got %v", "127.0.0.1", net.IP(retrievedPayload.GetRegistrationAddress()).String())
+	}
+
+	if retrievedPayload.GetRegistrationSource() != pb.RegistrationSource_API {
+		t.Fatalf("Registration source in retrieved C2Swrapper doesn't match: expected %v, got %v", pb.RegistrationSource_API, retrievedPayload.GetRegistrationSource())
+	}
+
+	altSource := pb.RegistrationSource_DetectorPrescan
+	c2API.RegistrationSource = &altSource
+	zmqPayload, err = processC2SWrapper(c2API, []byte(net.ParseIP("127.0.0.1").To16()))
+	if err != nil {
+		t.Fatalf("failed to generate ZMQ payload: expected nil, got %v", err)
+	}
+
+	var retrievedPayload1 pb.C2SWrapper
+	err = proto.Unmarshal(zmqPayload, &retrievedPayload1)
+	if err != nil {
+		t.Fatalf("failed to unmarshal ClientToStation from ZMQ payload: expected nil, got %v", err)
+	}
+
+	if retrievedPayload1.GetRegistrationSource() != pb.RegistrationSource_DetectorPrescan {
+		t.Fatalf("Registration source in retrieved C2Swrapper doesn't match: expected %v, got %v", pb.RegistrationSource_DetectorPrescan, retrievedPayload.GetRegistrationSource())
+	}
 }
 
 func TestCorrectRegistration(t *testing.T) {
@@ -102,7 +128,7 @@ func TestCorrectRegistration(t *testing.T) {
 		logger:          logger,
 	}
 
-	_, body := generateClientToAPIPayload()
+	_, body := generateC2SWrapperPayload()
 	r := httptest.NewRequest("POST", "/register", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -136,6 +162,34 @@ func TestIncorrectMethod(t *testing.T) {
 	}
 }
 
+func TestParseIP(t *testing.T) {
+	resp := parseIP("127.0.0.1")
+	if resp.String() != "127.0.0.1" {
+		t.Fatalf("parseIP unable to parse raw ipv4 address")
+	}
+
+	resp = parseIP("127.0.0.1:443")
+	if resp.String() != "127.0.0.1" {
+		t.Fatalf("parseIP unable to parse raw ipv4 address with port")
+	}
+
+	resp = parseIP("2001::1")
+	if resp.String() != "2001::1" {
+		t.Fatalf("parseIP unable to parse raw ipv6 address")
+	}
+
+	resp = parseIP("[2001::1]")
+	if resp != nil {
+		t.Fatal("parseIP unable to parse ipv6 address with brackets")
+	}
+
+	resp = parseIP("[2001::1]:80")
+	if resp.String() != "2001::1" {
+		t.Fatal("parseIP unable to parse ipv6 address with port")
+	}
+
+}
+
 func TestEmptyBody(t *testing.T) {
 	s := server{
 		messageAccepter: nil,
@@ -163,7 +217,7 @@ func TestBadAccepter(t *testing.T) {
 		logger:          logger,
 	}
 
-	_, body := generateClientToAPIPayload()
+	_, body := generateC2SWrapperPayload()
 	r := httptest.NewRequest("POST", "/register", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -195,7 +249,7 @@ func BenchmarkRegistration(b *testing.B) {
 	}
 	s.messageAccepter = s.sendToZMQ
 
-	_, body := generateClientToAPIPayload()
+	_, body := generateC2SWrapperPayload()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {

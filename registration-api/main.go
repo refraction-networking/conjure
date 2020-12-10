@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -69,7 +70,7 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload := &pb.ClientToAPI{}
+	payload := &pb.C2SWrapper{}
 	if err = proto.Unmarshal(in, payload); err != nil {
 		s.logger.Println("failed to decode protobuf body:", err)
 		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
@@ -78,7 +79,12 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 
 	// s.logger.Printf("received successful registration for covert address %s\n", payload.RegistrationPayload.GetCovertAddress())
 
-	zmqPayload, err := generateZMQPayload(payload)
+	clientAddr := parseIP(requestIP)
+	if err != nil {
+		s.logger.Println("failed to get source address:", err)
+	}
+
+	zmqPayload, err := processC2SWrapper(payload, []byte(clientAddr.To16()))
 	if err != nil {
 		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -106,15 +112,54 @@ func (s *server) sendToZMQ(message []byte) error {
 	return err
 }
 
-func generateZMQPayload(clientToAPIProto *pb.ClientToAPI) ([]byte, error) {
-	payload := &pb.ZMQPayload{}
-	source := pb.RegistrationSource_API
+func processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr []byte) ([]byte, error) {
+	payload := &pb.C2SWrapper{}
 
-	payload.SharedSecret = clientToAPIProto.Secret
+	if clientToAPIProto == nil {
+		return nil, fmt.Errorf("unable to process nil C2SWrapper")
+	}
+
+	// If the channel that the registration was received over was not specified
+	// in the C2SWrapper set it here as API.
+	if clientToAPIProto.RegistrationSource == nil {
+		source := pb.RegistrationSource_API
+		payload.RegistrationSource = &source
+	} else {
+		source := clientToAPIProto.GetRegistrationSource()
+		payload.RegistrationSource = &source
+	}
+
+	// If the address that the registration was received from was NOT set in the
+	// C2SWrapper set it here to the source address of the API request.
+	if clientToAPIProto.RegistrationAddress == nil {
+		payload.RegistrationAddress = clientAddr
+	}
+
+	payload.SharedSecret = clientToAPIProto.SharedSecret
 	payload.RegistrationPayload = clientToAPIProto.RegistrationPayload
-	payload.RegistrationSource = &source
 
 	return proto.Marshal(payload)
+}
+
+// parseIP attempts to parse the IP address of a request from string format wether
+// it has a port attached to it or not. Returns nil if parse fails.
+func parseIP(addrPort string) *net.IP {
+
+	// by default format from r.RemoteAddr is host:port
+	host, _, err := net.SplitHostPort(addrPort)
+	if err != nil || host == "" {
+		// if the request ends up as host only this should catch it.
+		addr := net.ParseIP(addrPort)
+		if addr == nil {
+			return nil
+		}
+		return &addr
+	}
+
+	addr := net.ParseIP(host)
+
+	return &addr
+
 }
 
 func main() {
