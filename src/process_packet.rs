@@ -310,7 +310,7 @@ impl PerCoreGlobal
                 let shared_secret = res.0.to_vec();
                 let vsp = res.2;
                 zmq_msg.set_shared_secret(shared_secret);
-                zmq_msg.registration_payload = SingularPtrField::some(vsp);
+                zmq_msg.set_registration_payload(vsp);
                 zmq_msg.set_registration_source(RegistrationSource::Detector);
 
                 let repr_str = hex::encode(res.0);
