@@ -251,7 +251,6 @@ func (reg *DecoyRegistration) GenerateClientToStation() *pb.ClientToStation {
 		V6Support:           &v6,
 		V4Support:           &v4,
 		Transport:           &reg.Transport,
-		Flags:               reg.Flags,
 	}
 
 	for (proto.Size(initProto)+AES_GCM_TAG_SIZE)%3 != 0 {
@@ -261,13 +260,25 @@ func (reg *DecoyRegistration) GenerateClientToStation() *pb.ClientToStation {
 	return initProto
 }
 
-func (reg *DecoyRegistration) GenerateClientToAPI() *pb.ClientToAPI {
+func (reg *DecoyRegistration) GenerateC2SWrapper() *pb.C2SWrapper {
+	boolHolder := true
 	c2s := reg.GenerateClientToStation()
-	protoPayload := &pb.ClientToAPI{
-		Secret:              reg.Keys.SharedSecret,
+	c2s.Flags.Prescanned = &boolHolder
+	source := pb.RegistrationSource_DetectorPrescan
+
+	protoPayload := &pb.C2SWrapper{
+		SharedSecret:        reg.Keys.SharedSecret,
 		RegistrationPayload: c2s,
+		RegistrationSource:  &source,
 	}
 	return protoPayload
+}
+
+func (reg *DecoyRegistration) PreScanned() bool {
+	if reg == nil || reg.Flags == nil {
+		return false
+	}
+	return reg.Flags.GetPrescanned()
 }
 
 // PhantomIsLive - Test whether the phantom is live using

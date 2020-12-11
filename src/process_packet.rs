@@ -21,7 +21,7 @@ use PerCoreGlobal;
 use util::IpPacket;
 use elligator;
 use protobuf::{Message, SingularPtrField};
-use signalling::{ZMQPayload, RegistrationSource};
+use signalling::{C2SWrapper, RegistrationSource};
 
 
 const TLS_TYPE_APPLICATION_DATA: u8 = 0x17;
@@ -305,12 +305,12 @@ impl PerCoreGlobal
                 // res.2 => variable size payload (c2s)
 
                 // form message for zmq
-                let mut zmq_msg = ZMQPayload::new();
+                let mut zmq_msg = C2SWrapper::new();
 
                 let shared_secret = res.0.to_vec();
                 let vsp = res.2;
                 zmq_msg.set_shared_secret(shared_secret);
-                zmq_msg.registration_payload = SingularPtrField::some(vsp);
+                zmq_msg.set_registration_payload(vsp);
                 zmq_msg.set_registration_source(RegistrationSource::Detector);
 
                 let repr_str = hex::encode(res.0);

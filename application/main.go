@@ -186,7 +186,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 				if reg == nil || reg.RegistrationSource == nil {
 					continue
 				}
-				if *reg.RegistrationSource != pb.RegistrationSource_DetectorPrescan {
+				if !reg.PreScanned() {
 					// New registration received over channel that requires liveness scan for the phantom
 					liveness, response := reg.PhantomIsLive()
 					if liveness == true {
@@ -210,11 +210,11 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 }
 
 func tryShareRegistrationOverAPI(reg *cj.DecoyRegistration, apiEndpoint string) {
-	c2a := reg.GenerateClientToAPI()
+	c2a := reg.GenerateC2SWrapper()
 
 	payload, err := proto.Marshal(c2a)
 	if err != nil {
-		logger.Printf("%v failed to marshal ClientToAPI payload: %v", reg.IDString(), err)
+		logger.Printf("%v failed to marshal C2SWrapper payload: %v", reg.IDString(), err)
 		return
 	}
 
@@ -249,7 +249,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 		return nil, err
 	}
 
-	parsed := &pb.ZMQPayload{}
+	parsed := &pb.C2SWrapper{}
 	err = proto.Unmarshal(msg, parsed)
 	if err != nil {
 		logger.Printf("Failed to unmarshall ClientToStation: %v", err)
