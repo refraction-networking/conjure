@@ -342,8 +342,7 @@ impl PerCoreGlobal
         match str::from_utf8(tcp_pkt.payload()) {
             Ok(payload) => {
                 if payload == SPECIAL_PACKET_PAYLOAD {
-                    debug!("Validated traffic from {}:{} to {}:{}", 
-                        flow.src_ip, flow.src_port, flow.dst_ip, flow.dst_port)
+                    debug!("Validated traffic from {}", flow)
                 }
             },
             Err(_) => {},
@@ -353,8 +352,7 @@ impl PerCoreGlobal
     fn check_udp_test_str(&mut self, flow: &Flow, udp_pkt: &UdpPacket) {
         if udp_pkt.payload().windows(SPECIAL_UDP_PAYLOAD.len())
             .any(|sub| sub == SPECIAL_UDP_PAYLOAD) {
-                debug!("Validated UDP traffic from {}:{} to {}:{}",
-                    flow.src_ip, flow.src_port, flow.dst_ip, flow.dst_port)
+                debug!("Validated UDP traffic from {}", flow)
             }
     }
 } // impl PerCoreGlobal
