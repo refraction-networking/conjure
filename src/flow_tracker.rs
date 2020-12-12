@@ -4,7 +4,7 @@ use std::thread;
 use time::precise_time_ns;
 use redis;
 
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
 
@@ -24,7 +24,9 @@ pub struct Flow
 
 impl fmt::Display for Flow {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:{} -> {}:{}", self.src_ip, self.src_port, self.dst_ip, self.dst_port)
+        let socket_src = SocketAddr::new(self.src_ip, self.src_port);
+        let socket_dst = SocketAddr::new(self.dst_ip, self.dst_port);
+        write!(f, "{} -> {}",socket_src, socket_dst)
     }
 }
 
@@ -312,5 +314,41 @@ impl FlowTracker
     {
         let map = self.dark_decoy_flows.read().expect("RwLock Broken");
         map.len()
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_flow_display_format() {
+        use Flow;
+        use std::fmt::Write;
+        use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+        let flow6 = Flow {
+            src_ip: IpAddr::V6(Ipv6Addr::new(0x2601, 0, 0, 0, 0, 0, 0xabcd, 0xef00)),
+            dst_ip: IpAddr::V6(Ipv6Addr::new(0x26ff, 0, 0, 0, 0, 0, 0, 1)),
+            src_port: 5672,
+            dst_port: 443,
+        };
+
+        let mut output = String::new();
+        write!(&mut output, "{}", flow6)
+            .expect("Error occurred while trying to write in String");
+        assert_eq!(output, "[2601::abcd:ef00]:5672 -> [26ff::1]:443");
+
+
+        let flow4 = Flow {
+            src_ip: IpAddr::V4(Ipv4Addr::new(10,22,0,1)),
+            dst_ip: IpAddr::V4(Ipv4Addr::new(128,138,97,6)),
+            src_port: 5672,
+            dst_port: 443,
+        };
+
+        let mut output = String::new();
+        write!(&mut output, "{}", flow4)
+            .expect("Error occurred while trying to write in String");
+        assert_eq!(output, "10.22.0.1:5672 -> 128.138.97.6:443");
     }
 }
