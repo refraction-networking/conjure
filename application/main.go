@@ -257,6 +257,15 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 	}
 
 	conjureKeys, err := cj.GenSharedKeys(parsed.SharedSecret)
+	if parsed.GetRegistrationAddress() == nil {
+		parsed.RegistrationAddress = make([]byte, 16, 16)
+	}
+	if parsed.GetDecoyAddress() == nil {
+		parsed.DecoyAddress = make([]byte, 16, 16)
+	}
+
+	sourceAddr := net.IP(parsed.RegistrationAddress)
+	decoyAddr := net.IP(parsed.DecoyAddress)
 
 	// Register one or both of v4 and v6 based on support specified by the client
 	var newRegs []*cj.DecoyRegistration
@@ -269,7 +278,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 		}
 
 		// log phantom IP, shared secret, ipv6 support
-		logger.Printf("New registration: %v\n", reg.String())
+		logger.Printf("New registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
 
 		newRegs = append(newRegs, reg)
 	}
@@ -282,7 +291,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 		}
 
 		// log phantom IP, shared secret, ipv6 support
-		logger.Printf("New registration: %v\n", reg.String())
+		logger.Printf("New registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
 		newRegs = append(newRegs, reg)
 	}
 
