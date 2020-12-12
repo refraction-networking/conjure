@@ -72,6 +72,20 @@ impl Flow
     {
         Flow { src_ip: sip, dst_ip: dip, src_port: sport, dst_port: dport }
     }
+
+    pub fn export_addrs(&self) -> (Vec<u8>, Vec<u8>) {
+        let src_bytes = match self.src_ip {
+            IpAddr::V4(ip) => ip.octets().to_vec(),
+            IpAddr::V6(ip) => ip.octets().to_vec(),
+        };
+
+        let dst_bytes = match self.dst_ip {
+            IpAddr::V4(ip) => ip.octets().to_vec(),
+            IpAddr::V6(ip) => ip.octets().to_vec(),
+        };
+
+        return (src_bytes, dst_bytes)
+    }
 }
 
 // All members are stored in host-order, even src_ip and dst_ip.
@@ -86,7 +100,9 @@ pub struct FlowNoSrcPort
 
 impl fmt::Display for FlowNoSrcPort {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:* -> {}:{}", self.src_ip, self.dst_ip, self.dst_port)
+        let socket_src = SocketAddr::new(self.src_ip, 0);
+        let socket_dst = SocketAddr::new(self.dst_ip, self.dst_port);
+        write!(f, "{} -> {}",socket_src, socket_dst)
     }
 }
 
@@ -111,6 +127,20 @@ impl FlowNoSrcPort {
         FlowNoSrcPort { src_ip: sip, dst_ip: dip, dst_port: dport }
     }
     pub fn from_flow(f: &Flow) -> FlowNoSrcPort {FlowNoSrcPort{src_ip: f.src_ip, dst_ip: f.dst_ip, dst_port: f.dst_port}}
+
+    pub fn export_addrs(&self) -> (Vec<u8>, Vec<u8>) {
+        let src_bytes = match self.src_ip {
+            IpAddr::V4(ip) => ip.octets().to_vec(),
+            IpAddr::V6(ip) => ip.octets().to_vec(),
+        };
+
+        let dst_bytes = match self.dst_ip {
+            IpAddr::V4(ip) => ip.octets().to_vec(),
+            IpAddr::V6(ip) => ip.octets().to_vec(),
+        };
+
+        return (src_bytes, dst_bytes)
+    }
 }
 
 pub struct SchedEvent
@@ -320,15 +350,14 @@ impl FlowTracker
 
 #[cfg(test)]
 mod tests {
+    use flow_tracker::{FlowNoSrcPort, Flow};
+    use std::fmt::Write;
+
     #[test]
     fn test_flow_display_format() {
-        use Flow;
-        use std::fmt::Write;
-        use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-
         let flow6 = Flow {
-            src_ip: IpAddr::V6(Ipv6Addr::new(0x2601, 0, 0, 0, 0, 0, 0xabcd, 0xef00)),
-            dst_ip: IpAddr::V6(Ipv6Addr::new(0x26ff, 0, 0, 0, 0, 0, 0, 1)),
+            src_ip: "2601::abcd:ef00".parse().unwrap(),
+            dst_ip: "26ff::1".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
         };
@@ -340,8 +369,8 @@ mod tests {
 
 
         let flow4 = Flow {
-            src_ip: IpAddr::V4(Ipv4Addr::new(10,22,0,1)),
-            dst_ip: IpAddr::V4(Ipv4Addr::new(128,138,97,6)),
+            src_ip: "10.22.0.1".parse().unwrap(),
+            dst_ip: "128.138.97.6".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
         };
@@ -350,5 +379,56 @@ mod tests {
         write!(&mut output, "{}", flow4)
             .expect("Error occurred while trying to write in String");
         assert_eq!(output, "10.22.0.1:5672 -> 128.138.97.6:443");
+
+
+        let flow_n6 = FlowNoSrcPort {
+            src_ip: "2601::abcd:ef00".parse().unwrap(),
+            dst_ip: "26ff::1".parse().unwrap(),
+            dst_port: 443,
+        };
+
+        let mut output = String::new();
+        write!(&mut output, "{}", flow_n6)
+            .expect("Error occurred while trying to write in String");
+        assert_eq!(output, "[2601::abcd:ef00]:0 -> [26ff::1]:443");
+
+
+        let flow_n4 = FlowNoSrcPort {
+            src_ip: "10.22.0.1".parse().unwrap(),
+            dst_ip: "128.138.97.6".parse().unwrap(),
+            dst_port: 443,
+        };
+
+        let mut output = String::new();
+        write!(&mut output, "{}", flow_n4)
+            .expect("Error occurred while trying to write in String");
+        assert_eq!(output, "10.22.0.1:0 -> 128.138.97.6:443");
+    }
+
+    #[test]
+    fn test_flow_export_addrs() {
+        let flow = Flow {
+            src_ip: "10.22.0.1".parse().unwrap(),
+            dst_ip: "128.138.97.6".parse().unwrap(),
+            src_port: 5672,
+            dst_port: 443,
+        };
+
+        let (src, dst) =  flow.export_addrs();
+        print!("{:?} {:?}", src, dst);
+        assert_eq!(vec![10,22,0,1], src);
+        assert_eq!(vec![128,138,97,6], dst);
+
+        let flow6 = Flow {
+            src_ip: "2601::abcd:ef00".parse().unwrap(),
+            dst_ip: "26ff::1".parse().unwrap(),
+            src_port: 5672,
+            dst_port: 443,
+        };
+
+        let (src, dst) =  flow6.export_addrs();
+        print!("{:?} {:?}", src, dst);
+        assert_eq!(vec![0x26, 0x01, 0,0,0,0,0,0,0,0,0,0,0xab, 0xcd, 0xef, 0x00], src);
+        assert_eq!(vec![0x26, 0xff, 0,0,0,0,0,0,0,0,0,0,   0,    0,    0,    1], dst);
     }
 }
