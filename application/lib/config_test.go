@@ -17,6 +17,8 @@ func TestConjureLibParseConfig(t *testing.T) {
 		t.Fatalf("No sockets provided to test parse")
 	}
 
-	// t.Logf("%+v", conf)
-	return
+	if len(conf.covertBlocklist) == 0 {
+		t.Fatalf("failed to parse blocklist")
+	}
+
 }

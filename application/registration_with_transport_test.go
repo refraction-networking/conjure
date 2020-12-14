@@ -38,7 +38,8 @@ func TestManagerFunctionality(t *testing.T) {
 	rm.AddTransport(pb.TransportType_Min, min.Transport{})
 	c2s.Transport = &transport
 
-	newReg, err := rm.NewRegistration(c2s, &keys, c2s.GetV6Support())
+	source := pb.RegistrationSource_Detector
+	newReg, err := rm.NewRegistration(c2s, &keys, c2s.GetV6Support(), &source)
 	if err != nil {
 		t.Fatalf("Registration failed: %v", err)
 	}

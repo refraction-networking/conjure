@@ -183,7 +183,12 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 		go func() {
 			// Handle multiple as receive_zmq_messages returns separate registrations for v4 and v6
 			for _, reg := range newRegs {
-				if reg == nil || reg.RegistrationSource == nil {
+				// If registration is trying to connect to a dark decoy that is blocklisted continue
+				if conf.IsBlocklisted(reg.DarkDecoy) {
+					continue
+				}
+
+				if reg == nil {
 					continue
 				}
 				if !reg.PreScanned() {
