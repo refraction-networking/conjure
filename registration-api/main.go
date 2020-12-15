@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -18,6 +19,7 @@ import (
 
 const (
 	// The length of the shared secret sent by the client in bytes.
+	regIDLen     = 16
 	SecretLength = 32
 )
 
@@ -84,7 +86,7 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 		s.logger.Println("failed to get source address:", err)
 	}
 
-	zmqPayload, err := processC2SWrapper(payload, []byte(clientAddr.To16()))
+	zmqPayload, err := s.processC2SWrapper(payload, []byte(clientAddr.To16()))
 	if err != nil {
 		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -112,16 +114,20 @@ func (s *server) sendToZMQ(message []byte) error {
 	return err
 }
 
-func processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr []byte) ([]byte, error) {
+func (s *server) processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr []byte) ([]byte, error) {
 	payload := &pb.C2SWrapper{}
 
 	if clientToAPIProto == nil {
 		return nil, fmt.Errorf("unable to process nil C2SWrapper")
 	}
 
+	if len(clientToAPIProto.GetSharedSecret()) < regIDLen/2 {
+		return nil, fmt.Errorf("shared secret undefined or insufficient length")
+	}
+
 	// If the channel that the registration was received over was not specified
 	// in the C2SWrapper set it here as API.
-	if clientToAPIProto.RegistrationSource == nil {
+	if clientToAPIProto.GetRegistrationSource() == pb.RegistrationSource_Unspecified {
 		source := pb.RegistrationSource_API
 		payload.RegistrationSource = &source
 	} else {
@@ -135,9 +141,10 @@ func processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr []byte) ([]by
 		payload.RegistrationAddress = clientAddr
 	}
 
-	payload.SharedSecret = clientToAPIProto.SharedSecret
-	payload.RegistrationPayload = clientToAPIProto.RegistrationPayload
+	payload.SharedSecret = clientToAPIProto.GetSharedSecret()
+	payload.RegistrationPayload = clientToAPIProto.GetRegistrationPayload()
 
+	s.logger.Printf("forwarding registration %s source %v \n", hex.EncodeToString(payload.GetSharedSecret())[:regIDLen], payload.GetRegistrationSource())
 	return proto.Marshal(payload)
 }
 

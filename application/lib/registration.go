@@ -263,7 +263,15 @@ func (reg *DecoyRegistration) GenerateClientToStation() *pb.ClientToStation {
 func (reg *DecoyRegistration) GenerateC2SWrapper() *pb.C2SWrapper {
 	boolHolder := true
 	c2s := reg.GenerateClientToStation()
-	c2s.Flags.Prescanned = &boolHolder
+
+	if c2s.GetFlags() == nil {
+		c2.Flags = &pb.RegistrationFlags{
+			Prescanned: &boolHolder,
+		}
+	} else {
+		c2s.Flags.Prescanned = &boolHolder
+	}
+
 	source := pb.RegistrationSource_DetectorPrescan
 
 	protoPayload := &pb.C2SWrapper{
