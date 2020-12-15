@@ -265,7 +265,7 @@ func (reg *DecoyRegistration) GenerateC2SWrapper() *pb.C2SWrapper {
 	c2s := reg.GenerateClientToStation()
 
 	if c2s.GetFlags() == nil {
-		c2.Flags = &pb.RegistrationFlags{
+		c2s.Flags = &pb.RegistrationFlags{
 			Prescanned: &boolHolder,
 		}
 	} else {
