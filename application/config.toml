@@ -39,6 +39,15 @@ covert_blocklist = [
 ]
 
 
+# List of addresses to filter out traffic from the detector. The primary functionality
+# of this is to prevent liveness testing from other stations in a conjure cluster from
+# clogging up the logs with connection notifications. To accomplish this goal add all station
+# ip addresses to this list when configuring station detectors.
+detector_filter_list = [
+    "127.0.0.1",
+    "::1",
+]
+
 ### ZMQ sockets to connect to and subscribe
 
 ## Registration API
