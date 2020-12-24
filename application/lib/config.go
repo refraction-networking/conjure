@@ -44,6 +44,9 @@ func ParseConfig() (*Config, error) {
 }
 
 func (c *Config) IsBlocklisted(addr net.IP) bool {
+	if addr == nil {
+		return true
+	}
 	for _, subnet := range c.covertBlocklist {
 		if subnet.Contains(addr) {
 			return true

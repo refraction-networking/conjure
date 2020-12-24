@@ -29,4 +29,8 @@ func TestConjureLibParseConfig(t *testing.T) {
 	if conf.IsBlocklisted(net.ParseIP("1.2.3.4")) {
 		t.Fatalf("Blocklist error - 1.2.3.4 should not be blocked")
 	}
+
+	if conf.IsBlocklisted(nil) {
+		t.Fatalf("Not sure what will happen.")
+	}
 }

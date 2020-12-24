@@ -183,14 +183,16 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 		go func() {
 			// Handle multiple as receive_zmq_messages returns separate registrations for v4 and v6
 			for _, reg := range newRegs {
-				// If registration is trying to connect to a dark decoy that is blocklisted continue
-				if conf.IsBlocklisted(reg.DarkDecoy) {
-					continue
-				}
-
 				if reg == nil {
 					continue
 				}
+
+				// If registration is trying to connect to a dark decoy that is blocklisted continue
+				covert := net.ParseIP(reg.Covert)
+				if covert == nil || conf.IsBlocklisted(covert) {
+					continue
+				}
+
 				if !reg.PreScanned() {
 					// New registration received over channel that requires liveness scan for the phantom
 					liveness, response := reg.PhantomIsLive()
