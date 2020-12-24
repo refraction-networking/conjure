@@ -48,7 +48,7 @@ extern {
                     sys_secs: *mut i64, sys_micros: *mut i64);
 
     fn open_reporter(fname: *const u8); // const char *
-    // fn write_reporter(msg: *const u8, len: size_t);
+    fn write_reporter(msg: *const u8, len: size_t);
 
     // Send a TCP RST to daddr:dport, spoofed from saddr:sport. seq must be the
     // last ACK val observed from the targeted host, so it won't ignore the ACK.
