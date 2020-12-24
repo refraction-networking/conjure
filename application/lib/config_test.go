@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"net"
 	"os"
 	"testing"
 )
@@ -17,6 +18,19 @@ func TestConjureLibParseConfig(t *testing.T) {
 		t.Fatalf("No sockets provided to test parse")
 	}
 
-	// t.Logf("%+v", conf)
-	return
+	if len(conf.covertBlocklist) == 0 {
+		t.Fatalf("failed to parse blocklist")
+	}
+
+	if !conf.IsBlocklisted(net.ParseIP("127.0.0.1")) {
+		t.Fatalf("Blocklist error - 127.0.0.1 should be blocked")
+	}
+
+	if conf.IsBlocklisted(net.ParseIP("1.2.3.4")) {
+		t.Fatalf("Blocklist error - 1.2.3.4 should not be blocked")
+	}
+
+	if conf.IsBlocklisted(nil) {
+		t.Fatalf("Not sure what will happen.")
+	}
 }

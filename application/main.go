@@ -183,9 +183,18 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 		go func() {
 			// Handle multiple as receive_zmq_messages returns separate registrations for v4 and v6
 			for _, reg := range newRegs {
-				if reg == nil || reg.RegistrationSource == nil {
+				if reg == nil {
 					continue
 				}
+
+				// If registration is trying to connect to a dark decoy that is blocklisted continue
+				covertStr, _, err := net.SplitHostPort(reg.Covert)
+				covert := net.ParseIP(covertStr)
+				if covert == nil || err != nil || conf.IsBlocklisted(covert) {
+					logger.Printf("Dropping reg, malformed or blocklisted covert: %v, %s, %v", reg.IDString(), reg.Covert, err)
+					continue
+				}
+
 				if !reg.PreScanned() {
 					// New registration received over channel that requires liveness scan for the phantom
 					liveness, response := reg.PhantomIsLive()
@@ -257,6 +266,15 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 	}
 
 	conjureKeys, err := cj.GenSharedKeys(parsed.SharedSecret)
+	if parsed.GetRegistrationAddress() == nil {
+		parsed.RegistrationAddress = make([]byte, 16, 16)
+	}
+	if parsed.GetDecoyAddress() == nil {
+		parsed.DecoyAddress = make([]byte, 16, 16)
+	}
+
+	sourceAddr := net.IP(parsed.RegistrationAddress)
+	decoyAddr := net.IP(parsed.DecoyAddress)
 
 	// Register one or both of v4 and v6 based on support specified by the client
 	var newRegs []*cj.DecoyRegistration
@@ -269,7 +287,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 		}
 
 		// log phantom IP, shared secret, ipv6 support
-		logger.Printf("New registration: %v\n", reg.String())
+		logger.Printf("New registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
 
 		newRegs = append(newRegs, reg)
 	}
@@ -282,7 +300,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 		}
 
 		// log phantom IP, shared secret, ipv6 support
-		logger.Printf("New registration: %v\n", reg.String())
+		logger.Printf("New registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
 		newRegs = append(newRegs, reg)
 	}
 

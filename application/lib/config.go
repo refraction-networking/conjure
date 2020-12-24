@@ -2,6 +2,7 @@ package lib
 
 import (
 	"fmt"
+	"net"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -16,6 +17,10 @@ type Config struct {
 
 	// REST endpoint to share decoy registrations.
 	PreshareEndpoint string `toml:"preshare_endpoint"`
+
+	// List of subnets with disallowed covert addresses.
+	CovertBlocklist []string `toml:"covert_blocklist"`
+	covertBlocklist []*net.IPNet
 }
 
 func ParseConfig() (*Config, error) {
@@ -25,5 +30,27 @@ func ParseConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to load config: %v", err)
 	}
 
+	c.covertBlocklist = []*net.IPNet{}
+	for _, subnet := range c.CovertBlocklist {
+		_, ipNet, err := net.ParseCIDR(subnet)
+		if err != nil {
+			continue
+		}
+
+		c.covertBlocklist = append(c.covertBlocklist, ipNet)
+	}
+
 	return &c, nil
+}
+
+func (c *Config) IsBlocklisted(addr net.IP) bool {
+	if addr == nil {
+		return true
+	}
+	for _, subnet := range c.covertBlocklist {
+		if subnet.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }

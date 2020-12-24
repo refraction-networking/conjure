@@ -20,7 +20,7 @@ use flow_tracker::{Flow, FlowNoSrcPort};
 use PerCoreGlobal;
 use util::IpPacket;
 use elligator;
-use protobuf::{Message, SingularPtrField};
+use protobuf::{Message};
 use signalling::{C2SWrapper, RegistrationSource};
 
 
@@ -308,10 +308,14 @@ impl PerCoreGlobal
                 let mut zmq_msg = C2SWrapper::new();
 
                 let shared_secret = res.0.to_vec();
+                let (src,decoy) = flow.export_addrs();
                 let vsp = res.2;
+
                 zmq_msg.set_shared_secret(shared_secret);
                 zmq_msg.set_registration_payload(vsp);
                 zmq_msg.set_registration_source(RegistrationSource::Detector);
+                zmq_msg.set_decoy_address(decoy);
+                zmq_msg.set_registration_address(src);
 
                 let repr_str = hex::encode(res.0);
                 debug!("New registration {}, {}", flow, repr_str);

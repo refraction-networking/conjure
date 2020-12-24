@@ -214,11 +214,11 @@ pub fn c_open_reporter(fname: String)
 */
 
 #[cfg(test)]
-pub fn c_write_reporter(msg: String)
+pub fn c_write_reporter(_msg: String)
 {panic!("YOU ARE TESTING AND THIS FUNCTION IS NOT MOCKED YET!");}
 #[cfg(test)]
-pub fn c_tcp_send_rst_pkt(saddr: u32, daddr: u32,
-                          sport: u16, dport: u16, seq: u32)
+pub fn c_tcp_send_rst_pkt(_saddr: u32, _daddr: u32,
+                          _sport: u16, _dport: u16, seq: u32)
 {panic!("c_tcp_send_rst_pkt({}) called", seq);}
 /*
 pub fn c_get_global_cli_conf() -> *const ClientConf

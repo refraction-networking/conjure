@@ -24,6 +24,21 @@ heartbeat_interval = 30000
 heartbeat_timeout = 1000
 
 
+# If a registration is received with an address in one of these subnets it will
+# be ignored and dropped. This is to prevent clients leveraging the outgoing
+# connections from the station to connect to sation infrastructure that would 
+# be othewise firewalled.
+covert_blocklist = [
+    "127.0.0.1/32",     # localhost ipv4
+    "10.0.0.0/8",       # reserved ipv4 
+    "172.16.0.0/12",    # reserved ipv4
+    "192.168.0.0/16",   # reserved ipv4
+    "fc00::/7 ",        # private network ipv6
+    "fe80::0/16",       # link local ipv6
+    "::1/128"           # localhost ipv6
+]
+
+
 ### ZMQ sockets to connect to and subscribe
 
 ## Registration API
