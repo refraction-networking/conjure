@@ -29,10 +29,13 @@ heartbeat_timeout = 1000
 # connections from the station to connect to sation infrastructure that would 
 # be othewise firewalled.
 covert_blocklist = [
-    "127.0.0.1/32",
-    "10.0.0.0/8",
-    "fe80::0/16",
-    "::1/128"
+    "127.0.0.1/32",     # localhost ipv4
+    "10.0.0.0/8",       # reserved ipv4 
+    "172.16.0.0/12",    # reserved ipv4
+    "192.168.0.0/16",   # reserved ipv4
+    "fc00::/7 ",        # private network ipv6
+    "fe80::0/16",       # link local ipv6
+    "::1/128"           # localhost ipv6
 ]
 
 
