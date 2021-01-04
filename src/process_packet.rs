@@ -216,7 +216,7 @@ impl PerCoreGlobal
         if self.flow_tracker.is_registered_dark_decoy(&dd_flow) {
 
             // Handle packet destined for registered IP
-            match filter_station_traffic(flow.src_ip.to_string()) {
+            match self.filter_station_traffic(flow.src_ip.to_string()) {
                 // traffic was sent by another station, likely liveness testing.
                 None => {},
 
@@ -359,61 +359,67 @@ impl PerCoreGlobal
                 debug!("Validated UDP traffic from {}", flow)
             }
     }
-} // impl PerCoreGlobal
 
 
-/// Checks if the traffic seen is from a participating station byt checking the
-/// source address. Returns Some if traffic is from anything other that a station.
-/// 
-/// This exists to prevent the detector from forwarding liveness check traffic 
-/// to the application wasting resources in the process.
-/// 
-/// Todo -> Move address list to some external config
-///
-/// # Examples
-///
-/// ```compile_fail
-/// let flow_src_station = String::from("192.122.200.231");
-/// let flow_src_client = String::from("128.138.89.172");
-/// 
-/// let station = filter_station_traffic(flow_src_station);
-/// let client = filter_station_traffic(flow_src_client);
-///
-/// assert_eq!(None, station);
-/// assert_eq!(Some(()), client);
-/// ```
-fn filter_station_traffic(src: String) -> Option<()> {
+    /// Checks if the traffic seen is from a participating station byt checking the
+    /// source address. Returns Some if traffic is from anything other that a station.
+    /// 
+    /// This exists to prevent the detector from forwarding liveness check traffic 
+    /// to the application wasting resources in the process.
+    /// 
+    /// Todo -> Move address list to some external config
+    ///
+    /// # Examples
+    ///
+    /// ```compile_fail
+    /// let flow_src_station = String::from("192.122.200.231");
+    /// let flow_src_client = String::from("128.138.89.172");
+    /// 
+    /// let station = filter_station_traffic(flow_src_station);
+    /// let client = filter_station_traffic(flow_src_client);
+    ///
+    /// assert_eq!(None, station);
+    /// assert_eq!(Some(()), client);
+    /// ```
+    fn filter_station_traffic(&mut self, src: String) -> Option<()> {
 
-    let station_addrs: [&str; 6] = [
-        "198.108.63.121",       // artemis
-        "192.122.200.188",      // windyheron
-        "192.122.200.253",      // windyegret
-        "192.122.200.166",      // decoy-tap
-        "192.122.200.231",      // curveball
-        "2001:48a8:687f:2::2",  // curveball
-    ];
-
-    for addr in station_addrs.iter() {
-        if src == *addr {
-            return None
+        for addr in self.filter_list.iter() {
+            if src == *addr {
+                return None
+            }
         }
-    }
 
-    Some(())
-}
+        Some(())
+    }
+} // impl PerCoreGlobal
 
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+    use std::fs;
+    use toml;
+    use StationConfig;
+
+
     #[test]
     fn test_filter_station_traffic() {
-        let flow_src_station = String::from("192.122.200.231");
-        let flow_src_client = String::from("128.138.89.172");
-        
-        let station = super::filter_station_traffic(flow_src_station);
-        let client = super::filter_station_traffic(flow_src_client);
-        
-        assert_eq!(None, station);
-        assert_eq!(Some(()), client);
+
+        env::set_var("CJ_STATION_CONFIG", "./application/config.toml");
+
+        // --
+        let conf_path = env::var("CJ_STATION_CONFIG").unwrap();
+
+        let contents = fs::read_to_string(conf_path)
+            .expect("Something went wrong reading the file");
+
+        // let value = contents.parse::<Value>().unwrap();
+        let value: StationConfig = toml::from_str(&contents).unwrap();
+
+        let nets =  value.detector_filter_list;
+
+        for net in nets.iter() {
+            println!("{}", net);
+        }
     }
 }

@@ -16,6 +16,9 @@ extern crate tuntap; // https://github.com/ewust/tuntap.rs
 extern crate zmq;
 extern crate protobuf;
 extern crate redis;
+extern crate toml;
+extern crate serde;
+extern crate serde_derive;
 
 use std::mem::transmute;
 use std::collections::HashMap;
@@ -25,6 +28,9 @@ use radix::PrefixTree;
 use std::io::BufReader;
 use std::io::BufRead;
 use std::fs::File;
+use std::env;
+use std::fs;
+use serde_derive::Deserialize;
 
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -70,6 +76,10 @@ pub struct PerCoreGlobal
     // ZMQ socket for sending information to the dark decoy application
     zmq_sock:      zmq::Socket,
 
+    // Filter list of addresses to ignore traffic from. This primarily functions to prevent liveness
+    // testing from other stations in a conjure cluster from clogging up the logs with connection
+    // notifications. 
+    filter_list: Vec<String>,
 }
 
 // Tracking of some pretty straightforward quantities
@@ -99,8 +109,15 @@ pub struct PerCoreStats
     pub in_tree_this_period: u64,
 }
 
-const IP_LIST_PATH: &'static str = "/var/lib/dark-decoy.prefixes";
+// Currently used to parse the Toml config. If this needs to play a larger role 
+// in the future this can be added to the PerCoreGlobal.
+#[derive(Deserialize)]
+struct StationConfig {
+    detector_filter_list: Vec<String>,
+}
 
+const IP_LIST_PATH: &'static str = "/var/lib/dark-decoy.prefixes";
+const STATION_CONF_PATH: &'static str = "CJ_STATION_CONFIG";
 
 impl PerCoreGlobal
 {
@@ -115,6 +132,13 @@ impl PerCoreGlobal
         let zmq_sock = zmq_ctx.socket(zmq::PUB).unwrap();
         zmq_sock.connect(workers_socket_addr).expect("failed connecting to ZMQ");
 
+        // Parse toml station config to get filter list
+        let conf_path = env::var(STATION_CONF_PATH).unwrap();
+        let contents = fs::read_to_string(conf_path)
+            .expect("Something went wrong reading the station config file");
+        let value: StationConfig = toml::from_str(&contents)
+            .expect("Failed to parse toml station config");
+
         PerCoreGlobal {
             priv_key: priv_key,
             lcore: the_lcore,
@@ -124,6 +148,7 @@ impl PerCoreGlobal
             stats: PerCoreStats::new(),
             ip_tree: PrefixTree::new(),
             zmq_sock: zmq_sock,
+            filter_list: value.detector_filter_list,
         }
     }
 
