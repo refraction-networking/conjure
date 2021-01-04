@@ -118,6 +118,8 @@ func (regManager *RegistrationManager) GetWrappingTransports() map[pb.TransportT
 	return m
 }
 
+// NewRegistration creates a new registration from details provided. Does NOT add the registration
+// to tracking map.
 func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
 
 	phantomAddr, err := regManager.PhantomSelector.Select(
@@ -150,6 +152,11 @@ func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 	if err != nil {
 		regManager.Logger.Printf("Error registering decoy: %s", err)
 	}
+}
+
+// RegistrationExists checks if the registration is already tracked by the manager
+func (regManager *RegistrationManager) RegistrationExists(reg *DecoyRegistration) bool {
+	return regManager.registeredDecoys.registrationExists(reg)
 }
 
 func (regManager *RegistrationManager) GetRegistrations(darkDecoyAddr net.IP) map[string]*DecoyRegistration {
@@ -429,6 +436,29 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr net.IP) int {
 		return 0
 	}
 	return len(regs)
+}
+
+func (r *RegisteredDecoys) registrationExists(d *DecoyRegistration) bool {
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	t, ok := r.transports[d.Transport]
+	if !ok {
+		fmt.Printf("Failing here\n")
+		return false
+	}
+
+	identifier := t.GetIdentifier(d)
+
+	phantomAddr := d.DarkDecoy.String()
+
+	_, exists := r.decoys[phantomAddr]
+	if !exists {
+		return false
+	}
+
+	_, exists = r.decoys[phantomAddr][identifier]
+	return exists
 }
 
 type regExpireLogMsg struct {

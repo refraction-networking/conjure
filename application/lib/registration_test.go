@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -10,6 +11,19 @@ import (
 	"github.com/golang/protobuf/proto"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
+
+type mockTransport struct{}
+
+func (mockTransport) Name() string      { return "MockTransport" }
+func (mockTransport) LogPrefix() string { return "MOCK" }
+
+func (mockTransport) GetIdentifier(d *DecoyRegistration) string {
+	return string(d.Keys.ConjureHMAC("MockTrasportHMACString"))
+}
+
+func (mockTransport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *RegistrationManager) (*DecoyRegistration, net.Conn, error) {
+	return nil, nil, nil
+}
 
 func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 	clientToStationBytes, err := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
@@ -53,6 +67,31 @@ func TestCreateDecoyRegistration(t *testing.T) {
 
 	if !testEqualRegistrations(newReg, &expectedReg) {
 		t.Fatalf("Bad registration Created")
+	}
+}
+
+func TestRegistrationLookup(t *testing.T) {
+	rm := NewRegistrationManager()
+
+	// The mock registration has transport id 0, so we hard code that here too
+	rm.AddTransport(0, mockTransport{})
+
+	c2s, keys := mockReceiveFromDetector()
+
+	regSource := pb.RegistrationSource_Detector
+
+	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support(), &regSource)
+	if err != nil {
+		t.Fatalf("Registration failed: %v", err)
+	}
+	t.Log(newReg)
+
+	if rm.RegistrationExists(newReg) {
+		t.Fatalf("Registration exists, but shouldn't")
+	}
+	rm.AddRegistration(newReg)
+	if !rm.RegistrationExists(newReg) {
+		t.Fatalf("Registration should exist, but doesn't")
 	}
 }
 
