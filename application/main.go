@@ -175,8 +175,12 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 	for {
 
 		newRegs, err := recieve_zmq_message(sub, regManager)
-		if err != nil || len(newRegs) == 0 {
+		if err != nil {
 			logger.Printf("Encountered err when creating Reg: %v\n", err)
+			continue
+		}
+		if len(newRegs) == 0 {
+			// no new registration
 			continue
 		}
 
@@ -209,7 +213,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					go tryShareRegistrationOverAPI(reg, conf.PreshareEndpoint)
 				}
 
-				// track new registration
+				// validate the registration
 				regManager.AddRegistration(reg)
 				logger.Printf("Adding registration %v, from %s\n", reg.IDString(), *reg.RegistrationSource)
 			}
@@ -286,10 +290,22 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 			return nil, err
 		}
 
-		// log phantom IP, shared secret, ipv6 support
-		logger.Printf("New registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
+		if regManager.RegistrationExists(reg) {
+			// log phantom IP, shared secret, ipv6 support
+			logger.Printf("Duplicate registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
+		} else {
+			// log phantom IP, shared secret, ipv6 support
+			logger.Printf("New registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
 
-		newRegs = append(newRegs, reg)
+			// add to list of new registrations to be processed.
+			newRegs = append(newRegs, reg)
+		}
+
+		// Track the received registration, if it is already tracked it will just update the record
+		regManager.TrackRegistration(reg)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if parsed.RegistrationPayload.GetV6Support() {
@@ -298,10 +314,22 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err
 		}
+		if regManager.RegistrationExists(reg) {
+			// log phantom IP, shared secret, ipv6 support
+			logger.Printf("Duplicate registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
+		} else {
+			// log phantom IP, shared secret, ipv6 support
+			logger.Printf("New registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
 
-		// log phantom IP, shared secret, ipv6 support
-		logger.Printf("New registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
-		newRegs = append(newRegs, reg)
+			// add to list of new registrations to be processed.
+			newRegs = append(newRegs, reg)
+		}
+
+		// Track the received registration, if it is already tracked it will just update the record
+		regManager.TrackRegistration(reg)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return newRegs, nil

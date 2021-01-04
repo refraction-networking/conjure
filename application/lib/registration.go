@@ -18,9 +18,16 @@ import (
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
+// DETECTOR_REG_CHANNEL is a constant that defines the name of the redis map that we
+// send validated registrations over in order to notify all detector cores.
 const DETECTOR_REG_CHANNEL string = "dark_decoy_map"
+
+// AES_GCM_TAG_SIZE the size of the aesgcm tag used when generating the client to
+// station message.
 const AES_GCM_TAG_SIZE = 16
 
+// Transport defines the interface for the manager to interface with variable
+// transports that wrap the traffic sent by clients.
 type Transport interface {
 	// The human-friendly name of the transport.
 	Name() string
@@ -73,6 +80,7 @@ type ConnectingTransport interface {
 	Connect(context.Context, *DecoyRegistration) (net.Conn, error)
 }
 
+// RegistrationManager manages registration tracking for the station.
 type RegistrationManager struct {
 	registeredDecoys *RegisteredDecoys
 	Logger           *log.Logger
@@ -94,6 +102,8 @@ func NewRegistrationManager() *RegistrationManager {
 	}
 }
 
+// AddTransport initializes a transport so that it can be tracked by the manager when
+// clients register.
 func (regManager *RegistrationManager) AddTransport(index pb.TransportType, t Transport) {
 	regManager.registeredDecoys.m.Lock()
 	defer regManager.registeredDecoys.m.Unlock()
@@ -101,7 +111,7 @@ func (regManager *RegistrationManager) AddTransport(index pb.TransportType, t Tr
 	regManager.registeredDecoys.transports[index] = t
 }
 
-// Returns a map of the wrapping transport types to their transports. This return value
+// GetWrappingTransports Returns a map of the wrapping transport types to their transports. This return value
 // can be mutated freely.
 func (regManager *RegistrationManager) GetWrappingTransports() map[pb.TransportType]WrappingTransport {
 	m := make(map[pb.TransportType]WrappingTransport)
@@ -118,6 +128,8 @@ func (regManager *RegistrationManager) GetWrappingTransports() map[pb.TransportT
 	return m
 }
 
+// NewRegistration creates a new registration from details provided. Adds the registration
+// to tracking map, But marks it as not valid.
 func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
 
 	phantomAddr, err := regManager.PhantomSelector.Select(
@@ -143,6 +155,16 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	return &reg, nil
 }
 
+// TrackRegistration adds the registration to the map WITHOUT marking it valid.
+func (regManager *RegistrationManager) TrackRegistration(d *DecoyRegistration) error {
+	err := regManager.registeredDecoys.track(d)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// AddRegistration officially adds the registration to usage by marking it as valid.
 func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 
 	darkDecoyAddr := d.DarkDecoy.String()
@@ -152,18 +174,30 @@ func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 	}
 }
 
-func (regManager *RegistrationManager) GetRegistrations(darkDecoyAddr net.IP) map[string]*DecoyRegistration {
-	return regManager.registeredDecoys.GetRegistrations(darkDecoyAddr)
+// RegistrationExists checks if the registration is already tracked by the manager, this is
+// independent of the validity tag, this just checks to see if the registration exists.
+func (regManager *RegistrationManager) RegistrationExists(reg *DecoyRegistration) bool {
+	trackedReg := regManager.registeredDecoys.registrationExists(reg)
+	return trackedReg != nil
 }
 
-func (regManager *RegistrationManager) CountRegistrations(darkDecoyAddr net.IP) int {
-	return regManager.registeredDecoys.countRegistrations(darkDecoyAddr)
+// GetRegistrations returns registrations associated with a specific phantom address.
+func (regManager *RegistrationManager) GetRegistrations(phantomAddr net.IP) map[string]*DecoyRegistration {
+	return regManager.registeredDecoys.getRegistrations(phantomAddr)
 }
 
+// CountRegistrations counts the number of registrations tracked that are using a
+// specific phantom address.
+func (regManager *RegistrationManager) CountRegistrations(phantomAddr net.IP) int {
+	return regManager.registeredDecoys.countRegistrations(phantomAddr)
+}
+
+// RemoveOldRegistrations garbage collects old registrations
 func (regManager *RegistrationManager) RemoveOldRegistrations() {
 	regManager.registeredDecoys.removeOldRegistrations(regManager.Logger)
 }
 
+// DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
 	DarkDecoy          net.IP
 	Keys               *ConjureSharedKeys
@@ -174,6 +208,10 @@ type DecoyRegistration struct {
 	RegistrationSource *pb.RegistrationSource
 	DecoyListVersion   uint32
 	regCount           int32
+
+	// validity marks whether the registration has been validated through liveness and other checks.
+	// This also denotes whether the registration has been shared with the detector.
+	Valid bool
 }
 
 // String -- Print a digest of the important identifying information for this registration.
@@ -364,47 +402,77 @@ func NewRegisteredDecoys() *RegisteredDecoys {
 	}
 }
 
-func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) error {
+func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 
-	r.m.Lock()
-	defer r.m.Unlock()
+	// Is the registration is already tracked.
+	if reg := r.registrationExists(d); reg != nil {
+		// update tracked registration with new information if any
+		reg.regCount++
+		return nil
+	}
 
 	t, ok := r.transports[d.Transport]
 	if !ok {
 		return fmt.Errorf("unknown transport %d", d.Transport)
 	}
 
+	phantomAddr := d.DarkDecoy.String()
 	identifier := t.GetIdentifier(d)
 
-	_, exists := r.decoys[darkDecoyAddr]
-	if exists == false {
-		r.decoys[darkDecoyAddr] = map[string]*DecoyRegistration{}
+	// Newly tracked registrations are not valid and have only been seen once.
+	d.regCount = 1
+	d.Valid = false
+
+	_, exists := r.decoys[phantomAddr]
+	if !exists {
+		r.decoys[phantomAddr] = map[string]*DecoyRegistration{}
 	}
 
-	reg, exists := r.decoys[darkDecoyAddr][identifier]
-	if exists == false {
-		// New Registration not known to the Manager
-		r.decoys[darkDecoyAddr][identifier] = d
+	r.decoys[phantomAddr][identifier] = d
 
-		r.decoysTimeouts = append(r.decoysTimeouts,
-			DecoyTimeout{
-				decoy:            darkDecoyAddr,
-				identifier:       identifier,
-				registrationTime: time.Now(),
-				regID:            d.IDString(),
-			})
-
-		//[TODO]{priority:5} track what registration decoys are seen for a given session
-		d.regCount = 1
-		registerForDetector(d)
-	} else {
-		reg.regCount++
-	}
+	r.decoysTimeouts = append(r.decoysTimeouts,
+		DecoyTimeout{
+			decoy:            phantomAddr,
+			identifier:       identifier,
+			registrationTime: time.Now(),
+			regID:            d.IDString(),
+		})
 
 	return nil
 }
 
-func (r *RegisteredDecoys) GetRegistrations(darkDecoyAddr net.IP) map[string]*DecoyRegistration {
+func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) error {
+
+	reg := r.registrationExists(d)
+	if reg == nil {
+		// Track unknown registration
+		err := r.track(d)
+		if err != nil {
+			return err
+		}
+
+		// Get a reference to the registration so we can update the valid tag.
+		reg = r.registrationExists(d)
+		if reg == nil {
+			return fmt.Errorf("failed to track and register %s with unknown error", d.IDString())
+		}
+	}
+
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	if reg.Valid {
+		// Registration has already been shared with the detector
+		return nil
+	}
+
+	reg.Valid = true
+	registerForDetector(reg)
+
+	return nil
+}
+
+func (r *RegisteredDecoys) getRegistrations(darkDecoyAddr net.IP) map[string]*DecoyRegistration {
 	darkDecoyAddrStatic := darkDecoyAddr.String()
 	r.m.RLock()
 	defer r.m.RUnlock()
@@ -413,7 +481,11 @@ func (r *RegisteredDecoys) GetRegistrations(darkDecoyAddr net.IP) map[string]*De
 
 	regs := make(map[string]*DecoyRegistration)
 	for k, v := range original {
-		regs[k] = v
+		if v.Valid {
+			// only return valid registration so we don't allow connections to a
+			// registration that has not been validated yet.
+			regs[k] = v
+		}
 	}
 
 	return regs
@@ -429,6 +501,32 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr net.IP) int {
 		return 0
 	}
 	return len(regs)
+}
+
+func (r *RegisteredDecoys) registrationExists(d *DecoyRegistration) *DecoyRegistration {
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	t, ok := r.transports[d.Transport]
+	if !ok {
+		return nil
+	}
+
+	identifier := t.GetIdentifier(d)
+
+	phantomAddr := d.DarkDecoy.String()
+
+	_, exists := r.decoys[phantomAddr]
+	if !exists {
+		return nil
+	}
+
+	reg, exists := r.decoys[phantomAddr][identifier]
+	if !exists {
+		return nil
+	}
+
+	return reg
 }
 
 type regExpireLogMsg struct {
