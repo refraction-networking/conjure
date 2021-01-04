@@ -289,16 +289,18 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 		if regManager.RegistrationExists(reg) {
 			// log phantom IP, shared secret, ipv6 support
 			logger.Printf("Duplicate registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
-
-			// Track the additional registration received, but do not add to list of new
-			// registrations so that we can skip processing it again.
-			regManager.AddRegistration(reg)
 		} else {
 			// log phantom IP, shared secret, ipv6 support
 			logger.Printf("New registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
 
 			// add to list of new registrations to be processed.
 			newRegs = append(newRegs, reg)
+		}
+
+		// Track the received registration, if it is already tracked it will just update the record
+		regManager.TrackRegistration(reg)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -311,16 +313,18 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 		if regManager.RegistrationExists(reg) {
 			// log phantom IP, shared secret, ipv6 support
 			logger.Printf("Duplicate registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
-
-			// Track the additional registration received, but do not add to list of new
-			// registrations so that we can skip processing it again.
-			regManager.AddRegistration(reg)
 		} else {
 			// log phantom IP, shared secret, ipv6 support
 			logger.Printf("New registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
 
 			// add to list of new registrations to be processed.
 			newRegs = append(newRegs, reg)
+		}
+
+		// Track the received registration, if it is already tracked it will just update the record
+		regManager.TrackRegistration(reg)
+		if err != nil {
+			return nil, err
 		}
 	}
 
