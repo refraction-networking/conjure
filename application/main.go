@@ -175,8 +175,12 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 	for {
 
 		newRegs, err := recieve_zmq_message(sub, regManager)
-		if err != nil || len(newRegs) == 0 {
+		if err != nil {
 			logger.Printf("Encountered err when creating Reg: %v\n", err)
+			continue
+		}
+		if len(newRegs) == 0 {
+			// no new registration
 			continue
 		}
 
@@ -209,7 +213,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					go tryShareRegistrationOverAPI(reg, conf.PreshareEndpoint)
 				}
 
-				// track new registration
+				// validate the registration
 				regManager.AddRegistration(reg)
 				logger.Printf("Adding registration %v, from %s\n", reg.IDString(), *reg.RegistrationSource)
 			}

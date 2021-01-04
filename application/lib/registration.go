@@ -423,6 +423,11 @@ func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 	d.regCount = 1
 	d.Valid = false
 
+	_, exists := r.decoys[phantomAddr]
+	if !exists {
+		r.decoys[phantomAddr] = map[string]*DecoyRegistration{}
+	}
+
 	r.decoys[phantomAddr][identifier] = d
 
 	r.decoysTimeouts = append(r.decoysTimeouts,
@@ -438,9 +443,6 @@ func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 
 func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) error {
 
-	r.m.Lock()
-	defer r.m.Unlock()
-
 	reg := r.registrationExists(d)
 	if reg == nil {
 		// Track unknown registration
@@ -455,6 +457,9 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 			return fmt.Errorf("failed to track and register %s with unknown error", d.IDString())
 		}
 	}
+
+	r.m.Lock()
+	defer r.m.Unlock()
 
 	if reg.Valid {
 		// Registration has already been shared with the detector
