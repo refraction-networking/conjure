@@ -69,9 +69,11 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 
 	var originalDst, originalSrc string
 	if logClientIP {
-		originalDst = originalDstIP.String()
+		originalSrc = clientConn.RemoteAddr().String()
+	} else {
+		originalSrc = "_"
 	}
-	originalSrc = clientConn.RemoteAddr().String()
+	originalDst = originalDstIP.String()
 	flowDescription := fmt.Sprintf("%s -> %s ", originalSrc, originalDst)
 	logger := log.New(os.Stdout, "[CONN] "+flowDescription, log.Ldate|log.Lmicroseconds)
 

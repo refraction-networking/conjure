@@ -234,7 +234,6 @@ func (reg *DecoyRegistration) String() string {
 	}{
 		Phantom:          reg.DarkDecoy.String(),
 		SharedSecret:     hex.EncodeToString(reg.Keys.SharedSecret),
-		Covert:           reg.Covert,
 		Mask:             reg.Mask,
 		Flags:            reg.Flags,
 		Transport:        reg.Transport,
