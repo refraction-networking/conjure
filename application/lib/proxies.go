@@ -74,7 +74,6 @@ func ProxyFactory(reg *DecoyRegistration, proxyProtocol uint) func(*DecoyRegistr
 }
 
 type sessionStats struct {
-	From     string
 	Duration int64
 	Written  int64
 	Tag      string
@@ -98,7 +97,6 @@ func halfPipe(src, dst net.Conn,
 			proxyEndTime := time.Since(proxyStartTime)
 			if err == nil {
 				stats := sessionStats{
-					From:     src.RemoteAddr().String(),
 					Duration: int64(proxyEndTime / time.Millisecond),
 					Written:  written,
 					Tag:      tag,
@@ -107,7 +105,6 @@ func halfPipe(src, dst net.Conn,
 				logger.Printf("gracefully stopping forwarding %s", stats_str)
 			} else {
 				stats := sessionStats{
-					From:     src.RemoteAddr().String(),
 					Duration: int64(proxyEndTime / time.Millisecond),
 					Written:  written,
 					Tag:      tag,
@@ -157,7 +154,7 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	if reg.Flags.GetProxyHeader() {
 		err = writePROXYHeader(covertConn, clientConn.RemoteAddr().String())
 		if err != nil {
-			logger.Printf("failed to send PROXY header to covert: %s", err)
+			logger.Printf("failed to send PROXY header: %s", err)
 			return
 		}
 	}
@@ -166,8 +163,8 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(clientConn, covertConn, &wg, &oncePrintErr, logger, "Up")
-	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down")
+	go halfPipe(clientConn, covertConn, &wg, &oncePrintErr, logger, "Up "+reg.IDString())
+	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down "+reg.IDString())
 	wg.Wait()
 }
 
