@@ -563,7 +563,6 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 			expiredRegTimeoutIndices = append(expiredRegTimeoutIndices, idx)
 		}
 	}
-	logger.Printf("remove: %+v",expiredRegTimeoutIndices)
 
 	logger.Printf("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
 		r.totalRegistrations(), len(r.decoysTimeouts), len(expiredRegTimeoutIndices))

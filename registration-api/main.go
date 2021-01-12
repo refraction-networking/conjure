@@ -89,11 +89,13 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	// s.logger.Printf("received successful registration for covert address %s\n", payload.RegistrationPayload.GetCovertAddress())
 
 	clientAddr := parseIP(requestIP)
-	if err != nil {
-		s.logger.Println("failed to get source address:", err)
+	var clientAddrBytes = make([]byte, 16, 16)
+	if clientAddr != nil {
+		clientAddrBytes = []byte(clientAddr.To16())
+	} else {
+		fmt.Printf("unable to get source address:\"%s\"\n", requestIP)
 	}
-
-	zmqPayload, err := s.processC2SWrapper(payload, []byte(clientAddr.To16()))
+	zmqPayload, err := s.processC2SWrapper(payload, clientAddrBytes)
 	if err != nil {
 		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
 		w.WriteHeader(http.StatusInternalServerError)
