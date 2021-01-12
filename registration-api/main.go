@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/BurntSushi/toml"
@@ -30,6 +31,9 @@ type config struct {
 	AuthType          string   `toml:"auth_type"`
 	AuthVerbose       bool     `toml:"auth_verbose"`
 	StationPublicKeys []string `toml:"station_pubkeys"`
+
+	// Parsed from conjure.conf environment vars
+	logClientIP bool
 }
 
 type server struct {
@@ -48,6 +52,9 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	requestIP := r.RemoteAddr
 	if r.Header.Get("X-Forwarded-For") != "" {
 		requestIP = r.Header.Get("X-Forwarded-For")
+	}
+	if !s.logClientIP {
+		requestIP = ""
 	}
 
 	s.logger.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
@@ -177,6 +184,13 @@ func main() {
 	_, err := toml.DecodeFile(os.Getenv("CJ_API_CONFIG"), &s)
 	if err != nil {
 		s.logger.Fatalln("failed to load config:", err)
+	}
+
+	// Should we log client IP addresses
+	s.logClientIP, err = strconv.ParseBool(os.Getenv("LOG_CLIENT_IP"))
+	if err != nil {
+		s.logger.Printf("failed parse client ip logging setting: %v\n", err)
+		s.logClientIP = false
 	}
 
 	sock, err := zmq.NewSocket(zmq.PUB)

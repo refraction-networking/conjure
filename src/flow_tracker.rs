@@ -21,12 +21,22 @@ pub struct Flow
     pub dst_port: u16,
 }
 
-
+// flow log client should only ever be set at initialization so this should
+// never result in a race condition. Also all threads read the same
+// environment variable so they will all set it the same.  
+static mut flow_log_client: bool = false;
 impl fmt::Display for Flow {
+
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let socket_src = SocketAddr::new(self.src_ip, self.src_port);
         let socket_dst = SocketAddr::new(self.dst_ip, self.dst_port);
-        write!(f, "{} -> {}",socket_src, socket_dst)
+
+        unsafe {
+            match flow_log_client {
+                true => write!(f, "{} -> {}",socket_src, socket_dst),
+                false => write!(f, "_ -> {}", socket_dst),
+            }
+        }
     }
 }
 
@@ -86,6 +96,12 @@ impl Flow
 
         return (src_bytes, dst_bytes)
     }
+
+    pub fn set_log_client(log: bool) {
+        unsafe {
+            flow_log_client = log;
+        }
+    }
 }
 
 // All members are stored in host-order, even src_ip and dst_ip.
@@ -102,7 +118,13 @@ impl fmt::Display for FlowNoSrcPort {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let socket_src = SocketAddr::new(self.src_ip, 0);
         let socket_dst = SocketAddr::new(self.dst_ip, self.dst_port);
-        write!(f, "{} -> {}",socket_src, socket_dst)
+
+        unsafe {
+            match flow_log_client {
+                true => write!(f, "{} -> {}",socket_src, socket_dst),
+                false => write!(f, "_ -> {}", socket_dst),
+            }
+        }
     }
 }
 
@@ -355,6 +377,59 @@ mod tests {
 
     #[test]
     fn test_flow_display_format() {
+        Flow::set_log_client(false);
+
+        let flow6 = Flow {
+            src_ip: "2601::abcd:ef00".parse().unwrap(),
+            dst_ip: "26ff::1".parse().unwrap(),
+            src_port: 5672,
+            dst_port: 443,
+        };
+
+        let mut output = String::new();
+        write!(&mut output, "{}", flow6)
+            .expect("Error occurred while trying to write in String");
+        assert_eq!(output, "_ -> [26ff::1]:443");
+
+
+        let flow4 = Flow {
+            src_ip: "10.22.0.1".parse().unwrap(),
+            dst_ip: "128.138.97.6".parse().unwrap(),
+            src_port: 5672,
+            dst_port: 443,
+        };
+
+        let mut output = String::new();
+        write!(&mut output, "{}", flow4)
+            .expect("Error occurred while trying to write in String");
+        assert_eq!(output, "_ -> 128.138.97.6:443");
+
+
+        let flow_n6 = FlowNoSrcPort {
+            src_ip: "2601::abcd:ef00".parse().unwrap(),
+            dst_ip: "26ff::1".parse().unwrap(),
+            dst_port: 443,
+        };
+
+        let mut output = String::new();
+        write!(&mut output, "{}", flow_n6)
+            .expect("Error occurred while trying to write in String");
+        assert_eq!(output, "_ -> [26ff::1]:443");
+
+
+        let flow_n4 = FlowNoSrcPort {
+            src_ip: "10.22.0.1".parse().unwrap(),
+            dst_ip: "128.138.97.6".parse().unwrap(),
+            dst_port: 443,
+        };
+
+        let mut output = String::new();
+        write!(&mut output, "{}", flow_n4)
+            .expect("Error occurred while trying to write in String");
+        assert_eq!(output, "_ -> 128.138.97.6:443");
+
+        Flow::set_log_client(true);
+
         let flow6 = Flow {
             src_ip: "2601::abcd:ef00".parse().unwrap(),
             dst_ip: "26ff::1".parse().unwrap(),

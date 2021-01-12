@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -66,8 +67,13 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 	}
 	fd.Close()
 
-	originalDst := originalDstIP.String()
-	originalSrc := clientConn.RemoteAddr().String()
+	var originalDst, originalSrc string
+	if logClientIP {
+		originalSrc = clientConn.RemoteAddr().String()
+	} else {
+		originalSrc = "_"
+	}
+	originalDst = originalDstIP.String()
 	flowDescription := fmt.Sprintf("%s -> %s ", originalSrc, originalDst)
 	logger := log.New(os.Stdout, "[CONN] "+flowDescription, log.Ldate|log.Lmicroseconds)
 
@@ -150,11 +156,12 @@ readLoop:
 			// We found our transport! First order of business: disable deadline
 			wrapped.SetDeadline(time.Time{})
 			logger.SetPrefix(fmt.Sprintf("[%s] %s ", t.LogPrefix(), reg.IDString()))
-			logger.Printf("registration found {reg_id: %s, phantom: %s, transport: %s, covert: %s}\n", reg.IDString(), originalDstIP, t.Name(), reg.Covert)
+			logger.Printf("registration found {reg_id: %s, phantom: %s, transport: %s}\n", reg.IDString(), originalDstIP, t.Name())
 			break readLoop
 		}
 	}
 
+	// TODO logging-client-ip
 	cj.Proxy(reg, wrapped, logger)
 }
 
@@ -215,7 +222,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 
 				// validate the registration
 				regManager.AddRegistration(reg)
-				logger.Printf("Adding registration %v, from %s\n", reg.IDString(), *reg.RegistrationSource)
+				logger.Printf("Adding registration %v\n", reg.IDString())
 			}
 		}()
 
@@ -277,8 +284,12 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 		parsed.DecoyAddress = make([]byte, 16, 16)
 	}
 
-	sourceAddr := net.IP(parsed.RegistrationAddress)
-	decoyAddr := net.IP(parsed.DecoyAddress)
+	// If client IP logging is disabled DO NOT parse source IP.
+	var sourceAddr, decoyAddr net.IP
+	if logClientIP {
+		sourceAddr = net.IP(parsed.RegistrationAddress)
+	}
+	decoyAddr = net.IP(parsed.DecoyAddress)
 
 	// Register one or both of v4 and v6 based on support specified by the client
 	var newRegs []*cj.DecoyRegistration
@@ -336,10 +347,11 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 }
 
 var logger *log.Logger
+var logClientIP = false
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-
+	var err error
 	var zmqAddress string
 	flag.StringVar(&zmqAddress, "zmq-address", "ipc://@zmq-proxy", "Address of ZMQ proxy")
 	flag.Parse()
@@ -347,6 +359,14 @@ func main() {
 	regManager := cj.NewRegistrationManager()
 	logger = regManager.Logger
 
+	// Should we log client IP addresses
+	logClientIP, err = strconv.ParseBool(os.Getenv("LOG_CLIENT_IP"))
+	if err != nil {
+		logger.Printf("failed parse client ip logging setting: %v\n", err)
+		logClientIP = false
+	}
+
+	// parse toml station configuration
 	conf, err := cj.ParseConfig()
 	if err != nil {
 		logger.Fatalf("failed to parse app config: %v", err)

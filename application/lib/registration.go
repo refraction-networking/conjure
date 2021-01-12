@@ -234,7 +234,6 @@ func (reg *DecoyRegistration) String() string {
 	}{
 		Phantom:          reg.DarkDecoy.String(),
 		SharedSecret:     hex.EncodeToString(reg.Keys.SharedSecret),
-		Covert:           reg.Covert,
 		Mask:             reg.Mask,
 		Flags:            reg.Flags,
 		Transport:        reg.Transport,
@@ -391,14 +390,15 @@ type RegisteredDecoys struct {
 
 	transports map[pb.TransportType]Transport
 
-	decoysTimeouts []DecoyTimeout
+	decoysTimeouts map[string]*DecoyTimeout
 	m              sync.RWMutex
 }
 
 func NewRegisteredDecoys() *RegisteredDecoys {
 	return &RegisteredDecoys{
-		decoys:     make(map[string]map[string]*DecoyRegistration),
-		transports: make(map[pb.TransportType]Transport),
+		decoys:         make(map[string]map[string]*DecoyRegistration),
+		transports:     make(map[pb.TransportType]Transport),
+		decoysTimeouts: make(map[string]*DecoyTimeout),
 	}
 }
 
@@ -406,6 +406,9 @@ func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 
 	// Is the registration is already tracked.
 	if reg := r.registrationExists(d); reg != nil {
+		r.m.Lock()
+		defer r.m.Unlock()
+
 		// update tracked registration with new information if any
 		reg.regCount++
 		return nil
@@ -430,13 +433,13 @@ func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 
 	r.decoys[phantomAddr][identifier] = d
 
-	r.decoysTimeouts = append(r.decoysTimeouts,
-		DecoyTimeout{
-			decoy:            phantomAddr,
-			identifier:       identifier,
-			registrationTime: time.Now(),
-			regID:            d.IDString(),
-		})
+	newtimeout := &DecoyTimeout{
+		decoy:            phantomAddr,
+		identifier:       identifier,
+		registrationTime: time.Now(),
+		regID:            d.IDString(),
+	}
+	r.decoysTimeouts[d.IDString()+phantomAddr] = newtimeout
 
 	return nil
 }
@@ -491,6 +494,14 @@ func (r *RegisteredDecoys) getRegistrations(darkDecoyAddr net.IP) map[string]*De
 	return regs
 }
 
+func (r *RegisteredDecoys) totalRegistrations() int {
+	total := 0
+	for _, regSet := range r.decoys {
+		total += len(regSet)
+	}
+	return total
+}
+
 func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr net.IP) int {
 	ddAddrStr := darkDecoyAddr.String()
 	r.m.RLock()
@@ -504,8 +515,6 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr net.IP) int {
 }
 
 func (r *RegisteredDecoys) registrationExists(d *DecoyRegistration) *DecoyRegistration {
-	r.m.Lock()
-	defer r.m.Unlock()
 
 	t, ok := r.transports[d.Transport]
 	if !ok {
@@ -536,23 +545,37 @@ type regExpireLogMsg struct {
 	RegCount   int32
 }
 
+// This whole process of tracking timeouts and registrations separately
+// makes less and less sense every time I come back to it.
 func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
-	const timeout = -time.Minute * 5
-	cutoff := time.Now().Add(timeout)
-	idx := 0
+	const regTimeout = time.Minute * 2
+	cutoff := time.Now().Add(-regTimeout)
+
 	r.m.Lock()
 	defer r.m.Unlock()
 
-	logger.Printf("cleansing registrations")
-	for idx := 0; idx < len(r.decoysTimeouts); idx++ {
-		if cutoff.After(r.decoysTimeouts[idx].registrationTime) {
-			break
+	var expiredRegTimeoutIndices = []string{}
+
+	for idx, decoyTimeout := range r.decoysTimeouts {
+		if decoyTimeout.registrationTime.Before(cutoff) {
+			// if a registration was received before the cutoff time add it
+			// to the list of registrations to be removed.
+			expiredRegTimeoutIndices = append(expiredRegTimeoutIndices, idx)
 		}
+	}
+	logger.Printf("remove: %+v",expiredRegTimeoutIndices)
+
+	logger.Printf("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
+		r.totalRegistrations(), len(r.decoysTimeouts), len(expiredRegTimeoutIndices))
+
+	for _, idx := range expiredRegTimeoutIndices {
 		expiredReg := r.decoysTimeouts[idx]
 		expiredRegObj, ok := r.decoys[expiredReg.decoy][expiredReg.identifier]
 		if !ok {
 			continue
 		}
+
+		// remove from decoy tracking
 		delete(r.decoys[expiredReg.decoy], expiredReg.identifier)
 		stats := regExpireLogMsg{
 			DecoyAddr:  expiredReg.decoy,
@@ -561,9 +584,12 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 			RegCount:   expiredRegObj.regCount,
 		}
 		statsStr, _ := json.Marshal(stats)
+
+		// remove from timeout tracking
+		delete(r.decoysTimeouts, idx)
+
 		logger.Printf("expired registration %s", statsStr)
 	}
-	r.decoysTimeouts = r.decoysTimeouts[idx:]
 }
 
 func registerForDetector(reg *DecoyRegistration) {

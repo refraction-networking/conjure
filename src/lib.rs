@@ -139,6 +139,16 @@ impl PerCoreGlobal
         let value: StationConfig = toml::from_str(&contents)
             .expect("Failed to parse toml station config");
 
+        // Also all threads read the same environment variable so they will all
+        // set it the same, race condition for setting client ip logging doesn't
+        // affect the outcome. LOG_CLIENT_IP set in conjure.conf
+        let client_ip_logging_str = env::var("LOG_CLIENT_IP").unwrap();
+        match client_ip_logging_str.as_ref() {
+            "true" => Flow::set_log_client(true),
+            "false" => Flow::set_log_client(false),
+            &_ => Flow::set_log_client(false), // default disable 
+        };
+
         PerCoreGlobal {
             priv_key: priv_key,
             lcore: the_lcore,
