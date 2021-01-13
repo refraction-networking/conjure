@@ -157,7 +157,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 
 // TrackRegistration adds the registration to the map WITHOUT marking it valid.
 func (regManager *RegistrationManager) TrackRegistration(d *DecoyRegistration) error {
-	err := regManager.registeredDecoys.track(d)
+	err := regManager.registeredDecoys.Track(d)
 	if err != nil {
 		return err
 	}
@@ -402,9 +402,16 @@ func NewRegisteredDecoys() *RegisteredDecoys {
 	}
 }
 
-func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
+// For use outside of this struct (so there are no data races.)
+func (r *RegisteredDecoys) Track(d *DecoyRegistration) error {
 	r.m.Lock()
 	defer r.m.Unlock()
+
+	return r.track(d)
+}
+
+// For use inside of this struct (so no deadlocks on struct mutex)
+func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 
 	// Is the registration is already tracked.
 	if reg := r.registrationExists(d); reg != nil {
