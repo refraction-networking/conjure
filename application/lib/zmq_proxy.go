@@ -106,6 +106,7 @@ func ZMQProxy(c ZMQConfig) {
 			p.logger.Printf("failed to connect to %s: %v\n", connectSocket.Address, err)
 			continue
 		}
+		defer sock.Close()
 
 		wg.Add(1)
 
