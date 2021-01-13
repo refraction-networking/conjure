@@ -63,6 +63,7 @@ func ZMQProxy(c ZMQConfig) {
 	if err != nil {
 		p.logger.Fatalln("failed to bind zmq socket:", err)
 	}
+	defer pubSock.Close()
 
 	wg := sync.WaitGroup{}
 
