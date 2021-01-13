@@ -177,7 +177,7 @@ func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 // RegistrationExists checks if the registration is already tracked by the manager, this is
 // independent of the validity tag, this just checks to see if the registration exists.
 func (regManager *RegistrationManager) RegistrationExists(reg *DecoyRegistration) bool {
-	trackedReg := regManager.registeredDecoys.registrationExists(reg)
+	trackedReg := regManager.registeredDecoys.RegistrationExists(reg)
 	return trackedReg != nil
 }
 
@@ -339,7 +339,7 @@ func (reg *DecoyRegistration) PhantomIsLive() (bool, error) {
 }
 
 func phantomIsLive(address string) (bool, error) {
-	width := 8
+	width := 2
 	dialError := make(chan error, width)
 
 	testConnect := func() {
@@ -403,12 +403,11 @@ func NewRegisteredDecoys() *RegisteredDecoys {
 }
 
 func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
+	r.m.Lock()
+	defer r.m.Unlock()
 
 	// Is the registration is already tracked.
 	if reg := r.registrationExists(d); reg != nil {
-		r.m.Lock()
-		defer r.m.Unlock()
-
 		// update tracked registration with new information if any
 		reg.regCount++
 		return nil
@@ -446,6 +445,9 @@ func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 
 func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) error {
 
+	r.m.Lock()
+	defer r.m.Unlock()
+
 	reg := r.registrationExists(d)
 	if reg == nil {
 		// Track unknown registration
@@ -460,9 +462,6 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 			return fmt.Errorf("failed to track and register %s with unknown error", d.IDString())
 		}
 	}
-
-	r.m.Lock()
-	defer r.m.Unlock()
 
 	if reg.Valid {
 		// Registration has already been shared with the detector
@@ -514,6 +513,16 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr net.IP) int {
 	return len(regs)
 }
 
+// For use outside of this struct (so there are no data races.)
+func (r *RegisteredDecoys) RegistrationExists(d *DecoyRegistration) *DecoyRegistration {
+	r.m.RLock()
+	defer r.m.RUnlock()
+
+	return r.registrationExists(d)
+
+}
+
+// For use inside of this struct (so no deadlocks on struct mutex)
 func (r *RegisteredDecoys) registrationExists(d *DecoyRegistration) *DecoyRegistration {
 
 	t, ok := r.transports[d.Transport]

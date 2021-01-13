@@ -18,6 +18,10 @@ type Config struct {
 	// REST endpoint to share decoy registrations.
 	PreshareEndpoint string `toml:"preshare_endpoint"`
 
+	// isthe station capable of handling v4 / v6 with independent toggles. 
+	EnableIPv4 bool `toml:"enable_v4"`
+	EnableIPv6 bool  `toml:"enable_v6"`
+
 	// List of subnets with disallowed covert addresses.
 	CovertBlocklist []string `toml:"covert_blocklist"`
 	covertBlocklist []*net.IPNet
