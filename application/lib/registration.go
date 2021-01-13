@@ -339,11 +339,12 @@ func (reg *DecoyRegistration) PhantomIsLive() (bool, error) {
 }
 
 func phantomIsLive(address string) (bool, error) {
-	width := 2
+	width := 4
 	dialError := make(chan error, width)
+	timeout := 750 * time.Millisecond
 
 	testConnect := func() {
-		conn, err := net.Dial("tcp", address)
+		conn, err := net.DialTimeout("tcp", address, timeout)
 		if err != nil {
 			dialError <- err
 			return
@@ -355,8 +356,6 @@ func phantomIsLive(address string) (bool, error) {
 	for i := 0; i < width; i++ {
 		go testConnect()
 	}
-
-	timeout := 750 * time.Millisecond
 
 	time.Sleep(timeout)
 
