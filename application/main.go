@@ -181,7 +181,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 
 	for {
 
-		newRegs, err := recieve_zmq_message(sub, regManager)
+		newRegs, err := recieve_zmq_message(sub, regManager, conf)
 		if err != nil {
 			logger.Printf("Encountered err when creating Reg: %v\n", err)
 			continue
@@ -289,7 +289,7 @@ func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint s
 // **NOTE** : Avoid ALL blocking calls (i.e. things that require a lock on the
 // registration tracking structs) in this method because it will block and
 // prevent the station from ingesting new registrations.
-func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([]*cj.DecoyRegistration, error) {
+func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, conf *cj.Config) ([]*cj.DecoyRegistration, error) {
 	msg, err := sub.RecvBytes(0)
 	if err != nil {
 		logger.Printf("error reading from ZMQ socket: %v\n", err)
@@ -318,7 +318,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 	// Register one or both of v4 and v6 based on support specified by the client
 	var newRegs []*cj.DecoyRegistration
 
-	if parsed.RegistrationPayload.GetV4Support() {
+	if parsed.RegistrationPayload.GetV4Support() && conf.EnableIPv4 {
 		reg, err := regManager.NewRegistration(parsed.RegistrationPayload, &conjureKeys, false, parsed.RegistrationSource)
 		if err != nil {
 			logger.Printf("Failed to create registration: %v", err)
@@ -329,7 +329,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 		newRegs = append(newRegs, reg)
 	}
 
-	if parsed.RegistrationPayload.GetV6Support() {
+	if parsed.RegistrationPayload.GetV6Support() && conf.EnableIPv6 {
 		reg, err := regManager.NewRegistration(parsed.RegistrationPayload, &conjureKeys, true, parsed.RegistrationSource)
 		if err != nil {
 			logger.Printf("Failed to create registration: %v", err)

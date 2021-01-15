@@ -92,9 +92,8 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	var clientAddrBytes = make([]byte, 16, 16)
 	if clientAddr != nil {
 		clientAddrBytes = []byte(clientAddr.To16())
-	} else {
-		fmt.Printf("unable to get source address:\"%s\"\n", requestIP)
 	}
+
 	zmqPayload, err := s.processC2SWrapper(payload, clientAddrBytes)
 	if err != nil {
 		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
