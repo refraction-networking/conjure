@@ -198,6 +198,28 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					continue
 				}
 
+				if regManager.RegistrationExists(reg) {
+					// log phantom IP, shared secret, ipv6 support
+					logger.Printf("Duplicate registration: %v\n", reg.IDString())
+
+					// Track the received registration, if it is already tracked it will just update the record
+					err := regManager.TrackRegistration(reg)
+					if err != nil {
+						logger.Println("error tracking registration: ", err)
+					}
+					continue
+				}
+
+				// log phantom IP, shared secret, ipv6 support
+				logger.Printf("New registration: %s %v\n", reg.IDString(), reg.String())
+
+				// Track the received registration
+				err := regManager.TrackRegistration(reg)
+				if err != nil {
+					logger.Println("error tracking registration: ", err)
+				}
+				continue
+
 				// If registration is trying to connect to a dark decoy that is blocklisted continue
 				covertStr, _, err := net.SplitHostPort(reg.Covert)
 				covert := net.ParseIP(covertStr)
@@ -262,6 +284,11 @@ func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint s
 	return nil
 }
 
+// recieve_zmq_message  ingests messages from zmq and parses them into
+// registration structs for the registration manager to process.
+// **NOTE** : Avoid ALL blocking calls (i.e. things that require a lock on the
+// registration tracking structs) in this method because it will block and
+// prevent the station from ingesting new registrations.
 func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([]*cj.DecoyRegistration, error) {
 	msg, err := sub.RecvBytes(0)
 	if err != nil {
@@ -276,20 +303,17 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 		return nil, err
 	}
 
+	// Generate keys from shared secret using HKDF
 	conjureKeys, err := cj.GenSharedKeys(parsed.SharedSecret)
+
+	// if wither addres is not provided (reg came over api / client ip
+	// logging disabled) fill with zeros to avoid nil dereference.
 	if parsed.GetRegistrationAddress() == nil {
 		parsed.RegistrationAddress = make([]byte, 16, 16)
 	}
 	if parsed.GetDecoyAddress() == nil {
 		parsed.DecoyAddress = make([]byte, 16, 16)
 	}
-
-	// If client IP logging is disabled DO NOT parse source IP.
-	var sourceAddr, decoyAddr net.IP
-	if logClientIP {
-		sourceAddr = net.IP(parsed.RegistrationAddress)
-	}
-	decoyAddr = net.IP(parsed.DecoyAddress)
 
 	// Register one or both of v4 and v6 based on support specified by the client
 	var newRegs []*cj.DecoyRegistration
@@ -301,22 +325,8 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 			return nil, err
 		}
 
-		if regManager.RegistrationExists(reg) {
-			// log phantom IP, shared secret, ipv6 support
-			logger.Printf("Duplicate registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
-		} else {
-			// log phantom IP, shared secret, ipv6 support
-			logger.Printf("New registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
-
-			// add to list of new registrations to be processed.
-			newRegs = append(newRegs, reg)
-		}
-
-		// Track the received registration, if it is already tracked it will just update the record
-		regManager.TrackRegistration(reg)
-		if err != nil {
-			return nil, err
-		}
+		// Received new registration, parse it and return
+		newRegs = append(newRegs, reg)
 	}
 
 	if parsed.RegistrationPayload.GetV6Support() {
@@ -325,24 +335,22 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager) ([
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err
 		}
-		if regManager.RegistrationExists(reg) {
-			// log phantom IP, shared secret, ipv6 support
-			logger.Printf("Duplicate registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
-		} else {
-			// log phantom IP, shared secret, ipv6 support
-			logger.Printf("New registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, reg.String())
 
-			// add to list of new registrations to be processed.
-			newRegs = append(newRegs, reg)
-		}
-
-		// Track the received registration, if it is already tracked it will just update the record
-		regManager.TrackRegistration(reg)
-		if err != nil {
-			return nil, err
-		}
+		// add to list of new registrations to be processed.
+		newRegs = append(newRegs, reg)
 	}
 
+	// If client IP logging is disabled DO NOT parse source IP.
+	var sourceAddr, decoyAddr net.IP
+	if logClientIP {
+		sourceAddr = net.IP(parsed.RegistrationAddress)
+	}
+	decoyAddr = net.IP(parsed.DecoyAddress)
+
+	// log decoy connection and id string
+	if len(newRegs) > 0 {
+		logger.Printf("received registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, newRegs[0].IDString())
+	}
 	return newRegs, nil
 }
 
