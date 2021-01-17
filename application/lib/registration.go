@@ -363,7 +363,7 @@ func phantomIsLive(address string) (bool, error) {
 	select {
 	case err := <-dialError:
 		if e, ok := err.(net.Error); ok && e.Timeout() {
-			return false, "Reached connection timeout"
+			return false, fmt.Errorf("Reached connection timeout")
 		}
 		if err != nil {
 			return true, err
