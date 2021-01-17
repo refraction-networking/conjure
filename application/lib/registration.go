@@ -362,7 +362,9 @@ func phantomIsLive(address string) (bool, error) {
 	// If any return errors or connect then return nil before deadline it is live
 	select {
 	case err := <-dialError:
-		// fmt.Printf("Received: %v\n", err)
+		if e, ok := err.(net.Error); ok && e.Timeout() {
+			return false, "Reached connection timeout"
+		}
 		if err != nil {
 			return true, err
 		}

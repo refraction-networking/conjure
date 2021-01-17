@@ -218,7 +218,6 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 				if err != nil {
 					logger.Println("error tracking registration: ", err)
 				}
-				continue
 
 				// If registration is trying to connect to a dark decoy that is blocklisted continue
 				covertStr, _, err := net.SplitHostPort(reg.Covert)
