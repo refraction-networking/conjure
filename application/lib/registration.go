@@ -362,7 +362,9 @@ func phantomIsLive(address string) (bool, error) {
 	// If any return errors or connect then return nil before deadline it is live
 	select {
 	case err := <-dialError:
-		// fmt.Printf("Received: %v\n", err)
+		if e, ok := err.(net.Error); ok && e.Timeout() {
+			return false, fmt.Errorf("Reached connection timeout")
+		}
 		if err != nil {
 			return true, err
 		}
@@ -560,15 +562,12 @@ type regExpireLogMsg struct {
 	RegCount   int32
 }
 
-// This whole process of tracking timeouts and registrations separately
-// makes less and less sense every time I come back to it.
-func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
+func (r *RegisteredDecoys) getExpiredRegistrations() []string {
+	r.m.RLock()
+	defer r.m.RUnlock()
+
 	const regTimeout = time.Minute * 2
-	cutoff := time.Now().Add(-regTimeout)
-
-	r.m.Lock()
-	defer r.m.Unlock()
-
+	var cutoff = time.Now().Add(-regTimeout)
 	var expiredRegTimeoutIndices = []string{}
 
 	for idx, decoyTimeout := range r.decoysTimeouts {
@@ -579,30 +578,57 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 		}
 	}
 
+	return expiredRegTimeoutIndices
+}
+
+func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	expiredReg := r.decoysTimeouts[index]
+	expiredRegObj, ok := r.decoys[expiredReg.decoy][expiredReg.identifier]
+	if !ok {
+		return nil
+	}
+
+	stats := &regExpireLogMsg{
+		DecoyAddr:  expiredReg.decoy,
+		Reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
+		RegID:      expiredReg.regID,
+		RegCount:   expiredRegObj.regCount,
+	}
+
+	// remove from timeout tracking
+	delete(r.decoysTimeouts, index)
+
+	// remove from decoy tracking
+	delete(r.decoys[expiredReg.decoy], expiredReg.identifier)
+
+	// if no more registration exist for this phantom clean up
+	if len(r.decoys[expiredReg.decoy]) == 0 {
+		delete(r.decoys, expiredReg.decoy)
+	}
+
+	return stats
+}
+
+// This whole process of tracking timeouts and registrations separately
+// makes less and less sense every time I come back to it.
+// Note: please try to limit duration that this process is capable of taking the
+// lock on the RegisteredDecoys mutex to prevent thread locking.
+func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
+	var expiredRegTimeoutIndices = r.getExpiredRegistrations()
+
 	logger.Printf("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
 		r.totalRegistrations(), len(r.decoysTimeouts), len(expiredRegTimeoutIndices))
 
 	for _, idx := range expiredRegTimeoutIndices {
-		expiredReg := r.decoysTimeouts[idx]
-		expiredRegObj, ok := r.decoys[expiredReg.decoy][expiredReg.identifier]
-		if !ok {
-			continue
+
+		stats := r.removeRegistration(idx)
+		if stats != nil {
+			statsStr, _ := json.Marshal(stats)
+			logger.Printf("expired registration %s", statsStr)
 		}
-
-		// remove from decoy tracking
-		delete(r.decoys[expiredReg.decoy], expiredReg.identifier)
-		stats := regExpireLogMsg{
-			DecoyAddr:  expiredReg.decoy,
-			Reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
-			RegID:      expiredReg.regID,
-			RegCount:   expiredRegObj.regCount,
-		}
-		statsStr, _ := json.Marshal(stats)
-
-		// remove from timeout tracking
-		delete(r.decoysTimeouts, idx)
-
-		logger.Printf("expired registration %s", statsStr)
 	}
 }
 
