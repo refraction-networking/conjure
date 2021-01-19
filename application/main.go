@@ -132,7 +132,7 @@ readLoop:
 			return
 		}
 		received.Write(buf[:n])
-		logger.Printf("read %d bytes so far", received.Len())
+		// logger.Printf("read %d bytes so far", received.Len())
 
 	transports:
 		for i, t := range possibleTransports {
@@ -140,7 +140,7 @@ readLoop:
 			if errors.Is(err, transports.ErrTryAgain) {
 				continue transports
 			} else if errors.Is(err, transports.ErrNotTransport) {
-				logger.Printf("not transport %s, removing from checks\n", t.Name())
+				// logger.Printf("not transport %s, removing from checks\n", t.Name())
 				delete(possibleTransports, i)
 				continue transports
 			} else if err != nil {
@@ -200,7 +200,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 
 				if regManager.RegistrationExists(reg) {
 					// log phantom IP, shared secret, ipv6 support
-					logger.Printf("Duplicate registration: %v\n", reg.IDString())
+					logger.Printf("Duplicate registration: %v %s\n", reg.IDString(), reg.RegistrationSource)
 
 					// Track the received registration, if it is already tracked it will just update the record
 					err := regManager.TrackRegistration(reg)
@@ -348,7 +348,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 
 	// log decoy connection and id string
 	if len(newRegs) > 0 {
-		logger.Printf("received registration: '%v' -> '%v' %v\n", sourceAddr, decoyAddr, newRegs[0].IDString())
+		logger.Printf("received registration: '%v' -> '%v' %v %s\n", sourceAddr, decoyAddr, newRegs[0].IDString(), parsed.RegistrationSource)
 	}
 	return newRegs, nil
 }
@@ -411,7 +411,7 @@ func main() {
 		newConn, err := ln.AcceptTCP()
 		if err != nil {
 			logger.Printf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
-			return // continue?
+			continue
 		}
 		go handleNewConn(regManager, newConn)
 	}

@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
@@ -633,8 +632,8 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 }
 
 func registerForDetector(reg *DecoyRegistration) {
-	client, err := getRedisClient()
-	if err != nil {
+	client := getRedisClient()
+	if client == nil {
 		fmt.Printf("couldn't connect to redis")
 	} else {
 		if reg.DarkDecoy.To4() != nil {
@@ -644,21 +643,4 @@ func registerForDetector(reg *DecoyRegistration) {
 		}
 		client.Close()
 	}
-}
-
-func getRedisClient() (*redis.Client, error) {
-	var client *redis.Client
-	client = redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
-		PoolSize: 10,
-	})
-
-	_, err := client.Ping().Result()
-	if err != nil {
-		return client, err
-	}
-
-	return client, err
 }
