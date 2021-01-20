@@ -24,7 +24,7 @@ func initRedisClient() {
 		Addr:     "localhost:6379",
 		Password: "",
 		DB:       0,
-		PoolSize: 10,
+		PoolSize: 100,
 	})
 
 	// Ping to test redis connection

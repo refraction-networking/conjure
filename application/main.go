@@ -161,7 +161,6 @@ readLoop:
 		}
 	}
 
-	// TODO logging-client-ip
 	cj.Proxy(reg, wrapped, logger)
 }
 
