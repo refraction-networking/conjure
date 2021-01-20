@@ -220,9 +220,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 				}
 
 				// If registration is trying to connect to a dark decoy that is blocklisted continue
-				covertStr, _, err := net.SplitHostPort(reg.Covert)
-				covert := net.ParseIP(covertStr)
-				if covert == nil || err != nil || conf.IsBlocklisted(covert) {
+				if reg.Covert == "" || conf.IsBlocklisted(reg.Covert) {
 					logger.Printf("Dropping reg, malformed or blocklisted covert: %v, %s, %v", reg.IDString(), reg.Covert, err)
 					continue
 				}

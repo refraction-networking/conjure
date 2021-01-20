@@ -134,14 +134,15 @@ func TestLivenessCheck(t *testing.T) {
 	}
 }
 
+// TODO
 func TestRegisterForDetector(t *testing.T) {
 	darkDecoyAddr := net.ParseIP("1.2.3.4")
 	reg := DecoyRegistration{
 		DarkDecoy: darkDecoyAddr,
 	}
 
-	client, err := getRedisClient()
-	if err != nil {
+	client := getRedisClient()
+	if client == nil {
 		t.Fatalf("couldn't connect to redis\n")
 	}
 	pubsub := client.Subscribe(DETECTOR_REG_CHANNEL)
