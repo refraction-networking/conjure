@@ -638,9 +638,19 @@ func registerForDetector(reg *DecoyRegistration) {
 		return
 	}
 
-	if reg.DarkDecoy.To4() != nil {
-		client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To4()))
-	} else {
-		client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To16()))
+	duration := uint64(3 * time.Minute.Nanoseconds())
+	src := ""
+	phantom := reg.DarkDecoy.String()
+	msg := &pb.StationToDetector{
+		PhantomIp: &phantom,
+		ClientIp:  &src,
+		TimeoutNs: &duration,
 	}
+
+	s2d, err := proto.Marshal(msg)
+	if err != nil {
+		// throw(fit)
+		return
+	}
+	client.Publish(DETECTOR_REG_CHANNEL, string(s2d))
 }

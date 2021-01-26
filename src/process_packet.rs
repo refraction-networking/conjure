@@ -213,7 +213,7 @@ impl PerCoreGlobal
         }
 
         let dd_flow = FlowNoSrcPort::from_flow(&flow);
-        if self.flow_tracker.is_registered_dark_decoy(&dd_flow) {
+        if self.flow_tracker.is_phantom_session(&dd_flow) {
 
             // Handle packet destined for registered IP
             match self.filter_station_traffic(flow.src_ip.to_string()) {
@@ -226,8 +226,8 @@ impl PerCoreGlobal
                         debug!("Connection for registered Phantom {}", flow);
                     }
                 
-                    // Update expire time
-                    self.flow_tracker.mark_dark_decoy(&dd_flow);
+                    // Update expire time if necessary
+                    self.flow_tracker.update_phantom_flow(&dd_flow);
     
                     // Forward packet...
                     self.forward_pkt(&ip_pkt);

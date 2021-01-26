@@ -181,9 +181,15 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 		t.Fatalf("no messages received\n")
 	}
 
-	// // reconstruct IP from message
-	received := net.IP(msg.Payload)
-	// t.Logf("%s, %+v", received, []byte(msg.Payload))
+	// reconstruct IP from message
+	parsed := &pb.StationToDetector{}
+	err := proto.Unmarshal([]byte(msg.Payload), parsed)
+	if err != nil {
+		t.Fatalf("Failed to parse protobuf")
+	}
+
+	// reconstruct IP from message
+	received := net.ParseIP(*parsed.PhantomIp)
 
 	// check IP equality
 	if reg.DarkDecoy.String() != received.String() {
@@ -223,8 +229,14 @@ func TestRegisterForDetectorArray(t *testing.T) {
 		}
 
 		// reconstruct IP from message
-		received := net.IP(msg.Payload)
-		// t.Logf("%s, %+v", received, []byte(msg.Payload))
+		parsed := &pb.StationToDetector{}
+		err := proto.Unmarshal([]byte(msg.Payload), parsed)
+		if err != nil {
+			t.Fatalf("Failed to parse protobuf")
+		}
+
+		// reconstruct IP from message
+		received := net.ParseIP(*parsed.PhantomIp)
 
 		// check IP equality
 		if reg.DarkDecoy.String() != received.String() {
@@ -274,10 +286,16 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 			}
 
 			// reconstruct IP from message
-			received := net.IP(msg.Payload)
-			if received == nil {
+			parsed := &pb.StationToDetector{}
+			err := proto.Unmarshal([]byte(msg.Payload), parsed)
+			if err != nil {
 				failed = true
 			}
+
+			// received := net.IP(msg.Payload)
+			// if received == nil {
+			// 	failed = true
+			// }
 			i++
 			wg.Done()
 		}
