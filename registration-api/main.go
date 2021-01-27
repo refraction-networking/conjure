@@ -145,8 +145,11 @@ func (s *server) processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr [
 
 	// If the address that the registration was received from was NOT set in the
 	// C2SWrapper set it here to the source address of the API request.
-	if clientToAPIProto.RegistrationAddress == nil {
+	if clientToAPIProto.GetRegistrationAddress() == nil ||
+		clientToAPIProto.GetRegistrationSource() == pb.RegistrationSource_API {
 		payload.RegistrationAddress = clientAddr
+	} else {
+		payload.RegistrationAddress = clientToAPIProto.GetRegistrationAddress()
 	}
 
 	payload.SharedSecret = clientToAPIProto.GetSharedSecret()

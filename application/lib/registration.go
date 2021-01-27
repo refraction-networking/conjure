@@ -199,6 +199,7 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
 	DarkDecoy          net.IP
+	RegistrationAddr   net.IP
 	Keys               *ConjureSharedKeys
 	Covert, Mask       string
 	Flags              *pb.RegistrationFlags
@@ -314,6 +315,7 @@ func (reg *DecoyRegistration) GenerateC2SWrapper() *pb.C2SWrapper {
 		SharedSecret:        reg.Keys.SharedSecret,
 		RegistrationPayload: c2s,
 		RegistrationSource:  &source,
+		RegistrationAddress: []byte(reg.RegistrationAddr),
 	}
 	return protoPayload
 }
