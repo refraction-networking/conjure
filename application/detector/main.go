@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"time"
 
 	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
@@ -22,7 +24,7 @@ type Detector struct {
 	FilterList []string
 
 	// Check if a packet is registered based on the destination address
-	IsRegistered func(addr string) bool
+	IsRegistered func(src, dst string, dstPort uint16) bool
 
 	// Tags checked for routing investigation purposes.
 	Tags []string
@@ -30,9 +32,15 @@ type Detector struct {
 	// Logger provided by initializing application.
 	Logger *log.Logger
 
+	// bool for independent thread to synchronize exit.
+	exit bool
+
+	// How often to log
+	StatsFrequency int
+
 	// TODO
 	// Stats tracking to mimic rust station
-	stats int
+	stats *DetectorStats
 }
 
 // Run sets the detector running, capturing traffic and processing checking for
@@ -56,21 +64,55 @@ func (det *Detector) Run() {
 		log.Fatal(err)
 	}
 
+	go det.spawnStatsThread()
+
 	// Actually process packets
 	source := gopacket.NewPacketSource(handler, handler.LinkType())
 	for packet := range source.Packets() {
 		det.handlePacket(packet)
 	}
 
+	det.exit = true
 	det.Logger.Printf("Detector Shutting Down\n")
 }
 
+func (det *Detector) spawnStatsThread() {
+	for {
+		det.Logger.Println(det.stats.Report())
+		det.stats.Reset()
+
+		if det.exit {
+			return
+		}
+		time.Sleep(time.Duration(det.StatsFrequency) * time.Second)
+	}
+}
+
 func (det *Detector) handlePacket(packet gopacket.Packet) {
+	dst := packet.NetworkLayer().NetworkFlow().Dst()
+	src := packet.NetworkLayer().NetworkFlow().Src()
+	var dstPort uint16
+
+	det.stats.BytesTotal += uint64(packet.Metadata().CaptureLength)
+	switch len(dst.Raw()) {
+	case 4:
+		det.stats.V4PacketCount++
+	case 16:
+		det.stats.V6PacketCount++
+	default:
+		det.Logger.Warn("IP is not valid as IPv4 or IPv6")
+	}
+
+	if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+		tcp, _ := tcpLayer.(*layers.TCP)
+		dstPort = uint16(tcp.DstPort)
+	} else {
+		return
+	}
 
 	det.checkForTags(packet)
 
-	dst := packet.NetworkLayer().NetworkFlow().Dst()
-	if det.IsRegistered(dst.String()) {
+	if det.IsRegistered(dst.String(), src.String(), dstPort) {
 		det.forwardPacket(packet)
 	}
 }
@@ -82,7 +124,7 @@ func (det *Detector) checkForTags(packet gopacket.Packet) {
 		if bytes.Contains(packet.ApplicationLayer().Payload(), []byte(tag)) {
 			dst := packet.NetworkLayer().NetworkFlow().Dst()
 			src := packet.NetworkLayer().NetworkFlow().Src()
-			det.Logger.Println(src, "->", dst)
+			det.Logger.Println("confirmed", src, "->", dst)
 		}
 	}
 }
@@ -134,10 +176,12 @@ func main() {
 	det := &Detector{
 		Iface:      iface,
 		FilterList: []string{"192.168.1.104"},
-		IsRegistered: func(addr string) bool {
+		IsRegistered: func(src, dst string, dstPort uint16) bool {
 			return true
 		},
-		Logger: logrus.New(),
+		Logger:         logrus.New(),
+		stats:          &DetectorStats{},
+		StatsFrequency: 3,
 	}
 
 	det.Run()
