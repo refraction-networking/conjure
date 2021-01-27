@@ -154,6 +154,39 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	return &reg, nil
 }
 
+// NewRegistrationC2SWrapper creates a new registration from details provided. Adds the registration
+// to tracking map, But marks it as not valid.
+func (regManager *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, includeV6 bool) (*DecoyRegistration, error) {
+	c2s := c2sw.GetRegistrationPayload()
+
+	// Generate keys from shared secret using HKDF
+	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret())
+
+	phantomAddr, err := regManager.PhantomSelector.Select(
+		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to select phantom IP address: %v", err)
+	}
+
+	regSrc := c2sw.GetRegistrationSource()
+	reg := DecoyRegistration{
+		DarkDecoy:          phantomAddr,
+		registrationAddr:   net.IP(c2sw.GetRegistrationAddress()),
+		Keys:               &conjureKeys,
+		Covert:             c2s.GetCovertAddress(),
+		Mask:               c2s.GetMaskedDecoyServerName(),
+		Flags:              c2s.Flags,
+		Transport:          c2s.GetTransport(),
+		DecoyListVersion:   c2s.GetDecoyListGeneration(),
+		RegistrationTime:   time.Now(),
+		RegistrationSource: &regSrc,
+		regCount:           0,
+	}
+
+	return &reg, nil
+}
+
 // TrackRegistration adds the registration to the map WITHOUT marking it valid.
 func (regManager *RegistrationManager) TrackRegistration(d *DecoyRegistration) error {
 	err := regManager.registeredDecoys.Track(d)
@@ -199,7 +232,7 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
 	DarkDecoy          net.IP
-	RegistrationAddr   net.IP
+	registrationAddr   net.IP
 	Keys               *ConjureSharedKeys
 	Covert, Mask       string
 	Flags              *pb.RegistrationFlags
@@ -315,7 +348,7 @@ func (reg *DecoyRegistration) GenerateC2SWrapper() *pb.C2SWrapper {
 		SharedSecret:        reg.Keys.SharedSecret,
 		RegistrationPayload: c2s,
 		RegistrationSource:  &source,
-		RegistrationAddress: []byte(reg.RegistrationAddr),
+		RegistrationAddress: []byte(reg.registrationAddr),
 	}
 	return protoPayload
 }
@@ -641,7 +674,7 @@ func registerForDetector(reg *DecoyRegistration) {
 	}
 
 	duration := uint64(3 * time.Minute.Nanoseconds())
-	src := reg.RegistrationAddr.String()
+	src := reg.registrationAddr.String()
 	phantom := reg.DarkDecoy.String()
 	msg := &pb.StationToDetector{
 		PhantomIp: &phantom,

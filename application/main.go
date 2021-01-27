@@ -304,9 +304,6 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 		return nil, err
 	}
 
-	// Generate keys from shared secret using HKDF
-	conjureKeys, err := cj.GenSharedKeys(parsed.SharedSecret)
-
 	// if either addres is not provided (reg came over api / client ip
 	// logging disabled) fill with zeros to avoid nil dereference.
 	if parsed.GetRegistrationAddress() == nil {
@@ -317,33 +314,31 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 	}
 
 	// If client IP logging is disabled DO NOT parse source IP.
-	var sourceAddr, decoyAddr net.IP
+	var sourceAddr, phantomAddr net.IP
 	sourceAddr = net.IP(parsed.GetRegistrationAddress())
-	decoyAddr = net.IP(parsed.GetDecoyAddress())
+	phantomAddr = net.IP(parsed.GetDecoyAddress())
 
 	// Register one or both of v4 and v6 based on support specified by the client
 	var newRegs []*cj.DecoyRegistration
 
 	// if the clients address is ipv6 skip creating an ipv4 registration.
-	if parsed.RegistrationPayload.GetV4Support() && conf.EnableIPv4 && sourceAddr.To4 != nil {
-		reg, err := regManager.NewRegistration(parsed.RegistrationPayload, &conjureKeys, false, parsed.RegistrationSource)
+	if parsed.GetRegistrationPayload().GetV4Support() && conf.EnableIPv4 && sourceAddr.To4() != nil {
+		reg, err := regManager.NewRegistrationC2SWrapper(parsed, false)
 		if err != nil {
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err
 		}
-		reg.RegistrationAddr = net.IP(parsed.GetRegistrationAddress())
 
 		// Received new registration, parse it and return
 		newRegs = append(newRegs, reg)
 	}
 
-	if parsed.RegistrationPayload.GetV6Support() && conf.EnableIPv6 {
-		reg, err := regManager.NewRegistration(parsed.RegistrationPayload, &conjureKeys, true, parsed.RegistrationSource)
+	if parsed.GetRegistrationPayload().GetV6Support() && conf.EnableIPv6 {
+		reg, err := regManager.NewRegistrationC2SWrapper(parsed, true)
 		if err != nil {
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err
 		}
-		reg.RegistrationAddr = net.IP(parsed.GetRegistrationAddress())
 
 		// add to list of new registrations to be processed.
 		newRegs = append(newRegs, reg)
@@ -352,9 +347,9 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 	// log decoy connection and id string
 	if len(newRegs) > 0 {
 		if logClientIP {
-			logger.Printf("received registration: '%v' -> '%v' %v %s\n", sourceAddr, decoyAddr, newRegs[0].IDString(), parsed.RegistrationSource)
+			logger.Printf("received registration: '%v' -> '%v' %v %s\n", sourceAddr, phantomAddr, newRegs[0].IDString(), parsed.GetRegistrationSource())
 		} else {
-			logger.Printf("received registration: '_' -> '%v' %v %s\n", decoyAddr, newRegs[0].IDString(), parsed.RegistrationSource)
+			logger.Printf("received registration: '_' -> '%v' %v %s\n", phantomAddr, newRegs[0].IDString(), parsed.GetRegistrationSource())
 		}
 	}
 	return newRegs, nil

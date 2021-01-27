@@ -157,7 +157,7 @@ func TestLiveness(t *testing.T) {
 func TestRegisterForDetectorOnce(t *testing.T) {
 	reg := DecoyRegistration{
 		DarkDecoy:        net.ParseIP("1.2.3.4"),
-		RegistrationAddr: net.ParseIP(""),
+		registrationAddr: net.ParseIP(""),
 	}
 
 	client := getRedisClient()
@@ -198,8 +198,8 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 		t.Fatalf("Expected Phantom %v, got %v", reg.DarkDecoy, recvPhantom)
 	}
 
-	if reg.RegistrationAddr.String() != recvClient.String() {
-		t.Fatalf("Expected Client %v, got %v", reg.RegistrationAddr, recvClient)
+	if reg.registrationAddr.String() != recvClient.String() {
+		t.Fatalf("Expected Client %v, got %v", reg.registrationAddr, recvClient)
 	}
 }
 
@@ -224,7 +224,7 @@ func TestRegisterForDetectorArray(t *testing.T) {
 	for _, addr := range addrs {
 		reg := &DecoyRegistration{
 			DarkDecoy:        net.ParseIP(addr),
-			RegistrationAddr: net.ParseIP(clientAddr),
+			registrationAddr: net.ParseIP(clientAddr),
 		}
 
 		// send message to redis pubsub, wait, then close subscriber & channel
@@ -252,8 +252,8 @@ func TestRegisterForDetectorArray(t *testing.T) {
 			t.Fatalf("Expected Phantom %v, got %v", reg.DarkDecoy, recvPhantom)
 		}
 
-		if reg.RegistrationAddr.String() != recvClient.String() {
-			t.Fatalf("Expected Client %v, got %v", reg.RegistrationAddr, recvClient)
+		if reg.registrationAddr.String() != recvClient.String() {
+			t.Fatalf("Expected Client %v, got %v", reg.registrationAddr, recvClient)
 		}
 	}
 }
@@ -283,7 +283,7 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 		wg.Add(1)
 		reg := &DecoyRegistration{
 			DarkDecoy:        net.ParseIP(addr),
-			RegistrationAddr: net.ParseIP(clientAddr),
+			registrationAddr: net.ParseIP(clientAddr),
 		}
 
 		// send message to redis pubsub, wait, then close subscriber & channel
