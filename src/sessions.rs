@@ -122,7 +122,7 @@ impl SessionDetails
             },
         };
 
-        if src.is_ipv4() != phantom.is_ipv4() {
+        if phantom.is_ipv4() && !src.is_ipv4() {
             return Err(SessionError::MixedV4V6Error)
         }
 
@@ -455,11 +455,13 @@ mod tests {
             ("192.168.0.1", "10.10.0.1", 100000),
             ("2601::123:abcd", "2001::1234", 100000),
             ("", "2001::1234", 100000),
+ 
+            // client registering with v4 will also create registrations for v6 just in-case
+             ("192.168.0.1", "2801::1234", 100000),
         ];
         let test_tuples_bad = [
             // Mixed ipv4/ipv6 phantom/client
             ("2001::1234", "10.10.0.1", 100000, SessionError::MixedV4V6Error),
-            ("192.168.0.1", "2001::1234", 100000, SessionError::MixedV4V6Error),
 
             // no phantom provided
             ("192.168.0.1", "", 100000, SessionError::InvalidPhantom),
@@ -520,7 +522,10 @@ mod tests {
             ("192.168.0.1", "192.0.0.127", 100000),     // duplicate client_addr
             ("2601::123:abcd", "2001::1234", 100000),
             ("", "2001::1234", 100000),                 // duplicate phantom Addr
-            ("172.128.0.2", "8.0.0.1", 1)               // timeout immediately
+            ("172.128.0.2", "8.0.0.1", 1),              // timeout immediately
+            
+            // client registering with v4 will also create registrations for v6 just in-case
+            ("192.168.0.1", "2801::1234", 100000),
         ];
 
         for entry in &test_tuples {
@@ -528,7 +533,7 @@ mod tests {
             st.insert_session(s1);
         }
 
-        if st.len() != 4 {
+        if st.len() != 5 {
             panic!("Either len is not working or insert is broken")
         };
 
@@ -552,7 +557,7 @@ mod tests {
         st._delete_session(sd);
 
 
-        if st.len() != 3 {
+        if st.len() != 4 {
             panic!("Either len is not working or delete is broken")
         };
     }
@@ -565,7 +570,10 @@ mod tests {
             // (client_ip, phantom_ip, timeout)
             ("172.128.0.2", "8.0.0.1", 1, false),            // timeout immediately
             ("192.168.0.1", "10.10.0.1", 5*S2NS, true),
-            ("192.168.0.1", "192.0.0.127", 5*S2NS, true),     
+            ("192.168.0.1", "192.0.0.127", 5*S2NS, true),    
+ 
+            // client registering with v4 will also create registrations for v6 just in-case
+             ("192.168.0.1", "2801::1234", 5*S2NS, true),
             
             // duplicate with shorter timeout should not drop
             ("2601::123:abcd", "2001::1234", 5*S2NS, true),
@@ -597,6 +605,6 @@ mod tests {
 
         thread::sleep(dur);
         
-        assert_eq!(st.drop_stale_sessions(), 4);
+        assert_eq!(st.drop_stale_sessions(), 5);
     }
 }

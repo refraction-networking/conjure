@@ -666,6 +666,9 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 	}
 }
 
+// **NOTE**: If you mess with this function make sure the
+// session tracking tests on the detector side do what you expect
+// them to do. (conjure/src/session.rs)
 func registerForDetector(reg *DecoyRegistration) {
 	client := getRedisClient()
 	if client == nil {
