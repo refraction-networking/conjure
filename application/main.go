@@ -285,6 +285,11 @@ func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint s
 // **NOTE** : Avoid ALL blocking calls (i.e. things that require a lock on the
 // registration tracking structs) in this method because it will block and
 // prevent the station from ingesting new registrations.
+// **NOTE2**: If the registration address is IPv4 we will create registrations
+// for both IPv4 decoy and IPv6 decoy. However, If the client Address from
+// registrations is IPv6 we will only create an ipv6 registration because
+// 		1) we have no client address to match on for ipv4
+//	 	2) the client _should_ support ipv6
 func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, conf *cj.Config) ([]*cj.DecoyRegistration, error) {
 	msg, err := sub.RecvBytes(0)
 	if err != nil {
@@ -311,10 +316,16 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 		parsed.DecoyAddress = make([]byte, 16, 16)
 	}
 
+	// If client IP logging is disabled DO NOT parse source IP.
+	var sourceAddr, decoyAddr net.IP
+	sourceAddr = net.IP(parsed.GetRegistrationAddress())
+	decoyAddr = net.IP(parsed.GetDecoyAddress())
+
 	// Register one or both of v4 and v6 based on support specified by the client
 	var newRegs []*cj.DecoyRegistration
 
-	if parsed.RegistrationPayload.GetV4Support() && conf.EnableIPv4 {
+	// if the clients address is ipv6 skip creating an ipv4 registration.
+	if parsed.RegistrationPayload.GetV4Support() && conf.EnableIPv4 && sourceAddr.To4 != nil {
 		reg, err := regManager.NewRegistration(parsed.RegistrationPayload, &conjureKeys, false, parsed.RegistrationSource)
 		if err != nil {
 			logger.Printf("Failed to create registration: %v", err)
@@ -338,16 +349,13 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 		newRegs = append(newRegs, reg)
 	}
 
-	// If client IP logging is disabled DO NOT parse source IP.
-	var sourceAddr, decoyAddr net.IP
-	if logClientIP {
-		sourceAddr = net.IP(parsed.GetRegistrationAddress())
-	}
-	decoyAddr = net.IP(parsed.DecoyAddress)
-
 	// log decoy connection and id string
 	if len(newRegs) > 0 {
-		logger.Printf("received registration: '%v' -> '%v' %v %s\n", sourceAddr, decoyAddr, newRegs[0].IDString(), parsed.RegistrationSource)
+		if logClientIP {
+			logger.Printf("received registration: '%v' -> '%v' %v %s\n", sourceAddr, decoyAddr, newRegs[0].IDString(), parsed.RegistrationSource)
+		} else {
+			logger.Printf("received registration: '_' -> '%v' %v %s\n", decoyAddr, newRegs[0].IDString(), parsed.RegistrationSource)
+		}
 	}
 	return newRegs, nil
 }
