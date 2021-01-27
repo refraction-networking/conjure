@@ -62,8 +62,18 @@ func generateC2SWrapperPayload() (c2API *pb.C2SWrapper, marshaledc2API []byte) {
 
 func TestC2SWrapperProcessing(t *testing.T) {
 	c2API, _ := generateC2SWrapperPayload()
+	messageChan := make(chan []byte, 1)
+	accepter := func(m []byte) error {
+		messageChan <- m
+		return nil
+	}
 
-	zmqPayload, err := processC2SWrapper(c2API, []byte(net.ParseIP("127.0.0.1").To16()))
+	s := server{
+		messageAccepter: accepter,
+		logger:          logger,
+	}
+
+	zmqPayload, err := s.processC2SWrapper(c2API, []byte(net.ParseIP("127.0.0.1").To16()))
 	if err != nil {
 		t.Fatalf("failed to generate ZMQ payload: expected nil, got %v", err)
 	}
@@ -100,7 +110,7 @@ func TestC2SWrapperProcessing(t *testing.T) {
 
 	altSource := pb.RegistrationSource_DetectorPrescan
 	c2API.RegistrationSource = &altSource
-	zmqPayload, err = processC2SWrapper(c2API, []byte(net.ParseIP("127.0.0.1").To16()))
+	zmqPayload, err = s.processC2SWrapper(c2API, []byte(net.ParseIP("127.0.0.1").To16()))
 	if err != nil {
 		t.Fatalf("failed to generate ZMQ payload: expected nil, got %v", err)
 	}
@@ -116,7 +126,7 @@ func TestC2SWrapperProcessing(t *testing.T) {
 	}
 }
 
-func TestCorrectRegistration(t *testing.T) {
+func TestCorrectRegistrationAPI(t *testing.T) {
 	messageChan := make(chan []byte, 1)
 	accepter := func(m []byte) error {
 		messageChan <- m
@@ -127,16 +137,80 @@ func TestCorrectRegistration(t *testing.T) {
 		messageAccepter: accepter,
 		logger:          logger,
 	}
+	s.logClientIP = true
 
-	_, body := generateC2SWrapperPayload()
+	c2API, _ := generateC2SWrapperPayload()
+	regSrc := pb.RegistrationSource_API
+	c2API.RegistrationSource = &regSrc
+	c2API.RegistrationAddress = net.ParseIP("8.8.8.8").To16()
+	body, _ := proto.Marshal(c2API)
+
 	r := httptest.NewRequest("POST", "/register", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
 	s.register(w, r)
 
 	select {
-	case <-messageChan:
-		// We already tested the payload generation above, so here we're just confirming it arrives
+	case m := <-messageChan:
+		// We already tested the payload generation above, so here we're just
+		// confirming it arrives with the correct modifications
+		payload := &pb.C2SWrapper{}
+		if err := proto.Unmarshal(m, payload); err != nil {
+			t.Fatalf("Bad C2Swrapper returned")
+		}
+
+		// If the Address isn't re-written for API registrar source throw error
+		if net.IP(payload.GetRegistrationAddress()).String() == "8.8.8.8" {
+			t.Fatalf("Registration Address should be overwritten for API registrar")
+		}
+
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("timed out waiting for message from endpoint")
+	}
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("response code mismatch: expected %d, got %d", http.StatusNoContent, w.Code)
+	}
+
+}
+
+func TestCorrectRegistrationPrescan(t *testing.T) {
+	messageChan := make(chan []byte, 1)
+	accepter := func(m []byte) error {
+		messageChan <- m
+		return nil
+	}
+
+	s := server{
+		messageAccepter: accepter,
+		logger:          logger,
+	}
+	s.logClientIP = true
+	c2API, _ := generateC2SWrapperPayload()
+	regSrc := pb.RegistrationSource_DetectorPrescan
+	c2API.RegistrationSource = &regSrc
+	c2API.RegistrationAddress = net.ParseIP("8.8.8.8").To16()
+	body, _ := proto.Marshal(c2API)
+
+	r := httptest.NewRequest("POST", "/register", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	s.register(w, r)
+
+	select {
+	case m := <-messageChan:
+		// We already tested the payload generation above, so here we're just
+		// confirming it arrives with the correct modifications
+		payload := &pb.C2SWrapper{}
+		if err := proto.Unmarshal(m, payload); err != nil {
+			t.Fatalf("Bad C2Swrapper returned")
+		}
+
+		// If the Address is re-written for DetectorPreScan registrar source throw error
+		if net.IP(payload.GetRegistrationAddress()).String() != "8.8.8.8" {
+			t.Fatalf("Registration Address should not be overwritten for API registrar")
+		}
+
 	case <-time.After(100 * time.Millisecond):
 		t.Fatalf("timed out waiting for message from endpoint")
 	}
@@ -151,6 +225,7 @@ func TestIncorrectMethod(t *testing.T) {
 		messageAccepter: nil,
 		logger:          logger,
 	}
+	s.logClientIP = true
 
 	r := httptest.NewRequest("GET", "/register", nil)
 	w := httptest.NewRecorder()

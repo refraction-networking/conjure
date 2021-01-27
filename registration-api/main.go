@@ -53,11 +53,11 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Forwarded-For") != "" {
 		requestIP = r.Header.Get("X-Forwarded-For")
 	}
-	if !s.logClientIP {
-		requestIP = ""
+	if s.logClientIP {
+		s.logger.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
+	} else {
+		s.logger.Printf("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
 	}
-
-	s.logger.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
 
 	const MinimumRequestLength = SecretLength + 1 // shared_secret + VSP
 	if r.Method != "POST" {
@@ -85,8 +85,6 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
 		return
 	}
-
-	// s.logger.Printf("received successful registration for covert address %s\n", payload.RegistrationPayload.GetCovertAddress())
 
 	clientAddr := parseIP(requestIP)
 	var clientAddrBytes = make([]byte, 16, 16)
