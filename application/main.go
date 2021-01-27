@@ -302,7 +302,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 	// Generate keys from shared secret using HKDF
 	conjureKeys, err := cj.GenSharedKeys(parsed.SharedSecret)
 
-	// if wither addres is not provided (reg came over api / client ip
+	// if either addres is not provided (reg came over api / client ip
 	// logging disabled) fill with zeros to avoid nil dereference.
 	if parsed.GetRegistrationAddress() == nil {
 		parsed.RegistrationAddress = make([]byte, 16, 16)
@@ -320,6 +320,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err
 		}
+		reg.RegistrationAddr = net.IP(parsed.GetRegistrationAddress())
 
 		// Received new registration, parse it and return
 		newRegs = append(newRegs, reg)
@@ -331,6 +332,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err
 		}
+		reg.RegistrationAddr = net.IP(parsed.GetRegistrationAddress())
 
 		// add to list of new registrations to be processed.
 		newRegs = append(newRegs, reg)
@@ -339,7 +341,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 	// If client IP logging is disabled DO NOT parse source IP.
 	var sourceAddr, decoyAddr net.IP
 	if logClientIP {
-		sourceAddr = net.IP(parsed.RegistrationAddress)
+		sourceAddr = net.IP(parsed.GetRegistrationAddress())
 	}
 	decoyAddr = net.IP(parsed.DecoyAddress)
 

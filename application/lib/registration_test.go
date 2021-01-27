@@ -47,29 +47,29 @@ func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 	return *clientToStation, conjureKeys
 }
 
-func testEqualRegistrations(reg1 *DecoyRegistration, reg2 *DecoyRegistration) bool {
-	return true
-}
+// func testEqualRegistrations(reg1 *DecoyRegistration, reg2 *DecoyRegistration) bool {
+// 	return true
+// }
 
-// This is not actually working yet
-func TestCreateDecoyRegistration(t *testing.T) {
-	rm := NewRegistrationManager()
+// // This is not actually working yet
+// func TestCreateDecoyRegistration(t *testing.T) {
+// 	rm := NewRegistrationManager()
 
-	c2s, keys := mockReceiveFromDetector()
+// 	c2s, keys := mockReceiveFromDetector()
 
-	regSource := pb.RegistrationSource_Detector
+// 	regSource := pb.RegistrationSource_Detector
 
-	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support(), &regSource)
-	if err != nil {
-		t.Fatalf("Registration failed: %v", err)
-	}
+// 	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support(), &regSource)
+// 	if err != nil {
+// 		t.Fatalf("Registration failed: %v", err)
+// 	}
 
-	expectedReg := DecoyRegistration{}
+// 	expectedReg := DecoyRegistration{}
 
-	if !testEqualRegistrations(newReg, &expectedReg) {
-		t.Fatalf("Bad registration Created")
-	}
-}
+// 	if !testEqualRegistrations(newReg, &expectedReg) {
+// 		t.Fatalf("Bad registration Created")
+// 	}
+// }
 
 func TestRegistrationLookup(t *testing.T) {
 	rm := NewRegistrationManager()
@@ -156,7 +156,8 @@ func TestLiveness(t *testing.T) {
 
 func TestRegisterForDetectorOnce(t *testing.T) {
 	reg := DecoyRegistration{
-		DarkDecoy: net.ParseIP("1.2.3.4"),
+		DarkDecoy:        net.ParseIP("1.2.3.4"),
+		RegistrationAddr: net.ParseIP(""),
 	}
 
 	client := getRedisClient()
@@ -182,23 +183,29 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 	}
 
 	// reconstruct IP from message
-	parsed := &pb.StationToDetector{}
-	err := proto.Unmarshal([]byte(msg.Payload), parsed)
+	parsed := pb.StationToDetector{}
+	err := proto.Unmarshal([]byte(msg.Payload), &parsed)
 	if err != nil {
 		t.Fatalf("Failed to parse protobuf")
 	}
 
 	// reconstruct IP from message
-	received := net.ParseIP(*parsed.PhantomIp)
+	recvPhantom := net.ParseIP(parsed.GetPhantomIp())
+	recvClient := net.ParseIP(parsed.GetClientIp())
 
 	// check IP equality
-	if reg.DarkDecoy.String() != received.String() {
-		t.Fatalf("Expected %v, got %v", reg.DarkDecoy, received)
+	if reg.DarkDecoy.String() != recvPhantom.String() {
+		t.Fatalf("Expected Phantom %v, got %v", reg.DarkDecoy, recvPhantom)
+	}
+
+	if reg.RegistrationAddr.String() != recvClient.String() {
+		t.Fatalf("Expected Client %v, got %v", reg.RegistrationAddr, recvClient)
 	}
 }
 
 func TestRegisterForDetectorArray(t *testing.T) {
 	var addrs = []string{}
+	var clientAddr = "192.0.2.1"
 	for i := 0; i < 100; i++ {
 		addrs = append(addrs, fmt.Sprintf("1.2.3.%d", i))
 		addrs = append(addrs, fmt.Sprintf("2001::dead:beef:%x", i))
@@ -216,7 +223,8 @@ func TestRegisterForDetectorArray(t *testing.T) {
 
 	for _, addr := range addrs {
 		reg := &DecoyRegistration{
-			DarkDecoy: net.ParseIP(addr),
+			DarkDecoy:        net.ParseIP(addr),
+			RegistrationAddr: net.ParseIP(clientAddr),
 		}
 
 		// send message to redis pubsub, wait, then close subscriber & channel
@@ -229,18 +237,23 @@ func TestRegisterForDetectorArray(t *testing.T) {
 		}
 
 		// reconstruct IP from message
-		parsed := &pb.StationToDetector{}
-		err := proto.Unmarshal([]byte(msg.Payload), parsed)
+		parsed := pb.StationToDetector{}
+		err := proto.Unmarshal([]byte(msg.Payload), &parsed)
 		if err != nil {
 			t.Fatalf("Failed to parse protobuf")
 		}
 
 		// reconstruct IP from message
-		received := net.ParseIP(*parsed.PhantomIp)
+		recvPhantom := net.ParseIP(parsed.GetPhantomIp())
+		recvClient := net.ParseIP(parsed.GetClientIp())
 
 		// check IP equality
-		if reg.DarkDecoy.String() != received.String() {
-			t.Fatalf("Expected %v, got %v", reg.DarkDecoy, received)
+		if reg.DarkDecoy.String() != recvPhantom.String() {
+			t.Fatalf("Expected Phantom %v, got %v", reg.DarkDecoy, recvPhantom)
+		}
+
+		if reg.RegistrationAddr.String() != recvClient.String() {
+			t.Fatalf("Expected Client %v, got %v", reg.RegistrationAddr, recvClient)
 		}
 	}
 }
@@ -250,6 +263,7 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 	var wg sync.WaitGroup
 	var failed = false
 	var regNum = 100
+	var clientAddr = "192.0.2.1"
 	for i := 0; i < regNum; i++ {
 		addrs = append(addrs, fmt.Sprintf("1.2.3.%d", i))
 		addrs = append(addrs, fmt.Sprintf("2001::dead:beef:%x", i))
@@ -268,7 +282,8 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 	for _, addr := range addrs {
 		wg.Add(1)
 		reg := &DecoyRegistration{
-			DarkDecoy: net.ParseIP(addr),
+			DarkDecoy:        net.ParseIP(addr),
+			RegistrationAddr: net.ParseIP(clientAddr),
 		}
 
 		// send message to redis pubsub, wait, then close subscriber & channel
@@ -292,10 +307,10 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 				failed = true
 			}
 
-			// received := net.IP(msg.Payload)
-			// if received == nil {
-			// 	failed = true
-			// }
+			recvClient := net.ParseIP(parsed.GetClientIp())
+			if recvClient.String() != clientAddr {
+				failed = true
+			}
 			i++
 			wg.Done()
 		}

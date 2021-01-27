@@ -641,7 +641,7 @@ func registerForDetector(reg *DecoyRegistration) {
 	}
 
 	duration := uint64(3 * time.Minute.Nanoseconds())
-	src := ""
+	src := reg.RegistrationAddr.String()
 	phantom := reg.DarkDecoy.String()
 	msg := &pb.StationToDetector{
 		PhantomIp: &phantom,
