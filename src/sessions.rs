@@ -156,8 +156,8 @@ impl fmt::Display for SessionDetails {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         unsafe {
             match FLOW_CLIENT_LOG {
-                true => write!(f, "{} -> {}", self.client_ip.to_string(), self.phantom_ip.to_string()),
-                false => write!(f, "_ -> {}", self.phantom_ip.to_string()),
+                true => write!(f, "{} -> {} ({}ns)", self.client_ip.to_string(), self.phantom_ip.to_string(), self.timeout),
+                false => write!(f, "_ -> {} ({}ns)", self.phantom_ip.to_string(), self.timeout),
             }
         }
     }

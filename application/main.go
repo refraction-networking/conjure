@@ -128,7 +128,7 @@ readLoop:
 
 		n, err := clientConn.Read(buf[:])
 		if err != nil {
-			logger.Printf("got error while reading from connection, giving up: %v\n", err)
+			logger.Printf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len(), err)
 			return
 		}
 		received.Write(buf[:n])
