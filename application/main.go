@@ -181,7 +181,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 
 	for {
 
-		newRegs, err := recieve_zmq_message(sub, regManager, conf)
+		newRegs, err := receive_zmq_message(sub, regManager, conf)
 		if err != nil {
 			logger.Printf("Encountered err when creating Reg: %v\n", err)
 			continue
@@ -283,12 +283,12 @@ func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint s
 	return nil
 }
 
-// recieve_zmq_message  ingests messages from zmq and parses them into
+// receive_zmq_message  ingests messages from zmq and parses them into
 // registration structs for the registration manager to process.
 // **NOTE** : Avoid ALL blocking calls (i.e. things that require a lock on the
 // registration tracking structs) in this method because it will block and
 // prevent the station from ingesting new registrations.
-func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, conf *cj.Config) ([]*cj.DecoyRegistration, error) {
+func receive_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, conf *cj.Config) ([]*cj.DecoyRegistration, error) {
 	msg, err := sub.RecvBytes(0)
 	if err != nil {
 		logger.Printf("error reading from ZMQ socket: %v\n", err)
