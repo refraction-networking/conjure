@@ -186,6 +186,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 			logger.Printf("Encountered err when creating Reg: %v\n", err)
 			continue
 		}
+		logger.Printf("debug: received %d new registrations\n", len(newRegs))
 		if len(newRegs) == 0 {
 			// no new registration
 			continue
@@ -294,6 +295,7 @@ func receive_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 		logger.Printf("error reading from ZMQ socket: %v\n", err)
 		return nil, err
 	}
+	logger.Printf("debug: ZMQ recieved %d bytes\n", len(msg))
 
 	parsed := &pb.C2SWrapper{}
 	err = proto.Unmarshal(msg, parsed)

@@ -107,18 +107,24 @@ func ZMQProxy(c ZMQConfig) {
 			p.logger.Printf("failed to connect to %s: %v\n", connectSocket.Address, err)
 			continue
 		}
-		defer sock.Close()
+		defer func() {
+			p.logger.Printf("error: closing socket: %v", connectSocket.Address)
+			sock.Close()
+		}()
 
 		wg.Add(1)
 
 		go func(frontend *zmq.Socket, config socketConfig) {
 			p.logger.Printf("proxying for %s\n", config.Address)
 			e := zmq.Proxy(frontend, pubSock, nil)
+			p.logger.Printf("error: zmq Proxy returned!")
 			if e != nil {
 				p.logger.Printf("proxy for %s failed: %v\n", config.Address, e)
 			}
 		}(sock, connectSocket)
 	}
 
+	p.logger.Printf("Registered and proxying...")
 	wg.Wait()
+	p.logger.Printf("error: zmq proxy wait finished!")
 }
