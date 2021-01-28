@@ -23,7 +23,7 @@ pub struct Flow
 // flow log client should only ever be set at initialization so this should
 // never result in a race condition. Also all threads read the same
 // environment variable so they will all set it the same.  
-static mut FLOW_CLIENT_LOG: bool = false;
+pub static mut FLOW_CLIENT_LOG: bool = false;
 impl fmt::Display for Flow {
 
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

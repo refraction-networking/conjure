@@ -50,7 +50,7 @@ use redis;
 
 use signalling::StationToDetector;
 use protobuf::Message;
-use flow_tracker::FlowNoSrcPort;
+use flow_tracker::{FlowNoSrcPort,FLOW_CLIENT_LOG};
 
 
 const S2NS: u64= 1000*1000*1000;
@@ -152,13 +152,13 @@ impl From<&StationToDetector> for SessionResult {
 }
 
 // TODO - make accessible
-static SESSION_CLIENT_LOG: bool = false;
-
 impl fmt::Display for SessionDetails {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match SESSION_CLIENT_LOG {
-            true => write!(f, "{} -> {}", self.client_ip.to_string(), self.phantom_ip.to_string()),
-            false => write!(f, "_ -> {}", self.phantom_ip.to_string()),
+        unsafe {
+            match FLOW_CLIENT_LOG {
+                true => write!(f, "{} -> {}", self.client_ip.to_string(), self.phantom_ip.to_string()),
+                false => write!(f, "_ -> {}", self.phantom_ip.to_string()),
+            }
         }
     }
 }
@@ -192,7 +192,6 @@ impl<'a> SessionTracker
     }
 
     pub fn spawn_update_thread(&self) {
-        //TODO - make it  run in its own thread.
         let write_map = Arc::clone(&self.tracked_sessions);
         thread::spawn(move || { ingest_from_pubsub(write_map) });
     }
