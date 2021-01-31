@@ -114,6 +114,7 @@ func ZMQProxy(c ZMQConfig) {
 		go func(frontend *zmq.Socket, config socketConfig) {
 			p.logger.Printf("proxying for %s\n", config.Address)
 			e := zmq.Proxy(frontend, pubSock, nil)
+			defer p.logger.Println("[ERROR] zmq.Proxy exiting: ", e)
 			if e != nil {
 				p.logger.Printf("proxy for %s failed: %v\n", config.Address, e)
 			}
@@ -121,4 +122,5 @@ func ZMQProxy(c ZMQConfig) {
 	}
 
 	wg.Wait()
+	defer p.logger.Println("[ERROR] zmq.Proxy escaped wg.Wait")
 }

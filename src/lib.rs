@@ -21,7 +21,6 @@ extern crate serde;
 extern crate serde_derive;
 
 use std::mem::transmute;
-use std::collections::HashMap;
 use time::precise_time_ns;
 
 use radix::PrefixTree;
@@ -46,10 +45,9 @@ pub mod elligator;
 pub mod flow_tracker;
 pub mod process_packet;
 pub mod util;
-pub mod session;
 pub mod signalling;
+pub mod sessions;
 
-use session::SessionState;
 
 use flow_tracker::{Flow,FlowTracker};
 
@@ -63,7 +61,7 @@ pub struct PerCoreGlobal
     pub flow_tracker: FlowTracker,
 
     // Rc<RefCell<>> ??
-    pub sessions: HashMap<Flow, SessionState>,
+    // pub sessions: HashMap<Flow, SessionState>,
     // Just some scratch space for mio.
     //events_buf: Events,
 
@@ -152,7 +150,7 @@ impl PerCoreGlobal
         PerCoreGlobal {
             priv_key: priv_key,
             lcore: the_lcore,
-            sessions: HashMap::new(),
+            // sessions: HashMap::new(),
             flow_tracker: FlowTracker::new(),
             tun: tun,
             stats: PerCoreStats::new(),
@@ -275,7 +273,7 @@ pub extern "C" fn rust_periodic_report(ptr: *mut PerCoreGlobal)
     let mut global = unsafe { &mut *ptr };
     global.stats.periodic_status_report(
         global.flow_tracker.count_tracked_flows(),
-        global.flow_tracker.count_dark_decoy_flows());
+        global.flow_tracker.count_phantom_flows());
 }
 
 #[repr(C)]

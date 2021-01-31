@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -46,29 +47,29 @@ func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 	return *clientToStation, conjureKeys
 }
 
-func testEqualRegistrations(reg1 *DecoyRegistration, reg2 *DecoyRegistration) bool {
-	return true
-}
+// func testEqualRegistrations(reg1 *DecoyRegistration, reg2 *DecoyRegistration) bool {
+// 	return true
+// }
 
-// This is not actually working yet
-func TestCreateDecoyRegistration(t *testing.T) {
-	rm := NewRegistrationManager()
+// // This is not actually working yet
+// func TestCreateDecoyRegistration(t *testing.T) {
+// 	rm := NewRegistrationManager()
 
-	c2s, keys := mockReceiveFromDetector()
+// 	c2s, keys := mockReceiveFromDetector()
 
-	regSource := pb.RegistrationSource_Detector
+// 	regSource := pb.RegistrationSource_Detector
 
-	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support(), &regSource)
-	if err != nil {
-		t.Fatalf("Registration failed: %v", err)
-	}
+// 	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support(), &regSource)
+// 	if err != nil {
+// 		t.Fatalf("Registration failed: %v", err)
+// 	}
 
-	expectedReg := DecoyRegistration{}
+// 	expectedReg := DecoyRegistration{}
 
-	if !testEqualRegistrations(newReg, &expectedReg) {
-		t.Fatalf("Bad registration Created")
-	}
-}
+// 	if !testEqualRegistrations(newReg, &expectedReg) {
+// 		t.Fatalf("Bad registration Created")
+// 	}
+// }
 
 func TestRegistrationLookup(t *testing.T) {
 	rm := NewRegistrationManager()
@@ -134,14 +135,33 @@ func TestLivenessCheck(t *testing.T) {
 	}
 }
 
-func TestRegisterForDetector(t *testing.T) {
-	darkDecoyAddr := net.ParseIP("1.2.3.4")
-	reg := DecoyRegistration{
-		DarkDecoy: darkDecoyAddr,
+func TestLiveness(t *testing.T) {
+
+	liveness, response := phantomIsLive("192.122.190.105:443")
+
+	if liveness != true {
+		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
 
-	client, err := getRedisClient()
-	if err != nil {
+	liveness, response = phantomIsLive("192.122.190.210:443")
+	if liveness != false {
+		t.Fatalf("Host is NOT live, detected as live: %v\n", response)
+	}
+
+	liveness, response = phantomIsLive("[2001:48a8:687f:1::105]:443")
+	if liveness != true {
+		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
+	}
+}
+
+func TestRegisterForDetectorOnce(t *testing.T) {
+	reg := DecoyRegistration{
+		DarkDecoy:        net.ParseIP("1.2.3.4"),
+		registrationAddr: net.ParseIP(""),
+	}
+
+	client := getRedisClient()
+	if client == nil {
 		t.Fatalf("couldn't connect to redis\n")
 	}
 	pubsub := client.Subscribe(DETECTOR_REG_CHANNEL)
@@ -160,35 +180,150 @@ func TestRegisterForDetector(t *testing.T) {
 	msg := <-channel
 	if msg == nil {
 		t.Fatalf("no messages received\n")
-	} else {
-		t.Logf("Read %s from subscriber\n", msg.Payload)
 	}
 
 	// reconstruct IP from message
-	ip_string := fmt.Sprintf("%d.%d.%d.%d", msg.Payload[0], msg.Payload[1], msg.Payload[2], msg.Payload[3])
+	parsed := pb.StationToDetector{}
+	err := proto.Unmarshal([]byte(msg.Payload), &parsed)
+	if err != nil {
+		t.Fatalf("Failed to parse protobuf")
+	}
+
+	// reconstruct IP from message
+	recvPhantom := net.ParseIP(parsed.GetPhantomIp())
+	recvClient := net.ParseIP(parsed.GetClientIp())
 
 	// check IP equality
-	if reg.DarkDecoy.Equal(net.ParseIP(ip_string)) == false {
-		t.Fatalf("Expected %v, got %v", reg.DarkDecoy, net.ParseIP(msg.Payload))
+	if reg.DarkDecoy.String() != recvPhantom.String() {
+		t.Fatalf("Expected Phantom %v, got %v", reg.DarkDecoy, recvPhantom)
+	}
+
+	if reg.registrationAddr.String() != recvClient.String() {
+		t.Fatalf("Expected Client %v, got %v", reg.registrationAddr, recvClient)
 	}
 }
 
-func TestLiveness(t *testing.T) {
-
-	liveness, response := phantomIsLive("192.122.190.105:443")
-
-	if liveness != true {
-		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
+func TestRegisterForDetectorArray(t *testing.T) {
+	var addrs = []string{}
+	var clientAddr = "192.0.2.1"
+	for i := 0; i < 100; i++ {
+		addrs = append(addrs, fmt.Sprintf("1.2.3.%d", i))
+		addrs = append(addrs, fmt.Sprintf("2001::dead:beef:%x", i))
 	}
 
-	liveness, response = phantomIsLive("192.122.190.210:443")
-	if liveness != false {
-		t.Fatalf("Host is NOT live, detected as live: %v\n", response)
+	client := getRedisClient()
+	if client == nil {
+		t.Fatalf("couldn't connect to redis\n")
+	}
+	pubsub := client.Subscribe(DETECTOR_REG_CHANNEL)
+	defer pubsub.Close()
+
+	// go channel that receives published messages
+	channel := pubsub.Channel()
+
+	for _, addr := range addrs {
+		reg := &DecoyRegistration{
+			DarkDecoy:        net.ParseIP(addr),
+			registrationAddr: net.ParseIP(clientAddr),
+		}
+
+		// send message to redis pubsub, wait, then close subscriber & channel
+		registerForDetector(reg)
+
+		// check message
+		msg := <-channel
+		if msg == nil {
+			t.Fatalf("no messages received %s\n", addr)
+		}
+
+		// reconstruct IP from message
+		parsed := pb.StationToDetector{}
+		err := proto.Unmarshal([]byte(msg.Payload), &parsed)
+		if err != nil {
+			t.Fatalf("Failed to parse protobuf")
+		}
+
+		// reconstruct IP from message
+		recvPhantom := net.ParseIP(parsed.GetPhantomIp())
+		recvClient := net.ParseIP(parsed.GetClientIp())
+
+		// check IP equality
+		if reg.DarkDecoy.String() != recvPhantom.String() {
+			t.Fatalf("Expected Phantom %v, got %v", reg.DarkDecoy, recvPhantom)
+		}
+
+		if reg.registrationAddr.String() != recvClient.String() {
+			t.Fatalf("Expected Client %v, got %v", reg.registrationAddr, recvClient)
+		}
+	}
+}
+
+func TestRegisterForDetectorMultithread(t *testing.T) {
+	var addrs = []string{}
+	var wg sync.WaitGroup
+	var failed = false
+	var regNum = 100
+	var clientAddr = "192.0.2.1"
+	for i := 0; i < regNum; i++ {
+		addrs = append(addrs, fmt.Sprintf("1.2.3.%d", i))
+		addrs = append(addrs, fmt.Sprintf("2001::dead:beef:%x", i))
 	}
 
-	liveness, response = phantomIsLive("[2001:48a8:687f:1::105]:443")
-	if liveness != true {
-		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
+	client := getRedisClient()
+	if client == nil {
+		t.Fatalf("couldn't connect to redis\n")
+	}
+	pubsub := client.Subscribe(DETECTOR_REG_CHANNEL)
+	defer pubsub.Close()
+
+	// go channel that receives published messages
+	channel := pubsub.Channel()
+
+	for _, addr := range addrs {
+		wg.Add(1)
+		reg := &DecoyRegistration{
+			DarkDecoy:        net.ParseIP(addr),
+			registrationAddr: net.ParseIP(clientAddr),
+		}
+
+		// send message to redis pubsub, wait, then close subscriber & channel
+		go func() {
+			registerForDetector(reg)
+		}()
+	}
+
+	i := 0
+	go func() {
+		for msg := range channel {
+			// check message
+			if msg == nil {
+				t.Fatalf("no messages received\n")
+			}
+
+			// reconstruct IP from message
+			parsed := &pb.StationToDetector{}
+			err := proto.Unmarshal([]byte(msg.Payload), parsed)
+			if err != nil {
+				failed = true
+			}
+
+			recvClient := net.ParseIP(parsed.GetClientIp())
+			if recvClient.String() != clientAddr {
+				failed = true
+			}
+			i++
+			wg.Done()
+		}
+	}()
+
+	wg.Wait()
+
+	if i != 2*regNum {
+		t.Fatalf("Did not receive enough messages")
+	}
+
+	if failed {
+		t.Fatalf("Failed to parse an ip")
 	}
 }
 

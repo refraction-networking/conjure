@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
@@ -155,6 +154,47 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	return &reg, nil
 }
 
+// NewRegistrationC2SWrapper creates a new registration from details provided. Adds the registration
+// to tracking map, But marks it as not valid.
+func (regManager *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, includeV6 bool) (*DecoyRegistration, error) {
+	c2s := c2sw.GetRegistrationPayload()
+
+	// Generate keys from shared secret using HKDF
+	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret())
+
+	phantomAddr, err := regManager.PhantomSelector.Select(
+		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to select phantom IP address: %v", err)
+	}
+
+	clientAddr := net.IP(c2sw.GetRegistrationAddress())
+
+	if phantomAddr.To4 != nil && clientAddr.To4 == nil {
+		// This can happen if the client chooses from a set that contains no
+		// ipv6 options even if include ipv6 is enabled they will get ipv4.
+		return nil, fmt.Errorf("Failed because IPv6 client chose IPv4 phantom")
+	}
+
+	regSrc := c2sw.GetRegistrationSource()
+	reg := DecoyRegistration{
+		DarkDecoy:          phantomAddr,
+		registrationAddr:   net.IP(c2sw.GetRegistrationAddress()),
+		Keys:               &conjureKeys,
+		Covert:             c2s.GetCovertAddress(),
+		Mask:               c2s.GetMaskedDecoyServerName(),
+		Flags:              c2s.Flags,
+		Transport:          c2s.GetTransport(),
+		DecoyListVersion:   c2s.GetDecoyListGeneration(),
+		RegistrationTime:   time.Now(),
+		RegistrationSource: &regSrc,
+		regCount:           0,
+	}
+
+	return &reg, nil
+}
+
 // TrackRegistration adds the registration to the map WITHOUT marking it valid.
 func (regManager *RegistrationManager) TrackRegistration(d *DecoyRegistration) error {
 	err := regManager.registeredDecoys.Track(d)
@@ -200,6 +240,7 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
 	DarkDecoy          net.IP
+	registrationAddr   net.IP
 	Keys               *ConjureSharedKeys
 	Covert, Mask       string
 	Flags              *pb.RegistrationFlags
@@ -315,6 +356,7 @@ func (reg *DecoyRegistration) GenerateC2SWrapper() *pb.C2SWrapper {
 		SharedSecret:        reg.Keys.SharedSecret,
 		RegistrationPayload: c2s,
 		RegistrationSource:  &source,
+		RegistrationAddress: []byte(reg.registrationAddr),
 	}
 	return protoPayload
 }
@@ -632,33 +674,29 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 	}
 }
 
+// **NOTE**: If you mess with this function make sure the
+// session tracking tests on the detector side do what you expect
+// them to do. (conjure/src/session.rs)
 func registerForDetector(reg *DecoyRegistration) {
-	client, err := getRedisClient()
-	if err != nil {
+	client := getRedisClient()
+	if client == nil {
 		fmt.Printf("couldn't connect to redis")
-	} else {
-		if reg.DarkDecoy.To4() != nil {
-			client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To4()))
-		} else {
-			client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To16()))
-		}
-		client.Close()
+		return
 	}
-}
 
-func getRedisClient() (*redis.Client, error) {
-	var client *redis.Client
-	client = redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
-		PoolSize: 10,
-	})
+	duration := uint64(3 * time.Minute.Nanoseconds())
+	src := reg.registrationAddr.String()
+	phantom := reg.DarkDecoy.String()
+	msg := &pb.StationToDetector{
+		PhantomIp: &phantom,
+		ClientIp:  &src,
+		TimeoutNs: &duration,
+	}
 
-	_, err := client.Ping().Result()
+	s2d, err := proto.Marshal(msg)
 	if err != nil {
-		return client, err
+		// throw(fit)
+		return
 	}
-
-	return client, err
+	client.Publish(DETECTOR_REG_CHANNEL, string(s2d))
 }

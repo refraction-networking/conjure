@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 
 	"github.com/BurntSushi/toml"
 )
@@ -18,13 +19,17 @@ type Config struct {
 	// REST endpoint to share decoy registrations.
 	PreshareEndpoint string `toml:"preshare_endpoint"`
 
-	// isthe station capable of handling v4 / v6 with independent toggles. 
+	// isthe station capable of handling v4 / v6 with independent toggles.
 	EnableIPv4 bool `toml:"enable_v4"`
-	EnableIPv6 bool  `toml:"enable_v6"`
+	EnableIPv6 bool `toml:"enable_v6"`
 
-	// List of subnets with disallowed covert addresses.
-	CovertBlocklist []string `toml:"covert_blocklist"`
-	covertBlocklist []*net.IPNet
+	// List of disallowed subnets for covert addresses.
+	CovertBlocklistSubnets []string `toml:"covert_blocklist_subnets"`
+	covertBlocklistSubnets []*net.IPNet
+
+	// List of disallowed domain patterns for covert addresses.
+	CovertBlocklistDomains []string `toml:"covert_blocklist_domains"`
+	covertBlocklistDomains []*regexp.Regexp
 }
 
 func ParseConfig() (*Config, error) {
@@ -34,26 +39,50 @@ func ParseConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to load config: %v", err)
 	}
 
-	c.covertBlocklist = []*net.IPNet{}
-	for _, subnet := range c.CovertBlocklist {
-		_, ipNet, err := net.ParseCIDR(subnet)
-		if err != nil {
-			continue
-		}
-
-		c.covertBlocklist = append(c.covertBlocklist, ipNet)
-	}
+	c.parseBlocklists()
 
 	return &c, nil
 }
 
-func (c *Config) IsBlocklisted(addr net.IP) bool {
-	if addr == nil {
+func (c *Config) parseBlocklists() {
+	c.covertBlocklistSubnets = []*net.IPNet{}
+	for _, subnet := range c.CovertBlocklistSubnets {
+		_, ipNet, err := net.ParseCIDR(subnet)
+		if err == nil {
+			c.covertBlocklistSubnets = append(c.covertBlocklistSubnets, ipNet)
+		}
+	}
+
+	c.covertBlocklistDomains = []*regexp.Regexp{}
+	for _, r := range c.CovertBlocklistDomains {
+		blockedDom := regexp.MustCompile(r)
+		if blockedDom != nil {
+			c.covertBlocklistDomains = append(c.covertBlocklistDomains, blockedDom)
+		}
+	}
+}
+
+func (c *Config) IsBlocklisted(urlStr string) bool {
+
+	host, _, err := net.SplitHostPort(urlStr)
+	if err != nil || host == "" {
+		// unable to parse host:port
 		return true
 	}
-	for _, subnet := range c.covertBlocklist {
-		if subnet.Contains(addr) {
-			return true
+
+	if addr := net.ParseIP(host); addr != nil {
+		for _, net := range c.covertBlocklistSubnets {
+			if net.Contains(addr) {
+				// blocked by IP address
+				return true
+			}
+		}
+	} else {
+		for _, pattern := range c.covertBlocklistDomains {
+			if pattern.MatchString(host) {
+				// blocked by Domain pattern
+				return true
+			}
 		}
 	}
 	return false
