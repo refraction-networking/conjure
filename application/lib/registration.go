@@ -171,7 +171,7 @@ func (regManager *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWra
 
 	clientAddr := net.IP(c2sw.GetRegistrationAddress())
 
-	if phantomAddr.To4 != nil && clientAddr.To4 == nil {
+	if phantomAddr.To4() != nil && clientAddr.To4() == nil {
 		// This can happen if the client chooses from a set that contains no
 		// ipv6 options even if include ipv6 is enabled they will get ipv4.
 		return nil, fmt.Errorf("Failed because IPv6 client chose IPv4 phantom")

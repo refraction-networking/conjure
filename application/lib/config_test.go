@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"net"
 	"os"
 	"testing"
 )
@@ -22,7 +23,7 @@ func TestConjureLibParseConfig(t *testing.T) {
 	}
 }
 
-func TestConjureLibConfigBlocklist(t *testing.T) {
+func TestConjureLibConfigBlocklists(t *testing.T) {
 
 	conf := &Config{
 		CovertBlocklistSubnets: []string{
@@ -88,4 +89,47 @@ func TestConjureLibConfigBlocklist(t *testing.T) {
 			t.Fatalf("Blocklist error - %s should fail (malformed)", s)
 		}
 	}
+}
+
+func TestConjureLibConfigBlocklistPhantoms(t *testing.T) {
+	conf := &Config{
+		PhantomBlocklist: []string{
+			"192.168.0.0/16",
+			"2001::0/64",
+		},
+	}
+
+	conf.parseBlocklists()
+
+	// Addresses that pass Blocklisted check
+	goodIPs := []string{
+		"[::2]",
+		"127.0.0.1",
+		"192.255.0.22",
+
+		// These URLs will pass Blocklisted check, but fail at Dial("tcp", addr)
+		"127.0.0.1",
+		"192.0.0.0",
+	}
+
+	// Test Blocking
+	blockedIPs := []string{
+		"2001::abcd",
+		"192.168.1.1",
+	}
+
+	for _, s := range goodIPs {
+		addr := net.ParseIP(s)
+		if conf.IsBlocklistedPhantom(addr) {
+			t.Fatalf("Blocklist error - %s should not be blocked", s)
+		}
+	}
+
+	for _, s := range blockedIPs {
+		addr := net.ParseIP(s)
+		if !conf.IsBlocklistedPhantom(addr) {
+			t.Fatalf("Blocklist error - %s should be blocked", s)
+		}
+	}
+
 }

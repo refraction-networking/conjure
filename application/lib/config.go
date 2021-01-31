@@ -23,13 +23,17 @@ type Config struct {
 	EnableIPv4 bool `toml:"enable_v4"`
 	EnableIPv6 bool `toml:"enable_v6"`
 
-	// List of disallowed subnets for covert addresses.
+	// Local list of disallowed subnets for covert addresses.
 	CovertBlocklistSubnets []string `toml:"covert_blocklist_subnets"`
 	covertBlocklistSubnets []*net.IPNet
 
-	// List of disallowed domain patterns for covert addresses.
+	// Local list of disallowed domain patterns for covert addresses.
 	CovertBlocklistDomains []string `toml:"covert_blocklist_domains"`
 	covertBlocklistDomains []*regexp.Regexp
+
+	// Local list of disallowed subnets patterns for phantom addresses.
+	PhantomBlocklist []string `toml:"phantom_blocklist"`
+	phantomBlocklist []*net.IPNet
 }
 
 func ParseConfig() (*Config, error) {
@@ -60,6 +64,14 @@ func (c *Config) parseBlocklists() {
 			c.covertBlocklistDomains = append(c.covertBlocklistDomains, blockedDom)
 		}
 	}
+
+	c.phantomBlocklist = []*net.IPNet{}
+	for _, subnet := range c.PhantomBlocklist {
+		_, ipNet, err := net.ParseCIDR(subnet)
+		if err == nil {
+			c.phantomBlocklist = append(c.phantomBlocklist, ipNet)
+		}
+	}
 }
 
 func (c *Config) IsBlocklisted(urlStr string) bool {
@@ -83,6 +95,16 @@ func (c *Config) IsBlocklisted(urlStr string) bool {
 				// blocked by Domain pattern
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func (c *Config) IsBlocklistedPhantom(addr net.IP) bool {
+	for _, net := range c.phantomBlocklist {
+		if net.Contains(addr) {
+			// blocked by IP address
+			return true
 		}
 	}
 	return false
