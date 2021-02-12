@@ -8,11 +8,11 @@ type DetectorStats struct {
 	V6PacketCount uint64
 	V4PacketCount uint64
 	BytesTotal    uint64
-	BytesV4     uint64
-	BytesV6     uint64
+	BytesV4       uint64
+	BytesV6       uint64
 
 	PacketsForwarded uint64
-	
+
 	// tot_sys_us
 	// tot_usr_us
 }
@@ -26,7 +26,8 @@ func (cds *DetectorStats) Report() string {
 		cds.V4PacketCount,
 		cds.BytesV4,
 		cds.BytesV6,
-		PacketsForwarded,
+		cds.PacketsForwarded)
+
 }
 
 // Reset sets all stat counters back to 0
@@ -36,8 +37,8 @@ func (cds *DetectorStats) Reset() {
 	cds.BytesTotal = 0
 	cds.BytesV4 = 0
 	cds.BytesV6 = 0
-	
-	PacketsForwarded = 0
+
+	cds.PacketsForwarded = 0
 
 	// tot_sys_us
 	// tot_usr_us

@@ -42,11 +42,11 @@ type Detector struct {
 	stats *DetectorStats
 
 	// TODO
-	// State Tracking to allow for quick map lookup and timeout tracking. 
+	// State Tracking to allow for quick map lookup and timeout tracking.
 	// - We could store one tracker per thread (which would prevent them from
-	// 		contenting but would require N times as much storage - 1 per thread)
+	// 		contending but would require N times as much storage - 1 per thread)
 	// - OR we could store one and have all access it via mutex. which might
-	// 		slow access times and stuff, but minimizes storage requirements. 
+	// 		slow access times and stuff, but minimizes storage requirements.
 	tracker Tracker
 
 	// Check storage for tracked entries past timeouts
@@ -74,14 +74,14 @@ func (det *Detector) Run() {
 		log.Fatal(err)
 	}
 
-	go det.spawnStatsThread()
+	go det.StatsThread()
 
 	// Actually process packets
 	source := gopacket.NewPacketSource(handler, handler.LinkType())
 
 	// To multithread source is actually a channel that you could pass to
 	// workers. The workers would just then need to read `packet. ok` out of
-	// the channel. 
+	// the channel.
 	// https://www.reddit.com/r/golang/comments/4ec2gu/hung_up_on_gopacket/
 	for packet := range source.Packets() {
 		det.handlePacket(packet)
@@ -91,9 +91,9 @@ func (det *Detector) Run() {
 	det.Logger.Printf("Detector Shutting Down\n")
 }
 
-func (det *Detector) spawnStatsThread() {
+func (det *Detector) StatsThread() {
 	for {
-		det.Logger.Printf("stats %s" det.stats.Report())
+		det.Logger.Printf("stats %s", det.stats.Report())
 		det.stats.Reset()
 
 		if det.exit {
@@ -121,7 +121,6 @@ func (det *Detector) handlePacket(packet gopacket.Packet) {
 		det.Logger.Warn("IP is not valid as IPv4 or IPv6")
 	}
 
-
 	if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 		tcp, _ := tcpLayer.(*layers.TCP)
 		dstPort = uint16(tcp.DstPort)
@@ -130,16 +129,15 @@ func (det *Detector) handlePacket(packet gopacket.Packet) {
 		udp, _ := udpLayer.(*layers.UDP)
 		dstPort = uint16(udp.DstPort)
 		det.checkForTags(packet)
-	}
-	else {
+	} else {
 		// Not handling protocols other than TCP and UDP right now.
 		return
 	}
 
 	if det.tracker.IsRegistered(dst.String(), src.String(), dstPort) {
-		det.stats.PacketsForwarded ++
+		det.stats.PacketsForwarded++
 		det.forwardPacket(packet)
-		det.tracker.Update()
+		det.tracker.Update(SessionExtension)
 	}
 }
 
@@ -155,21 +153,21 @@ func (det *Detector) checkForTags(packet gopacket.Packet) {
 	}
 }
 
-// Connect tot the tun interface and send the packet to the other portion of
+// Connect to the tun interface and send the packet to the other portion of
 // the refraction station. TODO
 func (det *Detector) forwardPacket(packet gopacket.Packet) {
 	dst := packet.NetworkLayer().NetworkFlow().Dst()
 	src := packet.NetworkLayer().NetworkFlow().Src()
-	det.Logger.Println(src, "->", dst)
+	det.Logger.Println("forwarding:", src, "->", dst)
 }
 
-
-// 
+//
 func (det *Detector) Register(s2d *pb.StationToDetector) {
-	det.tracker.Add(s2d)
+	err := det.tracker.Add(s2d)
+	if err != nil {
+		det.Logger.Printf("error adding registration: %v", err)
+	}
 }
-
-
 
 func generateFilters(filterList []string) string {
 
@@ -207,13 +205,12 @@ var (
 
 func main() {
 
+	tr := NewTracker()
+
 	det := &Detector{
-		Iface:      iface,
-		FilterList: []string{"192.168.1.104"},
-		Tracker: NewTracker(),
-		IsRegistered: func(src, dst string, dstPort uint16) bool {
-			return true
-		},
+		Iface:          iface,
+		FilterList:     []string{"192.168.1.104"},
+		tracker:        tr,
 		Logger:         logrus.New(),
 		stats:          &DetectorStats{},
 		StatsFrequency: 3,
@@ -221,4 +218,3 @@ func main() {
 
 	det.Run()
 }
-
