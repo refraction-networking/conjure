@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
@@ -155,9 +154,50 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	return &reg, nil
 }
 
+// NewRegistrationC2SWrapper creates a new registration from details provided. Adds the registration
+// to tracking map, But marks it as not valid.
+func (regManager *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, includeV6 bool) (*DecoyRegistration, error) {
+	c2s := c2sw.GetRegistrationPayload()
+
+	// Generate keys from shared secret using HKDF
+	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret())
+
+	phantomAddr, err := regManager.PhantomSelector.Select(
+		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to select phantom IP address: %v", err)
+	}
+
+	clientAddr := net.IP(c2sw.GetRegistrationAddress())
+
+	if phantomAddr.To4() != nil && clientAddr.To4() == nil {
+		// This can happen if the client chooses from a set that contains no
+		// ipv6 options even if include ipv6 is enabled they will get ipv4.
+		return nil, fmt.Errorf("Failed because IPv6 client chose IPv4 phantom")
+	}
+
+	regSrc := c2sw.GetRegistrationSource()
+	reg := DecoyRegistration{
+		DarkDecoy:          phantomAddr,
+		registrationAddr:   net.IP(c2sw.GetRegistrationAddress()),
+		Keys:               &conjureKeys,
+		Covert:             c2s.GetCovertAddress(),
+		Mask:               c2s.GetMaskedDecoyServerName(),
+		Flags:              c2s.Flags,
+		Transport:          c2s.GetTransport(),
+		DecoyListVersion:   c2s.GetDecoyListGeneration(),
+		RegistrationTime:   time.Now(),
+		RegistrationSource: &regSrc,
+		regCount:           0,
+	}
+
+	return &reg, nil
+}
+
 // TrackRegistration adds the registration to the map WITHOUT marking it valid.
 func (regManager *RegistrationManager) TrackRegistration(d *DecoyRegistration) error {
-	err := regManager.registeredDecoys.track(d)
+	err := regManager.registeredDecoys.Track(d)
 	if err != nil {
 		return err
 	}
@@ -177,7 +217,7 @@ func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 // RegistrationExists checks if the registration is already tracked by the manager, this is
 // independent of the validity tag, this just checks to see if the registration exists.
 func (regManager *RegistrationManager) RegistrationExists(reg *DecoyRegistration) bool {
-	trackedReg := regManager.registeredDecoys.registrationExists(reg)
+	trackedReg := regManager.registeredDecoys.RegistrationExists(reg)
 	return trackedReg != nil
 }
 
@@ -200,6 +240,7 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
 	DarkDecoy          net.IP
+	registrationAddr   net.IP
 	Keys               *ConjureSharedKeys
 	Covert, Mask       string
 	Flags              *pb.RegistrationFlags
@@ -315,6 +356,7 @@ func (reg *DecoyRegistration) GenerateC2SWrapper() *pb.C2SWrapper {
 		SharedSecret:        reg.Keys.SharedSecret,
 		RegistrationPayload: c2s,
 		RegistrationSource:  &source,
+		RegistrationAddress: []byte(reg.registrationAddr),
 	}
 	return protoPayload
 }
@@ -339,11 +381,12 @@ func (reg *DecoyRegistration) PhantomIsLive() (bool, error) {
 }
 
 func phantomIsLive(address string) (bool, error) {
-	width := 8
+	width := 4
 	dialError := make(chan error, width)
+	timeout := 750 * time.Millisecond
 
 	testConnect := func() {
-		conn, err := net.Dial("tcp", address)
+		conn, err := net.DialTimeout("tcp", address, timeout)
 		if err != nil {
 			dialError <- err
 			return
@@ -356,14 +399,14 @@ func phantomIsLive(address string) (bool, error) {
 		go testConnect()
 	}
 
-	timeout := 750 * time.Millisecond
-
 	time.Sleep(timeout)
 
 	// If any return errors or connect then return nil before deadline it is live
 	select {
 	case err := <-dialError:
-		// fmt.Printf("Received: %v\n", err)
+		if e, ok := err.(net.Error); ok && e.Timeout() {
+			return false, fmt.Errorf("Reached connection timeout")
+		}
 		if err != nil {
 			return true, err
 		}
@@ -402,13 +445,19 @@ func NewRegisteredDecoys() *RegisteredDecoys {
 	}
 }
 
+// For use outside of this struct (so there are no data races.)
+func (r *RegisteredDecoys) Track(d *DecoyRegistration) error {
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	return r.track(d)
+}
+
+// For use inside of this struct (so no deadlocks on struct mutex)
 func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 
 	// Is the registration is already tracked.
 	if reg := r.registrationExists(d); reg != nil {
-		r.m.Lock()
-		defer r.m.Unlock()
-
 		// update tracked registration with new information if any
 		reg.regCount++
 		return nil
@@ -446,6 +495,9 @@ func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 
 func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) error {
 
+	r.m.Lock()
+	defer r.m.Unlock()
+
 	reg := r.registrationExists(d)
 	if reg == nil {
 		// Track unknown registration
@@ -460,9 +512,6 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 			return fmt.Errorf("failed to track and register %s with unknown error", d.IDString())
 		}
 	}
-
-	r.m.Lock()
-	defer r.m.Unlock()
 
 	if reg.Valid {
 		// Registration has already been shared with the detector
@@ -494,7 +543,15 @@ func (r *RegisteredDecoys) getRegistrations(darkDecoyAddr net.IP) map[string]*De
 	return regs
 }
 
+func (r *RegisteredDecoys) TotalRegistrations() int {
+	r.m.RLock()
+	defer r.m.RUnlock()
+
+	return r.totalRegistrations()
+}
+
 func (r *RegisteredDecoys) totalRegistrations() int {
+
 	total := 0
 	for _, regSet := range r.decoys {
 		total += len(regSet)
@@ -514,6 +571,16 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr net.IP) int {
 	return len(regs)
 }
 
+// RegistrationExists - For use outside of this struct only (so there are no data races.)
+func (r *RegisteredDecoys) RegistrationExists(d *DecoyRegistration) *DecoyRegistration {
+	r.m.RLock()
+	defer r.m.RUnlock()
+
+	return r.registrationExists(d)
+
+}
+
+// For use inside of this struct (so no deadlocks on struct mutex)
 func (r *RegisteredDecoys) registrationExists(d *DecoyRegistration) *DecoyRegistration {
 
 	t, ok := r.transports[d.Transport]
@@ -545,15 +612,12 @@ type regExpireLogMsg struct {
 	RegCount   int32
 }
 
-// This whole process of tracking timeouts and registrations separately
-// makes less and less sense every time I come back to it.
-func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
+func (r *RegisteredDecoys) getExpiredRegistrations() []string {
+	r.m.RLock()
+	defer r.m.RUnlock()
+
 	const regTimeout = time.Minute * 2
-	cutoff := time.Now().Add(-regTimeout)
-
-	r.m.Lock()
-	defer r.m.Unlock()
-
+	var cutoff = time.Now().Add(-regTimeout)
 	var expiredRegTimeoutIndices = []string{}
 
 	for idx, decoyTimeout := range r.decoysTimeouts {
@@ -564,60 +628,83 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 		}
 	}
 
+	return expiredRegTimeoutIndices
+}
+
+func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	expiredReg := r.decoysTimeouts[index]
+	expiredRegObj, ok := r.decoys[expiredReg.decoy][expiredReg.identifier]
+	if !ok {
+		return nil
+	}
+
+	stats := &regExpireLogMsg{
+		DecoyAddr:  expiredReg.decoy,
+		Reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
+		RegID:      expiredReg.regID,
+		RegCount:   expiredRegObj.regCount,
+	}
+
+	// remove from timeout tracking
+	delete(r.decoysTimeouts, index)
+
+	// remove from decoy tracking
+	delete(r.decoys[expiredReg.decoy], expiredReg.identifier)
+
+	// if no more registration exist for this phantom clean up
+	if len(r.decoys[expiredReg.decoy]) == 0 {
+		delete(r.decoys, expiredReg.decoy)
+	}
+
+	return stats
+}
+
+// This whole process of tracking timeouts and registrations separately
+// makes less and less sense every time I come back to it.
+// Note: please try to limit duration that this process is capable of taking the
+// lock on the RegisteredDecoys mutex to prevent thread locking.
+func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
+	var expiredRegTimeoutIndices = r.getExpiredRegistrations()
+
 	logger.Printf("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
-		r.totalRegistrations(), len(r.decoysTimeouts), len(expiredRegTimeoutIndices))
+		r.TotalRegistrations(), len(r.decoysTimeouts), len(expiredRegTimeoutIndices))
 
 	for _, idx := range expiredRegTimeoutIndices {
-		expiredReg := r.decoysTimeouts[idx]
-		expiredRegObj, ok := r.decoys[expiredReg.decoy][expiredReg.identifier]
-		if !ok {
-			continue
+
+		stats := r.removeRegistration(idx)
+		if stats != nil {
+			statsStr, _ := json.Marshal(stats)
+			logger.Printf("expired registration %s", statsStr)
 		}
-
-		// remove from decoy tracking
-		delete(r.decoys[expiredReg.decoy], expiredReg.identifier)
-		stats := regExpireLogMsg{
-			DecoyAddr:  expiredReg.decoy,
-			Reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
-			RegID:      expiredReg.regID,
-			RegCount:   expiredRegObj.regCount,
-		}
-		statsStr, _ := json.Marshal(stats)
-
-		// remove from timeout tracking
-		delete(r.decoysTimeouts, idx)
-
-		logger.Printf("expired registration %s", statsStr)
 	}
 }
 
+// **NOTE**: If you mess with this function make sure the
+// session tracking tests on the detector side do what you expect
+// them to do. (conjure/src/session.rs)
 func registerForDetector(reg *DecoyRegistration) {
-	client, err := getRedisClient()
-	if err != nil {
+	client := getRedisClient()
+	if client == nil {
 		fmt.Printf("couldn't connect to redis")
-	} else {
-		if reg.DarkDecoy.To4() != nil {
-			client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To4()))
-		} else {
-			client.Publish(DETECTOR_REG_CHANNEL, string(reg.DarkDecoy.To16()))
-		}
-		client.Close()
+		return
 	}
-}
 
-func getRedisClient() (*redis.Client, error) {
-	var client *redis.Client
-	client = redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
-		PoolSize: 10,
-	})
+	duration := uint64(3 * time.Minute.Nanoseconds())
+	src := reg.registrationAddr.String()
+	phantom := reg.DarkDecoy.String()
+	msg := &pb.StationToDetector{
+		PhantomIp: &phantom,
+		ClientIp:  &src,
+		TimeoutNs: &duration,
+	}
 
-	_, err := client.Ping().Result()
+	s2d, err := proto.Marshal(msg)
 	if err != nil {
-		return client, err
+		// throw(fit)
+		return
 	}
-
-	return client, err
+	client.Publish(DETECTOR_REG_CHANNEL, string(s2d))
 }

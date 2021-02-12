@@ -53,11 +53,11 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Forwarded-For") != "" {
 		requestIP = r.Header.Get("X-Forwarded-For")
 	}
-	if !s.logClientIP {
-		requestIP = ""
+	if s.logClientIP {
+		s.logger.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
+	} else {
+		s.logger.Printf("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
 	}
-
-	s.logger.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
 
 	const MinimumRequestLength = SecretLength + 1 // shared_secret + VSP
 	if r.Method != "POST" {
@@ -86,15 +86,12 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// s.logger.Printf("received successful registration for covert address %s\n", payload.RegistrationPayload.GetCovertAddress())
-
 	clientAddr := parseIP(requestIP)
 	var clientAddrBytes = make([]byte, 16, 16)
 	if clientAddr != nil {
 		clientAddrBytes = []byte(clientAddr.To16())
-	} else {
-		fmt.Printf("unable to get source address:\"%s\"\n", requestIP)
 	}
+
 	zmqPayload, err := s.processC2SWrapper(payload, clientAddrBytes)
 	if err != nil {
 		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
@@ -146,8 +143,11 @@ func (s *server) processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr [
 
 	// If the address that the registration was received from was NOT set in the
 	// C2SWrapper set it here to the source address of the API request.
-	if clientToAPIProto.RegistrationAddress == nil {
+	if clientToAPIProto.GetRegistrationAddress() == nil ||
+		clientToAPIProto.GetRegistrationSource() == pb.RegistrationSource_API {
 		payload.RegistrationAddress = clientAddr
+	} else {
+		payload.RegistrationAddress = clientToAPIProto.GetRegistrationAddress()
 	}
 
 	payload.SharedSecret = clientToAPIProto.GetSharedSecret()

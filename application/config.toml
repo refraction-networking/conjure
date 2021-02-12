@@ -23,21 +23,34 @@ heartbeat_interval = 30000
 # a response before the connection is assumed to be dead.
 heartbeat_timeout = 1000
 
+# Allow the station to opt out of either version of internet protocol to limit a 
+# statio to handling one or the other. For example, v6 on small station deployment
+# with only v6 phantom subnet,  v4 only on station with no puvlic v6 address. 
+enable_v4 = true
+enable_v6 = false
 
-# If a registration is received with an address in one of these subnets it will
+# If a registration is received with a covert address in one of these subnets it will
 # be ignored and dropped. This is to prevent clients leveraging the outgoing
 # connections from the station to connect to sation infrastructure that would 
 # be othewise firewalled.
-covert_blocklist = [
+covert_blocklist_subnets = [
     "127.0.0.1/32",     # localhost ipv4
     "10.0.0.0/8",       # reserved ipv4 
     "172.16.0.0/12",    # reserved ipv4
     "192.168.0.0/16",   # reserved ipv4
     "fc00::/7 ",        # private network ipv6
     "fe80::0/16",       # link local ipv6
-    "::1/128"           # localhost ipv6
+    "::1/128",           # localhost ipv6
 ]
 
+covert_blocklist_domains = [
+    "localhost",
+]
+
+# If a registration is received and the phantom address is in one of these
+# subnets the registration will be dropped. This allows us to exclude subnets to
+# prevent stations from interfering.
+phantom_blocklist = [ ]
 
 # List of addresses to filter out traffic from the detector. The primary functionality
 # of this is to prevent liveness testing from other stations in a conjure cluster from

@@ -202,8 +202,7 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 }
 
 func writePROXYHeader(conn net.Conn, originalIPPort string) error {
-	logger := log.New(os.Stdout, "[2WP] ", log.Ldate|log.Lmicroseconds)
-	logger.Println("Writing Proxy Header")
+
 	if len(originalIPPort) == 0 {
 		return errors.New("can't write PROXY header: empty IP")
 	}

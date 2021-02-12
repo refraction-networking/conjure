@@ -7,6 +7,7 @@ use util::{HKDFKeys, FSP};
 use aes_gcm::Aes128Gcm;
 use aes_gcm::aead::{Aead, NewAead, generic_array::GenericArray};
 use signalling::ClientToStation;
+use protobuf::Message;
 
 
 const REPRESENTATIVE_AND_FSP_LEN: usize = 54;
@@ -150,7 +151,7 @@ pub fn extract_payloads(secret_key: &[u8], tls_record: &[u8]) -> Result<([u8; 32
                 }
             };
 
-            let c2s = match protobuf::parse_from_bytes::<ClientToStation>(&variable_size_payload) {
+            let c2s: ClientToStation = match Message::parse_from_bytes::<>(&variable_size_payload) {
                 Ok(c2s) => c2s,
                 Err(err) => return Err(Box::new(err)),
             };
