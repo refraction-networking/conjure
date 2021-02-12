@@ -543,7 +543,15 @@ func (r *RegisteredDecoys) getRegistrations(darkDecoyAddr net.IP) map[string]*De
 	return regs
 }
 
+func (r *RegisteredDecoys) TotalRegistrations() int {
+	r.m.RLock()
+	defer r.m.RUnlock()
+
+	return r.totalRegistrations()
+}
+
 func (r *RegisteredDecoys) totalRegistrations() int {
+
 	total := 0
 	for _, regSet := range r.decoys {
 		total += len(regSet)
@@ -563,7 +571,7 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr net.IP) int {
 	return len(regs)
 }
 
-// For use outside of this struct (so there are no data races.)
+// RegistrationExists - For use outside of this struct only (so there are no data races.)
 func (r *RegisteredDecoys) RegistrationExists(d *DecoyRegistration) *DecoyRegistration {
 	r.m.RLock()
 	defer r.m.RUnlock()
@@ -662,7 +670,7 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 	var expiredRegTimeoutIndices = r.getExpiredRegistrations()
 
 	logger.Printf("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
-		r.totalRegistrations(), len(r.decoysTimeouts), len(expiredRegTimeoutIndices))
+		r.TotalRegistrations(), len(r.decoysTimeouts), len(expiredRegTimeoutIndices))
 
 	for _, idx := range expiredRegTimeoutIndices {
 
