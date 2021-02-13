@@ -137,7 +137,12 @@ func (det *Detector) handlePacket(packet gopacket.Packet) {
 	if det.tracker.IsRegistered(dst.String(), src.String(), dstPort) {
 		det.stats.PacketsForwarded++
 		det.forwardPacket(packet)
-		det.tracker.Update(SessionExtension)
+		key, err := keyFromParts(dst.String(), src.String(), dstPort)
+		if err != nil {
+			det.Logger.Warn("Error looking up connection", err)
+			return
+		}
+		det.tracker.Update(key, SessionExtension)
 	}
 }
 

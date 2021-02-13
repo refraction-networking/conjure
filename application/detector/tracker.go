@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -12,12 +13,17 @@ import (
 // alive with connections but past timeout in the tracker.
 const SessionExtension = time.Duration(3) * time.Minute
 
+// DefaultPort is the current default port that connections will come int on.
+// If in the future we want to filter by port for certain registrations/sessions
+// we can substitute that in where this is at.
+const DefaultPort = 443
+
 type Tracker interface {
 	Add(*pb.StationToDetector) error
 
-	Update(time.Duration) error
+	Update(string, time.Duration) error
 
-	RemoveExpired() error
+	RemoveExpired() (int, error)
 
 	IsRegistered(src, dst string, dstPort uint16) bool
 }
@@ -60,43 +66,64 @@ func (dt *DefaultTracker) add(s2d *pb.StationToDetector) error {
 		dt.sessions = make(map[string]*Entry)
 	}
 
-	key, entry, err := entryFromS2D(s2d)
+	key, newEntry, err := entryFromS2D(s2d)
 	if err != nil {
 		return err
 	}
 
-	dt.sessions[key] = entry
+	// Only add if it extends the timeout or doesn't exist already.
+	existingEntry, ok := dt.sessions[key]
+	if !ok {
+		dt.sessions[key] = newEntry
+		return nil
+	}
+
+	if existingEntry.timeout.Before(newEntry.timeout) {
+		dt.update(key, newEntry.originalDuration)
+	}
 
 	return nil
 }
 
-func (dt *DefaultTracker) Update(t time.Duration) error {
+func (dt *DefaultTracker) Update(key string, d time.Duration) error {
 	dt.m.Lock()
 	defer dt.m.Unlock()
 
-	return dt.update(t)
+	return dt.update(key, d)
 }
 
-func (dt *DefaultTracker) update(t time.Duration) error {
+func (dt *DefaultTracker) update(key string, d time.Duration) error {
 	if dt.sessions == nil {
 		return fmt.Errorf("DefaultTracker.Update - nil session tracker.")
 	}
 
-	return fmt.Errorf("Not Implemented yet")
+	entry, ok := dt.sessions[key]
+	if ok {
+		entry.timeout = time.Now().Add(d)
+	}
+	return nil
 }
 
-func (dt *DefaultTracker) RemoveExpired() error {
+func (dt *DefaultTracker) RemoveExpired() (int, error) {
 	dt.m.Lock()
 	defer dt.m.Unlock()
 
 	return dt.removeExpired()
 }
 
-func (dt *DefaultTracker) removeExpired() error {
+func (dt *DefaultTracker) removeExpired() (int, error) {
 	if dt.sessions == nil {
-		return fmt.Errorf("DefaultTracker.Update - nil session tracker.")
+		return 0, fmt.Errorf("DefaultTracker.Update - nil session tracker.")
 	}
-	return fmt.Errorf("Not Implemented yet")
+	var count = 0
+	var now = time.Now()
+	for key, entry := range dt.sessions {
+		if entry.timeout.Before(now) {
+			count++
+			delete(dt.sessions, key)
+		}
+	}
+	return count, nil
 }
 
 func (dt *DefaultTracker) IsRegistered(src, dst string, dstPort uint16) bool {
@@ -110,7 +137,14 @@ func (dt *DefaultTracker) isRegistered(src, dst string, dstPort uint16) bool {
 	if dt.sessions == nil {
 		return false
 	}
-	return true
+
+	key, err := keyFromParts(src, dst, dstPort)
+	if err != nil {
+		return false
+	}
+
+	_, ok := dt.sessions[key]
+	return ok
 }
 
 func entryFromS2D(s2d *pb.StationToDetector) (string, *Entry, error) {
@@ -132,11 +166,41 @@ func entryFromS2D(s2d *pb.StationToDetector) (string, *Entry, error) {
 
 func keyFromS2D(s2d *pb.StationToDetector) (string, error) {
 
-	clientIP := net.ParseIP(s2d.GetClientIP())
-	phantomIP := net.ParseIP(s2d.GetClientIP())
+	return keyFromParts(s2d.GetClientIp(), s2d.GetPhantomIp(), DefaultPort)
+}
 
-	if net.ParseIP(clientIP)
-	key := fmt.Sprintf("%s-%s", , s2d.GetPhantomIp())
+func keyFromParts(client string, phantom string, dstPort uint16) (string, error) {
+
+	phantomIP := net.ParseIP(phantom)
+	if phantomIP == nil {
+		return "", fmt.Errorf("Invalid phantom address")
+	}
+
+	clientIP := net.ParseIP(client)
+	if clientIP == nil {
+		if phantomIP.To4() == nil {
+			clientIP = net.ParseIP("::1")
+		} else {
+			return "", fmt.Errorf("Invalid client address")
+		}
+	}
+
+	// If the phantom is v4 and we have no IPv4 client address we cant track
+	// the session.
+	if (phantomIP.To4() != nil) && (clientIP.To4() == nil) {
+		return "", fmt.Errorf("Client/Phantom v4/v6 mismatch")
+	}
+
+	var key = ""
+	if phantomIP.To4() == nil {
+		key = fmt.Sprintf("%s", phantomIP)
+	} else {
+		key = fmt.Sprintf("%s-%s", clientIP, phantomIP)
+	}
 
 	return key, nil
+}
+
+func s2ns(d time.Duration) uint64 {
+	return uint64(d) / uint64(time.Nanosecond)
 }
