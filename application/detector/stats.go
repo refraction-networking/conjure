@@ -21,9 +21,9 @@ type DetectorStats struct {
 func (cds *DetectorStats) Report() string {
 
 	return fmt.Sprintf("%d, %d, %d, %d, %d, %d",
-		cds.BytesTotal,
-		cds.V6PacketCount,
 		cds.V4PacketCount,
+		cds.V6PacketCount,
+		cds.BytesTotal,
 		cds.BytesV4,
 		cds.BytesV6,
 		cds.PacketsForwarded)

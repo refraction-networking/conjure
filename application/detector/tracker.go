@@ -1,3 +1,45 @@
+//
+// Session Tracking
+//
+// This file is used to implement session tacking for the golang detector. There
+// are a few specifics be to aware of if you are going to modify this file.
+//
+// Current tracking is done as a Map of string timeout details. The string is a
+// derived from IP addresses of flows so that lookups can be performed quickly
+// when we need to determine whether a flow is associated with a session. The
+// timeouts for the session which are periodically checked and cleaned up by
+// the golang Detector that (currently) instantiates this.
+//
+// Notes:
+//  - The timeout for flows can be updated. This exists for two reasons.
+//      1. if a connection exists when the timeout comes due the rule needs to
+//         remain in effect until the connection is closed so that packets
+//         continue to be forwarded over the DNAT tun interfaces.
+//      2. If a second session is received which maps to the same key string and
+//         has a longer timeout we nee to update the session to be valid until
+//         the timeout of the longer session. Keep in mind that if a new
+//         registration is received that has a shorter timeout we still need to
+//         keep the longer timeout.
+//
+// - The key strings that are matched against are currently different for ipv4
+//   and ipv6. In v4 the string is a concatenation of the source and the
+//   destination (client and phantom) addresses. In ipv6 it is only the phantom
+//   address as the chance of phantom collisions is far lower.
+//      * While not currently in use we could add the destination (phantom) port
+//        to the key strings if we need extra specificity. This would require an
+//		  update to the StationToDetector Protobuf structure to include a u16 port.
+//
+// - While the rust detector ingests the StationToDetector announcements over
+//   redis (so that each independent thread receives the announcement and tracks
+//   independently) the golang detector is interfaced directly to the station so
+//   StationToDetector announcements can happen via a direct function call to add.
+//   The StationToDetector struct will be used in both the rust and golang
+//   registration ingest process, and can be updated incrementally.
+//
+// The notes above are implemented and tested below. If you modify the code
+// please make sure the tests still pass. If you modify the way this code is
+// used please update the tests.
+
 package main
 
 import (
@@ -18,6 +60,7 @@ const SessionExtension = time.Duration(3) * time.Minute
 // we can substitute that in where this is at.
 const DefaultPort = 443
 
+// Tracker interface to interact with detector session tracking.
 type Tracker interface {
 	Add(*pb.StationToDetector) error
 
@@ -28,6 +71,8 @@ type Tracker interface {
 	IsRegistered(src, dst string, dstPort uint16) bool
 }
 
+// Entry provides a structure to organize the information stored for each
+// registration useful to the detectors lookup.
 type Entry struct {
 	timeout          time.Time
 	originalTimeout  time.Time
@@ -39,14 +84,28 @@ type Entry struct {
 	// Entry. So it will count connections for both. ClientIPs arenever logged
 	// so we don't currently have a logging way of knowing how many collisions
 	// there are.
-	connections uint32
+	packets uint32
+	bytes   uint32
 }
 
+// DefaultTracker - track and look for potential registriaons for incoming connections
+// Sessions cannot be tracked by registration because we will not be
+// receiving registration information in order to identify the sessions. As
+// such sessions are stored as a thread safe map with keys dependent on the
+// ip version:
+// v4 "{}-{}", client_ip, phantom_ip
+// v6 "{}", phantom_ip
+//
+// The value stored for each of these is a timestamp to compare for timeout.
+// Note: In the future phantom port can be optionally added to the key
+// string to further filter incoming connections. This is left off for now
+// to allow for testing of source-refraction.
 type DefaultTracker struct {
 	m        sync.Mutex
 	sessions map[string]*Entry
 }
 
+// NewTracker  instantiates DefaultTracker
 func NewTracker() Tracker {
 	var sessions = make(map[string]*Entry)
 	return &DefaultTracker{
@@ -85,6 +144,9 @@ func (dt *DefaultTracker) add(s2d *pb.StationToDetector) error {
 	return nil
 }
 
+// Update is used to update (increase) the time that we  consider a session
+// valid for tracking purposes. Called when packets from a session are
+// seen so that forwarding continues past the original registration timeout.
 func (dt *DefaultTracker) Update(key string, d time.Duration) error {
 	dt.m.Lock()
 	defer dt.m.Unlock()
@@ -94,7 +156,7 @@ func (dt *DefaultTracker) Update(key string, d time.Duration) error {
 
 func (dt *DefaultTracker) update(key string, d time.Duration) error {
 	if dt.sessions == nil {
-		return fmt.Errorf("DefaultTracker.Update - nil session tracker.")
+		return fmt.Errorf("[DefaultTracker.Update] - nil session tracker")
 	}
 
 	entry, ok := dt.sessions[key]
@@ -104,6 +166,9 @@ func (dt *DefaultTracker) update(key string, d time.Duration) error {
 	return nil
 }
 
+// RemoveExpired garbage collects all entries that have passed their lifetime
+// timeout and not received an update to their connection timeout
+// (i.e. they are unused).
 func (dt *DefaultTracker) RemoveExpired() (int, error) {
 	dt.m.Lock()
 	defer dt.m.Unlock()
@@ -113,7 +178,7 @@ func (dt *DefaultTracker) RemoveExpired() (int, error) {
 
 func (dt *DefaultTracker) removeExpired() (int, error) {
 	if dt.sessions == nil {
-		return 0, fmt.Errorf("DefaultTracker.Update - nil session tracker.")
+		return 0, fmt.Errorf("[DefaultTracker.removeExpired] - nil session tracker")
 	}
 	var count = 0
 	var now = time.Now()
@@ -126,6 +191,8 @@ func (dt *DefaultTracker) removeExpired() (int, error) {
 	return count, nil
 }
 
+// IsRegistered check based on details availale from captured traffic if a
+// connection is potentially associated with a known registration.
 func (dt *DefaultTracker) IsRegistered(src, dst string, dstPort uint16) bool {
 	dt.m.Lock()
 	defer dt.m.Unlock()
@@ -153,7 +220,8 @@ func entryFromS2D(s2d *pb.StationToDetector) (string, *Entry, error) {
 		timeout:          time.Now().Add(lifetime),
 		originalTimeout:  time.Now().Add(lifetime),
 		originalDuration: lifetime,
-		connections:      0,
+		packets:          0,
+		bytes:            0,
 	}
 
 	key, err := keyFromS2D(s2d)

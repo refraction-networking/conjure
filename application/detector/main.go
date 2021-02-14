@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
+	cj "github.com/refraction-networking/conjure/application/lib"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
@@ -37,6 +38,9 @@ type Detector struct {
 	// How often to log
 	StatsFrequency int
 
+	// How often to run tracker cleanup
+	CleanupFrequency int
+
 	// TODO
 	// Stats tracking to mimic rust detector
 	stats *DetectorStats
@@ -53,8 +57,15 @@ type Detector struct {
 	GarbageCollect func() error
 }
 
+// DetectorFromConfig instantiates Our detector from the configuration
+func DetectorFromConfig(conf *cj.Config) *Detector {
+
+	return nil
+}
+
 // Run sets the detector running, capturing traffic and processing checking for
 // connections associated with registrations.
+// TODO: Multithread this function
 func (det *Detector) Run() {
 
 	if !deviceExists(det.Iface) {
@@ -91,6 +102,7 @@ func (det *Detector) Run() {
 	det.Logger.Printf("Detector Shutting Down\n")
 }
 
+// StatsThread preiodically logs  numerical metrics for performance on the station.
 func (det *Detector) StatsThread() {
 	for {
 		det.Logger.Printf("stats %s", det.stats.Report())
@@ -99,7 +111,20 @@ func (det *Detector) StatsThread() {
 		if det.exit {
 			return
 		}
-		time.Sleep(time.Duration(det.StatsFrequency) * time.Second)
+		time.Sleep(time.Second * time.Duration(det.StatsFrequency))
+	}
+}
+
+// CleanupThread preiodically run cleanup for detector session tracking.
+func (det *Detector) CleanupThread() {
+	for {
+		det.Logger.Printf("stats %s", det.stats.Report())
+		det.tracker.RemoveExpired()
+		// TODO: Fix this
+		if det.exit {
+			return
+		}
+		time.Sleep(time.Second * time.Duration(det.CleanupFrequency))
 	}
 }
 
@@ -166,11 +191,12 @@ func (det *Detector) forwardPacket(packet gopacket.Packet) {
 	det.Logger.Println("forwarding:", src, "->", dst)
 }
 
-//
+// Register tracks a registration for quick lookup on the data plane
+// (specifically handling packet ingest and forwaring).
 func (det *Detector) Register(s2d *pb.StationToDetector) {
 	err := det.tracker.Add(s2d)
 	if err != nil {
-		det.Logger.Printf("error adding registration: %v", err)
+		det.Logger.Warnf("error adding registration: %v", err)
 	}
 }
 
