@@ -364,6 +364,10 @@ fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u64>>>) {
                 },
                 None => {},
             };
+
+            // Explicitly drop map write lock here (locks are automatically dropped
+            // when they fall out of scope but this is more clear.)
+            drop(mmap);
             continue
         }
 
@@ -373,7 +377,8 @@ fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u64>>>) {
         // Insert
         *mmap.entry(key).or_insert(expire_time) = expire_time;
 
-        // Get rid of writable reference to map.
+        // Get rid of writable reference to map. (locks are automatically dropped
+        // when they fall out of scope but this is more clear.)
         drop(mmap);
 
         debug!("Added registered ip {} from redis", sd);
