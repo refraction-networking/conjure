@@ -56,3 +56,28 @@ Set CJ_IFACE variable to the name of the network interface that receives conjure
 
 ##### Run
 `docker-compose up -d`
+
+#### List of Supported Variables and Defaults
+```
+# zbalance
+CJ_IFACE=lo
+CJ_CLUSTER_ID=98
+CJ_CORECOUNT=1
+CJ_COREBASE=0
+ZBALANCE_HASH_MODE=1
+
+# detector
+CJ_CLUSTER_ID=98
+CJ_CORECOUNT=1
+CJ_COREBASE=0
+CJ_SKIP_CORE=-1
+CJ_QUEUE_OFFSET=0
+CJ_LOG_INTERVAL=5
+CJ_PRIVKEY=/opt/conjure/keys/privkey
+CJ_STATION_CONFIG=/opt/conjure/application/config.toml
+CJ_IP4_ADDR=127.0.0.1
+CJ_IP6_ADDR=[::1]
+
+# application
+CJ_STATION_CONFIG=/opt/conjure/application/config.toml
+```
