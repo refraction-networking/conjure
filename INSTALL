@@ -1,0 +1,38 @@
+# go version 1.15.2
+# rustc version 1.47.0
+
+go get -d -u -t github.com/refraction-networking/conjure
+cd ~/go/src/github.com/refraction-networking/conjure
+
+# Fix for redis having wrong package for us:
+go get -u github.com/go-redis/redis || true && cd ~/go/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master && cd -
+
+
+# Build app
+make app
+
+
+# Build PF_RING
+cd PF_RING && make && cd ../
+
+# Build libtapdance
+cd libtapdance && make && cd ..
+
+# Build detector
+make dark-decoy
+
+
+# Make install directory
+sudo mkdir -p /opt/conjure
+
+# Install to /opt/
+sudo cp -r ./* /opt/conjure/
+
+# Install systemd stuff
+sudo cp sysconfig/conjure-{app,det}.service /etc/systemd/system/
+sudo cp sysconfig/zbalance.service /etc/systemd/system/
+
+# Install zbalance stuff
+sudo cp ./sysconfig/start_zbalance_ipc.sh /opt/conjure/
+
+#sudo cp ./PF_RING/userland/examples_zc/zbalance_ipc /opt/conjure/
