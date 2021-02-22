@@ -1,0 +1,8 @@
+docker
+!docker/*
+docker/Dockerfile
+docker/docker-compose*
+docker/.dockerignore
+docker/*.swp
+.dockerignore
+*.swp

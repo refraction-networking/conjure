@@ -1,0 +1,64 @@
+version: '3.4'
+services:
+    # zbalance needs access to the monitored interface and to systems hugepages.
+    # hugepages are shared between containers
+    # `network_mode: host` and `privileged: true` make it possible
+    # but it might be possible to achieve with 'docker capabilities'
+  
+    zbalance:
+        image: zbalance:latest
+        build:
+                context: ../
+                dockerfile: ./docker/Dockerfile
+                target: zbalance
+        #cap_add: 
+        #  - SYS_ADMIN
+        privileged: true
+        environment:
+                - CJ_IFACE=eno3
+        volumes:
+                - /dev/hugepages:/dev/hugepages
+                - /etc/pf_ring:/etc/pf_ring
+        restart: unless-stopped
+        network_mode: "host"
+    redis:
+        image: redis:alpine
+        restart: unless-stopped
+        depends_on:
+                - zbalance
+        # Redis has to be exposed on localhost. Check 'detector' service for details
+        network_mode: "host"
+    detector:
+        image: detector:latest
+        build:
+                context: ../
+                dockerfile: ./docker/Dockerfile
+                target: detector
+        # For hugepages to work
+        privileged: true
+        environment:
+                - RUST_BACKTRACE=1
+                - LOG_CLIENT_IP=true
+        volumes:
+                - /dev/hugepages:/dev/hugepages
+                - /var/lib/tapdance/prod.privkey:/opt/conjure/keys/privkey
+        depends_on:
+                - zbalance
+                - redis
+        restart: unless-stopped
+        # To connect to reddis. See line 200 in src/flow_tracker.rs
+        network_mode: "host"
+    application:
+        image: application:latest
+        build:
+                context: ../
+                dockerfile: ./docker/Dockerfile
+                target: application
+        environment:
+                - LOG_CLIENT_IP=true
+        volumes:
+                - /var/lib/tapdance/prod.privkey:/opt/conjure/sysconfig/privkey
+        depends_on:
+                - zbalance
+                - detector
+        network_mode: "host"
