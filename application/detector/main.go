@@ -10,7 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
-	cj "github.com/refraction-networking/conjure/application/lib"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
@@ -20,6 +19,8 @@ import (
 // detector implementation and is (at present) meant purely for testing and use
 // with the API based registrars.
 type Detector struct {
+	*Config
+
 	// interface to listen on
 	Iface string
 
@@ -45,7 +46,6 @@ type Detector struct {
 	// Stats tracking to mimic rust detector
 	stats *DetectorStats
 
-	// TODO
 	// State Tracking to allow for quick map lookup and timeout tracking.
 	// - We could store one tracker per thread (which would prevent them from
 	// 		contending but would require N times as much storage - 1 per thread)
@@ -57,10 +57,36 @@ type Detector struct {
 	GarbageCollect func() error
 }
 
-// DetectorFromConfig instantiates Our detector from the configuration
-func DetectorFromConfig(conf *cj.Config) *Detector {
+// NewDetector parses configuration file from default location and return a new
+// Detector.
+func NewDetector() (*Detector, error) {
 
-	return nil
+	conf, err := GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return DetectorFromConfig(conf)
+}
+
+// DetectorFromConfig return Detector if the configuration was instantiated
+// independently, or if was parsed elsewhere.
+func DetectorFromConfig(conf *Config) (*Detector, error) {
+
+	var tr = NewTracker()
+
+	var det = &Detector{
+		Config: conf,
+
+		Iface:      iface,
+		FilterList: []string{"192.168.1.104"},
+
+		tracker: tr,
+
+		stats:          &DetectorStats{},
+		StatsFrequency: 3,
+	}
+	return det, nil
 }
 
 // Run sets the detector running, capturing traffic and processing checking for
@@ -73,22 +99,23 @@ func (det *Detector) Run() {
 	}
 
 	// Open packet reader in promiscuous mode.
-	handler, err := pcap.OpenLive(det.Iface, buffer, false, pcap.BlockForever)
+	packetDataSource, err := PacketSourceFromConfig(det.Source)
+	// packetDataSource, err := pcap.OpenLive(det.Iface, buffer, false, pcap.BlockForever)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer handler.Close()
+	defer packetDataSource.Close()
 
 	//Generate and Apply filters
 	filter := generateFilters(det.FilterList)
-	if err := handler.SetBPFFilter(filter); err != nil {
+	if err := packetDataSource.SetBPFFilter(filter); err != nil {
 		log.Fatal(err)
 	}
 
 	go det.StatsThread()
 
 	// Actually process packets
-	source := gopacket.NewPacketSource(handler, handler.LinkType())
+	source := gopacket.NewPacketSource(packetDataSource, packetDataSource.LinkType())
 
 	// To multithread source is actually a channel that you could pass to
 	// workers. The workers would just then need to read `packet. ok` out of

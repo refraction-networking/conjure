@@ -106,7 +106,7 @@ func TestDetectorTagLog(t *testing.T) {
 	det := &Detector{
 		tracker: tr,
 		Logger:  logger,
-		tags:    []string{},
+		Tags:    []string{},
 	}
 
 	pkt := getPacket()
