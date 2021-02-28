@@ -38,18 +38,18 @@ const (
 // DataSourceConfig contains all of the individual pieces to instantiate any one
 // of the packet sources and a string field to indicate which type to create.
 type DataSourceConfig struct {
-	DataSourceType PacketSourceType
+	DataSourceType PacketSourceType `toml:"data_source_type"`
 
 	// ---------[ PacketSourceIface parameters ]---------
-	Iface string
+	Iface string `toml:"iface"`
 	// the maximum size to read for each packet (snaplen) on live iface,
-	SnapLen int32
+	SnapLen int32 `toml:"snap_length"`
 
 	// ---------[ PacketSourcePcap parameters ]---------
-	OfflinePcapPath string
+	OfflinePcapPath string `toml:"offline_pcap_path"`
 
 	// -------------[ Generator Parameters ]------------
-	NumPackets uint64
+	NumPackets uint64 `toml:"num_packets"`
 }
 
 // DataSource descrive the interface allowing us to merge the requirements of

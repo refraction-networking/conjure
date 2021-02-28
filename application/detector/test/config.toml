@@ -1,0 +1,39 @@
+
+# Test Config For the golang conjure detector. 
+
+
+detector_tags = [ "nginx"]
+
+# How often to log periodic statistics
+stats_frequency = 3
+
+#How often to run tracker cleanup
+cleanup_frequency = 3
+
+# List of addresses to filter packets from (i.e. liveness testing)
+filter_list = [
+    "127.0.0.1", 
+    "10.0.0.0/8"
+]
+
+[source]
+    
+    # Type of packet source to use
+    data_source_type = "pcap"
+
+	# ---------[ PacketSourcePcap parameters ]---------
+    # Path tp pcap file for Pcap packet source.
+    offline_pcap_path = "$GOPATH/src/github.com/refraction-networking/conjure/application/detector/test/min.pcap"
+
+
+	# ---------[ PacketSourceIface parameters ]---------
+    # the maximum size to read for each packet (snaplen) on live iface,
+    snap_length = 1600
+
+    # link device to use for live packet capture packet source. 
+    iface = "eth0"
+
+
+	# -------------[ Generator Parameters ]------------
+    # Number of packets to generate for packet generator source.
+    num_packets = 100

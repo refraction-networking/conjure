@@ -11,19 +11,19 @@ import (
 // packet source, and control plane information like tags, filter-lists,  and
 // block-lists.
 type Config struct {
-	Source *DataSourceConfig
+	Source *DataSourceConfig `toml:"source"`
 
 	// List of addresses to filter packets from (i.e. liveness testing)
-	FilterList []string
+	FilterList []string `toml:"filter_list"`
 
 	// Tags checked for routing investigation purposes.
-	Tags []string
+	Tags []string `toml:"detector_tags"`
 
-	// How often to log
-	StatsFrequency int
+	// How often to log periodic statistics
+	StatsFrequency int `toml:"stats_frequency"`
 
 	// How often to run tracker cleanup
-	CleanupFrequency int
+	CleanupFrequency int `toml:"cleanup_frequency"`
 }
 
 // GetConfig returns a Config parsed from the global environment var that
@@ -36,7 +36,12 @@ func GetConfig() (*Config, error) {
 func ParseConfig(confPath string) (*Config, error) {
 	var c Config
 
-	_, err := toml.LoadFile(confPath)
+	tomlFile, err := toml.LoadFile(confPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %v", err)
+	}
+
+	err = tomlFile.Unmarshal(&c)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %v", err)
 	}
