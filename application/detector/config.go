@@ -12,6 +12,18 @@ import (
 // block-lists.
 type Config struct {
 	Source *DataSourceConfig
+
+	// List of addresses to filter packets from (i.e. liveness testing)
+	FilterList []string
+
+	// Tags checked for routing investigation purposes.
+	Tags []string
+
+	// How often to log
+	StatsFrequency int
+
+	// How often to run tracker cleanup
+	CleanupFrequency int
 }
 
 // GetConfig returns a Config parsed from the global environment var that

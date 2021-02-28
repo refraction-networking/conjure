@@ -86,9 +86,11 @@ func PacketSourcePcap(conf *DataSourceConfig) (DataSource, error) {
 
 // PacketSourceIface opens packet reader in promiscuous mode based on configuration.
 func PacketSourceIface(conf *DataSourceConfig) (DataSource, error) {
+	if err := deviceExists(conf.Iface); err != nil {
+		return nil, fmt.Errorf("Unable to find device '%s': %v", conf.Iface, err)
+	}
 	// the maximum size to read for each packet (snaplen),
-	buffer := int32(conf.SnapLen)
-	return pcap.OpenLive(conf.Iface, buffer, false, pcap.BlockForever)
+	return pcap.OpenLive(conf.Iface, conf.SnapLen, false, pcap.BlockForever)
 }
 
 // PacketSourceGenerator returns a PacketGenerator based on configuration.
@@ -163,4 +165,18 @@ func (pg *PacketGenerator) SetBPFFilter(string) error {
 // this could be flexible.
 func (pg *PacketGenerator) LinkType() layers.LinkType {
 	return layers.LinkTypeEthernet
+}
+
+func deviceExists(name string) error {
+	devices, err := pcap.FindAllDevs()
+	if err != nil {
+		return err
+	}
+
+	for _, device := range devices {
+		if device.Name == name {
+			return nil
+		}
+	}
+	return fmt.Errorf("Unable to find device '%s'", name)
 }

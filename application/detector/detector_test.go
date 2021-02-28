@@ -104,16 +104,37 @@ func TestDetectorTagLog(t *testing.T) {
 
 	logger, hook := test.NewNullLogger()
 	det := &Detector{
+		Config: &Config{
+			Tags: []string{"192.122.190.105"},
+
+			Source: &DataSourceConfig{
+				DataSourceType:  DataSourcePCAP,
+				OfflinePcapPath: "./test/min.pcap",
+			},
+		},
 		tracker: tr,
 		Logger:  logger,
-		Tags:    []string{},
 	}
 
 	pkt := getPacket()
+	require.NotNil(t, pkt)
 
 	det.checkForTags(pkt)
 
 	require.Equal(t, 1, len(hook.Entries))
 	require.Equal(t, logrus.InfoLevel, hook.LastEntry().Level)
 	require.Equal(t, "confirmed:"+errMsg, hook.LastEntry().Message)
+}
+
+func TestDetectorMatchForward(t *testing.T) {
+
+	// Use PCAP Packet source -- read from registered.pcap
+
+	// add registration from address
+
+	// "listen for packets"
+
+	// Make sure forward is called on the right packets.
+
+	require.NotNil(t, nil)
 }
