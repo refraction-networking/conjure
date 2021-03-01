@@ -171,7 +171,6 @@ func (det *Detector) handlePacket(packet gopacket.Packet) {
 }
 
 // Current stations check packets for tags (UDP specifically to check DNS)
-// TODO
 func (det *Detector) checkForTags(packet gopacket.Packet) {
 	if packet == nil {
 		return
@@ -183,6 +182,7 @@ func (det *Detector) checkForTags(packet gopacket.Packet) {
 			dst := packet.NetworkLayer().NetworkFlow().Dst()
 			src := packet.NetworkLayer().NetworkFlow().Src()
 			det.Logger.Println("confirmed", src, "->", dst)
+			return
 		}
 	}
 }

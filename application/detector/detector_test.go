@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -79,6 +80,21 @@ func getPacket() gopacket.Packet {
 
 // =============[ Tests ]=============[
 
+func TestDetectorInitialization(t *testing.T) {
+
+	// test error handling first
+	os.Setenv("CJ_STATION_CONFIG", "/tmp/file_does_not_exist.toml")
+	det, err := NewDetector()
+	require.Nil(t, det)
+	require.Equal(t, "failed to load config: open /tmp/file_does_not_exist.toml: no such file or directory", err.Error())
+
+	// Test with actual test config
+	os.Setenv("CJ_STATION_CONFIG", "./test/config.toml")
+	det, err = NewDetector()
+	require.Nil(t, err)
+	require.NotNil(t, det)
+}
+
 func TestDetectorRegisterErrorLog(t *testing.T) {
 	tr := &mockTracker{}
 	errMsg := "Throws Error"
@@ -98,32 +114,67 @@ func TestDetectorRegisterErrorLog(t *testing.T) {
 	require.Equal(t, "error adding registration: "+errMsg, hook.LastEntry().Message)
 }
 
-func TestDetectorTagLog(t *testing.T) {
-	tr := &mockTracker{}
-	errMsg := "Throws Error"
+func TestDetectorTagLogUDP(t *testing.T) {
+	logMsg := "192.122.190.105 -> 192.168.1.104"
 
 	logger, hook := test.NewNullLogger()
 	det := &Detector{
 		Config: &Config{
-			Tags: []string{"192.122.190.105"},
+			// url query:   abcdefghijk.lmnopqrstuvw.xyz
+			Tags: []string{"abcdefghijk"},
+			Source: &DataSourceConfig{
+				DataSourceType:  DataSourcePCAP,
+				OfflinePcapPath: "./test/min_udp.pcap",
+			},
+		},
+		Logger: logger,
+	}
 
+	handle, err := PacketSourceFromConfig(det.Source)
+	if err != nil {
+		t.Fatalf("Failed to open packet source for test: %v", err)
+	}
+
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	for packet := range packetSource.Packets() {
+		require.NotNil(t, packet)
+		det.checkForTags(packet)
+	}
+
+	require.Equal(t, 3, len(hook.Entries))
+	require.Equal(t, logrus.InfoLevel, hook.LastEntry().Level)
+	require.Equal(t, "confirmed "+logMsg, hook.LastEntry().Message)
+}
+
+func TestDetectorTagLogTCP(t *testing.T) {
+	logMsg := "192.122.190.105 -> 192.168.1.104"
+
+	logger, hook := test.NewNullLogger()
+	det := &Detector{
+		Config: &Config{
+			Tags: []string{"nginx"},
 			Source: &DataSourceConfig{
 				DataSourceType:  DataSourcePCAP,
 				OfflinePcapPath: "./test/min.pcap",
 			},
 		},
-		tracker: tr,
-		Logger:  logger,
+		Logger: logger,
 	}
 
-	pkt := getPacket()
-	require.NotNil(t, pkt)
+	handle, err := PacketSourceFromConfig(det.Source)
+	if err != nil {
+		t.Fatalf("Failed to open packet source for test: %v", err)
+	}
 
-	det.checkForTags(pkt)
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	for packet := range packetSource.Packets() {
+		require.NotNil(t, packet)
+		det.checkForTags(packet)
+	}
 
 	require.Equal(t, 1, len(hook.Entries))
 	require.Equal(t, logrus.InfoLevel, hook.LastEntry().Level)
-	require.Equal(t, "confirmed:"+errMsg, hook.LastEntry().Message)
+	require.Equal(t, "confirmed "+logMsg, hook.LastEntry().Message)
 }
 
 func TestDetectorMatchForward(t *testing.T) {
