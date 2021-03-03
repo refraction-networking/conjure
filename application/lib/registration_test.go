@@ -41,7 +41,7 @@ func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 
 	conjureKeys, err := GenSharedKeys(sharedSecret)
 
-	var testGeneration uint32 = 1119
+	var testGeneration uint32 = 957
 	clientToStation.DecoyListGeneration = &testGeneration
 
 	return *clientToStation, conjureKeys
