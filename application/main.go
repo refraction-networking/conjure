@@ -238,6 +238,15 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					go tryShareRegistrationOverAPI(reg, conf.PreshareEndpoint)
 				}
 
+
+				if conf.IsBlocklistedPhantom(reg.DarkDecoy) {
+					// Note: Phantom blocklist is applied at this stage because the phantom may only be blocked on this
+					// station. We may want other stations to be informed about the registration, but prevent this station
+					// specifically from handling / interfering in any subsequent connection. See PR #75
+					logger.Printf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
+					continue
+				}
+
 				// validate the registration
 				regManager.AddRegistration(reg)
 				logger.Printf("Adding registration %v\n", reg.IDString())
@@ -328,14 +337,9 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err
 		}
-		if conf.IsBlocklistedPhantom(reg.DarkDecoy) {
-			logger.Printf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
 
-		} else {
-			// Received new registration, parse it and return
-			newRegs = append(newRegs, reg)
-		}
-
+		// Received new registration, parse it and return
+		newRegs = append(newRegs, reg)
 	}
 
 	if parsed.GetRegistrationPayload().GetV6Support() && conf.EnableIPv6 {
@@ -344,12 +348,8 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err
 		}
-		if conf.IsBlocklistedPhantom(reg.DarkDecoy) {
-			logger.Printf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
-		} else {
-			// add to list of new registrations to be processed.
-			newRegs = append(newRegs, reg)
-		}
+		// add to list of new registrations to be processed.
+		newRegs = append(newRegs, reg)
 	}
 
 	// log decoy connection and id string
