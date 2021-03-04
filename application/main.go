@@ -240,6 +240,9 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 
 
 				if conf.IsBlocklistedPhantom(reg.DarkDecoy) {
+					// Note: Phantom blocklist is applied at this stage because the phantom may only be blocked on this
+					// station. We may want other stations to be informed about the registration, but prevent this station
+					// specifically from handling / interfering in any subsequent connection. See PR #75
 					logger.Printf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
 					continue
 				}
