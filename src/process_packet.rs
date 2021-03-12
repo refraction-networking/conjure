@@ -80,14 +80,18 @@ pub extern "C" fn rust_process_packet(ptr: *mut PerCoreGlobal,
     #[allow(unused_mut)]
     let mut global = unsafe { &mut *ptr };
 
-    let rust_view_len = frame_len as usize;
+    let mut rust_view_len = frame_len as usize;
     let rust_view = unsafe {
         slice::from_raw_parts_mut(raw_ethframe as *mut u8, frame_len as usize)
     };
+
+    // If this is a GRE, we want to ignore the GRE overhead in our packets
+    rust_view_len -= global.gre_offset;
+
     global.stats.packets_this_period += 1;
     global.stats.bytes_this_period += rust_view_len as u64;
 
-    let eth_pkt = match EthernetPacket::new(rust_view) {
+    let eth_pkt = match EthernetPacket::new(&rust_view[global.gre_offset..]) {
         Some(pkt) => pkt,
         None => return,
     };

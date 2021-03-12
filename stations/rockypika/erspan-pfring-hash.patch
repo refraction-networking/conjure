@@ -1,0 +1,132 @@
+diff --git a/userland/examples_zc/zbalance_ipc.c b/userland/examples_zc/zbalance_ipc.c
+index a51cf231..8cc6f6c5 100644
+--- a/userland/examples_zc/zbalance_ipc.c
++++ b/userland/examples_zc/zbalance_ipc.c
+@@ -35,6 +35,7 @@
+ #include <pthread.h>
+ #include <sched.h>
+ #include <stdio.h>
++#include <netinet/ip.h>
+ 
+ #include "pfring.h"
+ #include "pfring_zc.h"
+@@ -403,7 +404,8 @@ void printHelp(void) {
+          "                 3 - Fan-out (1st) + Round-Robin (2nd, 3rd, ..)\n"
+          "                 4 - GTP hash (Inner IP/Port or Seq-Num or Outer IP/Port)\n"
+          "                 5 - GRE hash (Inner or Outer IP)\n"
+-         "                 6 - Interface X to queue X\n");
++         "                 6 - Interface X to queue X\n"
++         "                 7 - ERSPAN (Inner IP)\n");
+   printf("-r <queue>:<dev> Replace egress queue <queue> with device <dev> (multiple -r can be specified)\n");
+   printf("-S <core id>     Enable Time Pulse thread and bind it to a core\n");
+   printf("-R <nsec>        Time resolution (nsec) when using Time Pulse thread\n"
+@@ -495,6 +497,43 @@ int64_t ip_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in
+   return pfring_zc_builtin_ip_hash(pkt_handle, in_queue) % num_out_queues;
+ }
+ 
++/* *************************************** */
++
++int npkts = 0;
++int64_t erspan_hack_ip_hash(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue)
++{
++    // Skip the first 0x2a bytes, which is the erspan header. There lies an etherheader; parse that
++    u_char *pkt = pfring_zc_pkt_buff_data(pkt_handle, in_queue);
++    u_char *ether = &pkt[0x2a];
++
++    uint16_t ethertype = (ether[12] << 8) | ether[13];
++    if (ethertype == 0x0800) {
++        // IPv4
++        if (pkt_handle->len < (sizeof(struct ether_header)+sizeof(struct iphdr))) {
++            return 0;
++        }
++
++        struct iphdr *ip = (struct iphdr*)&ether[sizeof(struct ether_header)];
++        return ntohl(ip->saddr) + ntohl(ip->daddr);
++    } else if (ethertype == 0x86dd) {
++        // IPv6
++        // TODO
++    }
++    return 0;
++}
++
++int64_t erspan_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
++  long num_out_queues = (long) user;
++#ifdef HAVE_PACKET_FILTER
++  if (!packet_filter(pkt_handle, in_queue))
++    return -1;
++#endif
++  if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
++
++  return erspan_hack_ip_hash(pkt_handle, in_queue) % num_out_queues;
++}
++
++
+ /* *************************************** */
+ 
+ int64_t gtp_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
+@@ -609,6 +648,32 @@ int64_t fo_multiapp_ip_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_
+ 
+ /* *************************************** */
+ 
++int64_t fo_multiapp_erspan_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
++  int32_t i, offset = 0, app_instance, hash;
++  int64_t consumers_mask = 0; 
++
++#ifdef HAVE_PACKET_FILTER
++  if (!packet_filter(pkt_handle, in_queue))
++    return 0x0;
++#endif
++
++  if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
++
++  hash = erspan_hack_ip_hash(pkt_handle, in_queue);
++
++  for (i = 0; i < num_apps; i++) {
++    app_instance = hash % instances_per_app[i];
++    consumers_mask |= ((int64_t) 1 << (offset + app_instance));
++    offset += instances_per_app[i];
++  }
++
++  return consumers_mask;
++}
++
++/* *************************************** */
++
++
++
+ int64_t fo_multiapp_gtp_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
+   int32_t i, offset = 0, app_instance, hash;
+   int64_t consumers_mask = 0;
+@@ -864,6 +929,7 @@ int main(int argc, char* argv[]) {
+       case 4:
+       case 5:
+       case 6:
++      case 7:
+         num_consumer_queues_limit = 64; /* egress mask is 64 bit */
+         break;
+       default:
+@@ -874,6 +940,7 @@ int main(int argc, char* argv[]) {
+   switch (hash_mode) {
+     case 1: 
+     case 3:
++    case 7:
+       num_consumer_queues_limit = 64; /* egress mask is 64 bit */
+       break;
+     default:
+@@ -1149,6 +1216,8 @@ int main(int argc, char* argv[]) {
+       break;
+     case 6: func =  direct_distribution_func;
+       break;
++    case 7: if (strcmp(device, "sysdig") == 0) func = sysdig_distribution_func; else if (time_pulse) func = erspan_distribution_func; /* else built-in IP-based */
++      break;
+     }
+ 
+     zw = pfring_zc_run_balancer(
+@@ -1189,6 +1258,7 @@ int main(int argc, char* argv[]) {
+       break;
+     case 6: func = fo_multiapp_direct_distribution_func;
+       break;
++    case 7: func = fo_multiapp_erspan_distribution_func;
+     }
+ 
+     zw = pfring_zc_run_fanout(

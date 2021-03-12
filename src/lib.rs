@@ -78,6 +78,10 @@ pub struct PerCoreGlobal
     // testing from other stations in a conjure cluster from clogging up the logs with connection
     // notifications. 
     filter_list: Vec<String>,
+
+    // If we're reading from a GRE tap, we can provide an optional offset that we read
+    // into the packet (skipping the GRE header).
+    gre_offset: usize,
 }
 
 // Tracking of some pretty straightforward quantities
@@ -147,6 +151,14 @@ impl PerCoreGlobal
             &_ => Flow::set_log_client(false), // default disable 
         };
 
+        let gre_offset = match env::var("PARSE_GRE_OFFSET") {
+            Ok(val) => val.parse::<usize>().unwrap(),
+            Err(env::VarError::NotPresent) => 0,
+            Err(_) => { println!("Error, can't parse PARSE_GRE_OFFSET"); 0},
+        };
+
+        debug!("gre_offset: {}", gre_offset);
+
         PerCoreGlobal {
             priv_key: priv_key,
             lcore: the_lcore,
@@ -157,6 +169,7 @@ impl PerCoreGlobal
             ip_tree: PrefixTree::new(),
             zmq_sock: zmq_sock,
             filter_list: value.detector_filter_list,
+            gre_offset: gre_offset,
         }
     }
 
