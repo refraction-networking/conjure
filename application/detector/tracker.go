@@ -40,7 +40,7 @@
 // please make sure the tests still pass. If you modify the way this code is
 // used please update the tests.
 
-package main
+package detector
 
 import (
 	"fmt"

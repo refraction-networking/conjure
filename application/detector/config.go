@@ -1,4 +1,4 @@
-package main
+package detector
 
 import (
 	"fmt"
@@ -18,6 +18,9 @@ type Config struct {
 
 	// Tags checked for routing investigation purposes.
 	Tags []string `toml:"detector_tags"`
+
+	// Workers dictates the number of goroutines over which to balance packet handling
+	Workers int `toml:"detector_workers"`
 
 	// How often to log periodic statistics
 	StatsFrequency int `toml:"stats_frequency"`

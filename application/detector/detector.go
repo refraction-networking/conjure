@@ -1,7 +1,10 @@
-package main
+package detector
 
 import (
 	"bytes"
+	"context"
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/gopacket"
@@ -17,6 +20,12 @@ import (
 // with the API based registrars.
 type Detector struct {
 	*Config
+
+	// Packet ingest
+	producer *Producer
+
+	// intermediary between packet ingest and worker threads
+	consumer *Consumer
 
 	// Logger provided by initializing application.
 	Logger *log.Logger
@@ -68,7 +77,7 @@ func DetectorFromConfig(conf *Config) (*Detector, error) {
 // Run sets the detector running, capturing traffic and processing checking for
 // connections associated with registrations.
 // TODO: Multithread this function
-func (det *Detector) Run() {
+func (det *Detector) Run(ctx context.Context) {
 
 	// Open packet reader in promiscuous mode.
 	packetDataSource, err := PacketSourceFromConfig(det.Source)
@@ -84,38 +93,49 @@ func (det *Detector) Run() {
 		log.Fatal(err)
 	}
 
-	go det.StatsThread()
+	go det.StatsThread(ctx)
+	go det.CleanupThread(ctx)
 
-	// Actually process packets
-	source := gopacket.NewPacketSource(packetDataSource, packetDataSource.LinkType())
-
-	// To multithread source is actually a channel that you could pass to
-	// workers. The workers would just then need to read `packet. ok` out of
-	// the channel.
-	// https://www.reddit.com/r/golang/comments/4ec2gu/hung_up_on_gopacket/
-	for packet := range source.Packets() {
-		det.handlePacket(packet)
+	wg := &sync.WaitGroup{}
+	// Start workers and Add [workerPoolSize] to WaitGroup
+	wg.Add(det.Workers)
+	for i := 0; i < det.Workers; i++ {
+		go det.consumer.workerFunc(wg, i, det.handlePacket)
 	}
 
+	// // Actually process packets
+	// source := gopacket.NewPacketSource(packetDataSource, packetDataSource.LinkType())
+
+	// // To multithread source is actually a channel that you could pass to
+	// // workers. The workers would just then need to read `packet. ok` out of
+	// // the channel.
+	// // https://www.reddit.com/r/golang/comments/4ec2gu/hung_up_on_gopacket/
+	// for packet := range source.Packets() {
+	// 	det.handlePacket(packet)
+	// }
+
 	det.exit = true
+	wg.Wait()
 	det.Logger.Printf("Detector Shutting Down\n")
 }
 
 // StatsThread preiodically logs  numerical metrics for performance on the station.
-func (det *Detector) StatsThread() {
+func (det *Detector) StatsThread(ctx context.Context) {
 	for {
 		det.Logger.Printf("stats %s", det.stats.Report())
 		det.stats.Reset()
 
-		if det.exit {
+		select {
+		case <-ctx.Done():
 			return
+		default:
+			time.Sleep(time.Second * time.Duration(det.StatsFrequency))
 		}
-		time.Sleep(time.Second * time.Duration(det.StatsFrequency))
 	}
 }
 
 // CleanupThread preiodically run cleanup for detector session tracking.
-func (det *Detector) CleanupThread() {
+func (det *Detector) CleanupThread(ctx context.Context) {
 	for {
 		det.Logger.Printf("stats %s", det.stats.Report())
 		det.tracker.RemoveExpired()
@@ -123,7 +143,12 @@ func (det *Detector) CleanupThread() {
 		if det.exit {
 			return
 		}
-		time.Sleep(time.Second * time.Duration(det.CleanupFrequency))
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			time.Sleep(time.Second * time.Duration(det.CleanupFrequency))
+		}
 	}
 }
 
@@ -216,4 +241,66 @@ func generateFilters(filterList []string) string {
 	}
 
 	return out
+}
+
+// ===============[ Consumer! ]===============
+
+// Consumer - takes jobs and runs
+type Consumer struct {
+	ingestChan chan gopacket.Packet
+	jobsChan   chan gopacket.Packet
+}
+
+// callbackFunc is invoked each time the external lib passes an event to us.
+func (c Consumer) callbackFunc(event gopacket.Packet) {
+	c.ingestChan <- event
+}
+
+// workerFunc starts a single worker function that will range on the jobsChan
+// until that channel closes.
+func (c Consumer) workerFunc(wg *sync.WaitGroup, index int, handlePacket func(gopacket.Packet)) {
+	defer wg.Done()
+
+	fmt.Printf("Worker %d starting\n", index)
+	for packet := range c.jobsChan {
+		handlePacket(packet)
+	}
+	fmt.Printf("Worker %d interrupted\n", index)
+}
+
+// startConsumer acts as the proxy between the ingestChan and jobsChan, with a
+// select to support graceful shutdown.
+func (c Consumer) startConsumer(ctx context.Context) {
+	for {
+		select {
+		case job := <-c.ingestChan:
+			c.jobsChan <- job
+		case <-ctx.Done():
+			fmt.Println("Consumer received cancellation signal, closing jobsChan!")
+			close(c.jobsChan)
+			fmt.Println("Consumer closed jobsChan")
+			return
+		}
+	}
+}
+
+// ===============[ Producer ]===============
+
+// Producer simulates an external library that invokes the
+// registered callback when it has new data for us once per 100ms.
+type Producer struct {
+	dataSource DataSource
+	// dataSource   gopacket.PacketDataSource
+	callbackFunc func(event gopacket.Packet)
+}
+
+func (p Producer) start() {
+	// Actually process packets
+	source := gopacket.NewPacketSource(p.dataSource, p.dataSource.LinkType())
+
+	for packet := range source.Packets() {
+		// det.handlePacket(packet)
+		p.callbackFunc(packet)
+
+	}
 }

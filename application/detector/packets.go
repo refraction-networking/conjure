@@ -1,4 +1,4 @@
-package main
+package detector
 
 // This file allows us to parse a config file for parameters needed to open /
 // connect to / parse a Packet Data Source. A gopacket.PacketDataSource is
