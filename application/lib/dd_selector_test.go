@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"net"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestIPSelectionAlt(t *testing.T) {
@@ -106,4 +108,16 @@ func TestSeededSelectionV6(t *testing.T) {
 	if expectedAddr != phantomAddr.String() {
 		t.Fatalf("Expected Addr %v -- Got %v", expectedAddr, phantomAddr)
 	}
+}
+
+func TestPhantomsV6OnlyFilter(t *testing.T) {
+	testNets := []string{"192.122.190.0/24", "2001:48a8:687f:1::/64", "2001:48a8:687f:1::/64"}
+	testNetsParsed, err := parseSubnets(testNets)
+	require.Nil(t, err)
+	require.Equal(t, 3, len(testNetsParsed))
+
+	testNetsParsed, err = V6Only(testNetsParsed)
+	require.Nil(t, err)
+	require.Equal(t, 2, len(testNetsParsed))
+
 }
