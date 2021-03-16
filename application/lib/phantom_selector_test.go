@@ -102,3 +102,15 @@ func TestPhantomsSeededSelectionV6(t *testing.T) {
 	phantomAddr, err := phantomSelector.Select(seed, newGen, true)
 	assert.Equal(t, expectedAddr, phantomAddr.String())
 }
+
+func TestPhantomsV6OnlyFilter(t *testing.T) {
+	testNets := []string{"192.122.190.0/24", "2001:48a8:687f:1::/64", "2001:48a8:687f:1::/64"}
+	testNetsParsed, err := parseSubnets(testNets)
+	require.Nil(t, err)
+	require.Equal(t, 3, len(testNetsParsed))
+
+	testNetsParsed, err = V6Only(testNetsParsed)
+	require.Nil(t, err)
+	require.Equal(t, 2, len(testNetsParsed))
+
+}

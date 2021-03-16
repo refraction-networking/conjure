@@ -71,9 +71,13 @@ func V6Only(obj []*net.IPNet) ([]*net.IPNet, error) {
 	var out []*net.IPNet = []*net.IPNet{}
 
 	for _, _net := range obj {
-		if ipv6net := _net.IP.To16(); ipv6net != nil {
-			out = append(out, _net)
+		if _net.IP == nil {
+			continue
 		}
+		if net := _net.IP.To4(); net != nil {
+			continue
+		}
+		out = append(out, _net)
 	}
 	return out, nil
 }
