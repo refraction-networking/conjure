@@ -3,6 +3,7 @@ package tests
 import (
 	"log"
 	"net"
+	"os"
 	"sync"
 
 	dd "github.com/refraction-networking/conjure/application/lib"
@@ -18,6 +19,9 @@ type Transport struct {
 var SharedSecret = []byte(`6a328b8ec2024dd92dd64332164cc0425ddbde40cb7b81e055bf7b099096d068`)
 
 func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.TransportType) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
+	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
+
 	phantom := bufconn.Listen(65535)
 
 	var wg sync.WaitGroup
@@ -46,8 +50,14 @@ func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.Trans
 	}
 
 	covert := "1.2.3.4:56789"
-	c2s := &pb.ClientToStation{Transport: &transport, CovertAddress: &covert}
-	reg, err = manager.NewRegistration(c2s, &keys, false)
+	regType := pb.RegistrationSource_API
+	gen := uint32(1)
+	c2s := &pb.ClientToStation{Transport: &transport, CovertAddress: &covert, DecoyListGeneration: &gen}
+	reg, err = manager.NewRegistration(c2s, &keys, false, &regType)
+	if err != nil {
+		log.Fatalln("failed to create new Registration:", err)
+	}
+
 	reg.Transport = transport
 	if err != nil {
 		log.Fatalln("failed to add registration:", err)
@@ -60,7 +70,10 @@ func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.Trans
 func SetupRegistrationManager(transports ...Transport) *dd.RegistrationManager {
 	manager := dd.NewRegistrationManager()
 	for _, t := range transports {
-		manager.AddTransport(t.Index, t.Transport)
+		err := manager.AddTransport(t.Index, t.Transport)
+		if err != nil {
+			log.Fatalln("failed add transport:", err)
+		}
 	}
 	return manager
 }

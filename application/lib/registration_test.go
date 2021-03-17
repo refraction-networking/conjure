@@ -11,6 +11,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"github.com/stretchr/testify/require"
 )
 
 type mockTransport struct{}
@@ -75,7 +76,8 @@ func TestRegistrationLookup(t *testing.T) {
 	rm := NewRegistrationManager()
 
 	// The mock registration has transport id 0, so we hard code that here too
-	rm.AddTransport(0, mockTransport{})
+	err := rm.AddTransport(0, mockTransport{})
+	require.Nil(t, err)
 
 	c2s, keys := mockReceiveFromDetector()
 
@@ -97,7 +99,7 @@ func TestRegistrationLookup(t *testing.T) {
 }
 
 func TestLivenessCheck(t *testing.T) {
-	phantomAddr := net.ParseIP("52.44.73.6")
+	phantomAddr := net.ParseIP("1.1.1.1")
 	reg := DecoyRegistration{
 		DarkDecoy: phantomAddr,
 	}
@@ -117,7 +119,7 @@ func TestLivenessCheck(t *testing.T) {
 	}
 
 	// Is there any test address we know will never respond?
-	phantomV6 := net.ParseIP("2001:48a8:687f:1::105")
+	phantomV6 := net.ParseIP("2606:4700:4700::64")
 	reg.DarkDecoy = phantomV6
 
 	liveness, response = reg.PhantomIsLive()
@@ -137,18 +139,18 @@ func TestLivenessCheck(t *testing.T) {
 
 func TestLiveness(t *testing.T) {
 
-	liveness, response := phantomIsLive("192.122.190.105:443")
+	liveness, response := phantomIsLive("1.1.1.1.:80")
 
 	if liveness != true {
 		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
 
-	liveness, response = phantomIsLive("192.122.190.210:443")
+	liveness, response = phantomIsLive("192.0.0.2:443")
 	if liveness != false {
 		t.Fatalf("Host is NOT live, detected as live: %v\n", response)
 	}
 
-	liveness, response = phantomIsLive("[2001:48a8:687f:1::105]:443")
+	liveness, response = phantomIsLive("[2606:4700:4700::64]:443")
 	if liveness != true {
 		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
