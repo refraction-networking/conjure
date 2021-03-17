@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"sync"
 	"time"
 
 	zmq "github.com/pebbe/zmq4"
@@ -65,8 +64,7 @@ func ZMQProxy(c ZMQConfig) {
 	}
 	defer pubSock.Close()
 
-	wg := sync.WaitGroup{}
-
+	messages := make(chan []byte)
 	// Create a socket for each socket we're connecting to. I would've
 	// liked to use a single socket for all connections, and ZMQ actually
 	// does support connecting to multiple sockets from a single socket,
@@ -109,18 +107,22 @@ func ZMQProxy(c ZMQConfig) {
 		}
 		defer sock.Close()
 
-		wg.Add(1)
-
-		go func(frontend *zmq.Socket, config socketConfig) {
-			p.logger.Printf("proxying for %s\n", config.Address)
-			e := zmq.Proxy(frontend, pubSock, nil)
-			defer p.logger.Println("[ERROR] zmq.Proxy exiting: ", e)
-			if e != nil {
-				p.logger.Printf("proxy for %s failed: %v\n", config.Address, e)
+		go func(sub *zmq.Socket, config socketConfig) {
+			for {
+				msg, err := sub.RecvBytes(0)
+				if err != nil {
+					p.logger.Printf("read from %s failed: %v\n", config.Address, err)
+					continue
+				}
+				messages <- msg
 			}
 		}(sock, connectSocket)
 	}
 
-	wg.Wait()
-	defer p.logger.Println("[ERROR] zmq.Proxy escaped wg.Wait")
+	for msg := range messages {
+		_, err := pubSock.SendBytes(msg, 0)
+		if err != nil {
+			p.logger.Printf("write to pubSock failed: %v\n", err)
+		}
+	}
 }
