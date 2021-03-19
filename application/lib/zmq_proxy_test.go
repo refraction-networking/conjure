@@ -10,6 +10,7 @@ import (
 	"time"
 
 	zmq "github.com/pebbe/zmq4"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -17,6 +18,11 @@ const (
 	messagesPerSocket = 10000
 )
 
+// This Test itself is a Data race issue, as the concurrect access to the
+// subscribe socket is not safe. So I think his test indicates that ZMQProxy is
+// now threadsafe through the use of channels (none of the messages get mangled
+// and the process doesn't segfault). However, the test to fail when
+// the `-race` flag is included because pebbe/zmq4 pubsub is not thread safe.
 func TestConcurrentProxy(t *testing.T) {
 	dir := t.TempDir()
 	keyFilename := filepath.Join(dir, "test_key")
@@ -81,10 +87,10 @@ func TestConcurrentProxy(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		for {
-			_, err := sub.RecvBytes(0)
-			if err != nil {
-				panic(err)
-			}
+			m, err := sub.RecvBytes(0)
+			require.Nil(t, err)
+			require.Equal(t, "test_test_test_test_test_test", string(m))
+
 			received++
 			if received == numSockets*messagesPerSocket {
 				done <- struct{}{}
@@ -98,7 +104,7 @@ func TestConcurrentProxy(t *testing.T) {
 	for i := 0; i < numSockets; i++ {
 		go func(sock *zmq.Socket) {
 			for j := 0; j < messagesPerSocket; j++ {
-				_, err = sock.SendBytes([]byte("test"), 0)
+				_, err = sock.SendBytes([]byte("test_test_test_test_test_test"), 0)
 				if err != nil {
 					panic(err)
 				}

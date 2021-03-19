@@ -174,7 +174,7 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 	// send message to redis pubsub, wait, then close subscriber & channel
 	registerForDetector(&reg)
 
-	time.AfterFunc(time.Millisecond*500, func() {
+	time.AfterFunc(time.Second*1, func() {
 		_ = pubsub.Close()
 	})
 
