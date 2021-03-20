@@ -99,8 +99,55 @@ func halfPipe(src, dst net.Conn,
 	// We could try to use io.CopyN in a loop or something that
 	// gives us occasional bytes. CopyN would not splice, though
 	// (uses a LimitedReader that only calls Read)
-	buf := bufferPool.Get().([]byte)
-	written, err := io.CopyBuffer(dst, src, buf)
+	//buf := bufferPool.Get().([]byte)
+	//written, err := io.CopyBuffer(dst, src, buf)
+
+	// On closer examination, it seems this code below seems about
+	// as performant. It's not using splice, but for CO comcast / curveball:
+	//				io.CopyBuffer	Read/Write
+	// curveball CPU	~2%				~2%
+	// DL 40MB time		~11.5s			~11.6s
+	// So while io.CopyBuffer is faster, it's not significantly faster
+
+	// If we run into perf problems, we can revert
+
+	written, err := func() (totWritten int64, err error) {
+		buf := make([]byte, 32*1024)
+		for {
+			nr, er := src.Read(buf)
+			if nr > 0 {
+				nw, ew := dst.Write(buf[0:nr])
+				totWritten += int64(nw)
+				// Update stats:
+				if strings.HasPrefix(tag, "Up") {
+					Stat().AddBytesUp(int64(nw))
+				} else {
+					Stat().AddBytesDown(int64(nw))
+				}
+
+				if ew != nil {
+					if ew != io.EOF {
+						err = ew
+					}
+					break
+				}
+				if nw != nr {
+					err = io.ErrShortWrite
+					break
+				}
+			}
+			if er != nil {
+				if er != io.EOF {
+					err = er
+				}
+				break
+			}
+		}
+		return totWritten, err
+
+	}()
+
+	// Close dst
 	if closeWriter, ok := dst.(interface {
 		CloseWrite() error
 	}); ok {
@@ -109,6 +156,7 @@ func halfPipe(src, dst net.Conn,
 		dst.Close()
 	}
 
+	// Close src
 	if closeReader, ok := src.(interface {
 		CloseRead() error
 	}); ok {
@@ -116,6 +164,8 @@ func halfPipe(src, dst net.Conn,
 	} else {
 		src.Close()
 	}
+
+	// Compute/log stats
 	proxyEndTime := time.Since(proxyStartTime)
 	stats := sessionStats{
 		Duration: int64(proxyEndTime / time.Millisecond),
@@ -127,11 +177,12 @@ func halfPipe(src, dst net.Conn,
 	}
 	stats_str, _ := json.Marshal(stats)
 	logger.Printf("stopping forwarding %s", stats_str)
-	if strings.HasPrefix(tag, "Up") {
-		Stat().AddBytesUp(written)
-	} else {
-		Stat().AddBytesDown(written)
-	}
+	/*
+		if strings.HasPrefix(tag, "Up") {
+			Stat().AddBytesUp(written)
+		} else {
+			Stat().AddBytesDown(written)
+		}*/
 	wg.Done()
 }
 
