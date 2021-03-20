@@ -90,29 +90,17 @@ func halfPipe(src, dst net.Conn,
 
 	var proxyStartTime = time.Now()
 
+	// using io.CopyBuffer doesn't let us see
+	// bytes / second (until very end of connect, then only avg)
+	// But io.CopyBuffer is very performant:
+	// actually doesn't use a buffer at all, just splices sockets
+	// together at the kernel level.
+	//
+	// We could try to use io.CopyN in a loop or something that
+	// gives us occasional bytes. CopyN would not splice, though
+	// (uses a LimitedReader that only calls Read)
 	buf := bufferPool.Get().([]byte)
 	written, err := io.CopyBuffer(dst, src, buf)
-	oncePrintErr.Do(
-		func() {
-			proxyEndTime := time.Since(proxyStartTime)
-			if err == nil {
-				stats := sessionStats{
-					Duration: int64(proxyEndTime / time.Millisecond),
-					Written:  written,
-					Tag:      tag,
-					Err:      ""}
-				stats_str, _ := json.Marshal(stats)
-				logger.Printf("gracefully stopping forwarding %s", stats_str)
-			} else {
-				stats := sessionStats{
-					Duration: int64(proxyEndTime / time.Millisecond),
-					Written:  written,
-					Tag:      tag,
-					Err:      err.Error()}
-				stats_str, _ := json.Marshal(stats)
-				logger.Printf("stopping forwarding due to err %s", stats_str)
-			}
-		})
 	if closeWriter, ok := dst.(interface {
 		CloseWrite() error
 	}); ok {
@@ -128,6 +116,17 @@ func halfPipe(src, dst net.Conn,
 	} else {
 		src.Close()
 	}
+	proxyEndTime := time.Since(proxyStartTime)
+	stats := sessionStats{
+		Duration: int64(proxyEndTime / time.Millisecond),
+		Written:  written,
+		Tag:      tag,
+		Err:      ""}
+	if err != nil {
+		stats.Err = err.Error()
+	}
+	stats_str, _ := json.Marshal(stats)
+	logger.Printf("stopping forwarding %s", stats_str)
 	wg.Done()
 }
 
