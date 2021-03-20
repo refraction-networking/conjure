@@ -109,7 +109,7 @@ func (s *Stats) AddReg(generation uint32, source *pb.RegistrationSource) {
 	atomic.AddInt64(&s.activeRegistrations, 1)
 	atomic.AddInt64(&s.newRegistrations, 1)
 
-	if *source == pb.RegistrationSource_DetectorPrescan {
+	if *source == pb.RegistrationSource_Detector {
 		//atomic.AddInt64(&s.activeLocalRegistrations, 1) // Actually an absolute is not super useful.
 		atomic.AddInt64(&s.newLocalRegistrations, 1)
 	} else {
@@ -133,7 +133,7 @@ func (s *Stats) ExpireReg(generation uint32, source *pb.RegistrationSource) {
 	atomic.AddInt64(&s.activeRegistrations, -1)
 
 	/*
-		if *source == pb.RegistrationSource_DetectorPrescan {
+		if *source == pb.RegistrationSource_Detector {
 			atomic.AddInt64(&s.activeLocalRegistrations, -1)
 		} else {
 			atomic.AddInt64(&s.activeApiRegistrations, -1)
