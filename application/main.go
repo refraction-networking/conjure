@@ -79,6 +79,7 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 
 	count := regManager.CountRegistrations(originalDstIP)
 	logger.Printf("new connection (%d potential registrations)\n", count)
+	cj.Stat().AddConn()
 
 	// Pick random timeout between 10 and 60 seconds, down to millisecond precision
 	ms := rand.Int63n(50000) + 10000
@@ -102,6 +103,8 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 		// in userspace before the SYN-ACK is sent, increasing probe
 		// resistance.
 		logger.Printf("no possible registrations, reading for %v then dropping connection\n", timeout)
+		cj.Stat().AddMissedReg()
+		cj.Stat().CloseConn()
 
 		// Copy into ioutil.Discard to keep ACKing until the deadline.
 		// This should help prevent fingerprinting; if we let the read
@@ -122,6 +125,7 @@ readLoop:
 	for {
 		if len(possibleTransports) < 1 {
 			logger.Printf("ran out of possible transports, reading for %v then giving up\n", time.Until(deadline))
+			cj.Stat().ConnErr()
 			io.Copy(ioutil.Discard, clientConn)
 			return
 		}
@@ -129,6 +133,7 @@ readLoop:
 		n, err := clientConn.Read(buf[:])
 		if err != nil {
 			logger.Printf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len(), err)
+			cj.Stat().ConnErr()
 			return
 		}
 		received.Write(buf[:n])
@@ -149,6 +154,7 @@ readLoop:
 				// may no longer be valid. We should just give up on this connection.
 				d := time.Until(deadline)
 				logger.Printf("got unexpected error from transport %s, sleeping %v then giving up: %v\n", t.Name(), d, err)
+				cj.Stat().ConnErr()
 				time.Sleep(d)
 				return
 			}
@@ -162,6 +168,7 @@ readLoop:
 	}
 
 	cj.Proxy(reg, wrapped, logger)
+	cj.Stat().CloseConn()
 }
 
 func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, conf *cj.Config) {
@@ -200,11 +207,13 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 				if regManager.RegistrationExists(reg) {
 					// log phantom IP, shared secret, ipv6 support
 					logger.Printf("Duplicate registration: %v %s\n", reg.IDString(), reg.RegistrationSource)
+					cj.Stat().AddDupReg()
 
 					// Track the received registration, if it is already tracked it will just update the record
 					err := regManager.TrackRegistration(reg)
 					if err != nil {
 						logger.Println("error tracking registration: ", err)
+						cj.Stat().AddErrReg()
 					}
 					continue
 				}
@@ -216,11 +225,13 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 				err := regManager.TrackRegistration(reg)
 				if err != nil {
 					logger.Println("error tracking registration: ", err)
+					cj.Stat().AddErrReg()
 				}
 
 				// If registration is trying to connect to a dark decoy that is blocklisted continue
 				if reg.Covert == "" || conf.IsBlocklisted(reg.Covert) {
 					logger.Printf("Dropping reg, malformed or blocklisted covert: %v, %s, %v", reg.IDString(), reg.Covert, err)
+					cj.Stat().AddErrReg()
 					continue
 				}
 
@@ -229,15 +240,16 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					liveness, response := reg.PhantomIsLive()
 					if liveness == true {
 						logger.Printf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
+						cj.Stat().AddLivenessFail()
 						continue
 					}
+					cj.Stat().AddLivenessPass()
 				}
 
 				if conf.EnableShareOverAPI && *reg.RegistrationSource == pb.RegistrationSource_Detector {
 					// Registration received from decoy-registrar, share over API if enabled.
 					go tryShareRegistrationOverAPI(reg, conf.PreshareEndpoint)
 				}
-
 
 				if conf.IsBlocklistedPhantom(reg.DarkDecoy) {
 					// Note: Phantom blocklist is applied at this stage because the phantom may only be blocked on this
@@ -250,6 +262,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 				// validate the registration
 				regManager.AddRegistration(reg)
 				logger.Printf("Adding registration %v\n", reg.IDString())
+				cj.Stat().AddReg(reg.DecoyListVersion, reg.RegistrationSource)
 			}
 		}()
 
@@ -382,6 +395,9 @@ func main() {
 		logger.Printf("failed parse client ip logging setting: %v\n", err)
 		logClientIP = false
 	}
+
+	// Init stats
+	cj.Stat()
 
 	// parse toml station configuration
 	conf, err := cj.ParseConfig()
