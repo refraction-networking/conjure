@@ -127,6 +127,11 @@ func halfPipe(src, dst net.Conn,
 	}
 	stats_str, _ := json.Marshal(stats)
 	logger.Printf("stopping forwarding %s", stats_str)
+	if strings.HasPrefix(tag, "Up") {
+		Stat().AddBytesUp(written)
+	} else {
+		Stat().AddBytesDown(written)
+	}
 	wg.Done()
 }
 
