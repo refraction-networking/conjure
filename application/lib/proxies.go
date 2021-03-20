@@ -166,6 +166,7 @@ func halfPipe(src, dst net.Conn,
 	}
 
 	// Compute/log stats
+
 	proxyEndTime := time.Since(proxyStartTime)
 	stats := sessionStats{
 		Duration: int64(proxyEndTime / time.Millisecond),
@@ -183,6 +184,7 @@ func halfPipe(src, dst net.Conn,
 		} else {
 			Stat().AddBytesDown(written)
 		}*/
+
 	wg.Done()
 }
 

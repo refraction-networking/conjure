@@ -25,6 +25,7 @@ type Stats struct {
 	newErrRegistrations    int64 // number of registrations that had some kinda error
 	newDupRegistrations    int64 // number of duplicate registrations (doesn't uniquify, so might have some double counting)
 
+
 	newLivenessPass int64 // Liveness tests that passed (non-live phantom) since reset()
 	newLivenessFail int64 // Liveness tests that failed (live phantom) since reset()
 
