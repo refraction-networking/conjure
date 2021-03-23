@@ -103,11 +103,28 @@ func NewRegistrationManager() *RegistrationManager {
 
 // AddTransport initializes a transport so that it can be tracked by the manager when
 // clients register.
-func (regManager *RegistrationManager) AddTransport(index pb.TransportType, t Transport) {
+func (regManager *RegistrationManager) AddTransport(index pb.TransportType, t Transport) error {
+	if regManager == nil {
+		logger := log.New(os.Stdout, "[REG] ", log.Ldate|log.Lmicroseconds)
+
+		p, err := NewPhantomIPSelector()
+		if err != nil {
+			return fmt.Errorf("failed to create the PhantomIPSelector object: %v", err)
+		}
+		regManager = &RegistrationManager{
+			Logger:           logger,
+			registeredDecoys: NewRegisteredDecoys(),
+			PhantomSelector:  p,
+		}
+	}
+	if regManager.registeredDecoys == nil {
+		regManager.registeredDecoys = NewRegisteredDecoys()
+	}
 	regManager.registeredDecoys.m.Lock()
 	defer regManager.registeredDecoys.m.Unlock()
 
 	regManager.registeredDecoys.transports[index] = t
+	return nil
 }
 
 // GetWrappingTransports Returns a map of the wrapping transport types to their transports. This return value

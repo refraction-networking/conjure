@@ -409,8 +409,14 @@ func main() {
 	go cj.ZMQProxy(conf.ZMQConfig)
 
 	// Add registration channel options
-	regManager.AddTransport(pb.TransportType_Min, min.Transport{})
-	regManager.AddTransport(pb.TransportType_Obfs4, obfs4.Transport{})
+	err = regManager.AddTransport(pb.TransportType_Min, min.Transport{})
+	if err != nil {
+		logger.Printf("failed to add transport: %v", err)
+	}
+	err = regManager.AddTransport(pb.TransportType_Obfs4, obfs4.Transport{})
+	if err != nil {
+		logger.Printf("failed to add transport: %v", err)
+	}
 
 	// Receive registration updates from ZMQ Proxy as subscriber
 	go get_zmq_updates(zmqAddress, regManager, conf)

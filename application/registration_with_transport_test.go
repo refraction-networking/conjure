@@ -3,12 +3,14 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
 	dd "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"github.com/stretchr/testify/require"
 )
 
 func mockReceiveFromDetector() (*pb.ClientToStation, dd.ConjureSharedKeys) {
@@ -30,13 +32,19 @@ func mockReceiveFromDetector() (*pb.ClientToStation, dd.ConjureSharedKeys) {
 }
 
 func TestManagerFunctionality(t *testing.T) {
+	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
+
 	rm := dd.NewRegistrationManager()
 
 	c2s, keys := mockReceiveFromDetector()
 
 	transport := pb.TransportType_Min
-	rm.AddTransport(pb.TransportType_Min, min.Transport{})
+	gen := uint32(1)
+	err := rm.AddTransport(pb.TransportType_Min, min.Transport{})
+	require.Nil(t, err)
 	c2s.Transport = &transport
+	c2s.DecoyListGeneration = &gen
 
 	source := pb.RegistrationSource_Detector
 	newReg, err := rm.NewRegistration(c2s, &keys, c2s.GetV6Support(), &source)
@@ -48,7 +56,7 @@ func TestManagerFunctionality(t *testing.T) {
 
 	storedReg := rm.GetRegistrations(newReg.DarkDecoy)[string(newReg.Keys.ConjureHMAC("MinTrasportHMACString"))]
 
-	if storedReg.DarkDecoy.String() != "141.219.56.148" || storedReg.Covert != "52.44.73.6:443" {
+	if storedReg.DarkDecoy.String() != "192.122.190.148" || storedReg.Covert != "52.44.73.6:443" {
 		t.Fatalf("Improper registration returned: %v\n", storedReg.String())
 	}
 }
