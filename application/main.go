@@ -79,6 +79,7 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 
 	count := regManager.CountRegistrations(originalDstIP)
 	logger.Printf("new connection (%d potential registrations)\n", count)
+	cj.Stat().AddConn()
 
 	// Pick random timeout between 10 and 60 seconds, down to millisecond precision
 	ms := rand.Int63n(50000) + 10000
@@ -102,6 +103,8 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 		// in userspace before the SYN-ACK is sent, increasing probe
 		// resistance.
 		logger.Printf("no possible registrations, reading for %v then dropping connection\n", timeout)
+		cj.Stat().AddMissedReg()
+		cj.Stat().CloseConn()
 
 		// Copy into ioutil.Discard to keep ACKing until the deadline.
 		// This should help prevent fingerprinting; if we let the read
@@ -122,6 +125,7 @@ readLoop:
 	for {
 		if len(possibleTransports) < 1 {
 			logger.Printf("ran out of possible transports, reading for %v then giving up\n", time.Until(deadline))
+			cj.Stat().ConnErr()
 			io.Copy(ioutil.Discard, clientConn)
 			return
 		}
@@ -129,6 +133,7 @@ readLoop:
 		n, err := clientConn.Read(buf[:])
 		if err != nil {
 			logger.Printf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len(), err)
+			cj.Stat().ConnErr()
 			return
 		}
 		received.Write(buf[:n])
@@ -149,6 +154,7 @@ readLoop:
 				// may no longer be valid. We should just give up on this connection.
 				d := time.Until(deadline)
 				logger.Printf("got unexpected error from transport %s, sleeping %v then giving up: %v\n", t.Name(), d, err)
+				cj.Stat().ConnErr()
 				time.Sleep(d)
 				return
 			}
@@ -162,6 +168,7 @@ readLoop:
 	}
 
 	cj.Proxy(reg, wrapped, logger)
+	cj.Stat().CloseConn()
 }
 
 func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, conf *cj.Config) {
@@ -200,11 +207,13 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 				if regManager.RegistrationExists(reg) {
 					// log phantom IP, shared secret, ipv6 support
 					logger.Printf("Duplicate registration: %v %s\n", reg.IDString(), reg.RegistrationSource)
+					cj.Stat().AddDupReg()
 
 					// Track the received registration, if it is already tracked it will just update the record
 					err := regManager.TrackRegistration(reg)
 					if err != nil {
 						logger.Println("error tracking registration: ", err)
+						cj.Stat().AddErrReg()
 					}
 					continue
 				}
@@ -216,11 +225,13 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 				err := regManager.TrackRegistration(reg)
 				if err != nil {
 					logger.Println("error tracking registration: ", err)
+					cj.Stat().AddErrReg()
 				}
 
 				// If registration is trying to connect to a dark decoy that is blocklisted continue
 				if reg.Covert == "" || conf.IsBlocklisted(reg.Covert) {
 					logger.Printf("Dropping reg, malformed or blocklisted covert: %v, %s, %v", reg.IDString(), reg.Covert, err)
+					cj.Stat().AddErrReg()
 					continue
 				}
 
@@ -229,8 +240,10 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					liveness, response := reg.PhantomIsLive()
 					if liveness == true {
 						logger.Printf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
+						cj.Stat().AddLivenessFail()
 						continue
 					}
+					cj.Stat().AddLivenessPass()
 				}
 
 				if conf.EnableShareOverAPI && *reg.RegistrationSource == pb.RegistrationSource_Detector {
@@ -238,9 +251,18 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					go tryShareRegistrationOverAPI(reg, conf.PreshareEndpoint)
 				}
 
+				if conf.IsBlocklistedPhantom(reg.DarkDecoy) {
+					// Note: Phantom blocklist is applied at this stage because the phantom may only be blocked on this
+					// station. We may want other stations to be informed about the registration, but prevent this station
+					// specifically from handling / interfering in any subsequent connection. See PR #75
+					logger.Printf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
+					continue
+				}
+
 				// validate the registration
 				regManager.AddRegistration(reg)
 				logger.Printf("Adding registration %v\n", reg.IDString())
+				cj.Stat().AddReg(reg.DecoyListVersion, reg.RegistrationSource)
 			}
 		}()
 
@@ -328,14 +350,9 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err
 		}
-		if conf.IsBlocklistedPhantom(reg.DarkDecoy) {
-			logger.Printf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
 
-		} else {
-			// Received new registration, parse it and return
-			newRegs = append(newRegs, reg)
-		}
-
+		// Received new registration, parse it and return
+		newRegs = append(newRegs, reg)
 	}
 
 	if parsed.GetRegistrationPayload().GetV6Support() && conf.EnableIPv6 {
@@ -344,12 +361,8 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 			logger.Printf("Failed to create registration: %v", err)
 			return nil, err
 		}
-		if conf.IsBlocklistedPhantom(reg.DarkDecoy) {
-			logger.Printf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
-		} else {
-			// add to list of new registrations to be processed.
-			newRegs = append(newRegs, reg)
-		}
+		// add to list of new registrations to be processed.
+		newRegs = append(newRegs, reg)
 	}
 
 	// log decoy connection and id string
@@ -383,6 +396,9 @@ func main() {
 		logClientIP = false
 	}
 
+	// Init stats
+	cj.Stat()
+
 	// parse toml station configuration
 	conf, err := cj.ParseConfig()
 	if err != nil {
@@ -393,8 +409,14 @@ func main() {
 	go cj.ZMQProxy(conf.ZMQConfig)
 
 	// Add registration channel options
-	regManager.AddTransport(pb.TransportType_Min, min.Transport{})
-	regManager.AddTransport(pb.TransportType_Obfs4, obfs4.Transport{})
+	err = regManager.AddTransport(pb.TransportType_Min, min.Transport{})
+	if err != nil {
+		logger.Printf("failed to add transport: %v", err)
+	}
+	err = regManager.AddTransport(pb.TransportType_Obfs4, obfs4.Transport{})
+	if err != nil {
+		logger.Printf("failed to add transport: %v", err)
+	}
 
 	// Receive registration updates from ZMQ Proxy as subscriber
 	go get_zmq_updates(zmqAddress, regManager, conf)

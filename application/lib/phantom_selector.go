@@ -12,17 +12,6 @@ import (
 	wr "github.com/mroth/weightedrand"
 )
 
-// ConjurePhantomSubnet - Weighted option to choose phantom address from.
-type ConjurePhantomSubnet struct {
-	Weight  float32
-	Subnets []string
-}
-
-// SubnetConfig - Configuration of subnets for Conjure to choose a Phantom out of.
-type SubnetConfig struct {
-	WeightedSubnets []ConjurePhantomSubnet
-}
-
 // getSubnets - return EITHER all subnet strings as one composite array if we are
 //		selecting unweighted, or return the array associated with the (seed) selected
 //		array of subnet strings based on the associated weights
@@ -59,30 +48,6 @@ func (sc *SubnetConfig) getSubnets(seed []byte, weighted bool) []string {
 	}
 
 	return out
-}
-
-// PhantomIPSelector - Object for tracking current generation to SubnetConfig Mapping.
-type PhantomIPSelector struct {
-	Networks map[uint]*SubnetConfig
-}
-
-var defaultSubnetGeneration = SubnetConfig{
-	WeightedSubnets: []ConjurePhantomSubnet{
-		{Weight: 9, Subnets: []string{"192.122.190.0/24", "2001:48a8:687f:1::/64"}},
-		{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
-	},
-}
-
-var oldPhantomSubnets = SubnetConfig{
-	WeightedSubnets: []ConjurePhantomSubnet{
-		ConjurePhantomSubnet{Weight: 1, Subnets: []string{
-			"192.122.190.0/24", "2001:48a8:687f:1::/64", // Curveball Merit
-			"141.219.0.0/16", "35.8.0.0/16"}},
-	},
-}
-
-func defaultSubnets() *SubnetConfig {
-	return &defaultSubnetGeneration
 }
 
 // SubnetFilter - Filter IP subnets based on whatever to prevent specific subnets from
@@ -140,27 +105,10 @@ func parseSubnets(phantomSubnets []string) ([]*net.IPNet, error) {
 	// return nil, fmt.Errorf("parseSubnets not implemented yet")
 }
 
-func getStaticSubnets() map[uint]*SubnetConfig {
-	nets := map[uint]*SubnetConfig{
-		1: &SubnetConfig{WeightedSubnets: []ConjurePhantomSubnet{
-			ConjurePhantomSubnet{Weight: 1, Subnets: []string{"192.122.190.0/24", "2001:48a8:687f:1::/64"}}}},
-		2: &SubnetConfig{WeightedSubnets: []ConjurePhantomSubnet{
-			ConjurePhantomSubnet{Weight: 1, Subnets: []string{"192.122.190.0/28", "2001:48a8:687f:1::/96"}}}},
-		538: &oldPhantomSubnets,
-		957: &defaultSubnetGeneration,
-	}
-
-	return nets
-}
-
 // NewPhantomIPSelector - create object currently populated with a static map of generation number
 //		to SubnetConfig, but this may be loaded dynamically in the future.
 func NewPhantomIPSelector() (*PhantomIPSelector, error) {
-	p := PhantomIPSelector{
-		Networks: getStaticSubnets(),
-	}
-
-	return &p, nil
+	return GetPhantomSubnetSelector()
 }
 
 // Select - select an ip address from the list of subnets associated with the specified generation
@@ -173,6 +121,9 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool)
 	var idNets []idNet
 
 	genConfig := p.GetSubnetsByGeneration(generation)
+	if genConfig == nil {
+		return nil, fmt.Errorf("generation number not recognized")
+	}
 
 	genSubnetStrings := genConfig.getSubnets(seed, true)
 
@@ -290,7 +241,8 @@ func (p *PhantomIPSelector) GetSubnetsByGeneration(generation uint) *SubnetConfi
 		return subnets
 	}
 
-	return defaultSubnets()
+	// No Default subnets provided if the generation is not known
+	return nil
 }
 
 // AddGeneration - add a subnet config as a new new generation, if the requested

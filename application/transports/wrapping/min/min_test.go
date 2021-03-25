@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"os"
 	"testing"
 
 	"github.com/refraction-networking/conjure/application/transports"
@@ -12,6 +13,9 @@ import (
 )
 
 func TestSuccessfulWrap(t *testing.T) {
+	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
+
 	var transport Transport
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Min, Transport: transport})
 	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min)
