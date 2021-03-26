@@ -80,4 +80,5 @@ CJ_IP6_ADDR=[::1]
 
 # application
 CJ_STATION_CONFIG=/opt/conjure/application/config.toml
+PHANTOM_SUBNET_LOCATION=/opt/conjure/sysconfig/phantom_subnets.toml
 ```
