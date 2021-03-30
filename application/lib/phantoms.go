@@ -10,7 +10,7 @@ import (
 
 // ConjurePhantomSubnet - Weighted option to choose phantom address from.
 type ConjurePhantomSubnet struct {
-	Weight  float32
+	Weight  uint32
 	Subnets []string
 }
 
@@ -29,17 +29,6 @@ type PhantomIPSelector struct {
 type phantomIPSelectorInternal struct {
 	Networks map[string]*SubnetConfig
 }
-
-// var defaultSubnetGeneration = SubnetConfig{
-// 	WeightedSubnets: []ConjurePhantomSubnet{
-// 		{Weight: 9, Subnets: []string{"192.122.190.0/24", "2001:48a8:687f:1::/64"}},
-// 		{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
-// 	},
-// }
-
-// func defaultSubnets() *SubnetConfig {
-// 	return &defaultSubnetGeneration
-// }
 
 // GetPhantomSubnetSelector gets the location of the configuration file from an
 // environment variable and returns the parsed configuration.
