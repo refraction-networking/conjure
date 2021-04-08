@@ -58,6 +58,7 @@ services:
                 - LOG_CLIENT_IP=true
         volumes:
                 - /var/lib/tapdance/prod.privkey:/opt/conjure/sysconfig/privkey
+                - ./phantom_subnets.toml:/opt/conjure/sysconfig/phantom_subnets.toml
         depends_on:
                 - zbalance
                 - detector

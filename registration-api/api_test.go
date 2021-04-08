@@ -16,6 +16,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	zmq "github.com/pebbe/zmq4"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -332,4 +333,22 @@ func BenchmarkRegistration(b *testing.B) {
 		w := httptest.NewRecorder()
 		s.register(w, r)
 	}
+}
+
+func TestAPIGetClientAddr(t *testing.T) {
+
+	req, err := http.NewRequest("GET", "http://example.com", nil)
+	require.Nil(t, err)
+
+	req.RemoteAddr = "10.0.0.0"
+	require.Equal(t, "10.0.0.0", getRemoteAddr(req))
+
+	req.Header.Add("X-Forwarded-For", "192.168.1.1")
+	require.Equal(t, "192.168.1.1", getRemoteAddr(req))
+
+	req.Header.Set("X-Forwarded-For", "127.0.0.1, 192.168.0.0")
+	require.Equal(t, "127.0.0.1", getRemoteAddr(req))
+
+	req.Header.Set("X-Forwarded-For", "127.0.0.1,192.168.0.0")
+	require.Equal(t, "127.0.0.1", getRemoteAddr(req))
 }

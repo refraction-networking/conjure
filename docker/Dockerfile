@@ -73,9 +73,11 @@ RUN apt-get update && apt-get -y -q install libzmq3-dev iproute2 iptables && apt
 ENTRYPOINT [ "/entrypoint.sh"]
 
 FROM ubuntu:20.04 as application
-ENV CJ_STATION_CONFIG=/opt/conjure/application/config.toml
+ENV CJ_STATION_CONFIG=/opt/conjure/application/config.toml \
+    PHANTOM_SUBNET_LOCATION=/opt/conjure/sysconfig/phantom_subnets.toml
 COPY --from=build_base_go /opt/conjure/application/application /opt/conjure/application/application
 RUN apt-get update && apt-get -y -q install libzmq3-dev
 COPY --from=build_base_go /opt/conjure/application/config.toml ${CJ_STATION_CONFIG}
+COPY --from=build_base_go /opt/conjure/application/lib/test/phantom_subnets.toml ${PHANTOM_SUBNET_LOCATION}
 #COPY ./docker/application-entrypoint.sh /entrypoint.sh
 ENTRYPOINT [ "/opt/conjure/application/application"]

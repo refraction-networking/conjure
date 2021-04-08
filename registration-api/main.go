@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/BurntSushi/toml"
@@ -48,11 +49,23 @@ type server struct {
 	sock   *zmq.Socket
 }
 
-func (s *server) register(w http.ResponseWriter, r *http.Request) {
-	requestIP := r.RemoteAddr
+// Get the first element of the X-Forwarded-For header if it is available, this
+// will be the clients address if intermediate proxies follow X-Forwarded-For
+// specification (as seen here: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For).
+// Otherwise return the remote address specified in the request.
+//
+// In the future this may need to handle True-Client-IP headers.
+func getRemoteAddr(r *http.Request) string {
 	if r.Header.Get("X-Forwarded-For") != "" {
-		requestIP = r.Header.Get("X-Forwarded-For")
+		addrList := r.Header.Get("X-Forwarded-For")
+		return strings.Trim(strings.Split(addrList, ",")[0], " \t")
 	}
+	return r.RemoteAddr
+}
+
+func (s *server) register(w http.ResponseWriter, r *http.Request) {
+	requestIP := getRemoteAddr(r)
+
 	if s.logClientIP {
 		s.logger.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
 	} else {
