@@ -11,6 +11,9 @@ EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
 
 ExecStart=/opt/conjure/registration-api/registration-api
 
+# send SIGHUP to the process running API service on systemd reload
+ExecReload=/bin/kill -HUP $MAINPID
+
 # on stop processes will get SIGTERM, and after 10 secs - SIGKILL (default 90)
 TimeoutStopSec=10
 
