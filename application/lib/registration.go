@@ -633,7 +633,7 @@ func (r *RegisteredDecoys) getExpiredRegistrations() []string {
 	r.m.RLock()
 	defer r.m.RUnlock()
 
-	const regTimeout = time.Minute * 2
+	const regTimeout = time.Hour * 6
 	var cutoff = time.Now().Add(-regTimeout)
 	var expiredRegTimeoutIndices = []string{}
 
@@ -712,7 +712,7 @@ func registerForDetector(reg *DecoyRegistration) {
 		return
 	}
 
-	duration := uint64(3 * time.Minute.Nanoseconds())
+	duration := uint64(6 * time.Hour.Nanoseconds())
 	src := reg.registrationAddr.String()
 	phantom := reg.DarkDecoy.String()
 	msg := &pb.StationToDetector{
