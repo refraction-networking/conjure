@@ -18,6 +18,10 @@ type CachedLivenessTester struct{
 	ip_cache map[string]bool
 }
 
+type UncachedLivenessTester struct{
+}
+
+
 func (blt *CachedLivenessTester) Init(){
 	blt.ip_cache = make(map[string]bool)
 }
@@ -75,6 +79,10 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 		blt.ip_cache[addr] = true
 	}
 	return isLive, err
+}
+
+func (blt *UncachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, error) {
+	return phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
 }
 
 func phantomIsLive(address string) (bool, error) {
