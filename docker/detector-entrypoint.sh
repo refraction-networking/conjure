@@ -5,7 +5,7 @@ OFFSET=${CJ_QUEUE_OFFSET:-2}
 
 cleanup() {
   echo $(ps aux)
-  start-stop-daemon --stop --oknodo --retry 15 -n dark-decoy
+  start-stop-daemon --stop --oknodo --retry 15 -n conjure
   #pkill dark-decoy
   echo $(ps aux)
   for CORE in `seq $OFFSET $((OFFSET + CORE_COUNT -1 ))`
@@ -65,7 +65,7 @@ do
   fi
 done
 echo "Prerequisite configuration complete."
-/opt/conjure/dark-decoy -c ${CJ_CLUSTER_ID} -o ${CJ_COREBASE} -n ${CJ_CORECOUNT} -l ${CJ_LOG_INTERVAL} -K ${CJ_PRIVKEY} -s ${CJ_SKIP_CORE} -z ${CJ_QUEUE_OFFSET} &
+/opt/conjure/conjure -c ${CJ_CLUSTER_ID} -o ${CJ_COREBASE} -n ${CJ_CORECOUNT} -l ${CJ_LOG_INTERVAL} -K ${CJ_PRIVKEY} -s ${CJ_SKIP_CORE} -z ${CJ_QUEUE_OFFSET} &
 wait $!
 cleanup
 
