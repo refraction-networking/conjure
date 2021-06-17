@@ -3,12 +3,9 @@
 
 
 
+source $CJ_PATH/sysconfig/conjure.conf
 
-# SET THESE FOR EACH DIFFERENT STATION
-IP4_ADDR="192.122.200.253"
-IP6_ADDR="[fe80::225:90ff:fef9:6fb4]"
-CORE_COUNT=6
-OFFSET=6
+CORE_COUNT=$CJ_CORECOUNT
 
 do_or_die() {
     $1 || exit_msg "command \"$1\" failed"

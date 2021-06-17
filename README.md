@@ -11,90 +11,114 @@
 
 ### See also 
 
-[Refraction Client Library](https://github.com/refraction-networking/gotapdance) - gotapdance
-pure golang library and client binaries for testing and connecting to refraction systems.
+[Refraction Client Library](https://github.com/refraction-networking/gotapdance) -
+pure golang client library for connecting to refraction systems. Implements BOTH
+conjure and tapdance.
 
 [Tapdance Station](https://github.com/refraction-networking/tapdance) - Tapdance
 station code implementing the previous iteration of refraction networking development.
-
-## Requirements
-
-```sh
-sudo apt install libzmq3-dev redis-server
-go get -d -u -t github.com/refraction-networking/gotapdance/...
-go get -d github.com/go-redis/redis
-
-```
-
-### Install PF_RING
-
-1. [Install PF_RING kernel module](https://www.ntop.org/guides/pf_ring/get_started/git_installation.html#kernel-module-installation)
-
-2. [Install PF_RING Libpfring and Libpcap](https://www.ntop.org/guides/pf_ring/get_started/git_installation.html#libpfring-and-libpcap-installation)
 
 ## Install
 
 This is an abridged install and configuration process, for expanded install instructions,
 configuration options, or multi-station deployments see [the wiki](https://github.com/refraction-networking/conjure/wiki).
 
-Build the station
+
+### Requirements
+
+Building the station requires both go and rust:
+
+- [Install Golang](https://golang.org/doc/install)
+
+- [Install Rust](https://www.rust-lang.org/tools/install) 
+
+**Install packages and go libraries**
+
+```sh
+sudo apt install  wget git make gcc bison flex protobuf-compiler curl libssl-dev pkg-config libgmp3-dev libzmq3-dev
+go get -d -u -t github.com/refraction-networking/gotapdance/...
+
+# Due to compatibility issue with redis v8 -- checkout the stable 7.4.0 go library version.
+go get -d github.com/go-redis/redis
+cd ${GOPATH}/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master 
+```
+
+**Install PF_RING** 
+
+1. [Install from Package](https://github.com/refraction-networking/conjure/wiki/PF_RING#from-packages)
+
+2. [Install From Git / Source](https://github.com/refraction-networking/conjure/wiki/PF_RING#from-source)
+
+### Build the station
 
 ```sh
 make
 
-#future
+## future
 # sudo make install
 ```
 
 ### Configure
 
-To have a functional station modify a few configuration file.
+To run a station configuration modifications are required. This section outlines
+some minimal changes, for more configuration options see the [wiki configuration page](https://github.com/refraction-networking/conjure/wiki/Configuration).
 
-Define global paths, core usage, and pf_ring parameters in `sysconfig/conjure.conf`
+1. Define global paths, core usage, and pf_ring parameters in `sysconfig/conjure.conf`
 
-```conf
-# ============[ REQUIRED ]============
-# The interface(s) which PF_RING Zero Copy will tap.
-CJ_IFACE="zc:enp179s0f0,zc:enp179s0f1"
+    ```conf
+    # ============[ REQUIRED ]============
+    # The interface(s) which PF_RING Zero Copy will tap.
+    CJ_IFACE="zc:enp179s0f0,zc:enp179s0f1"
 
-Public addresses that of non-tap interface - used for kernel DNAT 
-IP4_ADDR="<PUBLIC_STATION_V4_ADDRESS>"
-IP6_ADDR="<PUBLIC_STATION_V6_ADDRESS>"
+    Public addresses that of non-tap interface - used for kernel DNAT 
+    IP4_ADDR="<PUBLIC_STATION_V4_ADDRESS>"
+    IP6_ADDR="<PUBLIC_STATION_V6_ADDRESS>"
 
-```
+    ```
 
-Define application parameters in `application/congfig.toml`
+    Note: ipv6 in disabled by default. To enable IPv6 modify
+    `application/config.toml`
+    ```diff
+    # Allow the station to opt out of either version of internet protocol to limit a
+    # station to handling one or the other. For example, v6 on small station deployment
+    # with only v6 phantom subnet,  v4 only on station with no puvlic v6 address. 
+    enable_v4 = true
+    -enable_v6 = false
+    +enable_v6 = true
+    ```
 
-```toml
-# ============[ REQUIRED ]============
-## Detector
-[[connect_sockets]]
+2. Define application parameters in `application/congfig.toml`
 
-address = "ipc://@detector"
-type = "NULL"
+    ```toml
+    # ============[ REQUIRED ]============
+    ## Detector
+    [[connect_sockets]]
 
-```
+    address = "ipc://@detector"
+    type = "NULL"
 
-Define the phantom subnet generations that will be supported (this can be
+    ```
+
+3. Define the phantom subnet generations that will be supported (this can be
 updated going forward with new generations) in `sysconfig/phantom_subnets.toml`
 
-```toml
-[Networks]
-    [Networks.1]
-        Generation = 1
-        [[Networks.1.WeightedSubnets]]
-            Weight = 9
-            Subnets = ["192.122.190.0/24", "2001:48a8:687f:1::/64"] 
+    ```toml
+    [Networks]
+        [Networks.1]
+            Generation = 1
+            [[Networks.1.WeightedSubnets]]
+                Weight = 9
+                Subnets = ["192.122.190.0/24", "2001:0123:4567:89ab::/64"] 
 
-    [Networks.2]
-        Generation = 2
-        [[Networks.2.WeightedSubnets]]
-            Weight = 9
-            Subnets = ["192.122.190.0/24", "2001:48a8:687f:1::/64"] 
-        [[Networks.2.WeightedSubnets]]
-            Weight = 1
-            Subnets = ["2001:48a8:687f:1::/96"] 
-```
+        [Networks.2]
+            Generation = 2
+            [[Networks.2.WeightedSubnets]]
+                Weight = 9
+                Subnets = ["192.0.0.0/24", "2001:0123:4567:89ab::/64"] 
+            [[Networks.2.WeightedSubnets]]
+                Weight = 1
+                Subnets = ["2001:0123:4567:89ab::/96"] 
+    ```
 
 ### Setup
 
@@ -137,6 +161,7 @@ Start the station.
 # zbalance has to be first or the detector will throw an error 
 systemctl start zbalance
 
+# Next start the detector and station application processes
 systemctl start conjure-det
 systemctl start conjure-app
 
