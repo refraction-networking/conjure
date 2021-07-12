@@ -8,9 +8,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/BurntSushi/toml"
 	"github.com/golang/protobuf/proto"
@@ -170,6 +172,76 @@ func (s *server) processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr [
 	return proto.Marshal(payload)
 }
 
+// setupReloadHandler spawns a lightweight thread to listen for reload signals
+// and loads updated configurations for the registration-api process everytime
+// the reload signal is received
+func (s *server) setupReloadHandler() {
+	signalChan := make(chan os.Signal, 1)
+
+	signal.Notify(
+		signalChan,
+		syscall.SIGHUP, // listen for SIGHUP as reload signal
+	)
+
+	// spawn a goroutine to handle os signals continuously
+	go func() {
+		for {
+			<-signalChan
+			s.loadNewConfig()
+		}
+	}()
+}
+
+// loadNewConfig reads configuration for registration-api, and updates all
+// in-memory configs other than the ports. Updating the port of ZMQ socket
+// and/or the port of the application should require a restart.
+func (s *server) loadNewConfig() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.logger.Printf("reloading config for registration API")
+
+	_, err := toml.DecodeFile(os.Getenv("CJ_API_CONFIG"), &s)
+	if err != nil {
+		s.logger.Fatalln("failed to load config:", err)
+	}
+
+	// AuthStart() is not idempotent, must explictly stop auth before updating curve
+	zmq.AuthStop()
+	// update the auth curve of the ZMQ socket without creating a new one
+	s.setupAuth(s.sock)
+}
+
+// setupAuth resets the auth settings based on the configuration
+func (s *server) setupAuth(sock *zmq.Socket) {
+	if s.AuthType == "CURVE" {
+		// always read from key path everytime this function is called because
+		// even if the key path stays the same, the key content may have changed
+		privkeyBytes, err := ioutil.ReadFile(s.PrivateKeyPath)
+		if err != nil {
+			s.logger.Fatalln("failed to get private key:", err)
+		}
+
+		privkey := zmq.Z85encode(string(privkeyBytes[:32]))
+
+		zmq.AuthSetVerbose(s.AuthVerbose)
+
+		err = zmq.AuthStart()
+		if err != nil {
+			s.logger.Fatalln("failed to start zmq auth:", err)
+		}
+
+		s.logger.Println(s.StationPublicKeys)
+		zmq.AuthAllow("*")
+		zmq.AuthCurveAdd("*", s.StationPublicKeys...)
+
+		err = sock.ServerAuthCurve("*", privkey)
+		if err != nil {
+			s.logger.Fatalln("failed to set up auth on zmq socket:", err)
+		}
+	}
+}
+
 // parseIP attempts to parse the IP address of a request from string format wether
 // it has a port attached to it or not. Returns nil if parse fails.
 func parseIP(addrPort string) *net.IP {
@@ -213,29 +285,7 @@ func main() {
 		s.logger.Fatalln("failed to create zmq socket:", err)
 	}
 
-	if s.AuthType == "CURVE" {
-		privkeyBytes, err := ioutil.ReadFile(s.PrivateKeyPath)
-		if err != nil {
-			s.logger.Fatalln("failed to get private key:", err)
-		}
-
-		privkey := zmq.Z85encode(string(privkeyBytes[:32]))
-
-		zmq.AuthSetVerbose(s.AuthVerbose)
-		err = zmq.AuthStart()
-		if err != nil {
-			s.logger.Fatalln("failed to start zmq auth:", err)
-		}
-
-		s.logger.Println(s.StationPublicKeys)
-		zmq.AuthAllow("*")
-		zmq.AuthCurveAdd("*", s.StationPublicKeys...)
-
-		err = sock.ServerAuthCurve("*", privkey)
-		if err != nil {
-			s.logger.Fatalln("failed to set up auth on zmq socket:", err)
-		}
-	}
+	s.setupAuth(sock)
 
 	err = sock.Bind(fmt.Sprintf("tcp://*:%d", s.ZMQPort))
 	if err != nil {
@@ -250,6 +300,8 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/register", s.register)
 	http.Handle("/", r)
+
+	s.setupReloadHandler()
 
 	s.logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", s.APIPort), nil))
 }

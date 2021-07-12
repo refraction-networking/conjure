@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	zmq "github.com/pebbe/zmq4"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"github.com/stretchr/testify/require"
@@ -351,4 +352,21 @@ func TestAPIGetClientAddr(t *testing.T) {
 
 	req.Header.Set("X-Forwarded-For", "127.0.0.1,192.168.0.0")
 	require.Equal(t, "127.0.0.1", getRemoteAddr(req))
+}
+
+func TestAPIConfigReload(t *testing.T) {
+	sock, _ := zmq.NewSocket(zmq.PUB)
+
+	s := server{
+		logger:	logger,
+		sock:   sock,
+	}
+
+	os.Setenv("CJ_API_CONFIG", "test/config.null.toml")
+	s.loadNewConfig()
+	assert.Equal(t, s.AuthType, "NULL")
+
+	os.Setenv("CJ_API_CONFIG", "test/config.curve.toml")
+	s.loadNewConfig()
+	assert.Equal(t, s.AuthType, "CURVE")
 }

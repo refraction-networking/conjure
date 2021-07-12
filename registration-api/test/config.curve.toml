@@ -1,0 +1,8 @@
+api_port = 8080
+zmq_port = 5591
+privkey_path = "test/privkey_test"
+auth_type = "CURVE"
+auth_verbose = true
+station_pubkeys = [
+	"",
+]
