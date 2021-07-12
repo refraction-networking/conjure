@@ -48,6 +48,7 @@ cd ${GOPATH}/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-mas
 1. [Install from Package](https://github.com/refraction-networking/conjure/wiki/PF_RING#from-packages)
 
 2. [Install From Git / Source](https://github.com/refraction-networking/conjure/wiki/PF_RING#from-source)
+    * if installing from git / source make the zbalance_ipc executable, and ensure that it is available through your `$PATH`.
 
 ### Build the station
 
