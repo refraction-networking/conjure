@@ -24,4 +24,16 @@ do
 	didfirst=1
     fi
 done
-sudo ./PF_RING/userland/examples_zc/zbalance_ipc -i $ifcarg -c ${CJ_CLUSTER_ID} -n ${CJ_CORECOUNT} -m ${ZBALANCE_HASH_MODE} -g ${ZBALANCE_CORE}
+
+# PF_Ring should be installed and zbalance_ipc should be available in your path
+if ! command -v zbalance_ipc &> /dev/null
+then
+    echo "zbalance_ipc could not be found,"
+    echo "please ensure pf_ring is instaled and zbalance_ipc is in you PATH."
+    echo "Installing from package automtically installs executable scripts"
+    echo "see https://www.ntop.org/guides/pf_ring/get_started/packages_installation.html"
+    exit
+fi
+
+
+sudo zbalance_ipc -i $ifcarg -c ${CJ_CLUSTER_ID} -n ${CJ_CORECOUNT} -m ${ZBALANCE_HASH_MODE} -g ${ZBALANCE_CORE}
