@@ -7,6 +7,8 @@ name: CI-build
 on:
   push:
     branches: [ master, staging ]
+  pull_request:
+    branches: [ master, staging ]
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -29,24 +31,22 @@ jobs:
           GO_VERSION: 1.15.4
           # RUSTVERSION: 1.47.0
         run: |
+          # Apt deps
+          sudo apt-get update
+          sudo apt-get install protobuf-compiler gcc curl git wget software-properties-common -y -q
+          sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
+          sudo add-apt-repository universe 
+          wget https://packages.ntop.org/apt-stable/18.04/all/apt-ntop-stable.deb 
+          sudo apt-get install ./apt-ntop-stable.deb 
+          sudo apt-get update
+          sudo apt-get install pfring
+          echo "Apt dependencies installed"
+          echo "--------------------------------------"
+          
           echo "HOME=$HOME"
           export GOPATH=`pwd`/go
           echo "GOPATH=$GOPATH"
           cd go/src/github.com/refraction-networking/conjure
-          
-          # Apt deps
-          sudo apt-get update
-          sudo apt-get install protobuf-compiler gcc curl git wget -y -q
-          sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
-          echo "Apt dependencies installed"
-          echo "--------------------------------------"
-          
-          # Build PF_Ring libraries
-          cd $GOPATH/src/github.com/refraction-networking/conjure/PF_RING/userland/lib && ./configure && make
-          cd $GOPATH/src/github.com/refraction-networking/conjure/PF_RING/userland/libpcap && ./configure && make
-          cd $GOPATH/src/github.com/refraction-networking/conjure
-          echo "PF_Ring libraries successfully built"
-          echo "--------------------------------------"
 
           # Install rust
           curl https://sh.rustup.rs -sSf -o install_rust.sh; sh install_rust.sh -y;          
@@ -66,6 +66,7 @@ jobs:
           # temp fix before transition to redis v8
           go get -u github.com/go-redis/redis || true && cd $GOPATH/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master && cd -
           go get -u github.com/BurntSushi/toml || true
+          go get -u github.com/gorilla/mux || true
           go get -d -u -t github.com/refraction-networking/gotapdance/... || true
           go get -u github.com/refraction-networking/conjure/application/... || true 
           go get -u github.com/refraction-networking/conjure/registration-api/... || true 
@@ -77,7 +78,7 @@ jobs:
           make
           echo "Station successfully built"
           mkdir -p  $GITHUB_WORKSPACE/bin
-          cp dark-decoy application/application registration-api/registration-api $GITHUB_WORKSPACE/bin
+          cp conjure application/application registration-api/registration-api $GITHUB_WORKSPACE/bin
           cd $GITHUB_WORKSPACE && tar -czf conjure-station.tar.gz bin
           
       
