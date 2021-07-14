@@ -29,9 +29,12 @@ func (blt *CachedLivenessTester) Init(){
 //limit should be left empty if scanning the whole internet, for local test only
 //Call with goroutine
 func (blt *CachedLivenessTester) Periodic_scan(port string, bandwidth string, limit string){
+	//For testing
 	limit = "-n " + limit
+	os.Create("block_list.txt")
 	for{
-		_, err := exec.Command("sudo","zmap","-B",bandwidth,"-p",port,limit,"-o","result.csv").Output()
+		//_, err := exec.Command("sudo","zmap","-B",bandwidth,"-p",port,limit,"-o","result.csv").Output()
+		_, err := exec.Command("zmap","-p","443","-O","csv","-f","saddr,classification","-P","4","--output-filter= (classification = rst || classification = synack)",-"-b","block_list.txt","-w","allow_list.txt","-o","result.csv").Output()
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -50,13 +53,30 @@ func (blt *CachedLivenessTester) Periodic_scan(port string, bandwidth string, li
 		
 		//fmt.Println(records)
 		f.Close()
+		//fmt.Println()
+		f, err := os.Create("block_list.txt")
+		if err != nil {
+			fmt.Println("Unable to read blocklist file", err)
+			f.Close()
+		}
 
 		for _, ip := range records{
-			blt.ip_cache[ip[0]] = true
+			fmt.Println(ip[0])
+			if val, ok := blt.ip_cache[ip[0]]; !ok {
+				blt.ip_cache[ip[0]] = true
+				_, err := f.WriteString(ip[0]+"\n")
+				if err != nil {
+					fmt.Println("Unable to write blocklist file", err)
+					f.Close()
+				}
+			}
 		}
+		f.Close()
 		//fmt.Println(blt.ip_cache)
+		//block_list.txt
+
 		fmt.Println("Scanned once")
-		time.Sleep(time.Hour)
+		time.Sleep(time.Hour * 2)
 	}
 }
 
