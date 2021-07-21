@@ -33,10 +33,10 @@ RUN go get -u -d github.com/go-redis/redis || true && cd ${GOPATH}/src/github.co
 # Copy docker context dir. This is used as a source if CUSTOM_BUILD is enabled
 COPY . /tmp/conjure
 # Get Conjure or copy a directory Dockerfile is in. Switched by CUSTOM_BUILD var
-RUN    bash -c 'if [[ -z "$CUSTOM_BUILD" ]] ; then \
-     go get -d github.com/refraction-networking/conjure/...  ; \
-     else mkdir -p ${GOPATH}/src/github.com/refraction-networking; cp -r /tmp/conjure ${GOPATH}/src/github.com/refraction-networking/conjure ; \
-     fi' 
+RUN    go get -d github.com/refraction-networking/conjure/...  ; \
+       bash -c 'if [[ ! -z "$CUSTOM_BUILD" ]] ; then \
+       rm -rf ${GOPATH}/src/github.com/refraction-networking/conjure; cp -r /tmp/conjure ${GOPATH}/src/github.com/refraction-networking/conjure ; \
+       fi'
 
 # Checkout needed branch and compile
 RUN    cd /root/go/src/github.com/refraction-networking/conjure && \
