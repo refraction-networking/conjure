@@ -385,54 +385,6 @@ func (reg *DecoyRegistration) PreScanned() bool {
 	return reg.Flags.GetPrescanned()
 }
 
-// PhantomIsLive - Test whether the phantom is live using
-// 8 syns which returns syn-acks from 99% of sites within 1 second.
-// see  ZMap: Fast Internet-wide Scanning  and Its Security Applications
-// https://www.usenix.org/system/files/conference/usenixsecurity13/sec13-paper_durumeric.pdf
-//
-// return:	bool	true  - host is live
-// 					false - host is not life
-//			error	reason decision was made
-func (reg *DecoyRegistration) PhantomIsLive() (bool, error) {
-	return phantomIsLive(net.JoinHostPort(reg.DarkDecoy.String(), "443"))
-}
-
-func phantomIsLive(address string) (bool, error) {
-	width := 4
-	dialError := make(chan error, width)
-	timeout := 750 * time.Millisecond
-
-	testConnect := func() {
-		conn, err := net.DialTimeout("tcp", address, timeout)
-		if err != nil {
-			dialError <- err
-			return
-		}
-		conn.Close()
-		dialError <- nil
-	}
-
-	for i := 0; i < width; i++ {
-		go testConnect()
-	}
-
-	time.Sleep(timeout)
-
-	// If any return errors or connect then return nil before deadline it is live
-	select {
-	case err := <-dialError:
-		if e, ok := err.(net.Error); ok && e.Timeout() {
-			return false, fmt.Errorf("Reached connection timeout")
-		}
-		if err != nil {
-			return true, err
-		}
-		return true, fmt.Errorf("Phantom picked up the connection")
-	default:
-		return false, fmt.Errorf("Reached statistical timeout %v", timeout)
-	}
-}
-
 type DecoyTimeout struct {
 	decoy            string
 	identifier       string
