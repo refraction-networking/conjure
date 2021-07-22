@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/mux"
 	zmq "github.com/pebbe/zmq4"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	td "github.com/refraction-networking/gotapdance/tapdance"
 )
 
 const (
@@ -125,6 +126,84 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// new
+func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
+	requestIP := getRemoteAddr(r)
+
+	if s.logClientIP {
+		s.logger.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
+	} else {
+		s.logger.Printf("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
+	}
+
+	const MinimumRequestLength = SecretLength + 1 // shared_secret + VSP
+	if r.Method != "POST" {
+		s.logger.Printf("rejecting request due to incorrect method %s\n", r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.ContentLength < MinimumRequestLength {
+		s.logger.Printf("rejecting request due to short content-length of %d, expecting at least %d\n", r.ContentLength, MinimumRequestLength)
+		http.Error(w, "Payload too small", http.StatusBadRequest)
+		return
+	}
+
+	// Deserialize the body of the request, result is a pb
+	in, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		s.logger.Println("failed to read request body:", err)
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	// HANDLE REGISTRATION RESPONSE here
+
+	payload := &pb.C2SWrapper{}
+	// Unmarshal pb into payload C2SWrapper
+	if err = proto.Unmarshal(in, payload); err != nil {
+		s.logger.Println("failed to decode protobuf body:", err)
+		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
+		return
+	}
+
+	clientAddr := parseIP(requestIP)
+	var clientAddrBytes = make([]byte, 16, 16)
+	if clientAddr != nil {
+		clientAddrBytes = []byte(clientAddr.To16())
+	}
+
+	zmqPayload, err := s.processC2SWrapper(payload, clientAddrBytes)
+	if err != nil {
+		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err = s.messageAccepter(zmqPayload)
+	if err != nil {
+		s.logger.Println("failed to publish registration:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Add header to w (server response)
+	w.WriteHeader(http.StatusOK)
+
+	// Create registration response object
+	rr := &pb.RegistrationResponse{}
+	addr := uint32(123456)
+	rr.Ipv4Addr = &addr
+	port := uint32(2)
+	rr.Port = &port
+
+	// Marshal (serialize) rr object (line ) and then write it to w
+	body, _ := proto.Marshal(rr)
+	w.Write(body)
+	// fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
+
+} // registerBidirectional()
+
 func (s *server) sendToZMQ(message []byte) error {
 	s.Lock()
 	_, err := s.sock.SendBytes(message, zmq.DONTWAIT)
@@ -154,10 +233,16 @@ func (s *server) processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr [
 		payload.RegistrationSource = &source
 	}
 
+	var subnets []string
+	subnets = td.getSubnets
+
+	// TODO: line 226 need similar one for Bidirectitonal
+
 	// If the address that the registration was received from was NOT set in the
-	// C2SWrapper set it here to the source address of the API request.
+	// C2SWrapper set it here to the source address of the API (uni or bidirectional) request.
 	if clientToAPIProto.GetRegistrationAddress() == nil ||
-		clientToAPIProto.GetRegistrationSource() == pb.RegistrationSource_API {
+		clientToAPIProto.GetRegistrationSource() == pb.RegistrationSource_API ||
+		clientToAPIProto.GetRegistrationSource() == pb.RegistrationSource_BidirectionalAPI {
 		payload.RegistrationAddress = clientAddr
 	} else {
 		payload.RegistrationAddress = clientToAPIProto.GetRegistrationAddress()
@@ -249,6 +334,7 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/register", s.register)
+	r.HandleFunc("/register-bidirectional", s.registerBidirectional) // new
 	http.Handle("/", r)
 
 	s.logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", s.APIPort), nil))
