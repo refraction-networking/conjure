@@ -39,8 +39,7 @@ func (blt *CachedLivenessTester) Periodic_scan(t string){
 		case <- blt.signal:
 			return
 		default:
-			_, err := exec.Command("/home/kevinkz/localzmap/sbin/zmap","-p","443","-O","csv","-f","saddr,classification","-P","4","--output-filter= (classification = rst || classification = synack)","-b","block_list.txt","-w","allow_list.txt","-o","result.csv").Output()
-			//_, err := exec.Command("zmap","-p","443","-O","csv","-f","saddr,classification","-P","4","--output-filter= (classification = rst || classification = synack)","-b","block_list.txt","-w","allow_list.txt","-o","result.csv").Output()
+			_, err := exec.Command("zmap","-p","443","-O","csv","-f","saddr,classification","-P","4","--output-filter= (classification = rst || classification = synack)","-b","block_list.txt","-w","allow_list.txt","-o","result.csv").Output()
 			if err != nil {
 				fmt.Println(err)
 			}
