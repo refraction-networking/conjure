@@ -22,3 +22,6 @@ auth_verbose = true
 station_pubkeys = [
 	"",
 ]
+
+# new
+bidirectional_api_generation = 957

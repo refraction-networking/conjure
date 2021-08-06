@@ -353,32 +353,43 @@ func TestAPIGetClientAddr(t *testing.T) {
 	require.Equal(t, "127.0.0.1", getRemoteAddr(req))
 }
 
-// Test for bidirectional API
 func TestCorrectBidirectionalAPI(t *testing.T) {
+	// Set subnet environment
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "../application/lib/test/phantom_subnets.toml")
+
 	messageChan := make(chan []byte, 1)
 	accepter := func(m []byte) error {
 		messageChan <- m
 		return nil
 	}
 
+	generation_957 := uint16(957)
+
 	// Create a server with the channel created above
 	s := server{
-		messageAccepter: accepter,
-		logger:          logger,
+		messageAccepter: 		 accepter,
+		logger:          		 logger,
 	}
 	s.logClientIP = true
+
+	s.config.BidirectionalAPIGen = generation_957
 
 	// Client sends to station v4 or v6, shared secret, etc.
 	c2API, _ := generateC2SWrapperPayload() // v4 support
 	regSrc := pb.RegistrationSource_BidirectionalAPI // new
+	// generation_957 := uint32(957)
+	// c2API.RegistrationPayload.DecoyListGeneration = &generation_957
 	c2API.RegistrationSource = &regSrc
 	c2API.RegistrationAddress = net.ParseIP("8.8.8.8").To16()
 	// c2API.decoy_address = nil // new
 	body, _ := proto.Marshal(c2API)
 
+	fmt.Println(c2API.SharedSecret)
+
 	r := httptest.NewRequest("POST", "/register-bidriectional", bytes.NewReader(body)) // new
 	w := httptest.NewRecorder()
 
+	s.initPhantomSelector()
 	s.registerBidirectional(w, r) // new
 	resp := w.Result() // new
 
@@ -420,11 +431,12 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 		t.Fatalf("Unable to unmarshal RegistrationResponse protobuf")
 	}
 
-	if *resp_payload.Ipv4Addr != uint32(123456) || *resp_payload.Port != uint32(2) {
-		t.Fatalf("Incorrectt information returned in RegistrationResponse protobuf")
-	}
-	// // Alter form
-	// bodyString := string(bodyBytes)
-	// // Print the string
+	// Print ipv4address from registtration response payload
+	// get back: 3229269742
+	t.Log(*resp_payload.Ipv4Addr)
+	// same thing as above but in a different format:
+	// bodyString := fmt.Sprint(*resp_payload.Ipv4Addr)
 	// t.Log(bodyString)
+
+	// loop run 100 times, make sure no errorsm
 }
