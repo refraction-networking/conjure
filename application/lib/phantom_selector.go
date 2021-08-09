@@ -192,9 +192,9 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool)
 }
 
 // SelectAddrFromSubnet - given a seed and a CIDR block choose an address.
-// 		This is done by generating a seeded random bytes up to teh length of the
+// 		This is done by generating a seeded random bytes up to the length of the
 //		full address then using the net mask to zero out any bytes that are
-//		already specified by the CIDR block. Tde masked random value is then
+//		already specified by the CIDR block. The masked random value is then
 //		added to the cidr block base giving the final randomly selected address.
 func SelectAddrFromSubnet(seed []byte, net1 *net.IPNet) (net.IP, error) {
 	bits, addrLen := net1.Mask.Size()

@@ -96,7 +96,7 @@ pub struct SessionDetails
 {
     pub client_ip: IpAddr,
     pub phantom_ip: IpAddr,
-    pub phantom_port: u16,
+    pub phantom_port: u32,
     timeout: u64,
 }
 
@@ -105,7 +105,7 @@ impl SessionDetails
 {
     // This function parses acceptable Session Details and returns an error if
     // the details provided do not fit current requirements for parsing 
-    pub fn new(client_ip: &str, phantom_ip: &str, timeout: u64) -> SessionResult {
+    pub fn new(client_ip: &str, phantom_ip: &str, phantom_port: u32, timeout: u64) -> SessionResult {
         let phantom: IpAddr = match phantom_ip.parse() {
             Ok(ip) => ip,
             Err(_) => {return Err(SessionError::InvalidPhantom)},
@@ -129,7 +129,7 @@ impl SessionDetails
         let s = SessionDetails {
             client_ip: src,
             phantom_ip: phantom,
-            phantom_port: DEFAULT_PHANTOM_PORT,
+            phantom_port: phantom_port, //TODO: change u32 to u16 or add error catching
             timeout: timeout,
         };
         Ok(s)
@@ -137,8 +137,8 @@ impl SessionDetails
 
     pub fn get_key(&self) -> String {
         match self.phantom_ip.is_ipv6() {
-            true => format!("{}", self.phantom_ip),
-            false => format!("{}-{}", self.client_ip, self.phantom_ip)
+            true => format!("{}-{}", self.phantom_ip, self.phantom_port),
+            false => format!("{}-{}-{}", self.client_ip, self.phantom_ip, self.phantom_port)
         }
     }
 }
@@ -147,7 +147,8 @@ impl From<&StationToDetector> for SessionResult {
     fn from(s2d: &StationToDetector) -> Self {
         let source = s2d.get_client_ip();
         let phantom = s2d.get_phantom_ip();
-        return SessionDetails::new(source, phantom,  s2d.get_timeout_ns())
+        let phantom_port = s2d.get_phantom_port();
+        return SessionDetails::new(source, phantom, phantom_port, s2d.get_timeout_ns())
     }
 }
 
@@ -156,8 +157,8 @@ impl fmt::Display for SessionDetails {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         unsafe {
             match FLOW_CLIENT_LOG {
-                true => write!(f, "{} -> {} ({}ns)", self.client_ip.to_string(), self.phantom_ip.to_string(), self.timeout),
-                false => write!(f, "_ -> {} ({}ns)", self.phantom_ip.to_string(), self.timeout),
+                true => write!(f, "{} -> {}:{} ({}ns)", self.client_ip.to_string(), self.phantom_ip.to_string(), self.phantom_port.to_string(), self.timeout),
+                false => write!(f, "_ -> {}:{} ({}ns)", self.phantom_ip.to_string(), self.phantom_port.to_string(), self.timeout),
             }
         }
     }
@@ -169,13 +170,10 @@ pub struct SessionTracker
     // receiving registration information in order to identify the sessions. As
     // such sessions are stored as a thread safe map with keys dependent on the
     // ip version:
-    // v4 "{}-{}", client_ip, phantom_ip
-    // v6 "{}", phantom_ip
-    //
+    // v4 "{}-{}-{}", client_ip, phantom_ip, phantom_port
+    // v6 "{}-{}", phantom_ip, phantom_port
+    // TODO: ADDITION OF PORT IS WIP
     // The value stored for each of these is a timestamp to compare for timeout.
-    // Note: In the future phantom port can be optionally added to the key
-    // string to further filter incoming connections. This is left off for now
-    // to allow for testing of source-refraction. 
     pub tracked_sessions: Arc<RwLock<HashMap<String, u64>>>,
 }
 
@@ -198,8 +196,8 @@ impl<'a> SessionTracker
 
     pub fn is_tracked_session(&self, flow: &FlowNoSrcPort) -> bool {
         let key = match flow.dst_ip.is_ipv6() {
-            true => format!("{}", flow.dst_ip),
-            false => format!("{}-{}", flow.src_ip, flow.dst_ip)
+            true => format!("{}-{}", flow.dst_ip, flow.dst_port),
+            false => format!("{}-{}-{}", flow.src_ip, flow.dst_ip, flow.dst_port)
         };
         self.session_exists(&key)
     }
@@ -231,8 +229,8 @@ impl<'a> SessionTracker
     pub fn update_session(&mut self, flow: &FlowNoSrcPort) {
 
         let key = match flow.dst_ip.is_ipv6() {
-            true => format!("{}", flow.dst_ip),
-            false => format!("{}-{}", flow.src_ip, flow.dst_ip)
+            true => format!("{}-{}", flow.dst_ip, flow.dst_port),
+            false => format!("{}-{}-{}", flow.src_ip, flow.dst_ip, flow.dst_port)
         };
 
         if !self.session_exists(&key) {
@@ -522,18 +520,18 @@ mod tests {
 
         let test_tuples = [
             // (client_ip, phantom_ip, timeout)
-            ("192.168.0.1", "10.10.0.1", 100000),
-            ("192.168.0.1", "192.0.0.127", 100000),     // duplicate client_addr
-            ("2601::123:abcd", "2001::1234", 100000),
-            ("", "2001::1234", 100000),                 // duplicate phantom Addr
-            ("172.128.0.2", "8.0.0.1", 1),              // timeout immediately
+            ("192.168.0.1", "10.10.0.1", 443, 100000),
+            ("192.168.0.1", "192.0.0.127", 443, 100000),     // duplicate client_addr
+            ("2601::123:abcd", "2001::1234", 443, 100000),
+            ("", "2001::1234", 443, 100000),                 // duplicate phantom Addr
+            ("172.128.0.2", "8.0.0.1", 443, 1),              // timeout immediately
             
             // client registering with v4 will also create registrations for v6 just in-case
-            ("192.168.0.1", "2801::1234", 100000),
+            ("192.168.0.1", "2801::1234", 100000, 443),
         ];
 
         for entry in &test_tuples {
-            let s1 = SessionDetails::new(entry.0, entry.1, entry.2).unwrap();
+            let s1 = SessionDetails::new(entry.0, entry.1, entry.2, entry.3).unwrap();
             st.insert_session(s1);
         }
 
@@ -557,7 +555,7 @@ mod tests {
         }
 
         let tt = test_tuples[0];
-        let sd = SessionDetails::new(tt.0, tt.1, tt.2).unwrap();
+        let sd = SessionDetails::new(tt.0, tt.1, tt.2, tt.3).unwrap();
         st._delete_session(sd);
 
 
@@ -571,25 +569,25 @@ mod tests {
         let mut st = SessionTracker::new();
 
         let test_tuples = [
-            // (client_ip, phantom_ip, timeout)
-            ("172.128.0.2", "8.0.0.1", 1, false),            // timeout immediately
-            ("192.168.0.1", "10.10.0.1", 5*S2NS, true),
-            ("192.168.0.1", "192.0.0.127", 5*S2NS, true),    
+            // (client_ip, phantom_ip, phantom_port, timeout)
+            ("172.128.0.2", "8.0.0.1", 443, 1, false),            // timeout immediately
+            ("192.168.0.1", "10.10.0.1", 443, 5*S2NS, true),
+            ("192.168.0.1", "192.0.0.127", 443, 5*S2NS, true),    
  
             // client registering with v4 will also create registrations for v6 just in-case
-             ("192.168.0.1", "2801::1234", 5*S2NS, true),
+             ("192.168.0.1", "2801::1234", 443, 5*S2NS, true),
             
             // duplicate with shorter timeout should not drop
-            ("2601::123:abcd", "2001::1234", 5*S2NS, true),
-            ("::1", "2001::1234", 1*S2NS, true),
+            ("2601::123:abcd", "2001::1234", 443, 5*S2NS, true),
+            ("::1", "2001::1234", 443, 1*S2NS, true),
             
             // duplicate with long timeout should prevent drop
-            ("7.0.0.2", "8.8.8.8", 1, true),
-            ("7.0.0.2", "8.8.8.8", 5*S2NS, true),
+            ("7.0.0.2", "8.8.8.8", 443, 1, true),
+            ("7.0.0.2", "8.8.8.8", 443, 5*S2NS, true),
         ];
     
         for entry in &test_tuples {
-            let s1 = SessionDetails::new(entry.0, entry.1, entry.2).unwrap();
+            let s1 = SessionDetails::new(entry.0, entry.1, entry.2, entry.3).unwrap();
             st.insert_session(s1);
         }
 

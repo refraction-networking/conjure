@@ -157,6 +157,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 
 	reg := DecoyRegistration{
 		DarkDecoy:          phantomAddr,
+		DecoyPort:          c2s.GetDecoyPort(),
 		Keys:               conjureKeys,
 		Covert:             c2s.GetCovertAddress(),
 		Mask:               c2s.GetMaskedDecoyServerName(),
@@ -197,6 +198,7 @@ func (regManager *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWra
 	regSrc := c2sw.GetRegistrationSource()
 	reg := DecoyRegistration{
 		DarkDecoy:          phantomAddr,
+		DecoyPort:          c2s.GetDecoyPort(),
 		registrationAddr:   net.IP(c2sw.GetRegistrationAddress()),
 		Keys:               &conjureKeys,
 		Covert:             c2s.GetCovertAddress(),
@@ -257,6 +259,7 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
 	DarkDecoy          net.IP
+	DecoyPort          uint32
 	registrationAddr   net.IP
 	Keys               *ConjureSharedKeys
 	Covert, Mask       string
@@ -391,10 +394,10 @@ func (reg *DecoyRegistration) PreScanned() bool {
 // https://www.usenix.org/system/files/conference/usenixsecurity13/sec13-paper_durumeric.pdf
 //
 // return:	bool	true  - host is live
-// 					false - host is not life
+// 					false - host is not live
 //			error	reason decision was made
 func (reg *DecoyRegistration) PhantomIsLive() (bool, error) {
-	return phantomIsLive(net.JoinHostPort(reg.DarkDecoy.String(), "443"))
+	return phantomIsLive(net.JoinHostPort(reg.DarkDecoy.String(), fmt.Sprint(reg.DecoyPort)))
 }
 
 func phantomIsLive(address string) (bool, error) {

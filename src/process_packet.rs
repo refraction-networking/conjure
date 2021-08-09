@@ -144,16 +144,15 @@ impl PerCoreGlobal
             };
             self.stats.tcp_packets_this_period += 1;
 
-            // Ignore packets that aren't -> 443.
+            // Log packets that are -> 443.
             // libpnet getters all return host order. Ignore the "u16be" in their
             // docs; interactions with pnet are purely host order.
-            if tcp_pkt.get_destination() != 443 {
-                return;
+            if tcp_pkt.get_destination() == 443 {
+                self.stats.tls_packets_this_period += 1; // (HTTPS, really)
+                self.stats.tls_bytes_this_period += frame_len as u64;
             }
         }
-        self.stats.tls_packets_this_period += 1; // (HTTPS, really)
-        self.stats.tls_bytes_this_period += frame_len as u64;
-        self.process_tls_pkt(ip);
+        self.process_pkt(ip);
     }
 
     fn process_ipv6_packet(&mut self, ip_pkt: Ipv6Packet, frame_len: usize)
@@ -194,7 +193,78 @@ impl PerCoreGlobal
         self.stats.tls_bytes_this_period += frame_len as u64;
 
         //debug!("v6 -> {} {} bytes", ip_pkt.get_destination(), ip_pkt.get_payload_length());
-        self.process_tls_pkt(ip);
+        self.process_pkt(ip);
+    }
+
+    fn process_pkt(&mut self, ip_pkt: IpPacket){
+        let tcp_pkt = match ip_pkt.tcp() {
+            Some(pkt) => pkt,
+            None => return,
+        };
+
+        let flow = Flow::new(&ip_pkt, &tcp_pkt);
+        let tcp_flags = tcp_pkt.get_flags();
+
+        if panic::catch_unwind(||{ tcp_pkt.payload(); }).is_err() {
+            return;
+        }
+
+        let dd_flow = FlowNoSrcPort::from_flow(&flow);
+        if self.flow_tracker.is_phantom_session(&dd_flow) {
+
+            // Handle packet destined for registered IP
+            match self.filter_station_traffic(flow.src_ip.to_string()) {
+                // traffic was sent by another station, likely liveness testing.
+                None => {},
+
+                // Non station traffic, forward to application to handle
+                Some(_) => {
+                    if  (tcp_flags & TcpFlags::SYN) != 0  && (tcp_flags & TcpFlags::ACK) == 0 {
+                        debug!("Connection for registered Phantom {}", flow);
+                    }
+                
+                    // Update expire time if necessary
+                    self.flow_tracker.update_phantom_flow(&dd_flow);
+    
+                    // Forward packet...
+                    self.forward_pkt(&ip_pkt);
+                    // TODO: if it was RST or FIN, close things
+                    return;
+                }
+            }
+        }
+        
+        if tcp_pkt.get_destination() == 443 {
+            if (tcp_flags & TcpFlags::SYN) != 0 && (tcp_flags & TcpFlags::ACK) == 0
+            {
+                self.stats.port_443_syns_this_period += 1;
+
+                self.flow_tracker.begin_tracking_flow(&flow);
+                return;
+            } else if (tcp_flags & TcpFlags::RST) != 0 || (tcp_flags & TcpFlags::FIN) != 0 {
+                self.flow_tracker.stop_tracking_flow(&flow);
+                return;
+            }
+
+            if !self.flow_tracker.is_tracked_flow(&flow) {
+                return;
+            }
+
+            if  is_tls_app_pkt(&tcp_pkt) {
+                match self.check_dark_decoy_tag(&flow, &tcp_pkt) {
+                    true => {
+                        // debug!("New Conjure registration detected in {},", flow);
+                        // self.flow_tracker.mark_dark_decoy(&dd_flow);
+                        // not removing flow from stale_tracked_flows for optimization reasons:
+                        // it will be removed later
+                    },
+                    false => {}
+                };
+                self.flow_tracker.stop_tracking_flow(&flow);
+            }else {
+                self.check_connect_test_str(&flow, &tcp_pkt);
+            }
+        }
     }
 
     // Takes an IPv4 packet
