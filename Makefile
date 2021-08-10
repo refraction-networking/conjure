@@ -3,16 +3,14 @@
 CC		 = ${CROSS_COMPILE}gcc #--platform=native
 
 DEBUG_OR_RELEASE = release
-PFRINGDIR=./PF_RING/
-PFRING_LIBS=${PFRINGDIR}/userland/lib/libpfring.a ${PFRINGDIR}/userland/libpcap/libpcap.a
 RUST_LIB=./target/release/librust_dark_decoy.a
 TD_LIB=./libtapdance/libtapdance.a
-LIBS=${PFRING_LIBS} ${RUST_LIB} ${TD_LIB} -L/usr/local/lib -lzmq -lcrypto -lpthread -lrt -lgmp -ldl -lm
-CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_RING_ZERO_COPY -I${PFRINGDIR}/userland/lib/ -I${PFRINGDIR}/kernel -O2 # -g
+LIBS=${RUST_LIB} ${TD_LIB} -L/usr/local/lib -lpcap -lpfring -lzmq -lcrypto -lpthread -lrt -lgmp -ldl -lm
+CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_RING_ZERO_COPY -O2 # -g
 PROTO_RS_PATH=src/signalling.rs
 
 
-all: rust libtd dark-decoy app registration-api ${PROTO_RS_PATH}
+all: rust libtd conjure app registration-api ${PROTO_RS_PATH}
 
 rust: ./src/*.rs
 	cargo build --${DEBUG_OR_RELEASE}
@@ -26,8 +24,9 @@ app:
 libtd:
 	cd ./libtapdance/ && make libtapdance.a
 
-dark-decoy: detect.c loadkey.c rust_util.c rust libtapdance
+conjure: detect.c loadkey.c rust_util.c rust libtapdance
 	${CC} ${CFLAGS} -o $@ detect.c loadkey.c rust_util.c ${LIBS}
+# gcc -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_RING_ZERO_COPY -O2 -o conjure detect.c loadkey.c rust_util.c ./target/release/librust_dark_decoy.a ./libtapdance/libtapdance.a -lpfring -lpcap -L/usr/local/lib -lzmq -lcrypto -lpthread -lrt -lgmp -ldl -lm
 
 registration-api:
 	cd ./registration-api/ && make

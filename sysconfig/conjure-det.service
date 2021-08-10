@@ -16,7 +16,7 @@ EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
 # ExecStartPre=/bin/bash /opt/conjure/build.sh
 # Ensure zbalance finished starting (else pfring_zc_ipc_attach can give Invalid argument)
 ExecStartPre=/bin/sleep 10
-ExecStart=/opt/conjure/dark-decoy -c ${CJ_CLUSTER_ID} -o ${CJ_COREBASE} -n ${CJ_CORECOUNT} -l ${CJ_LOG_INTERVAL} -K ${CJ_PRIVKEY} -s ${CJ_SKIP_CORE} -z ${CJ_QUEUE_OFFSET}
+ExecStart=/opt/conjure/conjure -c ${CJ_CLUSTER_ID} -o ${CJ_COREBASE} -n ${CJ_CORECOUNT} -l ${CJ_LOG_INTERVAL} -K ${CJ_PRIVKEY} -s ${CJ_SKIP_CORE} -z ${CJ_QUEUE_OFFSET}
 
 # on stop processes will get SIGTERM, and after 10 secs - SIGKILL (default 90)
 TimeoutStopSec=10

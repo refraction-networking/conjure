@@ -1,8 +1,5 @@
-docker
-!docker/*
-docker/Dockerfile
-docker/docker-compose*
-docker/.dockerignore
-docker/*.swp
-.dockerignore
+.git
 *.swp
+/docker/**
+!docker/*entrypoint.sh
+.dockerignore
