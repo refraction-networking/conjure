@@ -34,12 +34,13 @@ func (blt *CachedLivenessTester) Stop(){
 
 func (blt *CachedLivenessTester) Periodic_scan(t string){
 	os.Create("block_list.txt")
+	allow_list_addr := os.Getenv("PHANTOM_SUBNET_LOCATION")
 	for{
 		select {
 		case <- blt.signal:
 			return
 		default:
-			_, err := exec.Command("zmap","-p","443","-O","csv","-f","saddr,classification","-P","4","--output-filter= (classification = rst || classification = synack)","-b","block_list.txt","-w","allow_list.txt","-o","result.csv").Output()
+			_, err := exec.Command("zmap","-p","443","-O","csv","-f","saddr,classification","-P","4","--output-filter= (classification = rst || classification = synack)","-b","block_list.txt","-w",allow_list_addr,"-o","result.csv").Output()
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -77,6 +78,11 @@ func (blt *CachedLivenessTester) Periodic_scan(t string){
 			}
 			f.Close()
 
+			err = os.Remove("result.csv")
+			if err != nil {
+				fmt.Println("Unable to delete result.csv", err)
+			}
+
 			fmt.Println("Scanned once")
 			if t == "Minute" {
 				time.Sleep(time.Minute * 2)
@@ -91,14 +97,6 @@ func (blt *CachedLivenessTester) Periodic_scan(t string){
 	}
 }
 
-// PhantomIsLive - Test whether the phantom is live using
-// 8 syns which returns syn-acks from 99% of sites within 1 second.
-// see  ZMap: Fast Internet-wide Scanning  and Its Security Applications
-// https://www.usenix.org/system/files/conference/usenixsecurity13/sec13-paper_durumeric.pdf
-//
-// return:	bool	true  - host is live
-// 					false - host is not liev
-//			error	reason decision was made
 func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, error){
     // existing phantomIsLive() implementation
 	if _, ok := blt.ip_cache[addr]; ok {

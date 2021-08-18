@@ -15,6 +15,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	lt "../liveness"
 )
 
 // DETECTOR_REG_CHANNEL is a constant that defines the name of the redis map that we
@@ -84,11 +85,14 @@ type RegistrationManager struct {
 	registeredDecoys *RegisteredDecoys
 	Logger           *log.Logger
 	PhantomSelector  *PhantomIPSelector
+	LivenessTester	 *lt.CachedLivenessTester
 }
 
 func NewRegistrationManager() *RegistrationManager {
 	logger := log.New(os.Stdout, "[REG] ", log.Ldate|log.Lmicroseconds)
-
+	var clt *lt.CachedLivenessTester
+	clt = new(lt.CachedLivenessTester)
+	clt.Init()
 	p, err := NewPhantomIPSelector()
 	if err != nil {
 		// fmt.Errorf("failed to create the PhantomIPSelector object: %v", err)
@@ -98,6 +102,7 @@ func NewRegistrationManager() *RegistrationManager {
 		Logger:           logger,
 		registeredDecoys: NewRegisteredDecoys(),
 		PhantomSelector:  p,
+		LivenessTester:	  clt,
 	}
 }
 
@@ -254,6 +259,18 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 	regManager.registeredDecoys.removeOldRegistrations(regManager.Logger)
 }
 
+// PhantomIsLive - Test whether the phantom is live using
+// 8 syns which returns syn-acks from 99% of sites within 1 second.
+// see  ZMap: Fast Internet-wide Scanning  and Its Security Applications
+// https://www.usenix.org/system/files/conference/usenixsecurity13/sec13-paper_durumeric.pdf
+//
+// return:	bool	true  - host is live
+// 					false - host is not liev
+//			error	reason decision was made
+func (regManager *RegistrationManager) PhantomIsLive(addr string, port uint16) (bool, error) {
+	return regManager.LivenessTester.PhantomIsLive(addr, port)
+}
+
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
 	DarkDecoy          net.IP
@@ -384,6 +401,7 @@ func (reg *DecoyRegistration) PreScanned() bool {
 	}
 	return reg.Flags.GetPrescanned()
 }
+
 
 type DecoyTimeout struct {
 	decoy            string

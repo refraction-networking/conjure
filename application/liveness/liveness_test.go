@@ -7,6 +7,7 @@ import (
 )
 
 func TestBasic(t *testing.T) {
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "../lib/test/phantom_subnets.toml")
 	fmt.Println("Test Basic")
 	var blt CachedLivenessTester
 	blt.Init()
@@ -16,6 +17,7 @@ func TestBasic(t *testing.T) {
 }
 
 func TestStop(t *testing.T) {
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "../lib/test/phantom_subnets.toml")
 	fmt.Println("Test Stop")
 	var blt CachedLivenessTester
 	blt.Init()
