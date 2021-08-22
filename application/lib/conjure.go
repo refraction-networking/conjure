@@ -46,6 +46,7 @@ type ConjureSharedKeys struct {
 	SharedSecret                                              []byte
 	FspKey, FspIv, VspKey, VspIv, MasterSecret, DarkDecoySeed []byte
 	Obfs4Keys                                                 Obfs4Keys
+	WebRTCCryptoParams                                        WebRTCCryptoParams
 }
 
 func GenSharedKeys(sharedSecret []byte) (ConjureSharedKeys, error) {
@@ -80,6 +81,7 @@ func GenSharedKeys(sharedSecret []byte) (ConjureSharedKeys, error) {
 	}
 	var err error
 	keys.Obfs4Keys, err = generateObfs4Keys(tdHkdf)
+	keys.WebRTCCryptoParams = newWebRTCCryptoParams(ConjureDevSeed, string(sharedSecret))
 	return keys, err
 }
 
