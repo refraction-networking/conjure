@@ -385,15 +385,15 @@ impl PerCoreGlobal
     /// assert_eq!(None, station);
     /// assert_eq!(Some(()), client);
     /// ```
-    fn filter_station_traffic(&mut self, src: String) -> Option<()> {
+    fn filter_station_traffic(&mut self, src: String) -> bool {
 
         for addr in self.filter_list.iter() {
             if src == *addr {
-                return None
+                return false;
             }
         }
 
-        Some(())
+        true
     }
 } // impl PerCoreGlobal
 
