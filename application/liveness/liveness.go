@@ -14,9 +14,15 @@ type LivenessTester interface {
     PhantomIsLive(addr string, port uint16) (bool, error)
 }
 
+type Cache_element struct {
+    is_live 	bool
+	cached_time	time.Time
+}
+
 type CachedLivenessTester struct{
-	ip_cache map[string]bool
-	signal chan bool
+	ip_cache 				map[string]Cache_element
+	signal 					chan bool
+	cache_expiration_time 	float64
 }
 
 type UncachedLivenessTester struct{
@@ -24,12 +30,29 @@ type UncachedLivenessTester struct{
 
 
 func (blt *CachedLivenessTester) Init(){
-	blt.ip_cache = make(map[string]bool)
+	blt.ip_cache = make(map[string]Cache_element)
 	blt.signal = make(chan bool)
+	expiration_arg := os.Getenv("CACHE_EXPIRATION_TIME")
+	if len(expiration_arg) == 0 {
+		blt.cache_expiration_time = 2.0
+	} else {
+		blt.cache_expiration_time, err = strconv.ParseFloat(expiration_arg, 64)
+		if err != nil {
+			fmt.Println("Unable to parse float", err)
+		}
+	}
 }
 
 func (blt *CachedLivenessTester) Stop(){
 	blt.signal <- true
+}
+
+func (blt *CachedLivenessTester) Clear_expired_cache(){
+	for ip_addr, status := range blt.ip_cache {
+        if time.Now().Sub(status.cached_time).Hours() > blt.cache_expiration_time {
+			delete(blt.ip_cache, ip_addr)
+		}
+    }
 }
 
 func (blt *CachedLivenessTester) Periodic_scan(t string){
@@ -67,7 +90,10 @@ func (blt *CachedLivenessTester) Periodic_scan(t string){
 			for _, ip := range records{
 				if ip[0] != "saddr"{
 					if _, ok := blt.ip_cache[ip[0]]; !ok {
-						blt.ip_cache[ip[0]] = true
+						var val Cache_element
+						val.is_live = true
+						val.cached_time = time.Now()
+						blt.ip_cache[ip[0]] = val
 						_, err := f.WriteString(ip[0]+"/32"+"\n")
 						if err != nil {
 							fmt.Println("Unable to write blocklist file", err)
@@ -99,13 +125,18 @@ func (blt *CachedLivenessTester) Periodic_scan(t string){
 
 func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, error){
     // existing phantomIsLive() implementation
-	if _, ok := blt.ip_cache[addr]; ok {
-		return true, fmt.Errorf("cached live host")
+	if status, ok := blt.ip_cache[addr]; ok {
+		if time.Now().Sub(status.cached_time).Hours() < blt.cache_expiration_time {
+			if status.is_live {
+				return true, fmt.Errorf("cached live host")		
+			}
+		}
 	}
 	isLive, err := phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
-	if isLive {
-		blt.ip_cache[addr] = true
-	}
+	var val Cache_element
+	val.is_live = isLive
+	val.cached_time = time.Now()
+	blt.ip_cache[addr] = val
 	return isLive, err
 }
 
