@@ -218,10 +218,12 @@ message ClientToStation {
 	// A collection of optional flags for the registration.
 	optional RegistrationFlags flags = 24;
 
+    // Allow client to specify decoy port
+    optional uint32 phantom_port = 25;
+
     // Random-sized junk to defeat packet size fingerprinting.
     optional bytes padding = 100;
 }
-
 
 enum RegistrationSource {
     Unspecified = 0;
@@ -259,6 +261,6 @@ message SessionStats {
 message StationToDetector {
     optional string phantom_ip = 1;
     optional string client_ip = 2;
-
     optional uint64 timeout_ns = 3;
+    optional uint32 phantom_port = 4;
 }
