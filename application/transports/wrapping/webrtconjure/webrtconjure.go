@@ -18,22 +18,23 @@ type Transport struct{}
 func (Transport) Name() string      { return "TranspoRTC" }
 func (Transport) LogPrefix() string { return "WEBRTC" }
 
+// TODO: GetIdentifier
 func (Transport) GetIdentifier(r *dd.DecoyRegistration) string {
 	return string(r.Keys.SharedSecret) + string(r.Keys.DarkDecoySeed)
 }
 
 func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, net.Conn, error) {
-	// TO-DO: A proper check, or maybe no check. WebRTC does not reuse c passed in.
+	// TO-DO: A proper check, or maybe no check. WebRTC does not require a valid c to be passed in anyway...
 
 	// if data.Len() < 32 {
 	// 	return nil, nil, transports.ErrTryAgain
 	// }
 
-	hmacID := string(data.Bytes()[:32])
-	reg, ok := regManager.GetRegistrations(phantom)[hmacID]
-	if !ok {
-		return nil, nil, transports.ErrNotTransport
-	}
+	reg := getWebRTCRegistrations(regManager, phantom)
+
+	// if !ok {
+	// 	return nil, nil, transports.ErrNotTransport
+	// }
 
 	// TO-DO: Collect required info (SDP) from registration.
 	// Need:	- Seed, SharedSecret (at least one to be real-time exchanged for security)
@@ -121,7 +122,8 @@ func getWebRTCRegistrations(regManager *dd.RegistrationManager, phantom net.IP) 
 	var regs []*dd.DecoyRegistration
 
 	for identifier, r := range regManager.GetRegistrations(phantom) {
-		if len(identifier) == WebRTCIdentifierLen { // Fix this Length check, or use other checking
+		// TODO: Acquire WebRTC Registrations
+		if len(identifier) == WebRTCIdentifierLen {
 			regs = append(regs, r)
 		}
 	}
