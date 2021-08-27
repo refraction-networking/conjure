@@ -225,6 +225,8 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	wg.Wait()
 }
 
+// func twoWayProxyUDP
+
 func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
 	var err error
 	originalDst := originalDstIP.String()

@@ -8,7 +8,6 @@ import (
 	rtc "github.com/Gaukas/transportc"
 	"github.com/pion/webrtc/v3"
 	dd "github.com/refraction-networking/conjure/application/lib"
-	"github.com/refraction-networking/conjure/application/transports"
 )
 
 const WebRTCIdentifierLen = 34 // should be a deterministic number used as key in map[string]*DecoyRegistration
@@ -44,7 +43,7 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 	var seed string
 	var sharedsecret string
 	var deflatedSDP s2s.SDPDeflated
-	var serverIP net.IP
+	var serverIP net.IP = phantom
 	var serverPort uint16
 
 	clientSDP, err := InflateSdpWithSeed(seed, sharedsecret, deflatedSDP)
@@ -115,7 +114,8 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 	for (conn.Status() & rtc.WebRTConnReady) == 0 {
 	}
 
-	return reg, transports.PrependToConn(c, data), nil
+	// return reg, transports.PrependToConn(c, data), nil
+	return reg, conn, nil
 }
 
 func getWebRTCRegistrations(regManager *dd.RegistrationManager, phantom net.IP) []*dd.DecoyRegistration {
