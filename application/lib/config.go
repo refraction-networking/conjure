@@ -34,6 +34,9 @@ type Config struct {
 	// Local list of disallowed subnets patterns for phantom addresses.
 	PhantomBlocklist []string `toml:"phantom_blocklist"`
 	phantomBlocklist []*net.IPNet
+
+	// Expiration duration for cached live hosts
+	Cache_expiration_time float64 `toml:"cache_expiration_time"`
 }
 
 func ParseConfig() (*Config, error) {

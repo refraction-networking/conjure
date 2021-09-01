@@ -23,6 +23,10 @@ heartbeat_interval = 30000
 # a response before the connection is assumed to be dead.
 heartbeat_timeout = 1000
 
+# Time in hours to mark a cached live IP address as expired
+# in the liveness module.
+cache_expiration_time = 2.0
+
 # Allow the station to opt out of either version of internet protocol to limit a 
 # statio to handling one or the other. For example, v6 on small station deployment
 # with only v6 phantom subnet,  v4 only on station with no puvlic v6 address. 
