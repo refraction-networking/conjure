@@ -29,18 +29,10 @@ type UncachedLivenessTester struct{
 }
 
 
-func (blt *CachedLivenessTester) Init(){
+func (blt *CachedLivenessTester) Init(expiration_time float64){
 	blt.ip_cache = make(map[string]Cache_element)
 	blt.signal = make(chan bool)
-	expiration_arg := os.Getenv("CACHE_EXPIRATION_TIME")
-	if len(expiration_arg) == 0 {
-		blt.cache_expiration_time = 2.0
-	} else {
-		blt.cache_expiration_time, err = strconv.ParseFloat(expiration_arg, 64)
-		if err != nil {
-			fmt.Println("Unable to parse float", err)
-		}
-	}
+	blt.cache_expiration_time = expiration_time
 }
 
 func (blt *CachedLivenessTester) Stop(){
