@@ -45,6 +45,7 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 	var deflatedSDP s2s.SDPDeflated
 	var serverIP net.IP = phantom
 	var serverPort uint16
+	var rawsocket *net.UDPConn // Raw UDP Socket, by example a listener.
 
 	clientSDP, err := InflateSdpWithSeed(seed, sharedsecret, deflatedSDP)
 	if err != nil {
@@ -58,10 +59,10 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 
 	// Prepare the WebRTConn
 	conn, _ := rtc.Dial("udp", "0.0.0.0")
-	err = InitializeWebRTConn(conn, seed, sharedsecret)
-	if err != nil {
-		return nil, nil, err
-	}
+	// err = InitializeWebRTConn(conn, seed, sharedsecret)
+	// if err != nil {
+	// 	return nil, nil, err
+	// }
 
 	// Build transportc config, pion SettingEngine, pion Configuration
 	serverHkdfParams := getServerHkdfParams(seed, sharedsecret)
@@ -87,6 +88,7 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 	}
 	newSettingEngine := webrtc.SettingEngine{}
 	iceParams.UpdateSettingEngine(&newSettingEngine)
+	newSettingEngine.SetICEUDPMux(webrtc.NewICEUDPMux(nil, rawsocket))
 
 	newConfiguration := webrtc.Configuration{
 		Certificates: []webrtc.Certificate{cert},
