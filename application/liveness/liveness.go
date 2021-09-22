@@ -15,47 +15,47 @@ type LivenessTester interface {
 }
 
 type CacheElement struct {
-    is_live 	bool
-	cached_time	time.Time
+    isLive 	bool
+	cachedTime	time.Time
 }
 
 type CachedLivenessTester struct{
-	ip_cache 				map[string]CacheElement
+	ipCache 				map[string]CacheElement
 	signal 					chan bool
-	cache_expiration_time 	float64
+	cacheExpirationTime 	float64
 }
 
 type UncachedLivenessTester struct{
 }
 
 
-func (blt *CachedLivenessTester) Init(expiration_time float64){
-	blt.ip_cache = make(map[string]CacheElement)
+func (blt *CachedLivenessTester) Init(expirationTime float64){
+	blt.ipCache = make(map[string]CacheElement)
 	blt.signal = make(chan bool)
-	blt.cache_expiration_time = expiration_time
+	blt.cacheExpirationTime = expirationTime
 }
 
 func (blt *CachedLivenessTester) Stop(){
 	blt.signal <- true
 }
 
-func (blt *CachedLivenessTester) Clear_expired_cache(){
-	for ip_addr, status := range blt.ip_cache {
-        if time.Now().Sub(status.cached_time).Hours() > blt.cache_expiration_time {
-			delete(blt.ip_cache, ip_addr)
+func (blt *CachedLivenessTester) ClearExpiredCache(){
+	for ipAddr, status := range blt.ipCache {
+        if time.Now().Sub(status.cachedTime).Hours() > blt.cacheExpirationTime {
+			delete(blt.ipCache, ipAddr)
 		}
     }
 }
 
 func (blt *CachedLivenessTester) Periodic_scan(t string){
 	os.Create("block_list.txt")
-	allow_list_addr := os.Getenv("PHANTOM_SUBNET_LOCATION")
+	allowListAddr := os.Getenv("PHANTOM_SUBNET_LOCATION")
 	for{
 		select {
 		case <- blt.signal:
 			return
 		default:
-			_, err := exec.Command("zmap","-p","443","-O","csv","-f","saddr,classification","-P","4","--output-filter= (classification = rst || classification = synack)","-b","block_list.txt","-w",allow_list_addr,"-o","result.csv").Output()
+			_, err := exec.Command("zmap","-p","443","-O","csv","-f","saddr,classification","-P","4","--output-filter= (classification = rst || classification = synack)","-b","block_list.txt","-w",allowListAddr,"-o","result.csv").Output()
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -81,11 +81,11 @@ func (blt *CachedLivenessTester) Periodic_scan(t string){
 
 			for _, ip := range records{
 				if ip[0] != "saddr"{
-					if _, ok := blt.ip_cache[ip[0]]; !ok {
+					if _, ok := blt.ipCache[ip[0]]; !ok {
 						var val CacheElement
-						val.is_live = true
-						val.cached_time = time.Now()
-						blt.ip_cache[ip[0]] = val
+						val.isLive = true
+						val.cachedTime = time.Now()
+						blt.ipCache[ip[0]] = val
 						_, err := f.WriteString(ip[0]+"/32"+"\n")
 						if err != nil {
 							fmt.Println("Unable to write blocklist file", err)
@@ -117,18 +117,18 @@ func (blt *CachedLivenessTester) Periodic_scan(t string){
 
 func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, error){
     // existing phantomIsLive() implementation
-	if status, ok := blt.ip_cache[addr]; ok {
-		if time.Now().Sub(status.cached_time).Hours() < blt.cache_expiration_time {
-			if status.is_live {
+	if status, ok := blt.ipCache[addr]; ok {
+		if time.Now().Sub(status.cachedTime).Hours() < blt.cacheExpirationTime {
+			if status.isLive {
 				return true, fmt.Errorf("cached live host")		
 			}
 		}
 	}
 	isLive, err := phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
 	var val CacheElement
-	val.is_live = isLive
-	val.cached_time = time.Now()
-	blt.ip_cache[addr] = val
+	val.isLive = isLive
+	val.cachedTime = time.Now()
+	blt.ipCache[addr] = val
 	return isLive, err
 }
 
