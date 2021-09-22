@@ -36,7 +36,7 @@ type Config struct {
 	phantomBlocklist []*net.IPNet
 
 	// Expiration duration for cached live hosts
-	Cache_expiration_time float64 `toml:"cache_expiration_time"`
+	CacheExpirationTime float64 `toml:"cache_expiration_time"`
 }
 
 func ParseConfig() (*Config, error) {

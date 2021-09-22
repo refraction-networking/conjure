@@ -14,13 +14,13 @@ type LivenessTester interface {
     PhantomIsLive(addr string, port uint16) (bool, error)
 }
 
-type Cache_element struct {
+type CacheElement struct {
     is_live 	bool
 	cached_time	time.Time
 }
 
 type CachedLivenessTester struct{
-	ip_cache 				map[string]Cache_element
+	ip_cache 				map[string]CacheElement
 	signal 					chan bool
 	cache_expiration_time 	float64
 }
@@ -30,7 +30,7 @@ type UncachedLivenessTester struct{
 
 
 func (blt *CachedLivenessTester) Init(expiration_time float64){
-	blt.ip_cache = make(map[string]Cache_element)
+	blt.ip_cache = make(map[string]CacheElement)
 	blt.signal = make(chan bool)
 	blt.cache_expiration_time = expiration_time
 }
@@ -82,7 +82,7 @@ func (blt *CachedLivenessTester) Periodic_scan(t string){
 			for _, ip := range records{
 				if ip[0] != "saddr"{
 					if _, ok := blt.ip_cache[ip[0]]; !ok {
-						var val Cache_element
+						var val CacheElement
 						val.is_live = true
 						val.cached_time = time.Now()
 						blt.ip_cache[ip[0]] = val
@@ -125,7 +125,7 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 		}
 	}
 	isLive, err := phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
-	var val Cache_element
+	var val CacheElement
 	val.is_live = isLive
 	val.cached_time = time.Now()
 	blt.ip_cache[addr] = val

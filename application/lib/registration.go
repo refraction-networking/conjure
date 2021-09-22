@@ -15,7 +15,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
-	lt "../liveness"
+	lt "github.com/refraction-networking/gotapdance/application/liveness"
 )
 
 // DETECTOR_REG_CHANNEL is a constant that defines the name of the redis map that we
