@@ -54,7 +54,7 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 	InjectAppSpecs(clientSDP)
 	clientSDP.AddAttrs(s2s.SDPAttribute{
 		Key:   "setup",
-		Value: "actpass",
+		Value: "actpass", // Client always go with server pref
 	})
 
 	// Prepare the WebRTConn
@@ -85,10 +85,11 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 		},
 		CandidateType: webrtc.ICECandidateTypeHost,
 		Port:          serverPort,
+		RawSocket:     rawsocket,
 	}
 	newSettingEngine := webrtc.SettingEngine{}
 	iceParams.UpdateSettingEngine(&newSettingEngine)
-	newSettingEngine.SetICEUDPMux(webrtc.NewICEUDPMux(nil, rawsocket))
+	// newSettingEngine.SetICEUDPMux(webrtc.NewICEUDPMux(nil, rawsocket))
 
 	newConfiguration := webrtc.Configuration{
 		Certificates: []webrtc.Certificate{cert},
