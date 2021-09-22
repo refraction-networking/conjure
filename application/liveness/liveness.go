@@ -47,7 +47,7 @@ func (blt *CachedLivenessTester) ClearExpiredCache(){
     }
 }
 
-func (blt *CachedLivenessTester) Periodic_scan(t string){
+func (blt *CachedLivenessTester) PeriodicScan(t string){
 	os.Create("block_list.txt")
 	allowListAddr := os.Getenv("PHANTOM_SUBNET_LOCATION")
 	for{
