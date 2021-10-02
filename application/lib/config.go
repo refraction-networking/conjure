@@ -5,7 +5,6 @@ import (
 	"net"
 	"os"
 	"regexp"
-
 	"github.com/BurntSushi/toml"
 )
 
@@ -36,7 +35,7 @@ type Config struct {
 	phantomBlocklist []*net.IPNet
 
 	// Expiration duration for cached live hosts
-	CacheExpirationTime float64 `toml:"cache_expiration_time"`
+	CacheExpirationTime string `toml:"cache_expiration_time"`
 }
 
 func ParseConfig() (*Config, error) {

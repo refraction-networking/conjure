@@ -86,13 +86,14 @@ type RegistrationManager struct {
 	Logger           *log.Logger
 	PhantomSelector  *PhantomIPSelector
 	LivenessTester	 *lt.CachedLivenessTester
+	DefaultTester	 *lt.UncachedLivenessTester
+	IsCached		 bool
 }
 
 func NewRegistrationManager() *RegistrationManager {
 	logger := log.New(os.Stdout, "[REG] ", log.Ldate|log.Lmicroseconds)
-	var clt *lt.CachedLivenessTester
-	clt = new(lt.CachedLivenessTester)
-	clt.Init()
+	var ult *lt.UncachedLivenessTester
+	ult = new(lt.UncachedLivenessTester)
 	p, err := NewPhantomIPSelector()
 	if err != nil {
 		// fmt.Errorf("failed to create the PhantomIPSelector object: %v", err)
@@ -102,7 +103,8 @@ func NewRegistrationManager() *RegistrationManager {
 		Logger:           logger,
 		registeredDecoys: NewRegisteredDecoys(),
 		PhantomSelector:  p,
-		LivenessTester:	  clt,
+		DefaultTester:	  ult,
+		IsCached:		  false,
 	}
 }
 
@@ -268,7 +270,11 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 // 					false - host is not liev
 //			error	reason decision was made
 func (regManager *RegistrationManager) PhantomIsLive(addr string, port uint16) (bool, error) {
-	return regManager.LivenessTester.PhantomIsLive(addr, port)
+	if regManager.IsCached{
+		return regManager.LivenessTester.PhantomIsLive(addr, port)
+	} else {
+		return regManager.DefaultTester.PhantomIsLive(addr, port)
+	}
 }
 
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.

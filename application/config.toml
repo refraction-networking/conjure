@@ -25,7 +25,7 @@ heartbeat_timeout = 1000
 
 # Time in hours to mark a cached live IP address as expired
 # in the liveness module.
-cache_expiration_time = 2.0
+cache_expiration_time = "2.0h"
 
 # Allow the station to opt out of either version of internet protocol to limit a 
 # statio to handling one or the other. For example, v6 on small station deployment

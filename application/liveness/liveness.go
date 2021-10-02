@@ -22,14 +22,14 @@ type CacheElement struct {
 type CachedLivenessTester struct{
 	ipCache 				map[string]CacheElement
 	signal 					chan bool
-	cacheExpirationTime 	float64
+	cacheExpirationTime 	string
 }
 
 type UncachedLivenessTester struct{
 }
 
 
-func (blt *CachedLivenessTester) Init(expirationTime float64){
+func (blt *CachedLivenessTester) Init(expirationTime string){
 	blt.ipCache = make(map[string]CacheElement)
 	blt.signal = make(chan bool)
 	blt.cacheExpirationTime = expirationTime
@@ -40,8 +40,13 @@ func (blt *CachedLivenessTester) Stop(){
 }
 
 func (blt *CachedLivenessTester) ClearExpiredCache(){
+	convertedTime, err := time.ParseDuration(blt.cacheExpirationTime)
+	if err != nil{
+		fmt.Println("Unable to parse cacheExpirationTime", err)
+	}
+	timeInHour := convertedTime.Hours()
 	for ipAddr, status := range blt.ipCache {
-        if time.Now().Sub(status.cachedTime).Hours() > blt.cacheExpirationTime {
+        if time.Now().Sub(status.cachedTime).Hours() > timeInHour {
 			delete(blt.ipCache, ipAddr)
 		}
     }
@@ -117,8 +122,13 @@ func (blt *CachedLivenessTester) PeriodicScan(t string){
 
 func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, error){
     // existing phantomIsLive() implementation
+	convertedTime, err := time.ParseDuration(blt.cacheExpirationTime)
+	if err != nil{
+		fmt.Println("Unable to parse cacheExpirationTime", err)
+	}
+	timeInHour := convertedTime.Hours()
 	if status, ok := blt.ipCache[addr]; ok {
-		if time.Now().Sub(status.cachedTime).Hours() < blt.cacheExpirationTime {
+		if time.Now().Sub(status.cachedTime).Hours() < timeInHour {
 			if status.isLive {
 				return true, fmt.Errorf("cached live host")		
 			}
