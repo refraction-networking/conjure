@@ -7,7 +7,12 @@ import (
 	"os"
 )
 
+// To run the measuremest commands set the environment variable when running go test
+//     $ MEASUREMENTS=1 go test -v
 func TestBasic(t *testing.T) {
+	if os.Getenv("MEASUREMENTS") != "1" {
+		t.Skip("skiping long running measurement based tests")
+	}
 	os.Setenv("PHANTOM_SUBNET_LOCATION", "../lib/test/phantom_subnets.toml")
 	fmt.Println("Test Basic")
 	var blt CachedLivenessTester
@@ -17,7 +22,12 @@ func TestBasic(t *testing.T) {
 	blt.Stop()
 }
 
+// To run the measuremest commands set the environment variable when running go test
+//     $ MEASUREMENTS=1 go test -v
 func TestStop(t *testing.T) {
+	if os.Getenv("MEASUREMENTS") != "1" {
+		t.Skip("skiping long running measurement based tests")
+	}
 	os.Setenv("PHANTOM_SUBNET_LOCATION", "../lib/test/phantom_subnets.toml")
 	fmt.Println("Test Stop")
 	var blt CachedLivenessTester
