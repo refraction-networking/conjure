@@ -2,10 +2,10 @@ package lib
 
 import (
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"net"
 	"os"
 	"regexp"
-	"github.com/BurntSushi/toml"
 )
 
 // Config - Station golang configuration struct

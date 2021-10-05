@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	pb "github.com/refraction-networking/gotapdance/protobuf"
 	lt "github.com/refraction-networking/conjure/application/liveness"
+	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
 // DETECTOR_REG_CHANNEL is a constant that defines the name of the redis map that we
@@ -85,7 +85,7 @@ type RegistrationManager struct {
 	registeredDecoys *RegisteredDecoys
 	Logger           *log.Logger
 	PhantomSelector  *PhantomIPSelector
-	LivenessTester	 *lt.LivenessTester
+	LivenessTester   lt.LivenessTester
 }
 
 func NewRegistrationManager() *RegistrationManager {
@@ -101,7 +101,7 @@ func NewRegistrationManager() *RegistrationManager {
 		Logger:           logger,
 		registeredDecoys: NewRegisteredDecoys(),
 		PhantomSelector:  p,
-		LivenessTester:	  ult,
+		LivenessTester:   ult,
 	}
 }
 
@@ -267,7 +267,7 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 // 					false - host is not liev
 //			error	reason decision was made
 func (regManager *RegistrationManager) PhantomIsLive(addr string, port uint16) (bool, error) {
-		return regManager.LivenessTester.PhantomIsLive(addr, port)
+	return regManager.LivenessTester.PhantomIsLive(addr, port)
 }
 
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
@@ -400,7 +400,6 @@ func (reg *DecoyRegistration) PreScanned() bool {
 	}
 	return reg.Flags.GetPrescanned()
 }
-
 
 type DecoyTimeout struct {
 	decoy            string

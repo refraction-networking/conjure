@@ -2,9 +2,9 @@ package liveness
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
-	"os"
 )
 
 // To run the measuremest commands set the environment variable when running go test
