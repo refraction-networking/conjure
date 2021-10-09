@@ -27,12 +27,12 @@ func getClientHkdfParams(seed, sharedSecret string) *s2s.HKDFParams {
 	return &s2s.NewHKDFParams().SetSecret(sharedSecret).SetInfoPrefix(OffererIdentifier).SetSalt(seed)
 }
 
-func InflateSdpWithSeed(seed, sharedSecret string, deflatedSDP s2s.SDPDeflated) (*s2s.SDP, error) {
+func InflateSdpWithSeed(seed, sharedSecret string, deflatedSDP []s2s.SDPDeflated) (*s2s.SDP, error) {
 	// Debug: Server always as Answerer. Thus, Inflate with OffererIdentifier (due to peer's identity: Offerer).
 	var hkdfParams *s2s.HKDFParams = getClientHkdfParams(seed, sharedSecret)
 	// hkdfParams = &s2s.NewHKDFParams().SetSecret(ServerClientSharedSecret).SetInfoPrefix(AnswererIdentifier)
 
-	sdp, err := deflatedSDP.Inflate()
+	sdp, err := s2s.GroupInflate(deflatedSDP)
 	if err != nil {
 		return nil, err
 	}

@@ -6,9 +6,10 @@ import (
 
 	s2s "github.com/Gaukas/seed2sdp"
 	rtc "github.com/Gaukas/transportc"
-	"github.com/pion/webrtc/v3"
+	webrtc "github.com/pion/webrtc/v3"
 	dd "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports"
+	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
 const WebRTCIdentifierLen = 34 // should be a deterministic number used as key in map[string]*DecoyRegistration
@@ -31,29 +32,43 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 	// }
 
 	reg := getWebRTCRegistrations(regManager, phantom)
-
+	if reg == nil {
+		return nil, nil, transports.ErrNotTransport
+	}
 	// if !ok {
 	// 	return nil, nil, transports.ErrNotTransport
 	// }
 
-	// TO-DO: Collect required info (SDP) from registration.
+	// Collect required info (SDP) from registration.
 	// Need:	- Seed, SharedSecret (at least one to be real-time exchanged for security)
 	//       	- deflatedSDP
 	//		 	- serverIP
 	//		 	- serverPort
-	var seed string
-	var sharedsecret string
-	var deflatedSDP s2s.SDPDeflated
-	var serverIP net.IP = phantom
-	var serverPort uint16
-	var rawNetConn net.Conn
-	var rawsocket *net.UDPConn // Raw UDP Socket, by example a listener.
+	// Test: using the first viable registration ONLY.
+	var seed string = reg.WebRTCParams.GetRandSeed().GetSeed()
+	var sharedsecret string = reg.WebRTCParams.GetRandSeed().GetSharedSecret()
+	var deflatedSDPs []s2s.SDPDeflated
+	var pbDeflatedSDPs []*pb.DeflatedSDP = reg.WebRTCParams.GetDeflatedSdps()
+	for _, pbDefSDP := range pbDeflatedSDPs {
+		var newSDPDef = s2s.SDPDeflated{
+			SDPType:    uint8(pbDefSDP.GetSdpType()),
+			IPUpper64:  pbDefSDP.GetIpUpper(),
+			IPLower64:  pbDefSDP.GetIpLower(),
+			Composed32: pbDefSDP.GetComposedInfo(),
+		}
+		deflatedSDPs = append(deflatedSDPs, newSDPDef)
+	}
+
+	// var serverIP net.IP = phantom
+	// var serverPort uint16
+	var rawNetConn net.Conn = c // TODO: check if it works
+	var rawsocket *net.UDPConn  // Raw UDP Socket, by example a listener.
 	rawsocket, ok := rawNetConn.(*net.UDPConn)
 	if !ok {
 		return nil, nil, transports.ErrNotTransport
 	}
 
-	clientSDP, err := InflateSdpWithSeed(seed, sharedsecret, deflatedSDP)
+	clientSDP, err := InflateSdpWithSeed(seed, sharedsecret, deflatedSDPs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -86,12 +101,14 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 		SelfSDPType:    "answer",
 		SendBufferSize: rtc.DataChannelBufferSizeDefault,
 
-		IPAddr: []string{
-			serverIP.String(),
-		},
+		//// Shouldn't be needed, if we pass in raw socket.
+		// IPAddr: []string{
+		// 	serverIP.String(),
+		// },
+		// Port:          serverPort,
 		CandidateType: webrtc.ICECandidateTypeHost,
-		Port:          serverPort,
-		RawSocket:     rawsocket,
+
+		RawSocket: rawsocket,
 	}
 	newSettingEngine := webrtc.SettingEngine{}
 	iceParams.UpdateSettingEngine(&newSettingEngine)
@@ -113,7 +130,7 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 
 	conn.SetRemoteSDPJsonString(clientSDP.String())
 
-	// Set Local SDP (answer). Client should be able to approximate a matching one.
+	// Set Local SDP (answer). Client needs to be able to "guess" a matching one.
 	_, err = conn.LocalSDP()
 	if err != nil {
 		return nil, nil, err
@@ -127,15 +144,17 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 	return reg, conn, nil
 }
 
-func getWebRTCRegistrations(regManager *dd.RegistrationManager, phantom net.IP) []*dd.DecoyRegistration {
-	var regs []*dd.DecoyRegistration
+func getWebRTCRegistrations(regManager *dd.RegistrationManager, phantom net.IP) *dd.DecoyRegistration {
+	// var regs []*dd.DecoyRegistration
 
-	for identifier, r := range regManager.GetRegistrations(phantom) {
-		// TODO: Acquire WebRTC Registrations
-		if len(identifier) == WebRTCIdentifierLen {
-			regs = append(regs, r)
+	for _, r := range regManager.GetRegistrations(phantom) {
+		DeflatedSdps := r.WebRTCParams.GetDeflatedSdps()
+		if len(DeflatedSdps) > 0 { // If has any deflated SDP, treat as valid reg
+			// regs = append(regs, r)
+			return r
 		}
 	}
+	return nil
 
-	return regs
+	// return regs
 }

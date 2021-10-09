@@ -166,6 +166,9 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		RegistrationTime:   time.Now(),
 		RegistrationSource: registrationSource,
 		regCount:           0,
+
+		// WebRTC Specific
+		WebRTCParams: c2s.GetWebrtc(),
 	}
 
 	return &reg, nil
@@ -266,6 +269,9 @@ type DecoyRegistration struct {
 	RegistrationSource *pb.RegistrationSource
 	DecoyListVersion   uint32
 	regCount           int32
+
+	// WebRTC Transport Specific
+	WebRTCParams *pb.WebrtcSDP
 
 	// validity marks whether the registration has been validated through liveness and other checks.
 	// This also denotes whether the registration has been shared with the detector.
