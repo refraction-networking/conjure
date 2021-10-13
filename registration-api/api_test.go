@@ -352,3 +352,81 @@ func TestAPIGetClientAddr(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "127.0.0.1,192.168.0.0")
 	require.Equal(t, "127.0.0.1", getRemoteAddr(req))
 }
+
+func TestCorrectBidirectionalAPI(t *testing.T) {
+	// Set subnet environment
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "../application/lib/test/phantom_subnets.toml")
+
+	messageChan := make(chan []byte, 1)
+	accepter := func(m []byte) error {
+		messageChan <- m
+		return nil
+	}
+
+	generation_957 := uint16(957)
+
+	// Create a server with the channel created above
+	s := server{
+		messageAccepter: accepter,
+		logger:          logger,
+	}
+	s.logClientIP = true
+
+	s.config.BidirectionalAPIGen = generation_957
+
+	// Client sends to station v4 or v6, shared secret, etc.
+	c2API, _ := generateC2SWrapperPayload() // v4 support
+	regSrc := pb.RegistrationSource_BidirectionalAPI
+	c2API.RegistrationSource = &regSrc
+	c2API.RegistrationAddress = net.ParseIP("8.8.8.8").To16()
+	body, _ := proto.Marshal(c2API)
+
+	fmt.Println(c2API.SharedSecret)
+
+	r := httptest.NewRequest("POST", "/register-bidriectional", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	s.initPhantomSelector()
+	s.registerBidirectional(w, r)
+	resp := w.Result()
+
+	select {
+	case m := <-messageChan:
+		// We already tested the payload generation above, so here we're just
+		// confirming it arrives with the correct modifications
+		payload := &pb.C2SWrapper{}
+		if err := proto.Unmarshal(m, payload); err != nil {
+			t.Fatalf("Bad C2Swrapper returned")
+		}
+
+		// If the Address isn't re-written for API registrar source throw error
+		if net.IP(payload.GetRegistrationAddress()).String() == "8.8.8.8" {
+			t.Fatalf("Registration Address should be overwritten for API registrar")
+		}
+
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("timed out waiting for message from endpoint")
+	}
+
+	// Test for the new pb coming back
+	// w should respond with HTTP StatusOK, meaning it got something back
+	if w.Code != http.StatusOK {
+		t.Fatalf("response code mismatch: expected %d, got %d", http.StatusOK, w.Code)
+	}
+
+	defer resp.Body.Close()
+	// resp stores the server response from w
+	// Read (desearialize) resp's body into type []byte
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Unmarshal
+	resp_payload := &pb.RegistrationResponse{}
+	if err = proto.Unmarshal(bodyBytes, resp_payload); err != nil {
+		t.Fatalf("Unable to unmarshal RegistrationResponse protobuf")
+	}
+
+	t.Log(*resp_payload.Ipv4Addr)
+}
