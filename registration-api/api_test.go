@@ -367,8 +367,8 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 
 	// Create a server with the channel created above
 	s := server{
-		messageAccepter: 		 accepter,
-		logger:          		 logger,
+		messageAccepter: accepter,
+		logger:          logger,
 	}
 	s.logClientIP = true
 
@@ -376,22 +376,19 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 
 	// Client sends to station v4 or v6, shared secret, etc.
 	c2API, _ := generateC2SWrapperPayload() // v4 support
-	regSrc := pb.RegistrationSource_BidirectionalAPI // new
-	// generation_957 := uint32(957)
-	// c2API.RegistrationPayload.DecoyListGeneration = &generation_957
+	regSrc := pb.RegistrationSource_BidirectionalAPI
 	c2API.RegistrationSource = &regSrc
 	c2API.RegistrationAddress = net.ParseIP("8.8.8.8").To16()
-	// c2API.decoy_address = nil // new
 	body, _ := proto.Marshal(c2API)
 
 	fmt.Println(c2API.SharedSecret)
 
-	r := httptest.NewRequest("POST", "/register-bidriectional", bytes.NewReader(body)) // new
+	r := httptest.NewRequest("POST", "/register-bidriectional", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
 	s.initPhantomSelector()
-	s.registerBidirectional(w, r) // new
-	resp := w.Result() // new
+	s.registerBidirectional(w, r)
+	resp := w.Result()
 
 	select {
 	case m := <-messageChan:
@@ -414,7 +411,7 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 	// Test for the new pb coming back
 	// w should respond with HTTP StatusOK, meaning it got something back
 	if w.Code != http.StatusOK {
-			t.Fatalf("response code mismatch: expected %d, got %d", http.StatusOK, w.Code)
+		t.Fatalf("response code mismatch: expected %d, got %d", http.StatusOK, w.Code)
 	}
 
 	defer resp.Body.Close()
@@ -431,12 +428,5 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 		t.Fatalf("Unable to unmarshal RegistrationResponse protobuf")
 	}
 
-	// Print ipv4address from registtration response payload
-	// get back: 3229269742
 	t.Log(*resp_payload.Ipv4Addr)
-	// same thing as above but in a different format:
-	// bodyString := fmt.Sprint(*resp_payload.Ipv4Addr)
-	// t.Log(bodyString)
-
-	// loop run 100 times, make sure no errorsm
 }

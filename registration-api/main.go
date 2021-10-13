@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -11,15 +12,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"encoding/binary"
 
 	"github.com/BurntSushi/toml"
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
 	zmq "github.com/pebbe/zmq4"
-	pb  "github.com/refraction-networking/gotapdance/protobuf"
-	// td  "github.com/refraction-networking/gotapdance/tapdance"
 	lib "github.com/refraction-networking/conjure/application/lib"
+	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
 const (
@@ -29,13 +28,13 @@ const (
 )
 
 type config struct {
-	APIPort           	uint16   `toml:"api_port"`
-	ZMQPort           	uint16   `toml:"zmq_port"`
-	PrivateKeyPath    	string   `toml:"privkey_path"`
-	AuthType          	string   `toml:"auth_type"`
-	AuthVerbose       	bool     `toml:"auth_verbose"`
-	StationPublicKeys 	[]string `toml:"station_pubkeys"`
-	BidirectionalAPIGen uint16	 `toml:"bidirectional_api_generation"`
+	APIPort             uint16   `toml:"api_port"`
+	ZMQPort             uint16   `toml:"zmq_port"`
+	PrivateKeyPath      string   `toml:"privkey_path"`
+	AuthType            string   `toml:"auth_type"`
+	AuthVerbose         bool     `toml:"auth_verbose"`
+	StationPublicKeys   []string `toml:"station_pubkeys"`
+	BidirectionalAPIGen uint16   `toml:"bidirectional_api_generation"`
 
 	// Parsed from conjure.conf environment vars
 	logClientIP bool
@@ -45,10 +44,9 @@ type server struct {
 	sync.Mutex
 	config
 	IPSelector *lib.PhantomIPSelector
-	// IPSelector PhantomIPSelector
 
-	// Function to accept message into processing queue. Abstracted
-	// to allow mocking of ZMQ send flow
+	// Function to accept message into processing queue.
+	// Abstracted to allow mocking of ZMQ send flow
 	messageAccepter func([]byte) error
 
 	logger *log.Logger
@@ -131,7 +129,6 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// new
 func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	requestIP := getRemoteAddr(r)
 
@@ -189,9 +186,9 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 
 	if *payload.RegistrationPayload.V4Support {
 		phantom4, err := s.IPSelector.Select(
-				cjkeys.DarkDecoySeed,
-				uint(s.BidirectionalAPIGen), //generation type uint
-				false,
+			cjkeys.DarkDecoySeed,
+			uint(s.BidirectionalAPIGen), //generation type uint
+			false,
 		)
 
 		s.logger.Println(cjkeys.DarkDecoySeed)
@@ -208,9 +205,9 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 
 	if *payload.RegistrationPayload.V6Support {
 		phantom6, err := s.IPSelector.Select(
-				cjkeys.DarkDecoySeed,
-				uint(s.BidirectionalAPIGen),
-				true,
+			cjkeys.DarkDecoySeed,
+			uint(s.BidirectionalAPIGen),
+			true,
 		)
 		if err != nil {
 			s.logger.Println("Failed to select IPv4Address:", err)
@@ -275,8 +272,6 @@ func (s *server) processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr [
 		source := clientToAPIProto.GetRegistrationSource()
 		payload.RegistrationSource = &source
 	}
-
-	// TODO: line 249 need similar one for Bidirectitonal
 
 	// If the address that the registration was received from was NOT set in the
 	// C2SWrapper set it here to the source address of the API (uni or bidirectional) request.
@@ -385,7 +380,7 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/register", s.register)
-	r.HandleFunc("/register-bidirectional", s.registerBidirectional) // new
+	r.HandleFunc("/register-bidirectional", s.registerBidirectional)
 	http.Handle("/", r)
 
 	s.logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", s.APIPort), nil))
