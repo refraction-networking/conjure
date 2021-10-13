@@ -2,11 +2,10 @@ package lib
 
 import (
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"net"
 	"os"
 	"regexp"
-
-	"github.com/BurntSushi/toml"
 )
 
 // Config - Station golang configuration struct
@@ -34,6 +33,9 @@ type Config struct {
 	// Local list of disallowed subnets patterns for phantom addresses.
 	PhantomBlocklist []string `toml:"phantom_blocklist"`
 	phantomBlocklist []*net.IPNet
+
+	// Expiration duration for cached live hosts
+	CacheExpirationTime string `toml:"cache_expiration_time"`
 }
 
 func ParseConfig() (*Config, error) {
