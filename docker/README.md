@@ -57,7 +57,7 @@ Set CJ_IFACE variable to the name of the network interface that receives conjure
 ##### Run
 `docker-compose up -d`
 
-#### List of Supported Variables and Defaults
+#### List of Supported Variables and Defaults (docker-compose.yaml)
 ```
 # zbalance
 CJ_IFACE=lo
@@ -82,3 +82,16 @@ CJ_IP6_ADDR=[::1]
 CJ_STATION_CONFIG=/opt/conjure/application/config.toml
 PHANTOM_SUBNET_LOCATION=/opt/conjure/sysconfig/phantom_subnets.toml
 ```
+#### Troubleshooting
+##### Zbalance
+* ERROR: pfring_zc_create_cluster error [Socket operation on non-socket]
+    * Make sure CJ_IFACE is set to the correct interface
+    * Make sure the interface specified by CJ_IFACE has the pfring_zc driver loaded ( cat /proc/net/pf_ring/dev/<IntName>/info | grep ZC )
+    * Make sure that ports aren't already in use (for example, by another conjure instance)
+##### Application
+* Encountered err when creating Reg: Failed to select phantom IP address: generation number not recognized
+    * Make sure conjure/docker/phantom_subnets.toml contains the client's generations
+    * Can be caused by clients using API trying to connect, since API is enabled by default. Can be disabled by removing [[connect_sockets]] table for API from         conjure/application/config.toml
+##### Custom Build
+* COPY failed: file not found in build context or excluded by .dockerignore
+    * If using the docker build command, make sure to call from the conjure directory to provide build context: ```user@host:~/conjure$ docker build . -f docker/Dockerfile```
