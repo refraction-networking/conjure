@@ -11,6 +11,8 @@ services:
                 context: ../
                 dockerfile: ./docker/Dockerfile
                 target: zbalance
+                args:
+                        CUSTOM_BUILD: "1"
         #cap_add: 
         #  - SYS_ADMIN
         privileged: true

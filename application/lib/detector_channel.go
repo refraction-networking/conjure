@@ -1,11 +1,12 @@
 package lib
 
 import (
+	"context"
 	"log"
 	"os"
 	"sync"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 )
 
 var client *redis.Client
@@ -27,8 +28,9 @@ func initRedisClient() {
 		PoolSize: 100,
 	})
 
+	ctx := context.Background()
 	// Ping to test redis connection
-	_, err := client.Ping().Result()
+	_, err := client.Ping(ctx).Result()
 	if err != nil {
 		logger := log.New(os.Stderr, "[REDIS] ", log.Ldate|log.Lmicroseconds)
 		logger.Printf("redis connection ping failed.")
