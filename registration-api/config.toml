@@ -23,5 +23,7 @@ station_pubkeys = [
 	"",
 ]
 
-# new
+
+# This field specifies the generation number that the Bidirectional API 
+# registrar will use when selecting phantoms.
 bidirectional_api_generation = 957
