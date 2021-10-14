@@ -10,26 +10,35 @@ import (
 	"time"
 )
 
+// LivenessTester provides a generic interface for testing hosts in phantom
+// subnets for liveness. This prevents potential interference in connection
+// creation.
 type LivenessTester interface {
 	PhantomIsLive(addr string, port uint16) (bool, error)
 }
 
-type CacheElement struct {
+type cacheElement struct {
 	isLive     bool
 	cachedTime time.Time
 }
 
+// CachedLivenessTester implements LivenessTester interface with caching,
+// PhantomIsLive will check historical results first before using the network to
+// determine phantom liveness.
 type CachedLivenessTester struct {
-	ipCache             map[string]CacheElement
+	ipCache             map[string]cacheElement
 	signal              chan bool
 	cacheExpirationTime time.Duration
 }
 
+// UncachedLivenessTester implements LivenessTester interface without caching,
+// PhantomIsLive will always use the network to determine phantom liveness.
 type UncachedLivenessTester struct {
 }
 
+// Init parses cache expiry duration and initializes the Cache.
 func (blt *CachedLivenessTester) Init(expirationTime string) error {
-	blt.ipCache = make(map[string]CacheElement)
+	blt.ipCache = make(map[string]cacheElement)
 	blt.signal = make(chan bool)
 
 	convertedTime, err := time.ParseDuration(expirationTime)
@@ -41,10 +50,13 @@ func (blt *CachedLivenessTester) Init(expirationTime string) error {
 	return nil
 }
 
+// Stop end periodic scanning using running in separate goroutine. If periodic
+// scanning is not running this will do nothing.
 func (blt *CachedLivenessTester) Stop() {
 	blt.signal <- true
 }
 
+// ClearExpiredCache cleans out stale entries in the cache.
 func (blt *CachedLivenessTester) ClearExpiredCache() {
 	for ipAddr, status := range blt.ipCache {
 		if time.Since(status.cachedTime) > blt.cacheExpirationTime {
@@ -53,6 +65,9 @@ func (blt *CachedLivenessTester) ClearExpiredCache() {
 	}
 }
 
+// PeriodicScan uses zmap to populate the cache of a CachedLivenessTester.
+// Should be run as a goroutine as it may block for long periods of time while
+// scanning.
 func (blt *CachedLivenessTester) PeriodicScan(t string) {
 	os.Create("block_list.txt")
 	allowListAddr := os.Getenv("PHANTOM_SUBNET_LOCATION")
@@ -88,7 +103,7 @@ func (blt *CachedLivenessTester) PeriodicScan(t string) {
 			for _, ip := range records {
 				if ip[0] != "saddr" {
 					if _, ok := blt.ipCache[ip[0]]; !ok {
-						var val CacheElement
+						var val cacheElement
 						val.isLive = true
 						val.cachedTime = time.Now()
 						blt.ipCache[ip[0]] = val
@@ -121,6 +136,11 @@ func (blt *CachedLivenessTester) PeriodicScan(t string) {
 	}
 }
 
+// PhantomIsLive first checks the cached set of addressses for a fresh entry.
+// If one is available and the host was measured to be live this is returned
+// immediately and no network probes are sent. If the host was measured not
+// live, the entry is stale, or there is not entry then network probes are sent
+// and the result is then added to the cache.
 func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, error) {
 	// existing phantomIsLive() implementation
 	if status, ok := blt.ipCache[addr]; ok {
@@ -131,13 +151,17 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 		}
 	}
 	isLive, err := phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
-	var val CacheElement
+	var val cacheElement
 	val.isLive = isLive
 	val.cachedTime = time.Now()
 	blt.ipCache[addr] = val
 	return isLive, err
 }
 
+// PhantomIsLive sends 4 TCP syn packets to determine if the host will respond
+// to traffic and potentially interfere with a connection if used as a phantom
+// address. Measurement results are uncached, meaning endpoints are re-scanned
+// every time.
 func (blt *UncachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, error) {
 	return phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
 }
@@ -168,13 +192,13 @@ func phantomIsLive(address string) (bool, error) {
 	select {
 	case err := <-dialError:
 		if e, ok := err.(net.Error); ok && e.Timeout() {
-			return false, fmt.Errorf("Reached connection timeout")
+			return false, fmt.Errorf("reached connection timeout")
 		}
 		if err != nil {
 			return true, err
 		}
-		return true, fmt.Errorf("Phantom picked up the connection")
+		return true, fmt.Errorf("phantom picked up the connection")
 	default:
-		return false, fmt.Errorf("Reached statistical timeout %v", timeout)
+		return false, fmt.Errorf("reached statistical timeout %v", timeout)
 	}
 }

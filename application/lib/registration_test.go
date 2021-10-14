@@ -98,64 +98,6 @@ func TestRegistrationLookup(t *testing.T) {
 	}
 }
 
-func TestLivenessCheck(t *testing.T) {
-	phantomAddr := net.ParseIP("1.1.1.1")
-	reg := DecoyRegistration{
-		DarkDecoy: phantomAddr,
-	}
-
-	liveness, response := reg.PhantomIsLive()
-	if liveness != true {
-		t.Fatalf("Live host seen as non-responsive: %v\n", response)
-	}
-
-	// Is there any test address we know will never respond?
-	unroutableIP := net.ParseIP("127.0.0.2")
-	reg.DarkDecoy = unroutableIP
-
-	liveness, response = reg.PhantomIsLive()
-	if liveness == false {
-		t.Fatalf("Unroutable host seen as Live: %v\n", response)
-	}
-
-	// Is there any test address we know will never respond?
-	phantomV6 := net.ParseIP("2606:4700:4700::64")
-	reg.DarkDecoy = phantomV6
-
-	liveness, response = reg.PhantomIsLive()
-	if liveness != true {
-		t.Fatalf("Live V6 host seen as non-responsive: %v\n", response)
-	}
-
-	// Is there any test address we know will never respond?
-	unreachableV6 := net.ParseIP("2001:48a8:687f:1:1122::105")
-	reg.DarkDecoy = unreachableV6
-
-	liveness, response = reg.PhantomIsLive()
-	if liveness != false {
-		t.Fatalf("Non responsive V6 host seen as live: %v\n", response)
-	}
-}
-
-func TestLiveness(t *testing.T) {
-
-	liveness, response := phantomIsLive("1.1.1.1.:80")
-
-	if liveness != true {
-		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
-	}
-
-	liveness, response = phantomIsLive("192.0.0.2:443")
-	if liveness != false {
-		t.Fatalf("Host is NOT live, detected as live: %v\n", response)
-	}
-
-	liveness, response = phantomIsLive("[2606:4700:4700::64]:443")
-	if liveness != true {
-		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
-	}
-}
-
 func TestRegisterForDetectorOnce(t *testing.T) {
 	reg := DecoyRegistration{
 		DarkDecoy:        net.ParseIP("1.2.3.4"),
