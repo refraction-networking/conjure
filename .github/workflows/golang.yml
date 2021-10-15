@@ -34,13 +34,24 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Build app
-        run:  go build -a -o application/application ./application
-
-      - name: Build registration-api
-        run: make registration-api
-
       - name: Test
         run: |
+          cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
           export GOPATH="$GITHUB_WORKSPACE/go"
           go test -v ./...
+
+      - name: Build app
+        run: |
+          cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
+          make app
+
+      - name: Build registration-api
+        run: |
+          cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
+          make registration-api
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2.5.2
+        with:
+          version: latest
+          working-directory: $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
