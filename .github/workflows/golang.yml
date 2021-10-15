@@ -18,7 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-        path: go/src/github.com/refraction-networking/conjure
+        with:
+          path: go/src/github.com/refraction-networking/conjure
 
 
       - name: Install deps
@@ -40,5 +41,5 @@ jobs:
 
       - name: Test
         run: |
-          export GOPATH="$GIHUB_WORKSPACE/go"
+          export GOPATH="$GITHUB_WORKSPACE/go"
           go test -v ./...
