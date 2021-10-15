@@ -3,9 +3,9 @@ name: Go
 on:
   push:
     branches: [ master, jmwample/redis-v8 ]
-  # TODO revert ^
-  pull_request:
-    branches: [ master ]
+  # # TODO revert ^
+  # pull_request:
+  #   branches: [ master ]
 
 jobs:
 
@@ -20,7 +20,7 @@ jobs:
         go-version: 1.15.4
 
     - name: Build app
-      run: make app
+      run:  go build -a -o application/application ./application
 
     - name: Build registration-api
       run: make registration-api

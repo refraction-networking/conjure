@@ -1,2 +1,2 @@
 all:
-	/usr/local/go/bin/go build -race -a .
+	go build -race -a .

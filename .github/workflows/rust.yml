@@ -3,9 +3,9 @@ name: rust
 on:
   push:
     branches: [ master, jmwample/redis-v8 ]
-  # TODO revert ^
-  pull_request:
-    branches: [ master ]
+  # # TODO revert ^
+  # pull_request:
+  #   branches: [ master ]
 
 env:
   CARGO_TERM_COLOR: always
