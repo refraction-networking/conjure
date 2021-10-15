@@ -20,6 +20,9 @@ jobs:
       matrix:
         include:
           - { rust: stable,           os: ubuntu-latest }
+          - { rust: stable,           os: ubuntu-16.04 }
+          - { rust: stable,           os: ubuntu-18.04 }
+          - { rust: stable,           os: ubuntu-20.04 }
           - { rust: nightly,          os: ubuntu-latest }
     steps:
       - uses: actions/checkout@v2
@@ -62,11 +65,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: install deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install protobuf-compiler software-properties-common -y -q
-          sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
       - uses: hecrj/setup-rust-action@v1
         with:
           components: rustfmt
