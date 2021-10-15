@@ -124,7 +124,7 @@ impl SessionDetails {
             client_ip: src,
             phantom_ip: phantom,
             phantom_port: DEFAULT_PHANTOM_PORT,
-            timeout: timeout,
+            timeout,
         };
         Ok(s)
     }

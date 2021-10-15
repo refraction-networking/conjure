@@ -4,7 +4,7 @@ use libc::size_t;
 
 //#[cfg(not(test))]
 #[link(name = "tapdance")]
-extern {
+extern "C" {
     // Creates a forge socket with the given TCP parameters,
     // and attaches an SSL object to it with the given TLS params.
     // Returned ptr is the SSL object. The underlying (forged) TCP fd is written
@@ -31,21 +31,32 @@ extern {
     // For the station; given a tag, return the payload.
     // returns the number of bytes written into out.
     // must provide a 32-byte out_aes buffer
-    fn get_payload_from_tag(station_privkey: *const u8,
-						   stego_payload: *mut u8,
-                           stego_len: size_t,
-                           // Outputs
-						   out: *mut u8,
-						   out_len: size_t,
-                           out_aes: *mut u8) -> size_t; // 32 bytes
+    fn get_payload_from_tag(
+        station_privkey: *const u8,
+        stego_payload: *mut u8,
+        stego_len: size_t,
+        // Outputs
+        out: *mut u8,
+        out_len: size_t,
+        out_aes: *mut u8,
+    ) -> size_t; // 32 bytes
 
     // AES 128 GCM: 16-byte key, 12-byte IV
-    fn decrypt_aes_gcm(key: *const u8, iv: *const u8,
-                       ciphertext: *const u8, ciphertext_len: size_t,
-                       pt_out: *mut u8, pt_len: size_t) -> size_t;
+    fn decrypt_aes_gcm(
+        key: *const u8,
+        iv: *const u8,
+        ciphertext: *const u8,
+        ciphertext_len: size_t,
+        pt_out: *mut u8,
+        pt_len: size_t,
+    ) -> size_t;
 
-    fn get_cpu_time(usr_secs: *mut i64, usr_micros: *mut i64,
-                    sys_secs: *mut i64, sys_micros: *mut i64);
+    fn get_cpu_time(
+        usr_secs: *mut i64,
+        usr_micros: *mut i64,
+        sys_secs: *mut i64,
+        sys_micros: *mut i64,
+    );
 
     fn open_reporter(fname: *const u8); // const char *
     fn write_reporter(msg: *const u8, len: size_t);
@@ -63,96 +74,107 @@ extern {
     //fn get_global_cli_download_count() -> u64;
     //fn get_mut_global_failure_map() -> *mut c_void;
 
-    fn get_shared_secret_from_tag(station_privkey: *const u8,
-                                  stego_payload: *mut u8, stego_payload_len: size_t,
-                                  shared_secret_out: *mut u8) -> size_t;
+    fn get_shared_secret_from_tag(
+        station_privkey: *const u8,
+        stego_payload: *mut u8,
+        stego_payload_len: size_t,
+        shared_secret_out: *mut u8,
+    ) -> size_t;
 }
 
-pub fn c_get_payload_from_tag(station_privkey: &[u8],
-                              stego_payload: &mut [u8],
-                              out: &mut [u8], out_len: size_t,
-                              aes_out: &mut [u8]) -> size_t
-{
+pub fn c_get_payload_from_tag(
+    station_privkey: &[u8],
+    stego_payload: &mut [u8],
+    out: &mut [u8],
+    out_len: size_t,
+    aes_out: &mut [u8],
+) -> size_t {
     if aes_out.len() != 32 {
         panic!("Need to provide a 32-byte buffer space for AES key/IV to get_payload_from_tag");
     }
 
     unsafe {
-        get_payload_from_tag(station_privkey.as_ptr(),
-                             stego_payload.as_mut_ptr(), stego_payload.len(),
-                             out.as_mut_ptr(), out_len,
-                             aes_out.as_mut_ptr()) }
+        get_payload_from_tag(
+            station_privkey.as_ptr(),
+            stego_payload.as_mut_ptr(),
+            stego_payload.len(),
+            out.as_mut_ptr(),
+            out_len,
+            aes_out.as_mut_ptr(),
+        )
+    }
 }
 
-
-pub fn c_get_shared_secret_from_tag(station_privkey: &[u8],
-                              stego_payload: &mut [u8],
-                              shared_secret_out: &mut [u8]) -> size_t
-{
+pub fn c_get_shared_secret_from_tag(
+    station_privkey: &[u8],
+    stego_payload: &mut [u8],
+    shared_secret_out: &mut [u8],
+) -> size_t {
     if shared_secret_out.len() != 32 {
         panic!("Need to provide a 32-byte buffer space for shared_secret_out");
     }
 
     unsafe {
-        get_shared_secret_from_tag(station_privkey.as_ptr(),
-                             stego_payload.as_mut_ptr(),
-                                   stego_payload.len(),
-                             shared_secret_out.as_mut_ptr()) }
+        get_shared_secret_from_tag(
+            station_privkey.as_ptr(),
+            stego_payload.as_mut_ptr(),
+            stego_payload.len(),
+            shared_secret_out.as_mut_ptr(),
+        )
+    }
 }
 
-pub fn c_decrypt_aes_gcm(key: &[u8], iv: &[u8],
-                         ciphertext: &[u8]) -> Vec<u8>
-{
-    let mut pt_out : Vec<u8> = Vec::with_capacity(ciphertext.len());
+pub fn c_decrypt_aes_gcm(key: &[u8], iv: &[u8], ciphertext: &[u8]) -> Vec<u8> {
+    let mut pt_out: Vec<u8> = Vec::with_capacity(ciphertext.len());
     let pt_len = unsafe {
-        decrypt_aes_gcm(key.as_ptr(), iv.as_ptr(),
-                        ciphertext.as_ptr(), ciphertext.len(),
-                        pt_out.as_mut_ptr(), ciphertext.len())
+        decrypt_aes_gcm(
+            key.as_ptr(),
+            iv.as_ptr(),
+            ciphertext.as_ptr(),
+            ciphertext.len(),
+            pt_out.as_mut_ptr(),
+            ciphertext.len(),
+        )
     };
 
-    unsafe { pt_out.set_len(pt_len as usize); }
+    unsafe {
+        pt_out.set_len(pt_len as usize);
+    }
 
     return pt_out;
 }
 
-
-pub fn c_get_cpu_time() -> (i64, i64, i64, i64)
-{
+pub fn c_get_cpu_time() -> (i64, i64, i64, i64) {
     let mut usr_secs: i64 = 0;
     let mut usr_us: i64 = 0;
     let mut sys_secs: i64 = 0;
     let mut sys_us: i64 = 0;
-    unsafe { get_cpu_time(&mut usr_secs as *mut i64, &mut usr_us as *mut i64,
-                          &mut sys_secs as *mut i64, &mut sys_us as *mut i64); }
+    unsafe {
+        get_cpu_time(
+            &mut usr_secs as *mut i64,
+            &mut usr_us as *mut i64,
+            &mut sys_secs as *mut i64,
+            &mut sys_us as *mut i64,
+        );
+    }
     (usr_secs, usr_us, sys_secs, sys_us)
 }
 
-pub fn c_open_reporter(fname: String)
-{
+pub fn c_open_reporter(fname: String) {
     unsafe {
-        open_reporter(fname.as_ptr()); }
+        open_reporter(fname.as_ptr());
+    }
 }
 
 #[cfg(not(test))]
-pub fn c_write_reporter(msg: String)
-{
+pub fn c_write_reporter(msg: String) {
     //let n =
-    unsafe { write_reporter(msg.as_ptr(), msg.len()); }
+    unsafe {
+        write_reporter(msg.as_ptr(), msg.len());
+    }
 }
 
 //HACKY_CFG_NO_TEST_END*/
-
-
-
-
-
-
-
-
-
-
-
-
 
 //HACKY_CFG_YES_TEST_BEGIN
 /*
@@ -214,12 +236,13 @@ pub fn c_open_reporter(fname: String)
 */
 
 #[cfg(test)]
-pub fn c_write_reporter(_msg: String)
-{panic!("YOU ARE TESTING AND THIS FUNCTION IS NOT MOCKED YET!");}
+pub fn c_write_reporter(_msg: String) {
+    panic!("YOU ARE TESTING AND THIS FUNCTION IS NOT MOCKED YET!");
+}
 #[cfg(test)]
-pub fn c_tcp_send_rst_pkt(_saddr: u32, _daddr: u32,
-                          _sport: u16, _dport: u16, seq: u32)
-{panic!("c_tcp_send_rst_pkt({}) called", seq);}
+pub fn c_tcp_send_rst_pkt(_saddr: u32, _daddr: u32, _sport: u16, _dport: u16, seq: u32) {
+    panic!("c_tcp_send_rst_pkt({}) called", seq);
+}
 /*
 pub fn c_get_global_cli_conf() -> *const ClientConf
 {panic!("YOU ARE TESTING AND THIS FUNCTION IS NOT MOCKED YET!");}
