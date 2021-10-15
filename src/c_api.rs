@@ -175,7 +175,6 @@ pub fn c_write_reporter(msg: String) {
 }
 
 //HACKY_CFG_NO_TEST_END*/
-
 //HACKY_CFG_YES_TEST_BEGIN
 /*
 fn SSL_read(ssl: *mut c_void, output: *mut u8, out_len: i32) -> i32
