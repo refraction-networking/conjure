@@ -401,8 +401,8 @@ mod tests {
     use signalling::StationToDetector;
     use std::{thread, time};
 
-    // #[test]
-    // Disabled - requires redis for test.
+    #[test]
+    #[ignore] // Requires redis to run properly.
     fn test_session_tracker_pubsub() {
         // // Publish to redis
         // let octs = match flow.dst_ip {

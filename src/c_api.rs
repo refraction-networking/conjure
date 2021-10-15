@@ -59,6 +59,8 @@ extern "C" {
     );
 
     fn open_reporter(fname: *const u8); // const char *
+
+    #[allow(dead_code)]
     fn write_reporter(msg: *const u8, len: size_t);
 
     // Send a TCP RST to daddr:dport, spoofed from saddr:sport. seq must be the
