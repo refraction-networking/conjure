@@ -6,17 +6,43 @@ name: CI-build
 # events but only for the master branch
 on:
   push:
-    branches: [ master, staging ]
+    branches: [ master, jmwample/redis-v8 ] 
+  # TODO revert ^
   pull_request:
-    branches: [ master, staging ]
+    branches: [ master ]
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
 jobs:
+
+  rustlib:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --verbose --release
+
+  app:
+      runs-on: ubuntu-latest
+      steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.15.4
+
+      - name: Build app
+        run: make app
+
   # This workflow contains a single job called "build"
   build:
     # The type of runner that the job will run on
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
 
+    needs: [rustlib]
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -24,10 +50,10 @@ jobs:
         with:
           path: go/src/github.com/refraction-networking/conjure
           submodules: recursive
-        
+
       # Build the conjure station
       - name: Install Conjure build dependencies and Build Station Elements
-        env: 
+        env:
           GO_VERSION: 1.15.4
           # RUSTVERSION: 1.47.0
         run: |
@@ -35,57 +61,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install protobuf-compiler gcc curl git wget software-properties-common -y -q
           sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
-          sudo add-apt-repository universe 
-          wget https://packages.ntop.org/apt-stable/18.04/all/apt-ntop-stable.deb 
-          sudo apt-get install ./apt-ntop-stable.deb 
+          sudo add-apt-repository universe
+          wget https://packages.ntop.org/apt-stable/18.04/all/apt-ntop-stable.deb
+          sudo apt-get install ./apt-ntop-stable.deb
           sudo apt-get update
           sudo apt-get install pfring
           echo "Apt dependencies installed"
           echo "--------------------------------------"
-          
-          echo "HOME=$HOME"
-          export GOPATH=`pwd`/go
-          echo "GOPATH=$GOPATH"
-          cd go/src/github.com/refraction-networking/conjure
-
-          # Install rust
-          curl https://sh.rustup.rs -sSf -o install_rust.sh; sh install_rust.sh -y;          
-          cargo install protobuf-codegen
-          export PATH=$PATH:$HOME/.cargo/bin
-          source $HOME/.cargo/env
-          echo "Rust successfully installed"
-          echo "--------------------------------------"
-
-          # Install Golang
-          sudo rm -rf /usr/local/go /usr/bin/go
-          wget -q https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz
-          sudo tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
-          export PATH=$PATH:/usr/local/go/bin
-          export GOROOT="/usr/local/go"
-          go version
-          # temp fix before transition to redis v8
-          go get -u github.com/go-redis/redis || true && cd $GOPATH/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master && cd -
-          go get -u github.com/BurntSushi/toml || true
-          go get -u github.com/gorilla/mux || true
-          go get -d -u -t github.com/refraction-networking/gotapdance/... || true
-          go get -u github.com/refraction-networking/conjure/application/... || true 
-          go get -u github.com/refraction-networking/conjure/registration-api/... || true 
-          echo "Golang and go dependencies successfully installed"
-          echo "--------------------------------------"
 
           # Build it
           cd $GOPATH/src/github.com/refraction-networking/conjure
-          make
+          make conjure
           echo "Station successfully built"
           mkdir -p  $GITHUB_WORKSPACE/bin
           cp conjure application/application registration-api/registration-api $GITHUB_WORKSPACE/bin
           cd $GITHUB_WORKSPACE && tar -czf conjure-station.tar.gz bin
-          
-      
+
+
       - name: Save Build artifacts
         uses: actions/upload-artifact@v2
         with:
           name: conjure-station.tar.gz
           path: |
             conjure-station.tar.gz
-            
+

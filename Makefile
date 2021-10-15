@@ -16,7 +16,7 @@ rust: ./src/*.rs
 	cargo build --${DEBUG_OR_RELEASE}
 
 test:
-	cargo test --${DEBUG_OR_RELEASE} 
+	cargo test --${DEBUG_OR_RELEASE}
 
 app:
 	cd ./application/ && make

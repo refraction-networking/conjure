@@ -4,17 +4,13 @@ services:
     # hugepages are shared between containers
     # `network_mode: host` and `privileged: true` make it possible
     # but it might be possible to achieve with 'docker capabilities'
-  
+
     zbalance:
         image: zbalance:latest
         build:
                 context: ../
                 dockerfile: ./docker/Dockerfile
                 target: zbalance
-                args:
-                        CUSTOM_BUILD: "1"
-        #cap_add: 
-        #  - SYS_ADMIN
         privileged: true
         environment:
                 - CJ_IFACE=eno3
