@@ -6,7 +6,7 @@ name: CI-build
 # events but only for the master branch
 on:
   push:
-    branches: [ master, jmwample/redis-v8 ] 
+    branches: [ master, jmwample/redis-v8 ]
   # TODO revert ^
   pull_request:
     branches: [ master ]
@@ -16,30 +16,6 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-
-  rustlib:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: install deps
-      run: |
-        sudo apt install update
-        sudo apt-get install protobuf-compiler gcc curl git wget software-properties-common -y -q
-        sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
-    - name: Build
-      run: cargo build --verbose --release
-
-  app:
-      runs-on: ubuntu-latest
-      steps:
-      - uses: actions/checkout@v2
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.15.4
-
-      - name: Build app
-        run: make app
 
   # This workflow contains a single job called "build"
   build:
@@ -58,7 +34,6 @@ jobs:
       # Build the conjure station
       - name: Install Conjure build dependencies and Build Station Elements
         run: |
-          # Apt deps
           sudo apt-get update
           sudo apt-get install protobuf-compiler gcc curl git wget software-properties-common -y -q
           sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
@@ -68,18 +43,34 @@ jobs:
           sudo apt-get update
           sudo apt-get install pfring
           echo "Apt dependencies installed"
-          echo "--------------------------------------"
 
-          # Build it
+      - name: Build Rust Library
+        run: make rust
+
+      - name: Build Conjure Detector
+        run: |
           cd $GOPATH/src/github.com/refraction-networking/conjure
           make conjure
           echo "Station successfully built"
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.15.4
+
+      - name: Build app
+        run: make app
+
+      - name: Build registration-api
+        run: make registration-api
+
+      - name: Store build artifacts
+        run: |
           mkdir -p  $GITHUB_WORKSPACE/bin
           cp conjure application/application registration-api/registration-api $GITHUB_WORKSPACE/bin
           cd $GITHUB_WORKSPACE && tar -czf conjure-station.tar.gz bin
 
-
-      - name: Save Build artifacts
+      - name: Save build artifacts
         uses: actions/upload-artifact@v2
         with:
           name: conjure-station.tar.gz

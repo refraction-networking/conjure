@@ -20,14 +20,20 @@ jobs:
       matrix:
         include:
           - { rust: stable,           os: ubuntu-latest }
-          - { rust: stable,           os: macos-latest }
-          - { rust: stable,           os: windows-latest }
           - { rust: nightly,          os: ubuntu-latest }
     steps:
       - uses: actions/checkout@v2
+
+      - name: install deps
+        run: |
+          sudo apt-get install update
+          sudo apt-get install protobuf-compiler software-properties-common -y -q
+          sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
+
       - uses: hecrj/setup-rust-action@v1
         with:
           rust-version: ${{ matrix.rust }}
+
       - run: cargo test --verbose --workspace
       - run: cargo test --verbose --workspace --all-features
       - run: cargo test --verbose --workspace --no-default-features
@@ -39,6 +45,11 @@ jobs:
       RUSTFLAGS: -Dwarnings
     steps:
       - uses: actions/checkout@v2
+      - name: install deps
+        run: |
+          sudo apt-get install update
+          sudo apt-get install protobuf-compiler software-properties-common -y -q
+          sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
       - uses: hecrj/setup-rust-action@v1
         with:
           components: clippy
@@ -51,6 +62,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - name: install deps
+        run: |
+          sudo apt-get install update
+          sudo apt-get install protobuf-compiler software-properties-common -y -q
+          sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
       - uses: hecrj/setup-rust-action@v1
         with:
           components: rustfmt

@@ -10,20 +10,30 @@ on:
 jobs:
 
   build:
+    strategy:
+      matrix:
+        go-version: [1.15.x, 1.16.x, 1.17.x]
+
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.15.4
+      - name: Install deps
+        run: |
+          sudo apt-get install update
+          sudo apt-get install protobuf-compiler software-properties-common -y -q
+          sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
 
-    - name: Build app
-      run:  go build -a -o application/application ./application
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
 
-    - name: Build registration-api
-      run: make registration-api
+      - name: Build app
+        run:  go build -a -o application/application ./application
 
-    - name: Test
-      run: go test -v ./...
+      - name: Build registration-api
+        run: make registration-api
+
+      - name: Test
+        run: go test -v ./...
