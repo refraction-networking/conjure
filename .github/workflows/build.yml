@@ -19,6 +19,7 @@ jobs:
 
   # This workflow contains a single job called "build"
   build:
+    name: Build Station pieces
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
     # Steps represent a sequence of tasks that will be executed as part of the job
@@ -50,6 +51,7 @@ jobs:
       - name: Build Conjure Detector
         run: |
           cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
+          make libtd
           make conjure
           echo "Station successfully built"
 
