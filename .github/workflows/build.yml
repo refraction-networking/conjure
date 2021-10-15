@@ -73,6 +73,7 @@ jobs:
       - name: Store build artifacts
         run: |
           mkdir -p  $GITHUB_WORKSPACE/bin
+          cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
           cp conjure application/application registration-api/registration-api $GITHUB_WORKSPACE/bin
           cd $GITHUB_WORKSPACE && tar -czf conjure-station.tar.gz bin
 
