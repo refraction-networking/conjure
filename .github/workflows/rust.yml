@@ -19,8 +19,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { rust: stable,           os: ubuntu-latest }
-          - { rust: stable,           os: ubuntu-16.04 }
+          # ubuntu-latest is another name for ubuntu-20.04
+          # - { rust: stable,           os: ubuntu-latest }
           - { rust: stable,           os: ubuntu-18.04 }
           - { rust: stable,           os: ubuntu-20.04 }
           - { rust: nightly,          os: ubuntu-latest }

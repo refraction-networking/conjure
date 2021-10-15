@@ -43,11 +43,13 @@ jobs:
           echo "Apt dependencies installed"
 
       - name: Build Rust Library
-        run: make rust
+        run: |
+          cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
+          make rust
 
       - name: Build Conjure Detector
         run: |
-          cd $GOPATH/src/github.com/refraction-networking/conjure
+          cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
           make conjure
           echo "Station successfully built"
 

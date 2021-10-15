@@ -23,6 +23,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install protobuf-compiler software-properties-common -y -q
           sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
+          export GOPATH="$HOME/go"
 
       - name: Set up Go
         uses: actions/setup-go@v2
