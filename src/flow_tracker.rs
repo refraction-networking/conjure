@@ -92,7 +92,7 @@ impl Flow {
             IpAddr::V6(ip) => ip.octets().to_vec(),
         };
 
-        return (src_bytes, dst_bytes);
+        (src_bytes, dst_bytes)
     }
 
     pub fn set_log_client(log: bool) {
@@ -165,7 +165,7 @@ impl FlowNoSrcPort {
             IpAddr::V6(ip) => ip.octets().to_vec(),
         };
 
-        return (src_bytes, dst_bytes);
+        (src_bytes, dst_bytes)
     }
 }
 
@@ -193,6 +193,12 @@ pub struct FlowTracker {
 // Amount of time that we timeout all flows
 const TIMEOUT_TRACKED_NS: u64 = 30 * 1000 * 1000 * 1000;
 //const FIN_TIMEOUT_NS: u64 = 2*1000*1000*1000;
+
+impl Default for FlowTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl FlowTracker {
     pub fn new() -> FlowTracker {
@@ -222,7 +228,7 @@ impl FlowTracker {
     }
 
     pub fn is_tracked_flow(&self, flow: &Flow) -> bool {
-        self.tracked_flows.contains(&flow)
+        self.tracked_flows.contains(flow)
     }
 
     /// used to update (increase) the time that we  consider a session

@@ -108,7 +108,7 @@ impl SessionDetails {
         let src: IpAddr = match client_ip.parse() {
             Ok(ip) => ip,
             Err(_) => {
-                if client_ip == "" && phantom.is_ipv6() {
+                if client_ip.is_empty() && phantom.is_ipv6() {
                     "::1".parse().unwrap()
                 } else {
                     return Err(SessionError::InvalidClient);
@@ -141,7 +141,7 @@ impl From<&StationToDetector> for SessionResult {
     fn from(s2d: &StationToDetector) -> Self {
         let source = s2d.get_client_ip();
         let phantom = s2d.get_phantom_ip();
-        return SessionDetails::new(source, phantom, s2d.get_timeout_ns());
+        SessionDetails::new(source, phantom, s2d.get_timeout_ns())
     }
 }
 
@@ -183,6 +183,12 @@ pub struct SessionTracker {
     pub tracked_sessions: Arc<RwLock<HashMap<String, u64>>>,
 }
 
+impl<'a> Default for SessionTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> SessionTracker {
     pub fn new() -> SessionTracker {
         SessionTracker {
@@ -211,7 +217,14 @@ impl<'a> SessionTracker {
         let map = self.tracked_sessions.read().expect("RwLock Broken");
         let res = map.len();
         drop(map);
-        return res;
+        res
+    }
+
+    pub fn is_empty(&self) -> bool {
+        let map = self.tracked_sessions.read().expect("RwLock Broken");
+        let res = map.is_empty();
+        drop(map);
+        res
     }
 
     pub fn drop_stale_sessions(&mut self) -> usize {
@@ -255,14 +268,11 @@ impl<'a> SessionTracker {
         let expire_time = precise_time_ns() + extra_time;
 
         // compare and keep the longer
-        match mmap.get_mut(&key) {
-            Some(v) => {
-                // compare and keep the longer
-                if *v < expire_time {
-                    *v = expire_time;
-                }
+        if let Some(v) = mmap.get_mut(&key) {
+            // compare and keep the longer
+            if *v < expire_time {
+                *v = expire_time;
             }
-            None => {}
         };
     }
 
@@ -301,11 +311,11 @@ impl<'a> SessionTracker {
     }
 
     // lookup session by identifier
-    fn session_exists(&self, id: &String) -> bool {
+    fn session_exists(&self, id: &str) -> bool {
         let rmap = self.tracked_sessions.read().expect("RwLock broken");
         let res = rmap.contains_key(id);
         drop(rmap);
-        return res;
+        res
     }
 }
 
@@ -357,14 +367,11 @@ fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u64>>>) {
             // Set timeout
             let expire_time = precise_time_ns() + sd.timeout;
 
-            match mmap.get_mut(&key) {
-                Some(v) => {
-                    // compare and keep the longer
-                    if *v < expire_time {
-                        *v = expire_time;
-                    }
+            if let Some(v) = mmap.get_mut(&key) {
+                // compare and keep the longer
+                if *v < expire_time {
+                    *v = expire_time;
                 }
-                None => {}
             };
 
             // Explicitly drop map write lock here (locks are automatically dropped
@@ -389,8 +396,7 @@ fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u64>>>) {
 
 fn get_redis_conn() -> redis::Connection {
     let client = redis::Client::open("redis://127.0.0.1/").expect("Can't open Redis");
-    let con = client.get_connection().expect("Can't get Redis connection");
-    con
+    client.get_connection().expect("Can't get Redis connection")
 }
 
 #[cfg(test)]
@@ -420,7 +426,7 @@ mod tests {
             ("", "2345::6789", 5 * S2NS),
             // duplicate with shorter timeout should not drop
             ("2601::123:abcd", "2001::1234", 5 * S2NS),
-            ("::1", "2001::1234", 1 * S2NS),
+            ("::1", "2001::1234", S2NS),
             // duplicate with long timeout should prevent drop
             ("7.0.0.2", "8.8.8.8", 1),
             ("7.0.0.2", "8.8.8.8", 5 * S2NS),
@@ -448,9 +454,7 @@ mod tests {
 
         thread::sleep(dur);
 
-        if st.len() != 6 {
-            panic!("Failed to ingest from pubsub: {}", st.len());
-        }
+        assert_eq!(st.len(), 6, "Failed to ingest from pubsub: {}", st.len());
     }
 
     #[test]
@@ -583,7 +587,7 @@ mod tests {
             ("192.168.0.1", "2801::1234", 5 * S2NS, true),
             // duplicate with shorter timeout should not drop
             ("2601::123:abcd", "2001::1234", 5 * S2NS, true),
-            ("::1", "2001::1234", 1 * S2NS, true),
+            ("::1", "2001::1234", S2NS, true),
             // duplicate with long timeout should prevent drop
             ("7.0.0.2", "8.8.8.8", 1, true),
             ("7.0.0.2", "8.8.8.8", 5 * S2NS, true),

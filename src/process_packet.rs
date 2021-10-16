@@ -35,18 +35,12 @@ const SPECIAL_UDP_PAYLOAD: &[u8] = b"\x38xCKe9ECO5lNwXgd5Q25w0C2qUR7whltkA8BbyNo
 fn get_ip_packet<'p>(eth_pkt: &'p EthernetPacket) -> Option<IpPacket<'p>> {
     let payload = eth_pkt.payload();
 
-    fn parse_v4<'a>(p: &[u8]) -> Option<IpPacket> {
-        match Ipv4Packet::new(p) {
-            Some(pkt) => Some(IpPacket::V4(pkt)),
-            None => None,
-        }
+    fn parse_v4(p: &[u8]) -> Option<IpPacket> {
+        Ipv4Packet::new(p).map(IpPacket::V4)
     }
 
     fn parse_v6(p: &[u8]) -> Option<IpPacket> {
-        match Ipv6Packet::new(p) {
-            Some(pkt) => Some(IpPacket::V6(pkt)),
-            None => None,
-        }
+        Ipv6Packet::new(p).map(IpPacket::V6)
     }
 
     match eth_pkt.get_ethertype() {
@@ -67,21 +61,23 @@ fn get_ip_packet<'p>(eth_pkt: &'p EthernetPacket) -> Option<IpPacket<'p>> {
     }
 }
 
-// The jumping off point for all of our logic. This function inspects a packet
-// that has come in the tap interface. We do not yet have any idea if we care
-// about it; it might not even be TLS. It might not even be TCP!
+/// The jumping off point for all of our logic. This function inspects a packet
+/// that has come in the tap interface. We do not yet have any idea if we care
+/// about it; it might not even be TLS. It might not even be TCP!
+///
+/// # Safety
+/// this function is sae to use when: todo!()
 #[no_mangle]
-pub extern "C" fn rust_process_packet(
+pub unsafe extern "C" fn rust_process_packet(
     ptr: *mut PerCoreGlobal,
     raw_ethframe: *mut c_void,
     frame_len: size_t,
 ) {
     #[allow(unused_mut)]
-    let mut global = unsafe { &mut *ptr };
+    let mut global = &mut *ptr;
 
     let mut rust_view_len = frame_len as usize;
-    let rust_view =
-        unsafe { slice::from_raw_parts_mut(raw_ethframe as *mut u8, frame_len as usize) };
+    let rust_view = slice::from_raw_parts_mut(raw_ethframe as *mut u8, frame_len as usize);
 
     // If this is a GRE, we want to ignore the GRE overhead in our packets
     rust_view_len -= global.gre_offset;
@@ -97,7 +93,7 @@ pub extern "C" fn rust_process_packet(
     match get_ip_packet(&eth_pkt) {
         Some(IpPacket::V4(pkt)) => global.process_ipv4_packet(pkt, rust_view_len),
         Some(IpPacket::V6(pkt)) => global.process_ipv6_packet(pkt, rust_view_len),
-        None => return,
+        None => {}
     }
 }
 
@@ -204,11 +200,7 @@ impl PerCoreGlobal {
         let flow = Flow::new(&ip_pkt, &tcp_pkt);
         let tcp_flags = tcp_pkt.get_flags();
 
-        if panic::catch_unwind(|| {
-            tcp_pkt.payload();
-        })
-        .is_err()
-        {
+        if panic::catch_unwind(|| tcp_pkt.payload()).is_err() {
             return;
         }
 
@@ -291,7 +283,7 @@ impl PerCoreGlobal {
 
     fn check_dark_decoy_tag(&mut self, flow: &Flow, tcp_pkt: &TcpPacket) -> bool {
         self.stats.elligator_this_period += 1;
-        match elligator::extract_payloads(&self.priv_key, &tcp_pkt.payload()) {
+        match elligator::extract_payloads(&self.priv_key, tcp_pkt.payload()) {
             Ok(res) => {
                 // res.0 => shared secret
                 // res.1 => Fixed size payload
@@ -322,27 +314,22 @@ impl PerCoreGlobal {
                 };
 
                 match self.zmq_sock.send(&zmq_payload, 0) {
-                    Ok(_) => return true,
+                    Ok(_) => true,
                     Err(e) => {
                         warn!("Failed to send registration information over ZMQ: {}", e);
-                        return false;
+                        false
                     }
                 }
             }
-            Err(_e) => {
-                return false;
-            }
+            Err(_e) => false,
         }
     }
 
     fn check_connect_test_str(&mut self, flow: &Flow, tcp_pkt: &TcpPacket) {
-        match str::from_utf8(tcp_pkt.payload()) {
-            Ok(payload) => {
-                if payload == SPECIAL_PACKET_PAYLOAD {
-                    debug!("Validated traffic from {}", flow)
-                }
+        if let Ok(payload) = str::from_utf8(tcp_pkt.payload()) {
+            if payload == SPECIAL_PACKET_PAYLOAD {
+                debug!("Validated traffic from {}", flow)
             }
-            Err(_) => {}
         }
     }
 

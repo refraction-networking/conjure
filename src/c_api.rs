@@ -91,9 +91,11 @@ pub fn c_get_payload_from_tag(
     out_len: size_t,
     aes_out: &mut [u8],
 ) -> size_t {
-    if aes_out.len() != 32 {
-        panic!("Need to provide a 32-byte buffer space for AES key/IV to get_payload_from_tag");
-    }
+    assert_eq!(
+        aes_out.len(),
+        32,
+        "Need to provide a 32-byte buffer space for AES key/IV to get_payload_from_tag"
+    );
 
     unsafe {
         get_payload_from_tag(
@@ -112,9 +114,11 @@ pub fn c_get_shared_secret_from_tag(
     stego_payload: &mut [u8],
     shared_secret_out: &mut [u8],
 ) -> size_t {
-    if shared_secret_out.len() != 32 {
-        panic!("Need to provide a 32-byte buffer space for shared_secret_out");
-    }
+    assert_eq!(
+        shared_secret_out.len(),
+        32,
+        "Need to provide a 32-byte buffer space for shared_secret_out"
+    );
 
     unsafe {
         get_shared_secret_from_tag(
@@ -143,7 +147,7 @@ pub fn c_decrypt_aes_gcm(key: &[u8], iv: &[u8], ciphertext: &[u8]) -> Vec<u8> {
         pt_out.set_len(pt_len as usize);
     }
 
-    return pt_out;
+    pt_out
 }
 
 pub fn c_get_cpu_time() -> (i64, i64, i64, i64) {

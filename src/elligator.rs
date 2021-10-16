@@ -33,12 +33,14 @@ fn extract_stego_bytes(in_buf: &[u8], out_buf: &mut [u8]) {
     out_buf[2] = ((x) & 0xff) as u8;
 }
 
+type PayloadElements = ([u8; 32], [u8; FSP::LENGTH], ClientToStation);
+
 // Returns either (Shared Secret, Fixed Size Payload, Variable Size Payload) or Box<Error>
 //      Boxed error becuase size of return isn't known at compile time
 pub fn extract_payloads(
     secret_key: &[u8],
     tls_record: &[u8],
-) -> Result<([u8; 32], [u8; FSP::LENGTH], ClientToStation), Box<dyn Error>> {
+) -> Result<PayloadElements, Box<dyn Error>> {
     if tls_record.len() < 112
     // (conservatively) smaller than minimum request
     {
@@ -133,7 +135,7 @@ pub fn extract_payloads(
         }
         let vsp_stego_size = vsp_size / 3 * 4;
         let mut encrypted_variable_size_payload = vec![0; vsp_size as usize];
-        if (tls_payload.len() as i64) - (92 as i64) - (vsp_stego_size as i64) < 0 {
+        if (tls_payload.len() as i64) - (92_i64) - (vsp_stego_size as i64) < 0 {
             let err: Box<dyn Error> = From::from(format!(
                 "Stego Payload Size {} does not fit into TLS record of size {}",
                 vsp_size,
@@ -176,10 +178,10 @@ pub fn extract_payloads(
         Ok((shared_secret, fixed_size_payload.to_bytes(), c2s))
     });
     match result {
-        Ok(res) => return res,
+        Ok(res) => res,
         Err(e) => {
             let err: Box<dyn Error> = From::from(format!("{:?}", e));
-            return Err(err);
+            Err(err)
         }
     }
 } // end extract_payloads_new

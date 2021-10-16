@@ -271,10 +271,13 @@ impl PerCoreStats {
     }
 }
 
+///
+/// # Safety
+///
 #[no_mangle]
-pub extern "C" fn rust_periodic_report(ptr: *mut PerCoreGlobal) {
+pub unsafe extern "C" fn rust_periodic_report(ptr: *mut PerCoreGlobal) {
     #[allow(unused_mut)]
-    let mut global = unsafe { &mut *ptr };
+    let mut global = &mut *ptr;
     global.stats.periodic_status_report(
         global.flow_tracker.count_tracked_flows(),
         global.flow_tracker.count_phantom_flows(),
@@ -286,25 +289,24 @@ pub struct RustGlobalsStruct {
     global: *mut PerCoreGlobal,
 }
 
+///
+/// # Safety
+///
 #[no_mangle]
-pub extern "C" fn rust_detect_init(
+pub unsafe extern "C" fn rust_detect_init(
     lcore_id: i32,
     ckey: *const u8,
     workers_socket_addr: *const c_char,
 ) -> RustGlobalsStruct {
     logging::init(log::LogLevel::Debug, lcore_id);
 
-    let key = *array_ref![
-        unsafe { std::slice::from_raw_parts(ckey, 32 as usize) },
-        0,
-        32
-    ];
+    let key = *array_ref![std::slice::from_raw_parts(ckey, 32_usize), 0, 32];
 
     let s = format!("/tmp/dark-decoy-reporter-{}.fifo", lcore_id);
     c_api::c_open_reporter(s);
     report!("reset");
 
-    let addr: &CStr = unsafe { CStr::from_ptr(workers_socket_addr) };
+    let addr: &CStr = CStr::from_ptr(workers_socket_addr);
 
     let mut global = PerCoreGlobal::new(key, lcore_id, addr.to_str().unwrap());
     global.read_ip_list();
@@ -312,7 +314,7 @@ pub extern "C" fn rust_detect_init(
     debug!("Initialized rust core {}", global.lcore);
 
     RustGlobalsStruct {
-        global: unsafe { transmute(Box::new(global)) },
+        global: transmute(Box::new(global)),
     }
     //fail_map: unsafe { transmute(Box::new(fail_map)) },
     //cli_conf: unsafe { transmute(Box::new(cli_conf)) } }
@@ -322,13 +324,16 @@ pub extern "C" fn rust_detect_init(
 #[no_mangle]
 pub extern "C" fn rust_event_loop_tick(_ptr: *mut PerCoreGlobal) {}
 
-// Drops TLS flows that took too long to send their first app data packet,
-// RSTs decoy flows a couple of seconds after the client's FIN, and
-// errors-out cli-stream-less sessions that took too long to get a new stream.
+/// Drops TLS flows that took too long to send their first app data packet,
+/// RSTs decoy flows a couple of seconds after the client's FIN, and
+/// errors-out cli-stream-less sessions that took too long to get a new stream.
+///
+/// # Safety
+///
 #[no_mangle]
-pub extern "C" fn rust_periodic_cleanup(ptr: *mut PerCoreGlobal) {
+pub unsafe extern "C" fn rust_periodic_cleanup(ptr: *mut PerCoreGlobal) {
     #[allow(unused_mut)]
-    let mut global = unsafe { &mut *ptr };
+    let mut global = &mut *ptr;
     global.flow_tracker.drop_all_stale_flows();
 
     /*

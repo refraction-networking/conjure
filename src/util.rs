@@ -149,7 +149,7 @@ pub fn mem_used_kb() -> u64 {
         "Failed to parse a VmRSS value out of /proc/{}/status!",
         my_pid
     );
-    return 0;
+    0
 }
 
 pub struct HKDFKeys {
@@ -212,46 +212,41 @@ impl FSP {
     pub fn from_vec(fixed_size_payload: Vec<u8>) -> Result<FSP, Box<dyn Error>> {
         if fixed_size_payload.len() < FSP::USED_BYTES {
             let err: Box<dyn Error> = From::from("Not Enough bytes to parse FSP".to_string());
-            return Err(err);
+            Err(err)
         } else {
             let vsp_size = ((fixed_size_payload[0] as u16) << 8) + (fixed_size_payload[1] as u16);
-            return Ok(FSP {
+            Ok(FSP {
                 vsp_size,
                 flags: fixed_size_payload[2],
                 bytes: fixed_size_payload,
-            });
+            })
         }
     }
 
     pub fn check_flag(&self, flag: u8) -> bool {
-        if self.flags & flag != 0 {
-            return true;
-        } else {
-            return false;
-        }
+        self.flags & flag != 0
     }
 
     pub fn to_vec(&self) -> &Vec<u8> {
-        let vec = &self.bytes;
-        return vec;
+        &self.bytes as _
     }
 
     pub fn to_bytes(&self) -> [u8; FSP::LENGTH] {
         let mut array = [0; FSP::LENGTH];
         array.copy_from_slice(&self.bytes);
-        return array;
+        array
     }
 
     pub fn use_proxy_header(&self) -> bool {
-        return self.check_flag(FSP::FLAG_PROXY_HEADER);
+        self.check_flag(FSP::FLAG_PROXY_HEADER)
     }
 
     pub fn upload_only(&self) -> bool {
-        return self.check_flag(FSP::FLAG_UPLOAD_ONLY);
+        self.check_flag(FSP::FLAG_UPLOAD_ONLY)
     }
 
     pub fn use_til(&self) -> bool {
-        return self.check_flag(FSP::FLAG_USE_TIL);
+        self.check_flag(FSP::FLAG_USE_TIL)
     }
 }
 
