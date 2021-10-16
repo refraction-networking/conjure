@@ -6,8 +6,7 @@ name: CI-build
 # events but only for the master branch
 on:
   push:
-    branches: [ master, jmwample/redis-v8 ]
-  # TODO revert ^
+    branches: [ master ]
   pull_request:
     branches: [ master ]
 
