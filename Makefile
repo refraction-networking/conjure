@@ -16,7 +16,7 @@ rust: ./src/*.rs
 	cargo build --${DEBUG_OR_RELEASE}
 
 test:
-	cargo test --${DEBUG_OR_RELEASE} 
+	cargo test --${DEBUG_OR_RELEASE}
 
 app:
 	cd ./application/ && make
@@ -30,6 +30,12 @@ conjure: detect.c loadkey.c rust_util.c rust libtapdance
 
 registration-api:
 	cd ./registration-api/ && make
+
+# Note this copies in the whole current directory as context and results in
+# overly large context. should not be used to build release/production images.
+custom-build:
+	docker build --build-arg CUSTOM_BUILD=1 -f docker/Dockerfile .
+
 
 clean:
 	cargo clean

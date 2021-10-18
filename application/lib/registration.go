@@ -694,5 +694,7 @@ func registerForDetector(reg *DecoyRegistration) {
 		// throw(fit)
 		return
 	}
-	client.Publish(DETECTOR_REG_CHANNEL, string(s2d))
+
+	ctx := context.Background()
+	client.Publish(ctx, DETECTOR_REG_CHANNEL, string(s2d))
 }

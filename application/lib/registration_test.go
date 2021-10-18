@@ -2,9 +2,11 @@ package lib
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -99,16 +101,20 @@ func TestRegistrationLookup(t *testing.T) {
 }
 
 func TestRegisterForDetectorOnce(t *testing.T) {
+	if os.Getenv("TEST_REDIS") != "1" {
+		t.Skip("Skipping redis related test w/out mock")
+	}
 	reg := DecoyRegistration{
 		DarkDecoy:        net.ParseIP("1.2.3.4"),
 		registrationAddr: net.ParseIP(""),
 	}
 
+	ctx := context.Background()
 	client := getRedisClient()
 	if client == nil {
 		t.Fatalf("couldn't connect to redis\n")
 	}
-	pubsub := client.Subscribe(DETECTOR_REG_CHANNEL)
+	pubsub := client.Subscribe(ctx, DETECTOR_REG_CHANNEL)
 
 	// go channel that receives published messages
 	channel := pubsub.Channel()
@@ -148,6 +154,9 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 }
 
 func TestRegisterForDetectorArray(t *testing.T) {
+	if os.Getenv("TEST_REDIS") != "1" {
+		t.Skip("Skipping redis related test w/out mock")
+	}
 	var addrs = []string{}
 	var clientAddr = "192.0.2.1"
 	for i := 0; i < 100; i++ {
@@ -155,11 +164,12 @@ func TestRegisterForDetectorArray(t *testing.T) {
 		addrs = append(addrs, fmt.Sprintf("2001::dead:beef:%x", i))
 	}
 
+	ctx := context.Background()
 	client := getRedisClient()
 	if client == nil {
 		t.Fatalf("couldn't connect to redis\n")
 	}
-	pubsub := client.Subscribe(DETECTOR_REG_CHANNEL)
+	pubsub := client.Subscribe(ctx, DETECTOR_REG_CHANNEL)
 	defer pubsub.Close()
 
 	// go channel that receives published messages
@@ -203,6 +213,9 @@ func TestRegisterForDetectorArray(t *testing.T) {
 }
 
 func TestRegisterForDetectorMultithread(t *testing.T) {
+	if os.Getenv("TEST_REDIS") != "1" {
+		t.Skip("Skipping redis related test w/out mock")
+	}
 	var addrs = []string{}
 	var wg sync.WaitGroup
 	var failed = false
@@ -213,11 +226,12 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 		addrs = append(addrs, fmt.Sprintf("2001::dead:beef:%x", i))
 	}
 
+	ctx := context.Background()
 	client := getRedisClient()
 	if client == nil {
 		t.Fatalf("couldn't connect to redis\n")
 	}
-	pubsub := client.Subscribe(DETECTOR_REG_CHANNEL)
+	pubsub := client.Subscribe(ctx, DETECTOR_REG_CHANNEL)
 	defer pubsub.Close()
 
 	// go channel that receives published messages

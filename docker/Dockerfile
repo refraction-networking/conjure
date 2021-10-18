@@ -1,7 +1,7 @@
 #FROM ubuntu:20.04 as build_base
 FROM ubuntu:20.04 as build_base_go
 #    PATH="/opt/PF_RING/userland/examples_zc:$PATH"
-ARG GO_VERSION=1.15.3
+ARG GO_VERSION=1.15.2
 ARG CUSTOM_BUILD
 ARG BRANCH=master
 ENV PATH="/usr/local/go/bin:/root/.cargo/bin:${PATH}" \
@@ -25,25 +25,31 @@ RUN apt-get install -y -q software-properties-common wget && \
     apt-get clean all && \
     apt-get update && \
     apt-get install -y -q pfring && \
-    apt-get clean all 
+    apt-get clean all
 
-# Get go-reddis and make sure it's version is 7.4.0.
-RUN go get -u -d github.com/go-redis/redis || true && cd ${GOPATH}/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master 
 
 # Copy docker context dir. This is used as a source if CUSTOM_BUILD is enabled
 COPY . /tmp/conjure
-# Get Conjure or copy a directory Dockerfile is in. Switched by CUSTOM_BUILD var
-RUN    go get -d github.com/refraction-networking/conjure/...  ; \
-       bash -c 'if [[ ! -z "$CUSTOM_BUILD" ]] ; then \
-       rm -rf ${GOPATH}/src/github.com/refraction-networking/conjure; cp -r /tmp/conjure ${GOPATH}/src/github.com/refraction-networking/conjure ; \
-       fi'
 
-# Checkout needed branch and compile
-RUN    cd /root/go/src/github.com/refraction-networking/conjure && \
-    git checkout ${BRANCH} && \
+# Get Conjure or copy a directory Dockerfile is in. Switched by CUSTOM_BUILD var
+RUN go get -d github.com/refraction-networking/conjure/...  ; \
+    bash -c 'if [[ ! -z "$CUSTOM_BUILD" ]] ; then \
+    rm -rf ${GOPATH}/src/github.com/refraction-networking/conjure; cp -r /tmp/conjure ${GOPATH}/src/github.com/refraction-networking/conjure ; \
+    fi'
+
+# Checkout needed branch if not builing using CUSTOM_BUILD
+RUN bash -c 'if [[ -z "CUSTOM_BUILD" ]] ; then \
+    cd /root/go/src/github.com/refraction-networking/conjure && \
+    git checkout ${BRANCH}; \
+    fi'
+
+# Compile
+RUN cd /root/go/src/github.com/refraction-networking/conjure && \
     go get ./... || true && \
-    make 
-RUN    cp -r /root/go/src/github.com/refraction-networking/conjure /opt/conjure
+    make
+
+# Copy results
+RUN cp -r /root/go/src/github.com/refraction-networking/conjure /opt/conjure
 
 
 
@@ -55,7 +61,7 @@ ENV CJ_IFACE=lo \
     ZBALANCE_HASH_MODE=1
 #COPY --from=build_base /opt/PF_RING /opt/PF_RING
 
-RUN apt-get update && DEBIAN_FRONTEND="noninteractive" apt-get -y -q install libelf1 
+RUN apt-get update && DEBIAN_FRONTEND="noninteractive" apt-get -y -q install libelf1
 
 COPY --from=build_base_go /usr/bin/zbalance_ipc /usr/bin/zbalance_ipc
 COPY ./docker/zbalance-entrypoint.sh /entrypoint.sh
