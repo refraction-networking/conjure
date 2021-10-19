@@ -68,6 +68,7 @@ func initStats() {
 
 func (s *Stats) Reset() {
 	atomic.StoreInt64(&s.newConns, 0)
+	atomic.StoreInt64(&s.newErrConns, 0)
 	atomic.StoreInt64(&s.newRegistrations, 0)
 	atomic.StoreInt64(&s.newLocalRegistrations, 0)
 	atomic.StoreInt64(&s.newApiRegistrations, 0)
@@ -109,21 +110,18 @@ func (s *Stats) ConnErr() {
 	atomic.AddInt64(&s.newErrConns, 1)
 }
 
+// will only be called for registrations marked valid
 func (s *Stats) AddReg(generation uint32, source *pb.RegistrationSource) {
 	atomic.AddInt64(&s.activeRegistrations, 1)
 	atomic.AddInt64(&s.newRegistrations, 1)
 
 	if *source == pb.RegistrationSource_Detector {
-		//atomic.AddInt64(&s.activeLocalRegistrations, 1) // Actually an absolute is not super useful.
 		atomic.AddInt64(&s.newLocalRegistrations, 1)
 	} else if *source == pb.RegistrationSource_API {
-		//atomic.AddInt64(&s.activeApiRegistrations, 1)
 		atomic.AddInt64(&s.newApiRegistrations, 1)
 	} else if *source == pb.RegistrationSource_DetectorPrescan {
-		//atomic.AddInt64(&s.activeApiRegistrations, 1)
 		atomic.AddInt64(&s.newSharedRegistrations, 1)
 	} else {
-		//atomic.AddInt64(&s.activeApiRegistrations, 1)
 		atomic.AddInt64(&s.newUnknownRegistrations, 1)
 	}
 	s.genMutex.Lock()
@@ -139,15 +137,10 @@ func (s *Stats) AddErrReg() {
 	atomic.AddInt64(&s.newErrRegistrations, 1)
 }
 
+// should only be called for registrations marked valid
 func (s *Stats) ExpireReg(generation uint32, source *pb.RegistrationSource) {
 	atomic.AddInt64(&s.activeRegistrations, -1)
 
-	/*
-		if *source == pb.RegistrationSource_Detector {
-			atomic.AddInt64(&s.activeLocalRegistrations, -1)
-		} else {
-			atomic.AddInt64(&s.activeApiRegistrations, -1)
-		}*/
 	s.genMutex.Lock()
 	s.generations[generation] -= 1
 	s.genMutex.Unlock()
