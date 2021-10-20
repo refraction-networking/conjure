@@ -258,6 +258,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					// station. We may want other stations to be informed about the registration, but prevent this station
 					// specifically from handling / interfering in any subsequent connection. See PR #75
 					logger.Printf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
+					cj.Stat().AddErrReg()
 					continue
 				}
 
