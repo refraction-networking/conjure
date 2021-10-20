@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+const (
+	CACHED_PHANTOM_MSG = "cached live host"
+)
+
 // LivenessTester provides a generic interface for testing hosts in phantom
 // subnets for liveness. This prevents potential interference in connection
 // creation.
@@ -146,7 +150,7 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 	if status, ok := blt.ipCache[addr]; ok {
 		if time.Since(status.cachedTime) < blt.cacheExpirationTime {
 			if status.isLive {
-				return true, fmt.Errorf("cached live host")
+				return true, fmt.Errorf(CACHED_PHANTOM_MSG)
 			}
 		}
 	}
