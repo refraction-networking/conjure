@@ -17,12 +17,12 @@ type Stats struct {
 	newConns    int64 // new connections since last stats.reset()
 	newErrConns int64 // new connections that had some sort of error since last reset()
 
-	activeRegistrations     int64 // Current number of active registrations we have
+	activeRegistrations     int64 // Current number of active registrations we have (marked valid - no error in validation i.e. bad phantom, bad covert, live phantom)
 	newLocalRegistrations   int64 // Current registrations that were picked up from this detector (also included in newRegistrations)
 	newApiRegistrations     int64 // Current registrations that we heard about from the API (also included in newRegistrations)
 	newSharedRegistrations  int64 // Current registrations that we heard about from the API sharing system (also included in newRegistrations)
 	newUnknownRegistrations int64 // Current registrations that we heard about with unknown source (also included in newRegistrations)a
-	newRegistrations        int64 // Added registrations since last reset()
+	newRegistrations        int64 // Added valid registrations since last reset() - non valid registrations should be counted entirely in newErrRegistrations
 	newMissedRegistrations  int64 // number of "missed" registrations (as seen by a connection with no registration)
 	newErrRegistrations     int64 // number of registrations that had some kinda error
 	newDupRegistrations     int64 // number of duplicate registrations (doesn't uniquify, so might have some double counting)
