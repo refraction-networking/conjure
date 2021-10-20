@@ -633,8 +633,10 @@ func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
 		RegCount:   expiredRegObj.regCount,
 	}
 
-	// Update stats
-	Stat().ExpireReg(expiredRegObj.DecoyListVersion, expiredRegObj.RegistrationSource)
+	if expiredRegObj.Valid {
+		// Update stats
+		Stat().ExpireReg(expiredRegObj.DecoyListVersion, expiredRegObj.RegistrationSource)
+	}
 
 	// remove from timeout tracking
 	delete(r.decoysTimeouts, index)
