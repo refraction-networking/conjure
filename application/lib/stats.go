@@ -93,8 +93,7 @@ func (s *Stats) PrintStats() {
 		atomic.LoadInt64(&s.newLocalRegistrations), atomic.LoadInt64(&s.newApiRegistrations), atomic.LoadInt64(&s.newSharedRegistrations), atomic.LoadInt64(&s.newUnknownRegistrations),
 		atomic.LoadInt64(&s.newMissedRegistrations),
 		atomic.LoadInt64(&s.newErrRegistrations), atomic.LoadInt64(&s.newDupRegistrations),
-		atomic.LoadInt64(&s.newLivenessPass), atomic.LoadInt64(&s.newLivenessFail),
-		atomic.LoadInt64(&s.newLivenessPass), atomic.LoadInt64(&s.newLivenessCached),
+		atomic.LoadInt64(&s.newLivenessPass), atomic.LoadInt64(&s.newLivenessFail), atomic.LoadInt64(&s.newLivenessCached),
 		atomic.LoadInt64(&s.newBytesUp), atomic.LoadInt64(&s.newBytesDown))
 	s.Reset()
 }
