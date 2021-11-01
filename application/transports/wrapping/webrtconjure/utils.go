@@ -20,11 +20,11 @@ const (
 )
 
 func getServerHkdfParams(seed, sharedSecret string) *s2s.HKDFParams {
-	return &s2s.NewHKDFParams().SetSecret(sharedSecret).SetInfoPrefix(AnswererIdentifier).SetSalt(seed)
+	return s2s.NewHKDFParams().SetSecret(sharedSecret).SetInfoPrefix(AnswererIdentifier).SetSalt(seed)
 }
 
 func getClientHkdfParams(seed, sharedSecret string) *s2s.HKDFParams {
-	return &s2s.NewHKDFParams().SetSecret(sharedSecret).SetInfoPrefix(OffererIdentifier).SetSalt(seed)
+	return s2s.NewHKDFParams().SetSecret(sharedSecret).SetInfoPrefix(OffererIdentifier).SetSalt(seed)
 }
 
 func InflateSdpWithSeed(seed, sharedSecret string, deflatedSDP []s2s.SDPDeflated) (*s2s.SDP, error) {
@@ -47,7 +47,7 @@ func InflateSdpWithSeed(seed, sharedSecret string, deflatedSDP []s2s.SDPDeflated
 		return nil, err
 	}
 
-	sdp.Malleables = s2s.SDPMalleablesFromSeed(hkdfParams) // It is temporarily hardcoded. Could be revisited in later versions.
+	sdp.Malleables = s2s.PredictSDPMalleables(hkdfParams) // It is temporarily hardcoded. Could be revisited in later versions.
 
 	return sdp, nil
 }
@@ -55,7 +55,7 @@ func InflateSdpWithSeed(seed, sharedSecret string, deflatedSDP []s2s.SDPDeflated
 // CreateSdpWithSeed() predicts an Answer. Answer Only!!
 func CreateSdpWithSeed(seed, sharedSecret string, serverHostIP net.IP, serverPort uint16) (*s2s.SDP, error) {
 	var err error
-	hkdfParams := &s2s.NewHKDFParams().SetSecret(sharedSecret).SetInfoPrefix(AnswererIdentifier).SetSalt(seed)
+	hkdfParams := s2s.NewHKDFParams().SetSecret(sharedSecret).SetInfoPrefix(AnswererIdentifier).SetSalt(seed)
 
 	rtpCandidate := s2s.ICECandidate{}
 	rtpCandidate.SetComponent(s2s.ICEComponentRTP)
@@ -73,7 +73,7 @@ func CreateSdpWithSeed(seed, sharedSecret string, serverHostIP net.IP, serverPor
 
 	sdp := s2s.SDP{
 		SDPType:    "answer", // Assume server is the answerer, as usual
-		Malleables: s2s.SDPMalleablesFromSeed(hkdfParams),
+		Malleables: s2s.PredictSDPMalleables(hkdfParams),
 		IceCandidates: []s2s.ICECandidate{
 			rtpCandidate,
 			rtcpCandidate,

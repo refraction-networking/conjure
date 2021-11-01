@@ -2,6 +2,7 @@ package webrtconjure
 
 import (
 	"bytes"
+	"errors"
 	"net"
 
 	s2s "github.com/Gaukas/seed2sdp"
@@ -45,10 +46,10 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 	//		 	- serverIP
 	//		 	- serverPort
 	// Test: using the first viable registration ONLY.
-	var seed string = reg.WebRTCParams.GetRandSeed().GetSeed()
+	var seed string = reg.WebRTCParams.GetRandSeed().GetSeed() // Will error until Protobuf got merged
 	var sharedsecret string = reg.WebRTCParams.GetRandSeed().GetSharedSecret()
 	var deflatedSDPs []s2s.SDPDeflated
-	var pbDeflatedSDPs []*pb.DeflatedSDP = reg.WebRTCParams.GetDeflatedSdps()
+	var pbDeflatedSDPs []*pb.DeflatedSDP = reg.WebRTCParams.GetDeflatedSdps() // Will error until Protobuf got merged
 	for _, pbDefSDP := range pbDeflatedSDPs {
 		var newSDPDef = s2s.SDPDeflated{
 			SDPType:    uint8(pbDefSDP.GetSdpType()),
@@ -98,7 +99,7 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 
 	newDCConfig := rtc.DataChannelConfig{
 		Label:          "Seed2WebRTConn Server",
-		SelfSDPType:    "answer",
+		SelfSDPType:    "answer", // Client: "offer"
 		SendBufferSize: rtc.DataChannelBufferSizeDefault,
 
 		//// Shouldn't be needed, if we pass in raw socket.
@@ -111,13 +112,14 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 		RawSocket: rawsocket,
 	}
 	newSettingEngine := webrtc.SettingEngine{}
-	iceParams.UpdateSettingEngine(&newSettingEngine)
+	iceParams.InjectSettingEngine(&newSettingEngine)
 	// newSettingEngine.SetICEUDPMux(webrtc.NewICEUDPMux(nil, rawsocket))
 
 	newConfiguration := webrtc.Configuration{
 		Certificates: []webrtc.Certificate{cert},
 		ICEServers: []webrtc.ICEServer{
 			{
+				// may need to add different/more STUN server for client
 				URLs: []string{"stun:stun.l.google.com:19302"},
 			},
 		},
@@ -138,12 +140,19 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 
 	// Wait for connection establishment
 	for (conn.Status() & rtc.WebRTConnReady) == 0 {
+		if (conn.Status() & rtc.WebRTConnClosed) == 0 {
+			return nil, nil, errors.New("WebRTC Peer Connection Closed.")
+		}
+		if (conn.Status() & rtc.WebRTConnErrored) == 0 {
+			return nil, nil, errors.New("WebRTC Peer Connection Errored.")
+		}
 	}
 
 	// return reg, transports.PrependToConn(c, data), nil
 	return reg, conn, nil
 }
 
+// find multiple ones and check each one with net.conn received
 func getWebRTCRegistrations(regManager *dd.RegistrationManager, phantom net.IP) *dd.DecoyRegistration {
 	// var regs []*dd.DecoyRegistration
 

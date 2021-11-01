@@ -24,6 +24,7 @@ import (
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
+	rtc "github.com/refraction-networking/conjure/application/transports/wrapping/webrtconjure"
 )
 
 func getOriginalDst(fd uintptr) (net.IP, error) {
@@ -414,6 +415,10 @@ func main() {
 		logger.Printf("failed to add transport: %v", err)
 	}
 	err = regManager.AddTransport(pb.TransportType_Obfs4, obfs4.Transport{})
+	if err != nil {
+		logger.Printf("failed to add transport: %v", err)
+	}
+	err = regManager.AddTransport(pb.TransportType_Webrtc, rtc.Transport{})
 	if err != nil {
 		logger.Printf("failed to add transport: %v", err)
 	}
