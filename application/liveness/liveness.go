@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -33,6 +34,7 @@ type CachedLivenessTester struct {
 	ipCache             map[string]cacheElement
 	signal              chan bool
 	cacheExpirationTime time.Duration
+	m                   sync.RWMutex
 }
 
 // UncachedLivenessTester implements LivenessTester interface without caching,
@@ -42,6 +44,9 @@ type UncachedLivenessTester struct {
 
 // Init parses cache expiry duration and initializes the Cache.
 func (blt *CachedLivenessTester) Init(expirationTime string) error {
+	blt.m.Lock()
+	defer blt.m.Unlock()
+
 	blt.ipCache = make(map[string]cacheElement)
 	blt.signal = make(chan bool)
 
@@ -62,6 +67,9 @@ func (blt *CachedLivenessTester) Stop() {
 
 // ClearExpiredCache cleans out stale entries in the cache.
 func (blt *CachedLivenessTester) ClearExpiredCache() {
+	blt.m.Lock()
+	defer blt.m.Unlock()
+
 	for ipAddr, status := range blt.ipCache {
 		if time.Since(status.cachedTime) > blt.cacheExpirationTime {
 			delete(blt.ipCache, ipAddr)
@@ -106,17 +114,23 @@ func (blt *CachedLivenessTester) PeriodicScan(t string) {
 
 			for _, ip := range records {
 				if ip[0] != "saddr" {
-					if _, ok := blt.ipCache[ip[0]]; !ok {
-						var val cacheElement
-						val.isLive = true
-						val.cachedTime = time.Now()
-						blt.ipCache[ip[0]] = val
-						_, err := f.WriteString(ip[0] + "/32" + "\n")
-						if err != nil {
-							fmt.Println("Unable to write blocklist file", err)
-							f.Close()
+					func() {
+						// closure to ensure mutex unlocks in case of error.
+						blt.m.Lock()
+						defer blt.m.Unlock()
+
+						if _, ok := blt.ipCache[ip[0]]; !ok {
+							var val cacheElement
+							val.isLive = true
+							val.cachedTime = time.Now()
+							blt.ipCache[ip[0]] = val
+							_, err := f.WriteString(ip[0] + "/32" + "\n")
+							if err != nil {
+								fmt.Println("Unable to write blocklist file", err)
+								f.Close()
+							}
 						}
-					}
+					}()
 				}
 			}
 			f.Close()
@@ -145,8 +159,32 @@ func (blt *CachedLivenessTester) PeriodicScan(t string) {
 // immediately and no network probes are sent. If the host was measured not
 // live, the entry is stale, or there is not entry then network probes are sent
 // and the result is then added to the cache.
+//
+// Lock on mutex is taken for lookup, then for cache update. Do NOT hold mutex
+// while scanning for liveness as this will make cache extremely slow.
 func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, error) {
+	// cache lookup internal function to use RLock
+	if live, err := blt.phantomLookup(addr, port); live || err != nil {
+		return live, err
+	}
+
 	// existing phantomIsLive() implementation
+	isLive, err := phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
+	var val cacheElement
+	val.isLive = isLive
+	val.cachedTime = time.Now()
+
+	blt.m.Lock()
+	defer blt.m.Unlock()
+
+	blt.ipCache[addr] = val
+	return isLive, err
+}
+
+func (blt *CachedLivenessTester) phantomLookup(addr string, port uint16) (bool, error) {
+	blt.m.RLock()
+	defer blt.m.RUnlock()
+
 	if status, ok := blt.ipCache[addr]; ok {
 		if time.Since(status.cachedTime) < blt.cacheExpirationTime {
 			if status.isLive {
@@ -154,12 +192,7 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 			}
 		}
 	}
-	isLive, err := phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
-	var val cacheElement
-	val.isLive = isLive
-	val.cachedTime = time.Now()
-	blt.ipCache[addr] = val
-	return isLive, err
+	return false, nil
 }
 
 // PhantomIsLive sends 4 TCP syn packets to determine if the host will respond

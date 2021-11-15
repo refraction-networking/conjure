@@ -3,6 +3,7 @@ package liveness
 import (
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -97,4 +98,46 @@ func TestCachedLiveness(t *testing.T) {
 		t.Fatal("Lookup for cached live entries taking too long")
 	}
 
+}
+
+func TestCachedLivenessThreaded(t *testing.T) {
+
+	test_cases := [...]struct {
+		address  string
+		port     uint16
+		expected bool
+	}{
+		{"1.1.1.1", 80, true},
+		{"192.0.0.2", 443, false},
+		{"2606:4700:4700::64", 443, true},
+	}
+
+	iterations := 10
+	failed := false
+	var wg sync.WaitGroup
+
+	clt := CachedLivenessTester{}
+	err := clt.Init("1h")
+	if err != nil {
+		t.Fatalf("failed to init cached liveness tester: %s", err)
+	}
+
+	for i := 0; i < iterations; i++ {
+		wg.Add(1)
+
+		go func(j int) {
+			test := test_cases[j%len(test_cases)]
+			liveness, response := clt.PhantomIsLive(test.address, test.port)
+			if liveness != test.expected {
+				t.Logf("%s:%d -> %v (expected %v)\n", test.address, test.port, response, test.expected)
+			}
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
+
+	if failed {
+		t.Fatalf("failed")
+	}
 }
