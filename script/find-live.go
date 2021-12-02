@@ -34,14 +34,14 @@ type LogLine struct {
     // etc..
 }
 
-func getMessage(line string) string {
+func getMessage(line string) (string, string) {
     var obj LogLine
     err := json.Unmarshal([]byte(line), &obj)
     if err != nil {
         fmt.Println(line)
         fmt.Println(err)
     }
-    return obj.System.Syslog.Message
+    return obj.System.Syslog.Message, obj.System.Syslog.Hostname
 }
 
 //Dec 01 18:23:15 rnd-artemis conjure[3973007]: [ZMQ] 2021/12/01 18:23:15.016600 New registration: bc075982d03fd5dd {"Phantom":"35.6.81.134","SharedSecret":"bc075982d03fd5ddfcd9a14a854cd5dde4bd2180c5e4b93132964314066c5a15","Covert":"","Mask":"","Flags":{"upload_only":false,"proxy_header":true,"use_TIL":true},"Transport":1,"RegTime":"2021-12-01T18:23:15.016145664-05:00","DecoyListVersion":1153,"Source":2}
@@ -74,7 +74,7 @@ func main() {
     for contents.Scan() {
         fullLine := contents.Text()
         if strings.Contains(fullLine, "New registration") {
-            line := getMessage(fullLine)
+            line, _ := getMessage(fullLine)
             var mdy, t string
             var regId string
             var regStr string
@@ -92,7 +92,7 @@ func main() {
             //fmt.Printf("%s => %s\n", regId, reg.Phantom)
             phantoms[regId] = reg.Phantom
         } else if strings.Contains(fullLine, "live phantom") {
-            line := getMessage(fullLine)
+            line, hostname := getMessage(fullLine)
             var mdy, t string
             var regId string
             _, err := fmt.Sscanf(line, "[ZMQ] %s %s Dropping registration %s -- live phantom:",
@@ -102,11 +102,9 @@ func main() {
                 fmt.Println(err)
             }
             if val, ok := phantoms[regId]; ok {
-                fmt.Printf("%s %s Live phantom %s\n", mdy, t, val)
+                fmt.Printf("%s %s Live phantom %s %s\n", mdy, t, val, hostname)
             }
-
         }
-
     }
     fmt.Println(proc)
 }
