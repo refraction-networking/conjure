@@ -72,8 +72,9 @@ func main() {
     var proc int
     phantoms := make(map[string]string) // regId => phantom
     for contents.Scan() {
-        line := getMessage(contents.Text())
-        if strings.Contains(line, "New registration") {
+        fullLine := contents.Text()
+        if strings.Contains(fullLine, "New registration") {
+            line := getMessage(fullLine)
             var mdy, t string
             var regId string
             var regStr string
@@ -90,7 +91,8 @@ func main() {
             }
             //fmt.Printf("%s => %s\n", regId, reg.Phantom)
             phantoms[regId] = reg.Phantom
-        } else if strings.Contains(line, "live phantom") {
+        } else if strings.Contains(fullLine, "live phantom") {
+            line := getMessage(fullLine)
             var mdy, t string
             var regId string
             _, err := fmt.Sscanf(line, "[ZMQ] %s %s Dropping registration %s -- live phantom:",
