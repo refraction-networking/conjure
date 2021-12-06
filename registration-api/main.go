@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -16,6 +17,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
 	zmq "github.com/pebbe/zmq4"
+	lib "github.com/refraction-networking/conjure/application/lib"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
@@ -26,12 +28,13 @@ const (
 )
 
 type config struct {
-	APIPort           uint16   `toml:"api_port"`
-	ZMQPort           uint16   `toml:"zmq_port"`
-	PrivateKeyPath    string   `toml:"privkey_path"`
-	AuthType          string   `toml:"auth_type"`
-	AuthVerbose       bool     `toml:"auth_verbose"`
-	StationPublicKeys []string `toml:"station_pubkeys"`
+	APIPort             uint16   `toml:"api_port"`
+	ZMQPort             uint16   `toml:"zmq_port"`
+	PrivateKeyPath      string   `toml:"privkey_path"`
+	AuthType            string   `toml:"auth_type"`
+	AuthVerbose         bool     `toml:"auth_verbose"`
+	StationPublicKeys   []string `toml:"station_pubkeys"`
+	BidirectionalAPIGen uint16   `toml:"bidirectional_api_generation"`
 
 	// Parsed from conjure.conf environment vars
 	logClientIP bool
@@ -40,9 +43,10 @@ type config struct {
 type server struct {
 	sync.Mutex
 	config
+	IPSelector *lib.PhantomIPSelector
 
-	// Function to accept message into processing queue. Abstracted
-	// to allow mocking of ZMQ send flow
+	// Function to accept message into processing queue.
+	// Abstracted to allow mocking of ZMQ send flow
 	messageAccepter func([]byte) error
 
 	logger *log.Logger
@@ -125,6 +129,121 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
+	requestIP := getRemoteAddr(r)
+
+	if s.logClientIP {
+		s.logger.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
+	} else {
+		s.logger.Printf("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
+	}
+
+	const MinimumRequestLength = SecretLength + 1 // shared_secret + VSP
+	if r.Method != "POST" {
+		s.logger.Printf("rejecting request due to incorrect method %s\n", r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.ContentLength < MinimumRequestLength {
+		s.logger.Printf("rejecting request due to short content-length of %d, expecting at least %d\n", r.ContentLength, MinimumRequestLength)
+		http.Error(w, "Payload too small", http.StatusBadRequest)
+		return
+	}
+
+	// Deserialize the body of the request, result is a pb
+	in, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		s.logger.Println("failed to read request body:", err)
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	payload := &pb.C2SWrapper{}
+	// Unmarshal pb into payload C2SWrapper
+	if err = proto.Unmarshal(in, payload); err != nil {
+		s.logger.Println("failed to decode protobuf body:", err)
+		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
+		return
+	}
+
+	clientAddr := parseIP(requestIP)
+	var clientAddrBytes = make([]byte, 16, 16)
+	if clientAddr != nil {
+		clientAddrBytes = []byte(clientAddr.To16())
+	}
+
+	// Create registration response object
+	regResp := &pb.RegistrationResponse{}
+
+	// Generate seed and phantom address
+	cjkeys, err := lib.GenSharedKeys(payload.SharedSecret)
+	if err != nil {
+		s.logger.Println("Failed to generate the shared key using SharedSecret:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if *payload.RegistrationPayload.V4Support {
+		phantom4, err := s.IPSelector.Select(
+			cjkeys.DarkDecoySeed,
+			uint(s.BidirectionalAPIGen), //generation type uint
+			false,
+		)
+
+		s.logger.Println(cjkeys.DarkDecoySeed)
+
+		if err != nil {
+			s.logger.Println("Failed to select IPv4Address:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		addr4 := binary.BigEndian.Uint32(phantom4.To4())
+		regResp.Ipv4Addr = &addr4
+	}
+
+	if *payload.RegistrationPayload.V6Support {
+		phantom6, err := s.IPSelector.Select(
+			cjkeys.DarkDecoySeed,
+			uint(s.BidirectionalAPIGen),
+			true,
+		)
+		if err != nil {
+			s.logger.Println("Failed to select IPv4Address:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		regResp.Ipv6Addr = phantom6
+	}
+
+	port := uint32(443)
+	regResp.Port = &port // future  -change to randomized
+
+	// Createt payload to send out to all servers
+	zmqPayload, err := s.processC2SWrapper(payload, clientAddrBytes)
+	if err != nil {
+		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err = s.messageAccepter(zmqPayload)
+	if err != nil {
+		s.logger.Println("failed to publish registration:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Add header to w (server response)
+	w.WriteHeader(http.StatusOK)
+	// Marshal (serialize) registration response object and then write it to w
+	body, _ := proto.Marshal(regResp)
+	w.Write(body)
+
+} // registerBidirectional()
+
 func (s *server) sendToZMQ(message []byte) error {
 	s.Lock()
 	_, err := s.sock.SendBytes(message, zmq.DONTWAIT)
@@ -155,9 +274,10 @@ func (s *server) processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr [
 	}
 
 	// If the address that the registration was received from was NOT set in the
-	// C2SWrapper set it here to the source address of the API request.
+	// C2SWrapper set it here to the source address of the API (uni or bidirectional) request.
 	if clientToAPIProto.GetRegistrationAddress() == nil ||
-		clientToAPIProto.GetRegistrationSource() == pb.RegistrationSource_API {
+		clientToAPIProto.GetRegistrationSource() == pb.RegistrationSource_API ||
+		clientToAPIProto.GetRegistrationSource() == pb.RegistrationSource_BidirectionalAPI {
 		payload.RegistrationAddress = clientAddr
 	} else {
 		payload.RegistrationAddress = clientToAPIProto.GetRegistrationAddress()
@@ -191,6 +311,15 @@ func parseIP(addrPort string) *net.IP {
 
 }
 
+func (s *server) initPhantomSelector() {
+	phantomSelector, err := lib.GetPhantomSubnetSelector()
+	if err != nil {
+		s.logger.Fatalln("failed to create phantom selector:", err)
+	}
+
+	s.IPSelector = phantomSelector
+}
+
 func main() {
 	var s server
 	s.logger = log.New(os.Stdout, "[API] ", log.Ldate|log.Lmicroseconds)
@@ -212,6 +341,8 @@ func main() {
 	if err != nil {
 		s.logger.Fatalln("failed to create zmq socket:", err)
 	}
+
+	s.initPhantomSelector()
 
 	if s.AuthType == "CURVE" {
 		privkeyBytes, err := ioutil.ReadFile(s.PrivateKeyPath)
@@ -249,6 +380,7 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/register", s.register)
+	r.HandleFunc("/register-bidirectional", s.registerBidirectional)
 	http.Handle("/", r)
 
 	s.logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", s.APIPort), nil))

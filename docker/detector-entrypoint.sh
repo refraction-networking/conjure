@@ -2,6 +2,7 @@
 
 CORE_COUNT=${CJ_CORECOUNT:-2}
 OFFSET=${CJ_QUEUE_OFFSET:-2}
+SKIP_CORE=${CJ_SKIP_CORE:0}
 
 cleanup() {
   echo $(ps aux)
@@ -65,7 +66,7 @@ do
   fi
 done
 echo "Prerequisite configuration complete."
-/opt/conjure/conjure -c ${CJ_CLUSTER_ID} -o ${CJ_COREBASE} -n ${CJ_CORECOUNT} -l ${CJ_LOG_INTERVAL} -K ${CJ_PRIVKEY} -s ${CJ_SKIP_CORE} -z ${CJ_QUEUE_OFFSET} &
+/opt/conjure/conjure -c ${CJ_CLUSTER_ID} -o ${CJ_COREBASE} -n ${CJ_CORECOUNT} -l ${CJ_LOG_INTERVAL} -K ${CJ_PRIVKEY} -s ${SKIP_CORE} -z ${CJ_QUEUE_OFFSET} &
 wait $!
 cleanup
 

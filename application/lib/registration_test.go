@@ -2,9 +2,11 @@ package lib
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -98,75 +100,21 @@ func TestRegistrationLookup(t *testing.T) {
 	}
 }
 
-func TestLivenessCheck(t *testing.T) {
-	phantomAddr := net.ParseIP("1.1.1.1")
-	reg := DecoyRegistration{
-		DarkDecoy: phantomAddr,
-	}
-
-	liveness, response := reg.PhantomIsLive()
-	if liveness != true {
-		t.Fatalf("Live host seen as non-responsive: %v\n", response)
-	}
-
-	// Is there any test address we know will never respond?
-	unroutableIP := net.ParseIP("127.0.0.2")
-	reg.DarkDecoy = unroutableIP
-
-	liveness, response = reg.PhantomIsLive()
-	if liveness == false {
-		t.Fatalf("Unroutable host seen as Live: %v\n", response)
-	}
-
-	// Is there any test address we know will never respond?
-	phantomV6 := net.ParseIP("2606:4700:4700::64")
-	reg.DarkDecoy = phantomV6
-
-	liveness, response = reg.PhantomIsLive()
-	if liveness != true {
-		t.Fatalf("Live V6 host seen as non-responsive: %v\n", response)
-	}
-
-	// Is there any test address we know will never respond?
-	unreachableV6 := net.ParseIP("2001:48a8:687f:1:1122::105")
-	reg.DarkDecoy = unreachableV6
-
-	liveness, response = reg.PhantomIsLive()
-	if liveness != false {
-		t.Fatalf("Non responsive V6 host seen as live: %v\n", response)
-	}
-}
-
-func TestLiveness(t *testing.T) {
-
-	liveness, response := phantomIsLive("1.1.1.1.:80")
-
-	if liveness != true {
-		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
-	}
-
-	liveness, response = phantomIsLive("192.0.0.2:443")
-	if liveness != false {
-		t.Fatalf("Host is NOT live, detected as live: %v\n", response)
-	}
-
-	liveness, response = phantomIsLive("[2606:4700:4700::64]:443")
-	if liveness != true {
-		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
-	}
-}
-
 func TestRegisterForDetectorOnce(t *testing.T) {
+	if os.Getenv("TEST_REDIS") != "1" {
+		t.Skip("Skipping redis related test w/out mock")
+	}
 	reg := DecoyRegistration{
 		DarkDecoy:        net.ParseIP("1.2.3.4"),
 		registrationAddr: net.ParseIP(""),
 	}
 
+	ctx := context.Background()
 	client := getRedisClient()
 	if client == nil {
 		t.Fatalf("couldn't connect to redis\n")
 	}
-	pubsub := client.Subscribe(DETECTOR_REG_CHANNEL)
+	pubsub := client.Subscribe(ctx, DETECTOR_REG_CHANNEL)
 
 	// go channel that receives published messages
 	channel := pubsub.Channel()
@@ -206,6 +154,9 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 }
 
 func TestRegisterForDetectorArray(t *testing.T) {
+	if os.Getenv("TEST_REDIS") != "1" {
+		t.Skip("Skipping redis related test w/out mock")
+	}
 	var addrs = []string{}
 	var clientAddr = "192.0.2.1"
 	for i := 0; i < 100; i++ {
@@ -213,11 +164,12 @@ func TestRegisterForDetectorArray(t *testing.T) {
 		addrs = append(addrs, fmt.Sprintf("2001::dead:beef:%x", i))
 	}
 
+	ctx := context.Background()
 	client := getRedisClient()
 	if client == nil {
 		t.Fatalf("couldn't connect to redis\n")
 	}
-	pubsub := client.Subscribe(DETECTOR_REG_CHANNEL)
+	pubsub := client.Subscribe(ctx, DETECTOR_REG_CHANNEL)
 	defer pubsub.Close()
 
 	// go channel that receives published messages
@@ -261,6 +213,9 @@ func TestRegisterForDetectorArray(t *testing.T) {
 }
 
 func TestRegisterForDetectorMultithread(t *testing.T) {
+	if os.Getenv("TEST_REDIS") != "1" {
+		t.Skip("Skipping redis related test w/out mock")
+	}
 	var addrs = []string{}
 	var wg sync.WaitGroup
 	var failed = false
@@ -271,11 +226,12 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 		addrs = append(addrs, fmt.Sprintf("2001::dead:beef:%x", i))
 	}
 
+	ctx := context.Background()
 	client := getRedisClient()
 	if client == nil {
 		t.Fatalf("couldn't connect to redis\n")
 	}
-	pubsub := client.Subscribe(DETECTOR_REG_CHANNEL)
+	pubsub := client.Subscribe(ctx, DETECTOR_REG_CHANNEL)
 	defer pubsub.Close()
 
 	// go channel that receives published messages

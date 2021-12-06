@@ -19,6 +19,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	zmq "github.com/pebbe/zmq4"
 	cj "github.com/refraction-networking/conjure/application/lib"
+	lt "github.com/refraction-networking/conjure/application/liveness"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 
 	"github.com/refraction-networking/conjure/application/transports"
@@ -238,9 +239,13 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 
 				if !reg.PreScanned() {
 					// New registration received over channel that requires liveness scan for the phantom
-					liveness, response := reg.PhantomIsLive()
+					liveness, response := regManager.PhantomIsLive(reg.DarkDecoy.String(), 443)
+
 					if liveness == true {
 						logger.Printf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
+						if response.Error() == lt.CACHED_PHANTOM_MSG {
+							cj.Stat().AddLivenessCached()
+						}
 						cj.Stat().AddLivenessFail()
 						continue
 					}
@@ -257,6 +262,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					// station. We may want other stations to be informed about the registration, but prevent this station
 					// specifically from handling / interfering in any subsequent connection. See PR #75
 					logger.Printf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
+					cj.Stat().AddErrReg()
 					continue
 				}
 
@@ -404,6 +410,15 @@ func main() {
 	conf, err := cj.ParseConfig()
 	if err != nil {
 		logger.Fatalf("failed to parse app config: %v", err)
+	}
+
+	if conf.CacheExpirationTime != "" {
+		clt := &lt.CachedLivenessTester{}
+		err = clt.Init(conf.CacheExpirationTime)
+		if err != nil {
+			logger.Fatal(err)
+		}
+		regManager.LivenessTester = clt
 	}
 
 	// Launch local ZMQ proxy
