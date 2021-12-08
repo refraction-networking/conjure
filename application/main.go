@@ -237,10 +237,19 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 				}
 
 				if !reg.PreScanned() {
+
+					// Do not run a liveness scan for a registration for ip
+					// versions that are not enabled in config.
+					if reg.DarkDecoy.To4() != nil && !conf.EnableIPv4 {
+						continue
+					} else if reg.DarkDecoy.To4() == nil && !conf.EnableIPv6 {
+						continue
+					}
+
 					// New registration received over channel that requires liveness scan for the phantom
 					liveness, response := regManager.PhantomIsLive(reg.DarkDecoy.String(), 443)
 
-					if liveness == true {
+					if liveness {
 						logger.Printf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
 						if response.Error() == lt.CACHED_PHANTOM_MSG {
 							cj.Stat().AddLivenessCached()

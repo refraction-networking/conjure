@@ -207,22 +207,17 @@ impl PerCoreGlobal {
         let dd_flow = FlowNoSrcPort::from_flow(&flow);
         if self.flow_tracker.is_phantom_session(&dd_flow) {
             // Handle packet destined for registered IP
-            match self.filter_station_traffic(flow.src_ip.to_string()) {
-                // traffic was sent by another station, likely liveness testing.
-                None => {}
-
+            if !self.is_station_traffic(flow.src_ip.to_string()) {
                 // Non station traffic, forward to application to handle
-                Some(_) => {
-                    if (tcp_flags & TcpFlags::SYN) != 0 && (tcp_flags & TcpFlags::ACK) == 0 {
-                        debug!("Connection for registered Phantom {}", flow);
-                    }
-                    // Update expire time if necessary
-                    self.flow_tracker.update_phantom_flow(&dd_flow);
-                    // Forward packet...
-                    self.forward_pkt(&ip_pkt);
-                    // TODO: if it was RST or FIN, close things
-                    return;
+                if (tcp_flags & TcpFlags::SYN) != 0 && (tcp_flags & TcpFlags::ACK) == 0 {
+                    debug!("Connection for registered Phantom {}", flow);
                 }
+                // Update expire time if necessary
+                self.flow_tracker.update_phantom_flow(&dd_flow);
+                // Forward packet...
+                self.forward_pkt(&ip_pkt);
+                // TODO: if it was RST or FIN, close things
+                return;
             }
         }
 
@@ -354,23 +349,23 @@ impl PerCoreGlobal {
     /// # Examples
     ///
     /// ```compile_fail
-    /// let flow_src_station = String::from("192.122.200.231");
-    /// let flow_src_client = String::from("128.138.89.172");
+    /// # extern crate rust_dark_decoy;
+    /// # use rust_dark_decoy::PerCoreGlobal;
+    /// # fn main() {
+    /// # ::std::env::set_var("CJ_STATION_CONFIG", "./application/config.toml");
+    /// let s = crate::PerCoreGlobal{};
+    /// let flow_src_station = String::from("10.0.0.1");
+    /// let flow_src_client = String::from("172.16.0.1");
     ///
-    /// let station = filter_station_traffic(flow_src_station);
-    /// let client = filter_station_traffic(flow_src_client);
+    /// let station = s.is_station_traffic(flow_src_station);
+    /// let client = s.is_station_traffic(flow_src_client);
     ///
     /// assert_eq!(None, station);
     /// assert_eq!(Some(()), client);
+    /// # }
     /// ```
-    fn filter_station_traffic(&mut self, src: String) -> Option<()> {
-        for addr in self.filter_list.iter() {
-            if src == *addr {
-                return None;
-            }
-        }
-
-        Some(())
+    fn is_station_traffic(&mut self, src: String) -> bool {
+        self.filter_list.contains(&src)
     }
 } // impl PerCoreGlobal
 
@@ -382,7 +377,7 @@ mod tests {
     use StationConfig;
 
     #[test]
-    fn test_filter_station_traffic() {
+    fn test_is_station_traffic() {
         env::set_var("CJ_STATION_CONFIG", "./application/config.toml");
 
         // --
@@ -399,5 +394,9 @@ mod tests {
         for net in nets.iter() {
             println!("{}", net);
         }
+
+        assert_eq!(true, nets.contains(&String::from("127.0.0.1")));
+        assert_eq!(true, nets.contains(&String::from("::1")));
+        assert_eq!(false, nets.contains(&String::from("127.0.0.2")))
     }
 }
