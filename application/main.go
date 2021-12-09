@@ -250,7 +250,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					liveness, response := regManager.PhantomIsLive(reg.DarkDecoy.String(), 443)
 
 					if liveness {
-						logger.Printf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
+						logger.Printf("Dropping registration %v -- live phantom (%s): %v\n", reg.IDString(), reg.DarkDecoy, response)
 						if response.Error() == lt.CACHED_PHANTOM_MSG {
 							cj.Stat().AddLivenessCached()
 						}
