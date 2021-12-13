@@ -395,8 +395,8 @@ mod tests {
             println!("{}", net);
         }
 
-        assert_eq!(true, nets.contains(&String::from("127.0.0.1")));
-        assert_eq!(true, nets.contains(&String::from("::1")));
-        assert_eq!(false, nets.contains(&String::from("127.0.0.2")))
+        assert!(nets.contains(&String::from("127.0.0.1")));
+        assert!(nets.contains(&String::from("::1")));
+        assert!(!nets.contains(&String::from("127.0.0.2")))
     }
 }

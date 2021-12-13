@@ -90,8 +90,7 @@ type RegistrationManager struct {
 
 func NewRegistrationManager() *RegistrationManager {
 	logger := log.New(os.Stdout, "[REG] ", log.Ldate|log.Lmicroseconds)
-	var ult *lt.UncachedLivenessTester
-	ult = new(lt.UncachedLivenessTester)
+	var ult *lt.UncachedLivenessTester = new(lt.UncachedLivenessTester)
 	p, err := NewPhantomIPSelector()
 	if err != nil {
 		// fmt.Errorf("failed to create the PhantomIPSelector object: %v", err)

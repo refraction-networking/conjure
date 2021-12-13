@@ -402,6 +402,10 @@ func main() {
 	flag.Parse()
 
 	regManager := cj.NewRegistrationManager()
+	if regManager == nil {
+		fmt.Println("error occurred while setting up registration manager")
+		os.Exit(1)
+	}
 	logger = regManager.Logger
 
 	// Should we log client IP addresses
