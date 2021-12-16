@@ -35,6 +35,7 @@ type config struct {
 	AuthVerbose         bool     `toml:"auth_verbose"`
 	StationPublicKeys   []string `toml:"station_pubkeys"`
 	BidirectionalAPIGen uint16   `toml:"bidirectional_api_generation"`
+	ClientConfPath      string   `toml:"clientconf_path"`
 
 	// Parsed from conjure.conf environment vars
 	logClientIP bool
@@ -51,6 +52,12 @@ type server struct {
 
 	logger *log.Logger
 	sock   *zmq.Socket
+
+	// Latest clientConf for sharing over RegistrationResponse channel.
+	latestClientConf *pb.ClientConf
+
+	// // Function to compare passed in client config generation to server's
+	// compareClientConfGen func(int) *pb.ClientConf
 }
 
 // Get the first element of the X-Forwarded-For header if it is available, this
@@ -221,7 +228,14 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	port := uint32(443)
 	regResp.Port = &port // future  -change to randomized
 
-	// Createt payload to send out to all servers
+	// Check server's client config -- if server generation is less than
+	// client's decoy_list_generation
+	serverClientConf := s.compareClientConfGen(*payload.RegistrationPayload.DecoyListGeneration)
+	if serverClientConf != nil {
+		regResp.ClientConf = serverClientConf
+	}
+
+	// Create payload to send out to all servers
 	zmqPayload, err := s.processC2SWrapper(payload, clientAddrBytes)
 	if err != nil {
 		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
@@ -250,6 +264,53 @@ func (s *server) sendToZMQ(message []byte) error {
 	s.Unlock()
 
 	return err
+}
+
+// Function to parse the latest ClientConf based on path file
+func parseClientConf(path string) (*pb.ClientConf, error) {
+	// Create empty client config protobuf to return in case of error
+	emptyPayload := &pb.ClientConf{}
+
+	// Check that the filepath passed in exists
+	if _, err := os.Stat(path); err != nil {
+		fmt.Print("filepath does not exist:", path)
+		return emptyPayload, err
+	}
+
+	// Open file path that stores the client config
+	in, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Print("failed to read client config filepath:", err)
+		return emptyPayload, err
+	}
+
+	// Create protobuf struct
+	payload := &pb.ClientConf{}
+
+	// Unmarshal into protobuf struct
+	if err = proto.Unmarshal(in, payload); err != nil {
+		fmt.Print("failed to decode protobuf body:", err)
+		return emptyPayload, err
+	}
+
+	// If no error, return the payload (clientConf pb)
+	return payload, nil
+}
+
+// Use this function in registerBidirectional, if the returned ClientConfig is not nil add it to the RegistrationResponse.
+func (s *server) compareClientConfGen(genNum uint32) *pb.ClientConf {
+	// Check that server has a currnet (latest) client config
+	if s.latestClientConf == nil {
+		return nil
+	}
+
+	// Check if generation number param is greater than server's client config
+	if genNum > *s.latestClientConf.Generation {
+		return nil
+	}
+
+	// Otherwise, return server's client config
+	return s.latestClientConf
 }
 
 func (s *server) processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr []byte) ([]byte, error) {
@@ -329,6 +390,14 @@ func main() {
 	if err != nil {
 		s.logger.Fatalln("failed to load config:", err)
 	}
+
+	// Set latest client config based on saved file path
+	s.latestClientConf, err = parseClientConf(s.ClientConfPath)
+	if err != nil {
+		s.logger.Printf("failed to parse the latest ClientConf based on path file: %v\n", err)
+	}
+	// DEBUG -- TAKE OUT WHEN DONE TODO
+	s.logger.Println("latestClientConf:", s.latestClientConf)
 
 	// Should we log client IP addresses
 	s.logClientIP, err = strconv.ParseBool(os.Getenv("LOG_CLIENT_IP"))
