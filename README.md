@@ -37,10 +37,6 @@ Building the station requires both go and rust:
 ```sh
 sudo apt install  wget git make gcc bison flex protobuf-compiler curl libssl-dev pkg-config libgmp3-dev libzmq3-dev
 go get -d -u -t github.com/refraction-networking/gotapdance/...
-
-# Due to compatibility issue with redis v8 -- checkout the stable 7.4.0 go library version.
-go get -d github.com/go-redis/redis
-cd ${GOPATH}/src/github.com/go-redis/redis && git checkout tags/v7.4.0 -b v7-master 
 ```
 
 **Install PF_RING** 

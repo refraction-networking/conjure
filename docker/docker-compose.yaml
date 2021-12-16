@@ -4,18 +4,15 @@ services:
     # hugepages are shared between containers
     # `network_mode: host` and `privileged: true` make it possible
     # but it might be possible to achieve with 'docker capabilities'
-  
+
     zbalance:
         image: zbalance:latest
         build:
                 context: ../
                 dockerfile: ./docker/Dockerfile
                 target: zbalance
-        #cap_add: 
-        #  - SYS_ADMIN
         privileged: true
-        environment:
-                - CJ_IFACE=eno3
+        env_file: /etc/conjure/conjure.conf
         volumes:
                 - /dev/hugepages:/dev/hugepages
                 - /etc/pf_ring:/etc/pf_ring
@@ -36,12 +33,12 @@ services:
                 target: detector
         # For hugepages to work
         privileged: true
-        environment:
-                - RUST_BACKTRACE=1
-                - LOG_CLIENT_IP=true
+        env_file: /etc/conjure/conjure.conf
         volumes:
+                - /etc/conjure/app-config.toml:/opt/conjure/application/config.toml
+                - /etc/conjure/privkey:/opt/conjure/sysconfig/privkey
+                - /etc/conjure/phantom_subnets.toml:/opt/conjure/sysconfig/phantom_subnets.toml
                 - /dev/hugepages:/dev/hugepages
-                - /var/lib/tapdance/prod.privkey:/opt/conjure/keys/privkey
         depends_on:
                 - zbalance
                 - redis
@@ -54,11 +51,11 @@ services:
                 context: ../
                 dockerfile: ./docker/Dockerfile
                 target: application
-        environment:
-                - LOG_CLIENT_IP=true
+        env_file: /etc/conjure/conjure.conf
         volumes:
-                - /var/lib/tapdance/prod.privkey:/opt/conjure/sysconfig/privkey
-                - ./phantom_subnets.toml:/opt/conjure/sysconfig/phantom_subnets.toml
+                - /etc/conjure/app-config.toml:/opt/conjure/application/config.toml
+                - /etc/conjure/privkey:/opt/conjure/sysconfig/privkey
+                - /etc/conjure/phantom_subnets.toml:/opt/conjure/sysconfig/phantom_subnets.toml
         depends_on:
                 - zbalance
                 - detector

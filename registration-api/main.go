@@ -133,9 +133,9 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	requestIP := getRemoteAddr(r)
 
 	if s.logClientIP {
-		s.logger.Printf("received bidirectional %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
+		s.logger.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
 	} else {
-		s.logger.Printf("received bidirectional %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
+		s.logger.Printf("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
 	}
 
 	const MinimumRequestLength = SecretLength + 1 // shared_secret + VSP

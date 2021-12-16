@@ -4,37 +4,37 @@ extern crate arrayref;
 extern crate libc;
 #[macro_use]
 extern crate log;
+extern crate aes_gcm;
+extern crate errno;
+extern crate hex;
 extern crate pnet;
 extern crate rand;
 extern crate time;
-extern crate errno;
-extern crate hex;
-extern crate aes_gcm;
 
-extern crate radix; // https://github.com/refraction-networking/radix
-extern crate tuntap; // https://github.com/ewust/tuntap.rs
-extern crate zmq;
 extern crate protobuf;
+extern crate radix; // https://github.com/refraction-networking/radix
 extern crate redis;
-extern crate toml;
 extern crate serde;
 extern crate serde_derive;
+extern crate toml;
+extern crate tuntap; // https://github.com/ewust/tuntap.rs
+extern crate zmq;
 
 use std::mem::transmute;
 use time::precise_time_ns;
 
 use radix::PrefixTree;
-use std::io::BufReader;
-use std::io::BufRead;
-use std::fs::File;
+use serde_derive::Deserialize;
 use std::env;
 use std::fs;
-use serde_derive::Deserialize;
+use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
 
 use std::ffi::CStr;
 use std::os::raw::c_char;
 
-use tuntap::{IFF_TUN,TunTap};
+use tuntap::{TunTap, IFF_TUN};
 
 // Must go before all other modules so that the report! macro will be visible.
 #[macro_use]
@@ -44,17 +44,14 @@ pub mod c_api;
 pub mod elligator;
 pub mod flow_tracker;
 pub mod process_packet;
-pub mod util;
-pub mod signalling;
 pub mod sessions;
+pub mod signalling;
+pub mod util;
 
-
-use flow_tracker::{Flow,FlowTracker};
-
+use flow_tracker::{Flow, FlowTracker};
 
 // Global program state for one instance of a TapDance station process.
-pub struct PerCoreGlobal
-{
+pub struct PerCoreGlobal {
     priv_key: [u8; 32],
 
     lcore: i32,
@@ -64,19 +61,18 @@ pub struct PerCoreGlobal
     // pub sessions: HashMap<Flow, SessionState>,
     // Just some scratch space for mio.
     //events_buf: Events,
-
     pub tun: TunTap,
 
     pub stats: PerCoreStats,
 
     // List of IP prefixes we'll respond to as dark decoys
-    pub ip_tree:   PrefixTree,
+    pub ip_tree: PrefixTree,
     // ZMQ socket for sending information to the dark decoy application
-    zmq_sock:      zmq::Socket,
+    zmq_sock: zmq::Socket,
 
     // Filter list of addresses to ignore traffic from. This primarily functions to prevent liveness
     // testing from other stations in a conjure cluster from clogging up the logs with connection
-    // notifications. 
+    // notifications.
     filter_list: Vec<String>,
 
     // If we're reading from a GRE tap, we can provide an optional offset that we read
@@ -85,8 +81,7 @@ pub struct PerCoreGlobal
 }
 
 // Tracking of some pretty straightforward quantities
-pub struct PerCoreStats
-{
+pub struct PerCoreStats {
     pub elligator_this_period: u64,
     pub packets_this_period: u64,
     pub ipv4_packets_this_period: u64,
@@ -111,35 +106,34 @@ pub struct PerCoreStats
     pub in_tree_this_period: u64,
 }
 
-// Currently used to parse the Toml config. If this needs to play a larger role 
+// Currently used to parse the Toml config. If this needs to play a larger role
 // in the future this can be added to the PerCoreGlobal.
 #[derive(Deserialize)]
 struct StationConfig {
     detector_filter_list: Vec<String>,
 }
 
-const IP_LIST_PATH: &'static str = "/var/lib/dark-decoy.prefixes";
-const STATION_CONF_PATH: &'static str = "CJ_STATION_CONFIG";
+const IP_LIST_PATH: &str = "/var/lib/dark-decoy.prefixes";
+const STATION_CONF_PATH: &str = "CJ_STATION_CONFIG";
 
-impl PerCoreGlobal
-{
-    fn new(priv_key: [u8; 32], the_lcore: i32, workers_socket_addr: &str) -> PerCoreGlobal
-    {
-
+impl PerCoreGlobal {
+    fn new(priv_key: [u8; 32], the_lcore: i32, workers_socket_addr: &str) -> PerCoreGlobal {
         let tun = TunTap::new(IFF_TUN, &format!("tun{}", the_lcore)).unwrap();
         tun.set_up().unwrap();
 
         // Setup ZMQ
         let zmq_ctx = zmq::Context::new();
         let zmq_sock = zmq_ctx.socket(zmq::PUB).unwrap();
-        zmq_sock.connect(workers_socket_addr).expect("failed connecting to ZMQ");
+        zmq_sock
+            .connect(workers_socket_addr)
+            .expect("failed connecting to ZMQ");
 
         // Parse toml station config to get filter list
         let conf_path = env::var(STATION_CONF_PATH).unwrap();
         let contents = fs::read_to_string(conf_path)
             .expect("Something went wrong reading the station config file");
-        let value: StationConfig = toml::from_str(&contents)
-            .expect("Failed to parse toml station config");
+        let value: StationConfig =
+            toml::from_str(&contents).expect("Failed to parse toml station config");
 
         // Also all threads read the same environment variable so they will all
         // set it the same, race condition for setting client ip logging doesn't
@@ -148,33 +142,35 @@ impl PerCoreGlobal
         match client_ip_logging_str.as_ref() {
             "true" => Flow::set_log_client(true),
             "false" => Flow::set_log_client(false),
-            &_ => Flow::set_log_client(false), // default disable 
+            &_ => Flow::set_log_client(false), // default disable
         };
 
         let gre_offset = match env::var("PARSE_GRE_OFFSET") {
             Ok(val) => val.parse::<usize>().unwrap(),
             Err(env::VarError::NotPresent) => 0,
-            Err(_) => { println!("Error, can't parse PARSE_GRE_OFFSET"); 0},
+            Err(_) => {
+                println!("Error, can't parse PARSE_GRE_OFFSET");
+                0
+            }
         };
 
         debug!("gre_offset: {}", gre_offset);
 
         PerCoreGlobal {
-            priv_key: priv_key,
+            priv_key,
             lcore: the_lcore,
             // sessions: HashMap::new(),
             flow_tracker: FlowTracker::new(),
-            tun: tun,
+            tun,
             stats: PerCoreStats::new(),
             ip_tree: PrefixTree::new(),
-            zmq_sock: zmq_sock,
+            zmq_sock,
             filter_list: value.detector_filter_list,
-            gre_offset: gre_offset,
+            gre_offset,
         }
     }
 
-    fn read_ip_list(&mut self)
-    {
+    fn read_ip_list(&mut self) {
         let f = match File::open(IP_LIST_PATH) {
             Ok(f) => f,
             Err(e) => {
@@ -191,39 +187,34 @@ impl PerCoreGlobal
                 return;
             }
         }
-
     }
-
 }
 
-impl PerCoreStats
-{
-    fn new() -> PerCoreStats
-    {
-        PerCoreStats { elligator_this_period: 0,
-                       packets_this_period: 0,
-                       ipv4_packets_this_period: 0,
-                       ipv6_packets_this_period: 0,
-                       tcp_packets_this_period: 0,
-                       tls_packets_this_period: 0,
-                       bytes_this_period: 0,
-                       //reconns_this_period: 0,
-                       tls_bytes_this_period: 0,
-                       port_443_syns_this_period: 0,
-                       //cli2cov_raw_etherbytes_this_period: 0,
+impl PerCoreStats {
+    fn new() -> PerCoreStats {
+        PerCoreStats {
+            elligator_this_period: 0,
+            packets_this_period: 0,
+            ipv4_packets_this_period: 0,
+            ipv6_packets_this_period: 0,
+            tcp_packets_this_period: 0,
+            tls_packets_this_period: 0,
+            bytes_this_period: 0,
+            //reconns_this_period: 0,
+            tls_bytes_this_period: 0,
+            port_443_syns_this_period: 0,
+            //cli2cov_raw_etherbytes_this_period: 0,
+            tot_usr_us: 0,
+            tot_sys_us: 0,
+            last_measure_time: precise_time_ns(),
 
-                       tot_usr_us: 0,
-                       tot_sys_us: 0,
-                       last_measure_time: precise_time_ns(),
-
-                        not_in_tree_this_period: 0,
-                        in_tree_this_period: 0 }
+            not_in_tree_this_period: 0,
+            in_tree_this_period: 0,
+        }
     }
-    fn periodic_status_report(&mut self, tracked: usize, dark_decoys: usize)
-    {
+    fn periodic_status_report(&mut self, tracked: usize, dark_decoys: usize) {
         let cur_measure_time = precise_time_ns();
-        let (user_secs, user_usecs, sys_secs, sys_usecs) =
-            c_api::c_get_cpu_time();
+        let (user_secs, user_usecs, sys_secs, sys_usecs) = c_api::c_get_cpu_time();
         let user_microsecs: i64 = user_usecs + 1000000 * user_secs;
         let sys_microsecs: i64 = sys_usecs + 1000000 * sys_secs;
 
@@ -250,13 +241,15 @@ impl PerCoreStats
                 0,
                 0);
         */
-        report!("stats {} pkts ({} v4, {} v6) dark decoy flows {} tracked flows {} tags checked {}",
+        report!(
+            "stats {} pkts ({} v4, {} v6) dark decoy flows {} tracked flows {} tags checked {}",
             self.packets_this_period,
             self.ipv4_packets_this_period,
             self.ipv6_packets_this_period,
             dark_decoys,
             tracked,
-            self.elligator_this_period);
+            self.elligator_this_period
+        );
 
         self.elligator_this_period = 0;
         self.packets_this_period = 0;
@@ -278,64 +271,69 @@ impl PerCoreStats
     }
 }
 
-
+///
+/// # Safety
+///
 #[no_mangle]
-pub extern "C" fn rust_periodic_report(ptr: *mut PerCoreGlobal)
-{
+pub unsafe extern "C" fn rust_periodic_report(ptr: *mut PerCoreGlobal) {
     #[allow(unused_mut)]
-    let mut global = unsafe { &mut *ptr };
+    let mut global = &mut *ptr;
     global.stats.periodic_status_report(
         global.flow_tracker.count_tracked_flows(),
-        global.flow_tracker.count_phantom_flows());
+        global.flow_tracker.count_phantom_flows(),
+    );
 }
 
 #[repr(C)]
-pub struct RustGlobalsStruct
-{
+pub struct RustGlobalsStruct {
     global: *mut PerCoreGlobal,
 }
 
+///
+/// # Safety
+///
 #[no_mangle]
-pub extern "C" fn rust_detect_init(lcore_id: i32, ckey: *const u8, workers_socket_addr: *const c_char)
--> RustGlobalsStruct
-{
-
+pub unsafe extern "C" fn rust_detect_init(
+    lcore_id: i32,
+    ckey: *const u8,
+    workers_socket_addr: *const c_char,
+) -> RustGlobalsStruct {
     logging::init(log::LogLevel::Debug, lcore_id);
 
-    let key = *array_ref![unsafe{std::slice::from_raw_parts(ckey, 32 as usize)},
-                            0, 32];
+    let key = *array_ref![std::slice::from_raw_parts(ckey, 32_usize), 0, 32];
 
     let s = format!("/tmp/dark-decoy-reporter-{}.fifo", lcore_id);
     c_api::c_open_reporter(s);
     report!("reset");
 
-    let addr: &CStr = unsafe { CStr::from_ptr(workers_socket_addr) };
+    let addr: &CStr = CStr::from_ptr(workers_socket_addr);
 
     let mut global = PerCoreGlobal::new(key, lcore_id, addr.to_str().unwrap());
     global.read_ip_list();
 
     debug!("Initialized rust core {}", global.lcore);
 
-    RustGlobalsStruct { global: unsafe { transmute(Box::new(global)) } }
-                        //fail_map: unsafe { transmute(Box::new(fail_map)) },
-                        //cli_conf: unsafe { transmute(Box::new(cli_conf)) } }
+    RustGlobalsStruct {
+        global: transmute(Box::new(global)),
+    }
+    //fail_map: unsafe { transmute(Box::new(fail_map)) },
+    //cli_conf: unsafe { transmute(Box::new(cli_conf)) } }
 }
 
 // Called so we can tick the event loop forward. Must not block.
 #[no_mangle]
-pub extern "C" fn rust_event_loop_tick(_ptr: *mut PerCoreGlobal)
-{
+pub extern "C" fn rust_event_loop_tick(_ptr: *mut PerCoreGlobal) {}
 
-}
-
-// Drops TLS flows that took too long to send their first app data packet,
-// RSTs decoy flows a couple of seconds after the client's FIN, and
-// errors-out cli-stream-less sessions that took too long to get a new stream.
+/// Drops TLS flows that took too long to send their first app data packet,
+/// RSTs decoy flows a couple of seconds after the client's FIN, and
+/// errors-out cli-stream-less sessions that took too long to get a new stream.
+///
+/// # Safety
+///
 #[no_mangle]
-pub extern "C" fn rust_periodic_cleanup(ptr: *mut PerCoreGlobal)
-{
+pub unsafe extern "C" fn rust_periodic_cleanup(ptr: *mut PerCoreGlobal) {
     #[allow(unused_mut)]
-    let mut global = unsafe { &mut *ptr };
+    let mut global = &mut *ptr;
     global.flow_tracker.drop_all_stale_flows();
 
     /*
@@ -351,5 +349,3 @@ pub extern "C" fn rust_periodic_cleanup(ptr: *mut PerCoreGlobal)
     global.cli_psv_driver.check_streams_progress(&global.id2sess);
     */
 }
-
-

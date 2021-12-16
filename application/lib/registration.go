@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	lt "github.com/refraction-networking/conjure/application/liveness"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
@@ -84,11 +85,13 @@ type RegistrationManager struct {
 	registeredDecoys *RegisteredDecoys
 	Logger           *log.Logger
 	PhantomSelector  *PhantomIPSelector
+	LivenessTester   lt.LivenessTester
 }
 
 func NewRegistrationManager() *RegistrationManager {
 	logger := log.New(os.Stdout, "[REG] ", log.Ldate|log.Lmicroseconds)
-
+	var ult *lt.UncachedLivenessTester
+	ult = new(lt.UncachedLivenessTester)
 	p, err := NewPhantomIPSelector()
 	if err != nil {
 		// fmt.Errorf("failed to create the PhantomIPSelector object: %v", err)
@@ -98,6 +101,7 @@ func NewRegistrationManager() *RegistrationManager {
 		Logger:           logger,
 		registeredDecoys: NewRegisteredDecoys(),
 		PhantomSelector:  p,
+		LivenessTester:   ult,
 	}
 }
 
@@ -254,6 +258,18 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 	regManager.registeredDecoys.removeOldRegistrations(regManager.Logger)
 }
 
+// PhantomIsLive - Test whether the phantom is live using
+// 8 syns which returns syn-acks from 99% of sites within 1 second.
+// see  ZMap: Fast Internet-wide Scanning  and Its Security Applications
+// https://www.usenix.org/system/files/conference/usenixsecurity13/sec13-paper_durumeric.pdf
+//
+// return:	bool	true  - host is live
+// 					false - host is not liev
+//			error	reason decision was made
+func (regManager *RegistrationManager) PhantomIsLive(addr string, port uint16) (bool, error) {
+	return regManager.LivenessTester.PhantomIsLive(addr, port)
+}
+
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
 	DarkDecoy          net.IP
@@ -383,54 +399,6 @@ func (reg *DecoyRegistration) PreScanned() bool {
 		return false
 	}
 	return reg.Flags.GetPrescanned()
-}
-
-// PhantomIsLive - Test whether the phantom is live using
-// 8 syns which returns syn-acks from 99% of sites within 1 second.
-// see  ZMap: Fast Internet-wide Scanning  and Its Security Applications
-// https://www.usenix.org/system/files/conference/usenixsecurity13/sec13-paper_durumeric.pdf
-//
-// return:	bool	true  - host is live
-// 					false - host is not life
-//			error	reason decision was made
-func (reg *DecoyRegistration) PhantomIsLive() (bool, error) {
-	return phantomIsLive(net.JoinHostPort(reg.DarkDecoy.String(), "443"))
-}
-
-func phantomIsLive(address string) (bool, error) {
-	width := 4
-	dialError := make(chan error, width)
-	timeout := 750 * time.Millisecond
-
-	testConnect := func() {
-		conn, err := net.DialTimeout("tcp", address, timeout)
-		if err != nil {
-			dialError <- err
-			return
-		}
-		conn.Close()
-		dialError <- nil
-	}
-
-	for i := 0; i < width; i++ {
-		go testConnect()
-	}
-
-	time.Sleep(timeout)
-
-	// If any return errors or connect then return nil before deadline it is live
-	select {
-	case err := <-dialError:
-		if e, ok := err.(net.Error); ok && e.Timeout() {
-			return false, fmt.Errorf("Reached connection timeout")
-		}
-		if err != nil {
-			return true, err
-		}
-		return true, fmt.Errorf("Phantom picked up the connection")
-	default:
-		return false, fmt.Errorf("Reached statistical timeout %v", timeout)
-	}
 }
 
 type DecoyTimeout struct {
@@ -665,8 +633,10 @@ func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
 		RegCount:   expiredRegObj.regCount,
 	}
 
-	// Update stats
-	Stat().ExpireReg(expiredRegObj.DecoyListVersion, expiredRegObj.RegistrationSource)
+	if expiredRegObj.Valid {
+		// Update stats
+		Stat().ExpireReg(expiredRegObj.DecoyListVersion, expiredRegObj.RegistrationSource)
+	}
 
 	// remove from timeout tracking
 	delete(r.decoysTimeouts, index)
@@ -726,5 +696,7 @@ func registerForDetector(reg *DecoyRegistration) {
 		// throw(fit)
 		return
 	}
-	client.Publish(DETECTOR_REG_CHANNEL, string(s2d))
+
+	ctx := context.Background()
+	client.Publish(ctx, DETECTOR_REG_CHANNEL, string(s2d))
 }

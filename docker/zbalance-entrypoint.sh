@@ -1,8 +1,6 @@
 #!/bin/bash
 set -e
 
-
-
 while [ $(sysctl -b vm.nr_hugepages) -lt 512 ]
 do
 	echo 'Please set number of hugepages to at least 512.'
@@ -23,16 +21,24 @@ do
 	sleep 10
 done
 
-while [ ! $(cat "/proc/net/pf_ring/dev/${CJ_IFACE}/info" | grep ZC) ]
-do
+check_ZC_driver() {
+    ifcname="$1"
+    if [[ $ifc = "zc:"* ]]; then
+        ifcname="${ifcname#zc:}"
+    fi
+    if grep -q "ZC" "/proc/net/pf_ring/dev/${ifcname}/info"; then
+	echo "ZC driver loaded for ${ifcname}"
+    else
 	echo 'Is ZC network drivers loaded? For instructions visit https://www.ntop.org/guides/pf_ring/get_started/packages_installation.html'
-	echo ''
-	echo 'To check for ZC driver run:'
-	echo '	cat /proc/net/pf_ring/dev/'${CJ_IFACE}'/info'
-	echo 'You should see "Polling Mode: ZC/NAPI"'
-	echo ''
-	sleep 10; 
-done
+ 	echo ''
+ 	echo 'To check for ZC driver run:'
+ 	echo '	cat /proc/net/pf_ring/dev/'${ifcname}'/info'
+ 	echo 'You should see "Polling Mode: ZC/NAPI"'
+ 	echo ''
+	sleep 10
+	exit 1;
+    fi	
+}
 
 # TD_IFACE could be a CSV list of interfaces.
 # Pull them apart to ensure each gets zc: prefix
@@ -45,6 +51,9 @@ do
     if [[ $ifc = "zc:"* ]]; then
         ifcelem=${ifc}
     fi
+
+    check_ZC_driver ${ifcelem} 
+
     if [ $didfirst -ne 0 ]; then
         ifcarg="$ifcarg,$ifcelem"
     else
