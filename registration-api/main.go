@@ -34,7 +34,7 @@ type config struct {
 	AuthType            string   `toml:"auth_type"`
 	AuthVerbose         bool     `toml:"auth_verbose"`
 	StationPublicKeys   []string `toml:"station_pubkeys"`
-	BidirectionalAPIGen uint16   `toml:"bidirectional_api_generation"`
+	BidirectionalAPIGen uint32   `toml:"bidirectional_api_generation"`
 	ClientConfPath      string   `toml:"clientconf_path"`
 
 	// Parsed from conjure.conf environment vars
@@ -55,9 +55,6 @@ type server struct {
 
 	// Latest clientConf for sharing over RegistrationResponse channel.
 	latestClientConf *pb.ClientConf
-
-	// // Function to compare passed in client config generation to server's
-	// compareClientConfGen func(int) *pb.ClientConf
 }
 
 // Get the first element of the X-Forwarded-For header if it is available, this
@@ -183,6 +180,19 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	// Create registration response object
 	regResp := &pb.RegistrationResponse{}
 
+	// Check server's client config -- add server's ClientConf if client is outdated
+	serverClientConf := s.compareClientConfGen(*payload.RegistrationPayload.DecoyListGeneration)
+	if serverClientConf != nil {
+		s.logger.Printf("Sending server client config in registration resp due to server gen %d and client gen %d\n",
+			*serverClientConf.Generation, *payload.RegistrationPayload.DecoyListGeneration)
+
+		// Save the client config from server to return to client
+		regResp.ClientConf = serverClientConf
+
+		// Replace the payload generation with correct generation from server's client config
+		payload.RegistrationPayload.DecoyListGeneration = serverClientConf.Generation
+	}
+
 	// Generate seed and phantom address
 	cjkeys, err := lib.GenSharedKeys(payload.SharedSecret)
 	if err != nil {
@@ -197,8 +207,6 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 			uint(s.BidirectionalAPIGen), //generation type uint
 			false,
 		)
-
-		s.logger.Println(cjkeys.DarkDecoySeed)
 
 		if err != nil {
 			s.logger.Println("Failed to select IPv4Address:", err)
@@ -227,13 +235,6 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 
 	port := uint32(443)
 	regResp.Port = &port // future  -change to randomized
-
-	// Check server's client config -- if server generation is less than
-	// client's decoy_list_generation
-	serverClientConf := s.compareClientConfGen(*payload.RegistrationPayload.DecoyListGeneration)
-	if serverClientConf != nil {
-		regResp.ClientConf = serverClientConf
-	}
 
 	// Create payload to send out to all servers
 	zmqPayload, err := s.processC2SWrapper(payload, clientAddrBytes)
@@ -273,14 +274,14 @@ func parseClientConf(path string) (*pb.ClientConf, error) {
 
 	// Check that the filepath passed in exists
 	if _, err := os.Stat(path); err != nil {
-		fmt.Print("filepath does not exist:", path)
+		fmt.Println("filepath does not exist:", path)
 		return emptyPayload, err
 	}
 
 	// Open file path that stores the client config
 	in, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Print("failed to read client config filepath:", err)
+		fmt.Println("failed to read client config filepath:", err)
 		return emptyPayload, err
 	}
 
@@ -289,7 +290,7 @@ func parseClientConf(path string) (*pb.ClientConf, error) {
 
 	// Unmarshal into protobuf struct
 	if err = proto.Unmarshal(in, payload); err != nil {
-		fmt.Print("failed to decode protobuf body:", err)
+		fmt.Println("failed to decode protobuf body:", err)
 		return emptyPayload, err
 	}
 
@@ -297,10 +298,12 @@ func parseClientConf(path string) (*pb.ClientConf, error) {
 	return payload, nil
 }
 
-// Use this function in registerBidirectional, if the returned ClientConfig is not nil add it to the RegistrationResponse.
+// Use this function in registerBidirectional, if the returned ClientConfig is
+// not nil add it to the RegistrationResponse.
 func (s *server) compareClientConfGen(genNum uint32) *pb.ClientConf {
 	// Check that server has a currnet (latest) client config
 	if s.latestClientConf == nil {
+		s.logger.Println("Server latest ClientConf is nil")
 		return nil
 	}
 
@@ -396,8 +399,6 @@ func main() {
 	if err != nil {
 		s.logger.Printf("failed to parse the latest ClientConf based on path file: %v\n", err)
 	}
-	// DEBUG -- TAKE OUT WHEN DONE TODO
-	s.logger.Println("latestClientConf:", s.latestClientConf)
 
 	// Should we log client IP addresses
 	s.logClientIP, err = strconv.ParseBool(os.Getenv("LOG_CLIENT_IP"))

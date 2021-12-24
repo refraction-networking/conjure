@@ -363,7 +363,7 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 		return nil
 	}
 
-	generation_957 := uint16(957)
+	generation_957 := uint32(957)
 
 	// Create a server with the channel created above
 	s := server{
@@ -441,7 +441,8 @@ func TestBidirectionalAPIClientConf(t *testing.T) {
 		return nil
 	}
 
-	generation_1028 := uint16(1028)
+	clientconfig_gen := uint32(1)
+	fmt.Println("Client config generation number used in register:", clientconfig_gen)
 
 	// Create a server with the channel created above
 	s := server{
@@ -450,8 +451,11 @@ func TestBidirectionalAPIClientConf(t *testing.T) {
 	}
 	s.logClientIP = true
 
-	s.config.BidirectionalAPIGen = generation_1028
-	s.config.ClientConfPath = "/opt/conjure/sysconfig/ClientConf"
+	s.config.BidirectionalAPIGen = clientconfig_gen
+
+	s.config.ClientConfPath = "/Users/RebeccaHirsh/Documents/Refraction-Networking-Research/refraction-networking/gotapdance/assets/ClientConf"
+
+	s.latestClientConf, _ = parseClientConf(s.ClientConfPath)
 
 	// Client sends to station v4 or v6, shared secret, etc.
 	c2API, _ := generateC2SWrapperPayload() // v4 support
@@ -505,6 +509,9 @@ func TestBidirectionalAPIClientConf(t *testing.T) {
 		t.Fatalf("Unable to unmarshal RegistrationResponse protobuf")
 	}
 
-	t.Log(*resp_payload.Ipv4Addr)
-	t.Log(*resp_payload.ClientConf)
+	if resp_payload.ClientConf == nil {
+		t.Fatalf("server client conf not returned in registration response")
+	} else {
+		t.Log("server client conf returned in registration response")
+	}
 }
