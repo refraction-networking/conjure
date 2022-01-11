@@ -23,7 +23,9 @@ import (
 
 const (
 	// The length of the shared secret sent by the client in bytes.
-	regIDLen     = 16
+	regIDLen = 16
+
+	// SecretLength gives the length of a secret (used for minimum registration body len)
 	SecretLength = 32
 )
 
@@ -307,8 +309,9 @@ func (s *server) compareClientConfGen(genNum uint32) *pb.ClientConf {
 		return nil
 	}
 
+	s.logger.Printf("client: %d, stored: %d\n", genNum, s.latestClientConf.GetGeneration())
 	// Check if generation number param is greater than server's client config
-	if genNum > *s.latestClientConf.Generation {
+	if genNum > s.latestClientConf.GetGeneration() {
 		return nil
 	}
 
