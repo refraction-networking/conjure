@@ -95,6 +95,8 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=
 github.com/refraction-networking/gotapdance v0.0.0-20210825135431-3d46b8b662a9 h1:67SqS51Zq8eMpz4XmYG0fXDkn1YiUkJ191lPMs8jCUA=
 github.com/refraction-networking/gotapdance v0.0.0-20210825135431-3d46b8b662a9/go.mod h1:iBzxMSHu9kVV7v3Rc6vcDVCUDLsRGqLL3vtiR74JBvk=
+github.com/refraction-networking/gotapdance v0.0.0-20211215234154-01ce7114837a h1:yB/q71qQwDb1hBBwUJy+WE4NgBjapNb6TpCyKMKj+jk=
+github.com/refraction-networking/gotapdance v0.0.0-20211215234154-01ce7114837a/go.mod h1:iBzxMSHu9kVV7v3Rc6vcDVCUDLsRGqLL3vtiR74JBvk=
 github.com/refraction-networking/utls v0.0.0-20210713165636-0b2885c8c0d4 h1:n9NMHJusHylTmtaJ0Qe0VV9dkTZLiwAxHmrI/l98GeE=
 github.com/refraction-networking/utls v0.0.0-20210713165636-0b2885c8c0d4/go.mod h1:tz9gX959MEFfFN5whTIocCLUG57WiILqtdVxI8c6Wj0=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=

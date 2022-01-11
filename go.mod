@@ -13,7 +13,7 @@ require (
 	github.com/pebbe/zmq4 v1.2.7
 	github.com/pelletier/go-toml v1.9.4
 	github.com/pkg/taptun v0.0.0-20160424131934-bbbd335672ab
-	github.com/refraction-networking/gotapdance v0.0.0-20210825135431-3d46b8b662a9
+	github.com/refraction-networking/gotapdance v0.0.0-20211215234154-01ce7114837a
 	github.com/refraction-networking/utls v0.0.0-20210713165636-0b2885c8c0d4
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
