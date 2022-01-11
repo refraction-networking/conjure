@@ -281,7 +281,7 @@ func parseClientConf(path string) (*pb.ClientConf, error) {
 	}
 
 	// Open file path that stores the client config
-	in, err := os.ReadFile(path)
+	in, err := ioutil.ReadFile(path)
 	if err != nil {
 		fmt.Println("failed to read client config filepath:", err)
 		return emptyPayload, err
