@@ -183,10 +183,10 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	regResp := &pb.RegistrationResponse{}
 
 	// Check server's client config -- add server's ClientConf if client is outdated
-	serverClientConf := s.compareClientConfGen(*payload.RegistrationPayload.DecoyListGeneration)
+	serverClientConf := s.compareClientConfGen(payload.GetRegistrationPayload().GetDecoyListGeneration())
 	if serverClientConf != nil {
-		s.logger.Printf("Sending server client config in registration resp due to server gen %d and client gen %d\n",
-			*serverClientConf.Generation, *payload.RegistrationPayload.DecoyListGeneration)
+		// s.logger.Printf("Providing updated clientconf in reg resp %d -> %d\n",
+		// serverClientConf.GetGeneration(), payload.GetRegistrationPayload().GetDecoyListGeneration())
 
 		// Save the client config from server to return to client
 		regResp.ClientConf = serverClientConf
@@ -305,11 +305,11 @@ func parseClientConf(path string) (*pb.ClientConf, error) {
 func (s *server) compareClientConfGen(genNum uint32) *pb.ClientConf {
 	// Check that server has a currnet (latest) client config
 	if s.latestClientConf == nil {
-		s.logger.Println("Server latest ClientConf is nil")
+		// s.logger.Println("Server latest ClientConf is nil")
 		return nil
 	}
 
-	s.logger.Printf("client: %d, stored: %d\n", genNum, s.latestClientConf.GetGeneration())
+	// s.logger.Printf("client: %d, stored: %d\n", genNum, s.latestClientConf.GetGeneration())
 	// Check if generation number param is greater than server's client config
 	if genNum > s.latestClientConf.GetGeneration() {
 		return nil
@@ -398,9 +398,11 @@ func main() {
 	}
 
 	// Set latest client config based on saved file path
-	s.latestClientConf, err = parseClientConf(s.ClientConfPath)
+	cc, err := parseClientConf(s.ClientConfPath)
 	if err != nil {
 		s.logger.Printf("failed to parse the latest ClientConf based on path file: %v\n", err)
+	} else {
+		s.latestClientConf = cc
 	}
 
 	// Should we log client IP addresses
