@@ -153,16 +153,9 @@ impl fmt::Display for SessionDetails {
                 true => write!(
                     f,
                     "{} -> {} ({}ns)",
-                    self.client_ip.to_string(),
-                    self.phantom_ip.to_string(),
-                    self.timeout
+                    self.client_ip, self.phantom_ip, self.timeout
                 ),
-                false => write!(
-                    f,
-                    "_ -> {} ({}ns)",
-                    self.phantom_ip.to_string(),
-                    self.timeout
-                ),
+                false => write!(f, "_ -> {} ({}ns)", self.phantom_ip, self.timeout),
             }
         }
     }
