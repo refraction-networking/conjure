@@ -36,18 +36,18 @@ func generateC2SWrapperPayload() (c2API *pb.C2SWrapper, marshaledc2API []byte) {
 	covert := "1.2.3.4:1234"
 
 	// We need pointers to bools. This is nasty D:
-	true_bool := true
-	false_bool := false
+	trueBool := true
+	falseBool := false
 
 	c2s := pb.ClientToStation{
 		DecoyListGeneration: &generation,
 		CovertAddress:       &covert,
-		V4Support:           &true_bool,
-		V6Support:           &false_bool,
+		V4Support:           &trueBool,
+		V6Support:           &falseBool,
 		Flags: &pb.RegistrationFlags{
-			ProxyHeader: &true_bool,
-			Use_TIL:     &true_bool,
-			UploadOnly:  &false_bool,
+			ProxyHeader: &trueBool,
+			Use_TIL:     &trueBool,
+			UploadOnly:  &falseBool,
 		},
 	}
 
@@ -363,7 +363,7 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 		return nil
 	}
 
-	generation_957 := uint16(957)
+	generation957 := uint32(957)
 
 	// Create a server with the channel created above
 	s := server{
@@ -372,7 +372,7 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 	}
 	s.logClientIP = true
 
-	s.config.BidirectionalAPIGen = generation_957
+	s.config.BidirectionalAPIGen = generation957
 
 	// Client sends to station v4 or v6, shared secret, etc.
 	c2API, _ := generateC2SWrapperPayload() // v4 support
@@ -423,10 +423,99 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 	}
 
 	// Unmarshal
-	resp_payload := &pb.RegistrationResponse{}
-	if err = proto.Unmarshal(bodyBytes, resp_payload); err != nil {
+	respPayload := &pb.RegistrationResponse{}
+	if err = proto.Unmarshal(bodyBytes, respPayload); err != nil {
 		t.Fatalf("Unable to unmarshal RegistrationResponse protobuf")
 	}
 
-	t.Log(*resp_payload.Ipv4Addr)
+	t.Log(*respPayload.Ipv4Addr)
+}
+
+func TestBidirectionalAPIClientConf(t *testing.T) {
+	// Set subnet environment
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "../application/lib/test/phantom_subnets.toml")
+	var err error
+
+	messageChan := make(chan []byte, 1)
+	accepter := func(m []byte) error {
+		messageChan <- m
+		return nil
+	}
+
+	clientconfigGen := uint32(1)
+	fmt.Println("Client config generation number used in register:", clientconfigGen)
+
+	// Create a server with the channel created above
+	s := server{
+		messageAccepter: accepter,
+		logger:          logger,
+	}
+	s.logClientIP = true
+
+	s.config.BidirectionalAPIGen = clientconfigGen
+
+	s.config.ClientConfPath = "./test/ClientConf"
+
+	s.latestClientConf, err = parseClientConf(s.ClientConfPath)
+	if err != nil || s.latestClientConf == nil {
+		t.Fatalf("failed to parse test config")
+	}
+
+	// Client sends to station v4 or v6, shared secret, etc.
+	c2API, _ := generateC2SWrapperPayload() // v4 support
+	regSrc := pb.RegistrationSource_BidirectionalAPI
+	c2API.RegistrationSource = &regSrc
+	c2API.RegistrationAddress = net.ParseIP("8.8.8.8").To16()
+	body, _ := proto.Marshal(c2API)
+
+	r := httptest.NewRequest("POST", "/register-bidriectional", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	s.initPhantomSelector()
+	s.registerBidirectional(w, r)
+	resp := w.Result()
+
+	select {
+	case m := <-messageChan:
+		// We already tested the payload generation above, so here we're just
+		// confirming it arrives with the correct modifications
+		payload := &pb.C2SWrapper{}
+		if err := proto.Unmarshal(m, payload); err != nil {
+			t.Fatalf("Bad C2Swrapper returned")
+		}
+
+		// If the Address isn't re-written for API registrar source throw error
+		if net.IP(payload.GetRegistrationAddress()).String() == "8.8.8.8" {
+			t.Fatalf("Registration Address should be overwritten for API registrar")
+		}
+
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("timed out waiting for message from endpoint")
+	}
+
+	// Test for the new pb coming back
+	// w should respond with HTTP StatusOK, meaning it got something back
+	if w.Code != http.StatusOK {
+		t.Fatalf("response code mismatch: expected %d, got %d", http.StatusOK, w.Code)
+	}
+
+	defer resp.Body.Close()
+	// resp stores the server response from w
+	// Read (desearialize) resp's body into type []byte
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Unmarshal
+	respPayload := &pb.RegistrationResponse{}
+	if err = proto.Unmarshal(bodyBytes, respPayload); err != nil {
+		t.Fatalf("Unable to unmarshal RegistrationResponse protobuf")
+	}
+
+	if respPayload.ClientConf == nil {
+		t.Fatalf("server client conf not returned in registration response")
+	} else {
+		t.Log("server client conf returned in registration response")
+	}
 }

@@ -23,7 +23,9 @@ import (
 
 const (
 	// The length of the shared secret sent by the client in bytes.
-	regIDLen     = 16
+	regIDLen = 16
+
+	// SecretLength gives the length of a secret (used for minimum registration body len)
 	SecretLength = 32
 )
 
@@ -34,7 +36,8 @@ type config struct {
 	AuthType            string   `toml:"auth_type"`
 	AuthVerbose         bool     `toml:"auth_verbose"`
 	StationPublicKeys   []string `toml:"station_pubkeys"`
-	BidirectionalAPIGen uint16   `toml:"bidirectional_api_generation"`
+	BidirectionalAPIGen uint32   `toml:"bidirectional_api_generation"`
+	ClientConfPath      string   `toml:"clientconf_path"`
 
 	// Parsed from conjure.conf environment vars
 	logClientIP bool
@@ -51,6 +54,9 @@ type server struct {
 
 	logger *log.Logger
 	sock   *zmq.Socket
+
+	// Latest clientConf for sharing over RegistrationResponse channel.
+	latestClientConf *pb.ClientConf
 }
 
 // Get the first element of the X-Forwarded-For header if it is available, this
@@ -176,6 +182,19 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	// Create registration response object
 	regResp := &pb.RegistrationResponse{}
 
+	// Check server's client config -- add server's ClientConf if client is outdated
+	serverClientConf := s.compareClientConfGen(*payload.RegistrationPayload.DecoyListGeneration)
+	if serverClientConf != nil {
+		s.logger.Printf("Sending server client config in registration resp due to server gen %d and client gen %d\n",
+			*serverClientConf.Generation, *payload.RegistrationPayload.DecoyListGeneration)
+
+		// Save the client config from server to return to client
+		regResp.ClientConf = serverClientConf
+
+		// Replace the payload generation with correct generation from server's client config
+		payload.RegistrationPayload.DecoyListGeneration = serverClientConf.Generation
+	}
+
 	// Generate seed and phantom address
 	cjkeys, err := lib.GenSharedKeys(payload.SharedSecret)
 	if err != nil {
@@ -190,8 +209,6 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 			uint(s.BidirectionalAPIGen), //generation type uint
 			false,
 		)
-
-		s.logger.Println(cjkeys.DarkDecoySeed)
 
 		if err != nil {
 			s.logger.Println("Failed to select IPv4Address:", err)
@@ -221,7 +238,7 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	port := uint32(443)
 	regResp.Port = &port // future  -change to randomized
 
-	// Createt payload to send out to all servers
+	// Create payload to send out to all servers
 	zmqPayload, err := s.processC2SWrapper(payload, clientAddrBytes)
 	if err != nil {
 		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
@@ -250,6 +267,56 @@ func (s *server) sendToZMQ(message []byte) error {
 	s.Unlock()
 
 	return err
+}
+
+// Function to parse the latest ClientConf based on path file
+func parseClientConf(path string) (*pb.ClientConf, error) {
+	// Create empty client config protobuf to return in case of error
+	emptyPayload := &pb.ClientConf{}
+
+	// Check that the filepath passed in exists
+	if _, err := os.Stat(path); err != nil {
+		fmt.Println("filepath does not exist:", path)
+		return emptyPayload, err
+	}
+
+	// Open file path that stores the client config
+	in, err := ioutil.ReadFile(path)
+	if err != nil {
+		fmt.Println("failed to read client config filepath:", err)
+		return emptyPayload, err
+	}
+
+	// Create protobuf struct
+	payload := &pb.ClientConf{}
+
+	// Unmarshal into protobuf struct
+	if err = proto.Unmarshal(in, payload); err != nil {
+		fmt.Println("failed to decode protobuf body:", err)
+		return emptyPayload, err
+	}
+
+	// If no error, return the payload (clientConf pb)
+	return payload, nil
+}
+
+// Use this function in registerBidirectional, if the returned ClientConfig is
+// not nil add it to the RegistrationResponse.
+func (s *server) compareClientConfGen(genNum uint32) *pb.ClientConf {
+	// Check that server has a currnet (latest) client config
+	if s.latestClientConf == nil {
+		s.logger.Println("Server latest ClientConf is nil")
+		return nil
+	}
+
+	s.logger.Printf("client: %d, stored: %d\n", genNum, s.latestClientConf.GetGeneration())
+	// Check if generation number param is greater than server's client config
+	if genNum > s.latestClientConf.GetGeneration() {
+		return nil
+	}
+
+	// Otherwise, return server's client config
+	return s.latestClientConf
 }
 
 func (s *server) processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr []byte) ([]byte, error) {
@@ -328,6 +395,12 @@ func main() {
 	_, err := toml.DecodeFile(os.Getenv("CJ_API_CONFIG"), &s)
 	if err != nil {
 		s.logger.Fatalln("failed to load config:", err)
+	}
+
+	// Set latest client config based on saved file path
+	s.latestClientConf, err = parseClientConf(s.ClientConfPath)
+	if err != nil {
+		s.logger.Printf("failed to parse the latest ClientConf based on path file: %v\n", err)
 	}
 
 	// Should we log client IP addresses
