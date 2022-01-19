@@ -519,3 +519,16 @@ func TestBidirectionalAPIClientConf(t *testing.T) {
 		t.Log("server client conf returned in registration response")
 	}
 }
+
+func TestAPIParseClientConf(t *testing.T) {
+	var s server
+	s.logger = log.New(os.Stdout, "[TESTAPI] ", log.Ldate|log.Lmicroseconds)
+	s.ClientConfPath = "./test/ClientConf"
+
+	cc, err := parseClientConf(s.ClientConfPath)
+	require.Nil(t, err)
+	s.latestClientConf = cc
+
+	require.NotNil(t, s.latestClientConf)
+	require.Equal(t, uint32(1153), s.latestClientConf.GetGeneration())
+}
