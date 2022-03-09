@@ -89,6 +89,8 @@ pub struct PerCoreStats {
     pub tcp_packets_this_period: u64,
     pub tls_packets_this_period: u64,
     pub bytes_this_period: u64,
+    pub bytes_this_period_tcp_s443: u64,
+    pub bytes_this_period_s0_1023: u64,
     //pub reconns_this_period: u64,
     pub tls_bytes_this_period: u64,
     pub port_443_syns_this_period: u64,
@@ -200,6 +202,8 @@ impl PerCoreStats {
             tcp_packets_this_period: 0,
             tls_packets_this_period: 0,
             bytes_this_period: 0,
+            bytes_this_period_tcp_s443: 0,
+            bytes_this_period_s0_1023: 0,
             //reconns_this_period: 0,
             tls_bytes_this_period: 0,
             port_443_syns_this_period: 0,
@@ -257,9 +261,7 @@ impl PerCoreStats {
         self.ipv6_packets_this_period = 0;
         self.tcp_packets_this_period = 0;
         self.tls_packets_this_period = 0;
-        self.bytes_this_period = 0;
         //self.reconns_this_period = 0;
-        self.tls_bytes_this_period = 0;
         self.port_443_syns_this_period = 0;
 
         self.tot_usr_us = user_microsecs;
@@ -268,6 +270,21 @@ impl PerCoreStats {
 
         self.not_in_tree_this_period = 0;
         self.in_tree_this_period = 0;
+
+        report!("bytes-report total_bytes:{}, tcp-src-443_bytes:{} ({:.2}%), tcp-dst-443_bytes:{} ({:.2}%), u/t-src-0-1024_bytes:{} ({:.2}%)", 
+            self.bytes_this_period,
+            self.bytes_this_period_tcp_s443,
+            self.bytes_this_period_tcp_s443 as f64/self.bytes_this_period as f64 * 100 as f64,
+            self.tls_bytes_this_period,
+            self.tls_bytes_this_period as f64/self.bytes_this_period as f64 * 100 as f64,
+            self.bytes_this_period_s0_1023,
+            self.bytes_this_period_s0_1023 as f64/self.bytes_this_period as f64 * 100 as f64,
+        );
+
+        self.bytes_this_period = 0;
+        self.tls_bytes_this_period = 0;
+        self.bytes_this_period_tcp_s443 = 0;
+        self.bytes_this_period_s0_1023 = 0;
     }
 }
 

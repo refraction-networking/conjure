@@ -85,6 +85,7 @@ pub unsafe extern "C" fn rust_process_packet(
     global.stats.packets_this_period += 1;
     global.stats.bytes_this_period += rust_view_len as u64;
 
+
     let eth_pkt = match EthernetPacket::new(&rust_view[global.gre_offset..]) {
         Some(pkt) => pkt,
         None => return,
@@ -113,6 +114,10 @@ impl PerCoreGlobal {
             let ip = IpPacket::V4(ip_pkt);
             match ip.udp() {
                 Some(pkt) => {
+                    if pkt.get_source() < 1024 {
+                        self.stats.bytes_this_period_s0_1023 += frame_len as u64;
+                    }
+
                     // Special payloads are only sent as DNS on port 53
                     if pkt.get_destination() != 53 {
                         return;
@@ -135,6 +140,14 @@ impl PerCoreGlobal {
             };
             self.stats.tcp_packets_this_period += 1;
 
+            if tcp_pkt.get_source() == 443 {
+                self.stats.bytes_this_period_tcp_s443 += frame_len as u64;
+            }
+
+            if tcp_pkt.get_source() < 1024 {
+                self.stats.bytes_this_period_s0_1023 += frame_len as u64;
+            }
+
             // Ignore packets that aren't -> 443.
             // libpnet getters all return host order. Ignore the "u16be" in their
             // docs; interactions with pnet are purely host order.
@@ -155,6 +168,10 @@ impl PerCoreGlobal {
             let ip = IpPacket::V6(ip_pkt);
             match ip.udp() {
                 Some(pkt) => {
+                    if pkt.get_source() < 1024 {
+                        self.stats.bytes_this_period_s0_1023 += frame_len as u64;
+                    }
+
                     // Special payloads are only sent as DNS on port 53
                     if pkt.get_destination() != 53 {
                         return;
@@ -175,6 +192,14 @@ impl PerCoreGlobal {
                 None => return,
             };
             self.stats.tcp_packets_this_period += 1;
+
+            if tcp_pkt.get_source() == 443 {
+                self.stats.bytes_this_period_tcp_s443 += frame_len as u64;
+            }
+
+            if tcp_pkt.get_source() < 1024 {
+                self.stats.bytes_this_period_s0_1023 += frame_len as u64;
+            }
 
             if tcp_pkt.get_destination() != 443 {
                 return;
