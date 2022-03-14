@@ -11,7 +11,9 @@ use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::{TcpFlags, TcpPacket};
 use pnet::packet::udp::UdpPacket;
 use pnet::packet::Packet;
-// use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::fs::OpenOptions;
+use std::io::Write;
 
 use std::u8;
 //use elligator;
@@ -61,6 +63,35 @@ fn get_ip_packet<'p>(eth_pkt: &'p EthernetPacket) -> Option<IpPacket<'p>> {
     }
 }
 
+// Log packets from sloth to jsippe's VM.
+// Used to verify packet drops
+fn log_packet(ipv4_pkt: &Ipv4Packet) -> std::io::Result<()>
+{
+    match ipv4_pkt.get_next_level_protocol() {
+        IpNextHeaderProtocols::Tcp => {
+            if let Some(tcp_pkt) = TcpPacket::new(&ipv4_pkt.payload()) {
+                if ipv4_pkt.get_source() == Ipv4Addr::new(128,138,97,192) {
+                    if ipv4_pkt.get_destination() == Ipv4Addr::new(34,201,173,34) {
+                        if tcp_pkt.payload().len() > 0 {
+                            let log = format!("{} {}\n", time::now().to_timespec().sec, &String::from_utf8_lossy(tcp_pkt.payload()).to_mut());
+                            print!("{}", log);
+                            let path = "/tmp/jsippe-pkts.out";
+                            let mut file = OpenOptions::new()
+                            .write(true)
+                            .append(true)
+                            .open(path)?;
+                            file.write_all(log.as_bytes())?;
+                        }
+                    }
+                }
+            }
+        }
+        _ => {},
+    }
+    Ok(())
+}
+
+
 /// The jumping off point for all of our logic. This function inspects a packet
 /// that has come in the tap interface. We do not yet have any idea if we care
 /// about it; it might not even be TLS. It might not even be TCP!
@@ -107,6 +138,9 @@ impl PerCoreGlobal {
     // only passing it here for plumbing reasons, and just for stat reporting.
     fn process_ipv4_packet(&mut self, ip_pkt: Ipv4Packet, frame_len: usize) {
         self.stats.ipv4_packets_this_period += 1;
+
+        // Only used for jsippe's packet count
+        log_packet(&ip_pkt);
 
         // If the packet isn't TCP, first check for a UDP special payload, then return
         if ip_pkt.get_next_level_protocol() != IpNextHeaderProtocols::Tcp {
