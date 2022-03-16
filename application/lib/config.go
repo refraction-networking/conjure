@@ -2,10 +2,11 @@ package lib
 
 import (
 	"fmt"
-	"github.com/BurntSushi/toml"
 	"net"
 	"os"
 	"regexp"
+
+	"github.com/BurntSushi/toml"
 )
 
 // Config - Station golang configuration struct
@@ -85,6 +86,10 @@ func (c *Config) IsBlocklisted(urlStr string) bool {
 	}
 
 	if addr := net.ParseIP(host); addr != nil {
+		if !addr.IsGlobalUnicast() {
+			// No anycast / private / loopback allowed.
+			return true
+		}
 		for _, net := range c.covertBlocklistSubnets {
 			if net.Contains(addr) {
 				// blocked by IP address
