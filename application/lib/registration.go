@@ -401,6 +401,13 @@ func (reg *DecoyRegistration) PreScanned() bool {
 	return reg.Flags.GetPrescanned()
 }
 
+// GetRegistrationAddress returns the address that was used to create this
+// registration. This should almost never be used - it exists to get the address
+// for debugging and for logging misbehaving client IPs.
+func (reg *DecoyRegistration) GetRegistrationAddress() string {
+	return reg.registrationAddr.String()
+}
+
 type DecoyTimeout struct {
 	decoy            string
 	identifier       string

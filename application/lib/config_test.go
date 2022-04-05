@@ -28,7 +28,6 @@ func TestConjureLibConfigBlocklists(t *testing.T) {
 	conf := &Config{
 		CovertBlocklistSubnets: []string{
 			"192.0.0.1/16",
-			"::1/128",
 		},
 		CovertBlocklistDomains: []string{
 			".*blocked\\.com$",
@@ -43,7 +42,6 @@ func TestConjureLibConfigBlocklists(t *testing.T) {
 	goodURLs := []string{
 		"[::2]:443",
 		"blocked2.com:443",
-		"127.0.0.1:443",
 		"example.com:443",
 		"192.255.0.22:domain",
 
@@ -59,6 +57,7 @@ func TestConjureLibConfigBlocklists(t *testing.T) {
 		"abc.blocked.com:443",
 		"blocked1.com:443",
 		"192.0.2.1:http",
+		"127.0.0.1:443",
 		"localhost:443",
 	}
 

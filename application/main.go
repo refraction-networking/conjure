@@ -199,7 +199,8 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 		}
 
 		go func() {
-			// Handle multiple as receive_zmq_messages returns separate registrations for v4 and v6
+			// Handle multiple as receive_zmq_messages returns separate
+			// registrations for v4 and v6
 			for _, reg := range newRegs {
 				if reg == nil {
 					continue
@@ -210,7 +211,8 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					logger.Printf("Duplicate registration: %v %s\n", reg.IDString(), reg.RegistrationSource)
 					cj.Stat().AddDupReg()
 
-					// Track the received registration, if it is already tracked it will just update the record
+					// Track the received registration, if it is already tracked
+					// it will just update the record
 					err := regManager.TrackRegistration(reg)
 					if err != nil {
 						logger.Println("error tracking registration: ", err)
@@ -229,9 +231,12 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					cj.Stat().AddErrReg()
 				}
 
-				// If registration is trying to connect to a dark decoy that is blocklisted continue
+				// If registration is trying to connect to a dark decoy that is
+				// blocklisted continue
 				if reg.Covert == "" || conf.IsBlocklisted(reg.Covert) {
-					logger.Printf("Dropping reg, malformed or blocklisted covert: %v, %s, %v", reg.IDString(), reg.Covert, err)
+					// We log client IPs for clients attempting to connect to
+					// blocklisted covert addresses.
+					logger.Printf("Dropping reg, malformed or blocklisted covert: %v, %s -> %s", reg.IDString(), reg.GetRegistrationAddress(), reg.Covert)
 					cj.Stat().AddErrReg()
 					continue
 				}
