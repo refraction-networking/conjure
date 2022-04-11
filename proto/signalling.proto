@@ -141,20 +141,28 @@ enum TransportType {
     Null = 0;
     Min = 1;   // Send a 32-byte HMAC id to let the station distinguish registrations to same host
     Obfs4 = 2; // Not implemented yet?
-    Webrtc = 3; // UDP transport: WebRTC DataChannel
+    Webrtc = 99; // UDP transport: WebRTC DataChannel
 }
 
-message WebrtcSDP {
-    optional uint32 sdp_type = 1; // TODO: Single byte (uint8)
-    // the IP is represented as a 16-byte datatype.
-    optional uint64 ip_upper = 2; // ip := upper << 64 | lower
-    optional uint64 ip_lower = 3;
-    optional uint32 composed_info = 4;
+// Deflated ICE Candidate by seed2sdp package
+message WebRTCICECandidate {
+    // IP is represented in its 16-byte form
+    required uint64 ip_upper = 1;
+    required uint64 ip_lower = 2;
+    // Composed info includes port, tcptype (unset if not tcp), candidate type (host, srflx, prflx), protocol (TCP/UDP), and component (RTP/RTCP)
+    required uint32 composed_info = 3;
 }
 
-message WebrtcSignalling {
-    repeated WebrtcSDP webrtc_sdps = 1;
-    optional string webrtc_seed = 2;
+// Deflated SDP for WebRTC by seed2sdp package
+message WebRTCSDP {
+    required uint32 type = 1; 
+    repeated WebRTCICECandidate candidates = 2; // there could be multiple candidates
+}
+
+// WebRTCSignal includes a deflated SDP and a seed
+message WebRTCSignal {
+    required string seed = 1;
+    required WebRTCSDP sdp = 2;
 }
 
 message StationToClient {
@@ -233,7 +241,7 @@ message ClientToStation {
 	optional RegistrationFlags flags = 24;
 
     // Transport Extensions
-    optional WebrtcSignalling webrtc_signalling = 31;
+    optional WebRTCSignal webrtc_signal = 31;
     
     // Random-sized junk to defeat packet size fingerprinting.
     optional bytes padding = 100;

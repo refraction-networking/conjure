@@ -80,6 +80,23 @@ type ConnectingTransport interface {
 	Connect(context.Context, *DecoyRegistration) (net.Conn, error)
 }
 
+// UDPTransport describes transports based on UDP instead of TCP
+// which requires access to needed UDP port/Conn, etc.
+type UDPTransport interface {
+	Transport
+
+	// PortRange() sets the port range for the UDP transport to listen on
+	// , left-side inclusive [min, max)
+	PortRange(min, max int) error
+
+	// PortMapping() maps a port needed by the UDP transport to a UDPConn.
+	Listen(port int, rawsocket *net.UDPConn) error
+
+	// HandleRegistration() notifies the UDP transport that a registration
+	// under its transport type has been received and is ready to be processed.
+	HandleRegistration(ctx context.Context, reg *DecoyRegistration) (net.Conn, error) // BLOCK UNTIL CONNECTED
+}
+
 // RegistrationManager manages registration tracking for the station.
 type RegistrationManager struct {
 	registeredDecoys *RegisteredDecoys
@@ -166,6 +183,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		Mask:               c2s.GetMaskedDecoyServerName(),
 		Flags:              c2s.Flags,
 		Transport:          c2s.GetTransport(),
+		WebRTCSignal:       c2s.GetWebrtcSignal(), // Gaukas: consider generalization?
 		DecoyListVersion:   c2s.GetDecoyListGeneration(),
 		RegistrationTime:   time.Now(),
 		RegistrationSource: registrationSource,
@@ -272,12 +290,14 @@ func (regManager *RegistrationManager) PhantomIsLive(addr string, port uint16) (
 
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
-	DarkDecoy          net.IP
-	registrationAddr   net.IP
-	Keys               *ConjureSharedKeys
-	Covert, Mask       string
-	Flags              *pb.RegistrationFlags
-	Transport          pb.TransportType
+	DarkDecoy        net.IP
+	registrationAddr net.IP
+	Keys             *ConjureSharedKeys
+	Covert, Mask     string
+	Flags            *pb.RegistrationFlags
+	Transport        pb.TransportType
+	WebRTCSignal     *pb.WebRTCSignal
+
 	RegistrationTime   time.Time
 	RegistrationSource *pb.RegistrationSource
 	DecoyListVersion   uint32
