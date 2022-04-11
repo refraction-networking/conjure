@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -172,6 +173,27 @@ readLoop:
 	cj.Stat().CloseConn()
 }
 
+// Handle new registration from client for UDP Transports
+// NOTE: this is called within a goroutine in get_zmq_updates
+func handleUDPReg(regManager *cj.RegistrationManager, reg *cj.DecoyRegistration) {
+	// If it is using a UDP transport, notify the UDP transport used.
+	for tptype, tp := range regManager.GetUDPTransports() {
+		if tptype == reg.Transport {
+			ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+			go func() {
+				defer cancelFunc()
+				conn, err := tp.HandleRegistration(ctx, reg)
+				if err != nil {
+					logger.Printf("error handling UDP registration: %v\n", err)
+					return
+				}
+				cj.Proxy(reg, conn, logger)
+				cj.Stat().CloseConn()
+			}()
+		}
+	}
+}
+
 func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, conf *cj.Config) {
 	logger := log.New(os.Stdout, "[ZMQ] ", log.Ldate|log.Lmicroseconds)
 	sub, err := zmq.NewSocket(zmq.SUB)
@@ -274,6 +296,8 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 				regManager.AddRegistration(reg)
 				logger.Printf("Adding registration %v\n", reg.IDString())
 				cj.Stat().AddReg(reg.DecoyListVersion, reg.RegistrationSource)
+
+				handleUDPReg(regManager, reg)
 			}
 		}()
 
