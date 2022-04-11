@@ -459,6 +459,25 @@ func main() {
 	defer ln.Close()
 	logger.Printf("[STARTUP] Listening on %v\n", ln.Addr())
 
+	// Gaukas: Before entering loop, consider preparing all net.UDPConn
+	udpPort := 8000
+	segmentSize := 1000
+
+	for _, t := range regManager.GetUDPTransports() {
+		t.PortRange(udpPort, udpPort+segmentSize)
+
+		for j := 0; j < segmentSize; j++ {
+			udpAddr := &net.UDPAddr{IP: nil, Port: udpPort}
+			udpConn, err := net.ListenUDP("udp", udpAddr)
+			if err != nil {
+				logger.Printf("failed to listen on %v: %v\n", udpAddr, err)
+				continue
+			}
+			t.Listen(udpPort, udpConn)
+			udpPort++
+		}
+	}
+
 	for {
 		newConn, err := ln.AcceptTCP()
 		if err != nil {

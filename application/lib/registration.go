@@ -165,6 +165,23 @@ func (regManager *RegistrationManager) GetWrappingTransports() map[pb.TransportT
 	return m
 }
 
+// GetUDPTransports Returns a map of the UDP transport types to their transports. This return value
+// can be mutated freely.
+func (regManager *RegistrationManager) GetUDPTransports() map[pb.TransportType]UDPTransport {
+	m := make(map[pb.TransportType]UDPTransport)
+	regManager.registeredDecoys.m.RLock()
+	defer regManager.registeredDecoys.m.RUnlock()
+
+	for k, v := range regManager.registeredDecoys.transports {
+		udpt, ok := v.(UDPTransport)
+		if ok {
+			m[k] = udpt
+		}
+	}
+
+	return m
+}
+
 // NewRegistration creates a new registration from details provided. Adds the registration
 // to tracking map, But marks it as not valid.
 func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
