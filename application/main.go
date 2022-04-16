@@ -26,6 +26,12 @@ import (
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/webrtc"
+)
+
+const (
+	UDP_START_PORT               = 50000
+	UDP_PORT_ALLOC_PER_TRANSPORT = 200
 )
 
 func getOriginalDst(fd uintptr) (net.IP, error) {
@@ -187,6 +193,7 @@ func handleUDPReg(regManager *cj.RegistrationManager, reg *cj.DecoyRegistration)
 					logger.Printf("error handling UDP registration: %v\n", err)
 					return
 				}
+				cj.Stat().AddConn()
 				cj.Proxy(reg, conn, logger)
 				cj.Stat().CloseConn()
 			}()
@@ -461,6 +468,7 @@ func main() {
 	if err != nil {
 		logger.Printf("failed to add transport: %v", err)
 	}
+	err = regManager.AddTransport(pb.TransportType_Webrtc, webrtc.DefaultTransport())
 
 	// Receive registration updates from ZMQ Proxy as subscriber
 	go get_zmq_updates(zmqAddress, regManager, conf)
@@ -473,7 +481,23 @@ func main() {
 		}
 	}()
 
-	// listen for and handle incoming proxy traffic
+	// listen for UDP sockets per transport
+	currPort := UDP_START_PORT
+	for _, t := range regManager.GetUDPTransports() {
+		t.PortRange(currPort, currPort+UDP_PORT_ALLOC_PER_TRANSPORT) // Set port range for each transport
+		for j := 0; j < UDP_PORT_ALLOC_PER_TRANSPORT; j++ {
+			udpAddr := &net.UDPAddr{IP: nil, Port: currPort}
+			udpConn, err := net.ListenUDP("udp", udpAddr) // One net.UDPConn on each port
+			if err != nil {
+				logger.Printf("failed to listen on %v: %v\n", udpAddr, err)
+				continue
+			}
+			t.Listen(currPort, udpConn)
+			currPort++
+		}
+	}
+
+	// listen for and handle incoming TCP proxy traffic
 	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
 	ln, err := net.ListenTCP("tcp", listenAddr)
 	if err != nil {
@@ -482,25 +506,6 @@ func main() {
 	}
 	defer ln.Close()
 	logger.Printf("[STARTUP] Listening on %v\n", ln.Addr())
-
-	// Gaukas: Before entering loop, consider preparing all net.UDPConn
-	udpPort := 8000
-	segmentSize := 1000
-
-	for _, t := range regManager.GetUDPTransports() {
-		t.PortRange(udpPort, udpPort+segmentSize)
-
-		for j := 0; j < segmentSize; j++ {
-			udpAddr := &net.UDPAddr{IP: nil, Port: udpPort}
-			udpConn, err := net.ListenUDP("udp", udpAddr)
-			if err != nil {
-				logger.Printf("failed to listen on %v: %v\n", udpAddr, err)
-				continue
-			}
-			t.Listen(udpPort, udpConn)
-			udpPort++
-		}
-	}
 
 	for {
 		newConn, err := ln.AcceptTCP()
