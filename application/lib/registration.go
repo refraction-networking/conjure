@@ -200,7 +200,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		Mask:               c2s.GetMaskedDecoyServerName(),
 		Flags:              c2s.Flags,
 		Transport:          c2s.GetTransport(),
-		WebRTCSignal:       c2s.GetWebrtcSignal(), // Gaukas: consider generalization?
+		WebRTCSignal:       c2s.GetWebrtcSignal(), // consider supporting general Transport extension payload
 		DecoyListVersion:   c2s.GetDecoyListGeneration(),
 		RegistrationTime:   time.Now(),
 		RegistrationSource: registrationSource,
