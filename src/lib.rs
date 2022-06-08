@@ -23,13 +23,9 @@ extern crate zmq;
 use std::mem::transmute;
 use time::precise_time_ns;
 
-use radix::PrefixTree;
 use serde_derive::Deserialize;
 use std::env;
 use std::fs;
-use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
 
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -65,8 +61,6 @@ pub struct PerCoreGlobal {
 
     pub stats: PerCoreStats,
 
-    // List of IP prefixes we'll respond to as dark decoys
-    pub ip_tree: PrefixTree,
     // ZMQ socket for sending information to the dark decoy application
     zmq_sock: zmq::Socket,
 
@@ -113,7 +107,6 @@ struct StationConfig {
     detector_filter_list: Vec<String>,
 }
 
-const IP_LIST_PATH: &str = "/var/lib/dark-decoy.prefixes";
 const STATION_CONF_PATH: &str = "CJ_STATION_CONFIG";
 
 impl PerCoreGlobal {
@@ -163,29 +156,9 @@ impl PerCoreGlobal {
             flow_tracker: FlowTracker::new(),
             tun,
             stats: PerCoreStats::new(),
-            ip_tree: PrefixTree::new(),
             zmq_sock,
             filter_list: value.detector_filter_list,
             gre_offset,
-        }
-    }
-
-    fn read_ip_list(&mut self) {
-        let f = match File::open(IP_LIST_PATH) {
-            Ok(f) => f,
-            Err(e) => {
-                error!("Failed to read {}: {:?}", IP_LIST_PATH, e);
-                return;
-            }
-        };
-        #[allow(unused_mut)]
-        let mut file = BufReader::new(&f);
-        for line in file.lines() {
-            let res = self.ip_tree.add_cidr(&line.unwrap());
-            if res.is_err() {
-                error!("Bad IP list: {:?}", res);
-                return;
-            }
         }
     }
 }
@@ -308,8 +281,7 @@ pub unsafe extern "C" fn rust_detect_init(
 
     let addr: &CStr = CStr::from_ptr(workers_socket_addr);
 
-    let mut global = PerCoreGlobal::new(key, lcore_id, addr.to_str().unwrap());
-    global.read_ip_list();
+    let global = PerCoreGlobal::new(key, lcore_id, addr.to_str().unwrap());
 
     debug!("Initialized rust core {}", global.lcore);
 
