@@ -12,7 +12,6 @@ extern crate rand;
 extern crate time;
 
 extern crate protobuf;
-extern crate radix; // https://github.com/refraction-networking/radix
 extern crate redis;
 extern crate serde;
 extern crate serde_derive;
