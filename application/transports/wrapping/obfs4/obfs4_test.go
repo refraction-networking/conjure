@@ -98,6 +98,10 @@ func TestSuccessfulWrap(t *testing.T) {
 	}
 }
 
+func TestSuccessfulWrapMulti(t *testing.T) {
+	t.Fatal("not yet implemented")
+}
+
 func TestUnsuccessfulWrap(t *testing.T) {
 	var transport Transport
 	var err error

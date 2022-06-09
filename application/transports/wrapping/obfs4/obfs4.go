@@ -27,21 +27,19 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 		return nil, nil, transports.ErrTryAgain
 	}
 
+	// If we read up to the max handshake length and didn't find the mark, move on.
+	if data.Len() >= MaxHandshakeLength {
+		return nil, nil, transports.ErrNotTransport
+	}
+
 	var representative ntor.Representative
 	copy(representative[:ntor.RepresentativeLength], data.Bytes()[:ntor.RepresentativeLength])
 
-	// TODO: This seems to be an issue since we return unconditionally so why is it a loop?
-	// should something be checked so we continue to more registrations?
 	for _, r := range getObfs4Registrations(regManager, phantom) {
 		mark := generateMark(r.Keys.Obfs4Keys.NodeID, r.Keys.Obfs4Keys.PublicKey, &representative)
 		pos := findMarkMac(mark, data.Bytes(), ntor.RepresentativeLength+ClientMinPadLength, MaxHandshakeLength, true)
-
 		if pos == -1 {
-			// If we read up to the max handshake length and didn't find the mark, move on.
-			if data.Len() >= MaxHandshakeLength {
-				return nil, nil, transports.ErrNotTransport
-			}
-			return nil, nil, transports.ErrTryAgain
+			continue
 		}
 
 		// We found the mark in the client handshake! We found our registration!
