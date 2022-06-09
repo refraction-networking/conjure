@@ -7,6 +7,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/internal/tests"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
@@ -25,7 +27,8 @@ func TestSuccessfulWrap(t *testing.T) {
 	hmacID := reg.Keys.ConjureHMAC("MinTrasportHMACString")
 	message := []byte(`test message!`)
 
-	c2p.Write(append(hmacID, message...))
+	_, err := c2p.Write(append(hmacID, message...))
+	require.Nil(t, err)
 
 	var buf [4096]byte
 	var buffer bytes.Buffer
@@ -57,14 +60,15 @@ func TestUnsuccessfulWrap(t *testing.T) {
 
 	// No real reason for sending the shared secret; it's just 32 bytes
 	// (same length as HMAC ID) that should have no significance.
-	c2p.Write(tests.SharedSecret)
+	_, err := c2p.Write(tests.SharedSecret)
+	require.Nil(t, err)
 
 	var buf [32]byte
 	var buffer bytes.Buffer
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
 
-	_, _, err := transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}
@@ -72,6 +76,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 
 func TestTryAgain(t *testing.T) {
 	var transport Transport
+	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Min, Transport: transport})
 	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min)
 	defer c2p.Close()
@@ -80,22 +85,24 @@ func TestTryAgain(t *testing.T) {
 	var buf [32]byte
 	var buffer bytes.Buffer
 	for _, b := range tests.SharedSecret[:31] {
-		c2p.Write([]byte{b})
+		_, err = c2p.Write([]byte{b})
+		require.Nil(t, err)
 
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])
 
-		_, _, err := transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+		_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
 		if !errors.Is(err, transports.ErrTryAgain) {
 			t.Fatalf("expected ErrTryAgain, got %v", err)
 		}
 	}
 
-	c2p.Write(tests.SharedSecret[31:])
+	_, err = c2p.Write(tests.SharedSecret[31:])
+	require.Nil(t, err)
 
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
-	_, _, err := transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}

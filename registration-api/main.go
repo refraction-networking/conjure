@@ -14,11 +14,11 @@ import (
 	"sync"
 
 	"github.com/BurntSushi/toml"
-	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
 	zmq "github.com/pebbe/zmq4"
 	lib "github.com/refraction-networking/conjure/application/lib"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -110,7 +110,7 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientAddr := parseIP(requestIP)
-	var clientAddrBytes = make([]byte, 16, 16)
+	var clientAddrBytes = make([]byte, 16)
 	if clientAddr != nil {
 		clientAddrBytes = []byte(clientAddr.To16())
 	}
@@ -174,7 +174,7 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientAddr := parseIP(requestIP)
-	var clientAddrBytes = make([]byte, 16, 16)
+	var clientAddrBytes = make([]byte, 16)
 	if clientAddr != nil {
 		clientAddrBytes = []byte(clientAddr.To16())
 	}
@@ -256,9 +256,17 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	// Add header to w (server response)
 	w.WriteHeader(http.StatusOK)
 	// Marshal (serialize) registration response object and then write it to w
-	body, _ := proto.Marshal(regResp)
-	w.Write(body)
+	body, err := proto.Marshal(regResp)
+	if err != nil {
+		s.logger.Println("failed to write registration into response:", err)
+		return
+	}
 
+	_, err = w.Write(body)
+	if err != nil {
+		s.logger.Println("failed to write registration into response:", err)
+		return
+	}
 } // registerBidirectional()
 
 func (s *server) sendToZMQ(message []byte) error {

@@ -22,7 +22,7 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.
 		return nil, nil, transports.ErrTryAgain
 	}
 
-	hmacID := string(data.Bytes()[:32])
+	hmacID := data.String()[:32]
 	reg, ok := regManager.GetRegistrations(originalDst)[hmacID]
 	if !ok {
 		return nil, nil, transports.ErrNotTransport

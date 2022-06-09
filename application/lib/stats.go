@@ -58,11 +58,8 @@ func initStats() {
 	// Periodic PrintStats()
 	ticker := time.NewTicker(5 * time.Second)
 	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				statInstance.PrintStats()
-			}
+		for range ticker.C {
+			statInstance.PrintStats()
 		}
 	}()
 }

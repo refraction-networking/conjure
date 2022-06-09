@@ -47,7 +47,3 @@ func makeBufferedReaderConn(c net.Conn, r *bufio.Reader) *bufferedReaderConn {
 		R:    r,
 	}
 }
-
-func createBuffer() interface{} {
-	return make([]byte, 32*1024)
-}

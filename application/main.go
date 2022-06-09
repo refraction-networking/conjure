@@ -16,11 +16,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	zmq "github.com/pebbe/zmq4"
 	cj "github.com/refraction-networking/conjure/application/lib"
 	lt "github.com/refraction-networking/conjure/application/liveness"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
@@ -90,7 +90,10 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 	// This can be reset by transports to give more time for handshakes
 	// after a transport is identified.
 	deadline := time.Now().Add(timeout)
-	clientConn.SetDeadline(deadline)
+	err = clientConn.SetDeadline(deadline)
+	if err != nil {
+		logger.Println("error occurred while setting deadline:", err)
+	}
 
 	if count < 1 {
 		// Here, reading from the connection would be pointless, but
@@ -111,7 +114,11 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 		// This should help prevent fingerprinting; if we let the read
 		// buffer fill up and stopped ACKing after 8192 + (buffer size)
 		// bytes for obfs4, as an example, that would be quite clear.
-		io.Copy(ioutil.Discard, clientConn)
+		_, err = io.Copy(ioutil.Discard, clientConn)
+		if err != nil {
+			logger.Println("error occurred discarding data:", err)
+		}
+
 		return
 	}
 
@@ -127,7 +134,10 @@ readLoop:
 		if len(possibleTransports) < 1 {
 			logger.Printf("ran out of possible transports, reading for %v then giving up\n", time.Until(deadline))
 			cj.Stat().ConnErr()
-			io.Copy(ioutil.Discard, clientConn)
+			_, err = io.Copy(ioutil.Discard, clientConn)
+			if err != nil {
+				logger.Println("error occurred discarding data:", err)
+			}
 			return
 		}
 
@@ -161,7 +171,11 @@ readLoop:
 			}
 
 			// We found our transport! First order of business: disable deadline
-			wrapped.SetDeadline(time.Time{})
+			err = wrapped.SetDeadline(time.Time{})
+			if err != nil {
+				logger.Println("error occurred while setting deadline:", err)
+			}
+
 			logger.SetPrefix(fmt.Sprintf("[%s] %s ", t.LogPrefix(), reg.IDString()))
 			logger.Printf("registration found {reg_id: %s, phantom: %s, transport: %s}\n", reg.IDString(), originalDstIP, t.Name())
 			break readLoop
@@ -181,8 +195,14 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 	}
 	defer sub.Close()
 
-	sub.Connect(connectAddr)
-	sub.SetSubscribe("")
+	err = sub.Connect(connectAddr)
+	if err != nil {
+		logger.Println("error connecting to zmq publisher:", err)
+	}
+	err = sub.SetSubscribe("")
+	if err != nil {
+		logger.Println("error subscribing to zmq:", err)
+	}
 
 	logger.Printf("ZMQ connected to %v\n", connectAddr)
 
@@ -245,7 +265,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					// New registration received over channel that requires liveness scan for the phantom
 					liveness, response := regManager.PhantomIsLive(reg.DarkDecoy.String(), 443)
 
-					if liveness == true {
+					if liveness {
 						logger.Printf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
 						if response.Error() == lt.CACHED_PHANTOM_MSG {
 							cj.Stat().AddLivenessCached()
@@ -292,9 +312,7 @@ func tryShareRegistrationOverAPI(reg *cj.DecoyRegistration, apiEndpoint string) 
 	err = executeHTTPRequest(reg, payload, apiEndpoint)
 	if err != nil {
 		logger.Printf("%v failed to share Registration over API: %v", reg.IDString(), err)
-		return
 	}
-	return
 }
 
 func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint string) error {
@@ -340,10 +358,10 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 	// if either addres is not provided (reg came over api / client ip
 	// logging disabled) fill with zeros to avoid nil dereference.
 	if parsed.GetRegistrationAddress() == nil {
-		parsed.RegistrationAddress = make([]byte, 16, 16)
+		parsed.RegistrationAddress = make([]byte, 16)
 	}
 	if parsed.GetDecoyAddress() == nil {
-		parsed.DecoyAddress = make([]byte, 16, 16)
+		parsed.DecoyAddress = make([]byte, 16)
 	}
 
 	// If client IP logging is disabled DO NOT parse source IP.

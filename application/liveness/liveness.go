@@ -81,7 +81,6 @@ func (blt *CachedLivenessTester) ClearExpiredCache() {
 // Should be run as a goroutine as it may block for long periods of time while
 // scanning.
 func (blt *CachedLivenessTester) PeriodicScan(t string) {
-	os.Create("block_list.txt")
 	allowListAddr := os.Getenv("PHANTOM_SUBNET_LOCATION")
 	for {
 		select {
@@ -106,7 +105,7 @@ func (blt *CachedLivenessTester) PeriodicScan(t string) {
 			}
 
 			f.Close()
-			f, err = os.OpenFile("block_list.txt", os.O_APPEND|os.O_WRONLY, 0644)
+			f, err = os.OpenFile("block_list.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 			if err != nil {
 				fmt.Println("Unable to read blocklist file", err)
 				f.Close()
