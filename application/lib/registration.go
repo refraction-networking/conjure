@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	lt "github.com/refraction-networking/conjure/application/liveness"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"google.golang.org/protobuf/proto"
 )
 
 // DETECTOR_REG_CHANNEL is a constant that defines the name of the redis map that we
@@ -90,8 +90,7 @@ type RegistrationManager struct {
 
 func NewRegistrationManager() *RegistrationManager {
 	logger := log.New(os.Stdout, "[REG] ", log.Ldate|log.Lmicroseconds)
-	var ult *lt.UncachedLivenessTester
-	ult = new(lt.UncachedLivenessTester)
+	var ult *lt.UncachedLivenessTester = new(lt.UncachedLivenessTester)
 	p, err := NewPhantomIPSelector()
 	if err != nil {
 		// fmt.Errorf("failed to create the PhantomIPSelector object: %v", err)
@@ -182,6 +181,9 @@ func (regManager *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWra
 
 	// Generate keys from shared secret using HKDF
 	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret())
+	if err != nil {
+		return nil, fmt.Errorf("Failed to generate keys: %v", err)
+	}
 
 	phantomAddr, err := regManager.PhantomSelector.Select(
 		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
@@ -344,7 +346,7 @@ func (reg *DecoyRegistration) IDString() string {
 	if n < 16 {
 		return nilID
 	}
-	return fmt.Sprintf("%s", secret[:regIDLen])
+	return string(secret[:regIDLen])
 }
 
 func (reg *DecoyRegistration) GenerateClientToStation() *pb.ClientToStation {

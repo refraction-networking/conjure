@@ -30,6 +30,8 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 	var representative ntor.Representative
 	copy(representative[:ntor.RepresentativeLength], data.Bytes()[:ntor.RepresentativeLength])
 
+	// TODO: This seems to be an issue since we return unconditionally so why is it a loop?
+	// should something be checked so we continue to more registrations?
 	for _, r := range getObfs4Registrations(regManager, phantom) {
 		mark := generateMark(r.Keys.Obfs4Keys.NodeID, r.Keys.Obfs4Keys.PublicKey, &representative)
 		pos := findMarkMac(mark, data.Bytes(), ntor.RepresentativeLength+ClientMinPadLength, MaxHandshakeLength, true)

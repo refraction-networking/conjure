@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	zmq "github.com/pebbe/zmq4"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -28,7 +28,10 @@ var (
 
 func init() {
 	secret = make([]byte, SecretLength)
-	hex.Decode(secret, secretHex)
+	_, err := hex.Decode(secret, secretHex)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func generateC2SWrapperPayload() (c2API *pb.C2SWrapper, marshaledc2API []byte) {

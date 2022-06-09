@@ -20,10 +20,10 @@ import (
 
 const (
 	tlsRecordTypeChangeCipherSpec = byte(20)
-	tlsRecordTypeAlert            = byte(21)
 	tlsRecordTypeHandshake        = byte(22)
-	tlsRecordTypeApplicationData  = byte(23)
-	tlsRecordTypeHearbeat         = byte(24)
+	// tlsRecordTypeAlert            = byte(21)
+	// tlsRecordTypeApplicationData  = byte(23)
+	// tlsRecordTypeHearbeat         = byte(24)
 )
 
 const (
@@ -49,8 +49,7 @@ const (
 	TdFlagUseTIL      = uint8(1 << 0)
 )
 
-var bufferPool = sync.Pool{New: createBuffer}
-
+// ProxyFactory returns an internal proxy
 func ProxyFactory(reg *DecoyRegistration, proxyProtocol uint) func(*DecoyRegistration, *net.TCPConn, net.IP) {
 	switch proxyProtocol {
 	case 0:
@@ -64,11 +63,9 @@ func ProxyFactory(reg *DecoyRegistration, proxyProtocol uint) func(*DecoyRegistr
 	case 2:
 		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
 			// Obfs4 handler
-			return
 		}
 	default:
 		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
-			return
 		}
 	}
 }
@@ -151,7 +148,8 @@ func halfPipe(src, dst net.Conn,
 	if closeWriter, ok := dst.(interface {
 		CloseWrite() error
 	}); ok {
-		closeWriter.CloseWrite()
+		err = closeWriter.CloseWrite()
+		logger.Printf("error closing writer: %s", err)
 	} else {
 		dst.Close()
 	}
@@ -160,7 +158,8 @@ func halfPipe(src, dst net.Conn,
 	if closeReader, ok := src.(interface {
 		CloseRead() error
 	}); ok {
-		closeReader.CloseRead()
+		err = closeReader.CloseRead()
+		logger.Printf("error closing reader: %s", err)
 	} else {
 		src.Close()
 	}
@@ -176,8 +175,8 @@ func halfPipe(src, dst net.Conn,
 	if err != nil {
 		stats.Err = err.Error()
 	}
-	stats_str, _ := json.Marshal(stats)
-	logger.Printf("stopping forwarding %s", stats_str)
+	statsStr, _ := json.Marshal(stats)
+	logger.Printf("stopping forwarding %s", statsStr)
 	/*
 		if strings.HasPrefix(tag, "Up") {
 			Stat().AddBytesUp(written)
@@ -188,18 +187,8 @@ func halfPipe(src, dst net.Conn,
 	wg.Done()
 }
 
-func readAtMost(conn *net.TCPConn, buf []byte) (int, error) {
-	tot := 0
-	for tot < len(buf) {
-		n, err := conn.Read(buf[tot:])
-		if err != nil {
-			return n, err
-		}
-		tot += n
-	}
-	return tot, nil
-}
-
+// Proxy take a registration and a net.Conn and forwards client traffic to the
+// clients covert destination.
 func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	covertConn, err := net.Dial("tcp", reg.Covert)
 	if err != nil {
@@ -431,7 +420,9 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 		cipherSuite, masterSecret, clientRandom[:], serverRandom[:], false)
 
 	go func() {
-		p2.Write(firstAppData)
+		_, err := p2.Write(firstAppData)
+		logger.Printf("error closing %s", err)
+
 		p2.Close()
 	}()
 
@@ -470,7 +461,7 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 	go func() {
 		// wait for readFromServerAndParse to exit first, as it probably haven't seen appdata yet
 		select {
-		case _ = <-serverErrChan:
+		case <-serverErrChan:
 			halfPipe(finalClientConn, finalTargetConn, &wg, &oncePrintErr, logger, "Down")
 		case <-time.After(10 * time.Second):
 			finalClientConn.Close()
@@ -479,5 +470,4 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 	}()
 	wg.Wait()
 	// closes for all the things are deferred
-	return
 }

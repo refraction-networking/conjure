@@ -27,22 +27,18 @@ func TestConcurrentProxy(t *testing.T) {
 	dir := t.TempDir()
 	keyFilename := filepath.Join(dir, "test_key")
 	keyFile, err := os.Create(keyFilename)
-	if err != nil {
-		panic(err)
-	}
+	require.Nil(t, err)
+
 	// Generate sample Curve25519 key
 	var key [32]byte
 	_, err = io.ReadFull(rand.Reader, key[:])
-	if err != nil {
-		panic(err)
-	}
+	require.Nil(t, err)
+
 	key[0] &= 248
 	key[31] &= 127
 	key[31] |= 64
 	_, err = keyFile.Write(key[:])
-	if err != nil {
-		panic(err)
-	}
+	require.Nil(t, err)
 	keyFile.Close()
 
 	config := ZMQConfig{
@@ -62,26 +58,19 @@ func TestConcurrentProxy(t *testing.T) {
 			SubscriptionPrefix: "",
 		})
 		sockets[i], err = zmq.NewSocket(zmq.PUB)
-		if err != nil {
-			panic(err)
-		}
+		require.Nil(t, err)
 		err = sockets[i].Bind(name)
-		if err != nil {
-			panic(err)
-		}
+		require.Nil(t, err)
 	}
 
 	go ZMQProxy(config)
 
 	sub, err := zmq.NewSocket(zmq.SUB)
-	if err != nil {
-		panic(err)
-	}
-	sub.SetSubscribe("")
+	require.Nil(t, err)
+	err = sub.SetSubscribe("")
+	require.Nil(t, err)
 	err = sub.Connect("ipc://@test-proxying")
-	if err != nil {
-		panic(err)
-	}
+	require.Nil(t, err)
 
 	received := 0
 	done := make(chan struct{})

@@ -41,9 +41,7 @@ func (sc *SubnetConfig) getSubnets(seed []byte, weighted bool) []string {
 
 		// Use unweighted config for subnets, concat all into one array and return.
 		for _, cjSubnet := range sc.WeightedSubnets {
-			for _, subnet := range cjSubnet.Subnets {
-				out = append(out, subnet)
-			}
+			out = append(out, cjSubnet.Subnets...)
 		}
 	}
 
@@ -132,7 +130,7 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool)
 		return nil, err
 	}
 
-	if v6Support == false {
+	if !v6Support {
 		genSubnets, err = V4Only(genSubnets)
 		if err != nil {
 			return nil, err
@@ -287,18 +285,4 @@ func (p *PhantomIPSelector) RemoveGeneration(generation uint) bool {
 func (p *PhantomIPSelector) UpdateGeneration(generation uint, subnets *SubnetConfig) bool {
 	p.Networks[generation] = subnets
 	return true
-}
-
-func subnetListFromStrList(netStrs []string) []*net.IPNet {
-	var subnets []*net.IPNet
-
-	for gen, subnetStr := range netStrs {
-		_, cidr, err := net.ParseCIDR(subnetStr)
-		if err != nil || cidr == nil {
-			fmt.Printf("failed to parse subnet \"%s\" for generation: %d", subnetStr, gen)
-			continue
-		}
-		subnets = append(subnets, cidr)
-	}
-	return subnets
 }

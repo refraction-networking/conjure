@@ -6,19 +6,19 @@ import (
 	"os"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	dd "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func mockReceiveFromDetector() (*pb.ClientToStation, dd.ConjureSharedKeys) {
-	clientToStationBytes, err := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
-	sharedSecret, err := hex.DecodeString("5414c734ad5dc53e6b56a7bb47ce695a14a3ef076a3d5ace9cbf3b4d12706b73")
+	clientToStationBytes, _ := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
+	sharedSecret, _ := hex.DecodeString("5414c734ad5dc53e6b56a7bb47ce695a14a3ef076a3d5ace9cbf3b4d12706b73")
 
 	clientToStation := &pb.ClientToStation{}
-	err = proto.Unmarshal(clientToStationBytes, clientToStation)
+	err := proto.Unmarshal(clientToStationBytes, clientToStation)
 	if err != nil {
 		fmt.Printf("Failed to unmarshal ClientToStation protobuf\n")
 	}
@@ -26,7 +26,7 @@ func mockReceiveFromDetector() (*pb.ClientToStation, dd.ConjureSharedKeys) {
 	t := true
 	clientToStation.Flags = &pb.RegistrationFlags{Use_TIL: &t}
 
-	conjureKeys, err := dd.GenSharedKeys(sharedSecret)
+	conjureKeys, _ := dd.GenSharedKeys(sharedSecret)
 
 	return clientToStation, conjureKeys
 }

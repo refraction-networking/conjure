@@ -78,6 +78,7 @@ func TestPhantomsSeededSelectionV4(t *testing.T) {
 	expectedAddr := "192.122.190.130"
 
 	phantomAddr, err := phantomSelector.Select(seed, newGen, false)
+	require.Nil(t, err)
 	assert.Equal(t, expectedAddr, phantomAddr.String())
 
 }
@@ -100,6 +101,7 @@ func TestPhantomsSeededSelectionV6(t *testing.T) {
 	expectedAddr := "2001:48a8:687f:1:5fa4:c34c:434e:ddd"
 
 	phantomAddr, err := phantomSelector.Select(seed, newGen, true)
+	require.Nil(t, err)
 	assert.Equal(t, expectedAddr, phantomAddr.String())
 }
 

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 type mockTransport struct{}
@@ -30,11 +30,11 @@ func (mockTransport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst 
 }
 
 func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
-	clientToStationBytes, err := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
-	sharedSecret, err := hex.DecodeString("5414c734ad5dc53e6b56a7bb47ce695a14a3ef076a3d5ace9cbf3b4d12706b73")
+	clientToStationBytes, _ := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
+	sharedSecret, _ := hex.DecodeString("5414c734ad5dc53e6b56a7bb47ce695a14a3ef076a3d5ace9cbf3b4d12706b73")
 
 	clientToStation := &pb.ClientToStation{}
-	err = proto.Unmarshal(clientToStationBytes, clientToStation)
+	err := proto.Unmarshal(clientToStationBytes, clientToStation)
 	if err != nil {
 		fmt.Printf("Failed to unmarshal ClientToStation protobuf\n")
 	}
@@ -42,7 +42,7 @@ func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 	t := true
 	clientToStation.Flags = &pb.RegistrationFlags{Use_TIL: &t}
 
-	conjureKeys, err := GenSharedKeys(sharedSecret)
+	conjureKeys, _ := GenSharedKeys(sharedSecret)
 
 	var testGeneration uint32 = 957
 	clientToStation.DecoyListGeneration = &testGeneration
@@ -253,11 +253,6 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 	i := 0
 	go func() {
 		for msg := range channel {
-			// check message
-			if msg == nil {
-				t.Fatalf("no messages received\n")
-			}
-
 			// reconstruct IP from message
 			parsed := &pb.StationToDetector{}
 			err := proto.Unmarshal([]byte(msg.Payload), parsed)

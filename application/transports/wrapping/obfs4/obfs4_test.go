@@ -16,6 +16,7 @@ import (
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
+	"github.com/stretchr/testify/require"
 	"gitlab.com/yawning/obfs4.git/transports/obfs4"
 )
 
@@ -83,7 +84,8 @@ func TestSuccessfulWrap(t *testing.T) {
 	}
 
 	message := []byte(`test message!`)
-	c2p.Write(message)
+	_, err = c2p.Write(message)
+	require.Nil(t, err)
 
 	received := make([]byte, len(message))
 	_, err = io.ReadFull(wrappedsfp, received)
@@ -98,19 +100,21 @@ func TestSuccessfulWrap(t *testing.T) {
 
 func TestUnsuccessfulWrap(t *testing.T) {
 	var transport Transport
+	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Obfs4, Transport: transport})
 	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4)
 	defer c2p.Close()
 	defer sfp.Close()
 
-	io.Copy(c2p, io.LimitReader(rand.New(rand.NewSource(0)), 8192))
+	_, err = io.Copy(c2p, io.LimitReader(rand.New(rand.NewSource(0)), 8192))
+	require.Nil(t, err)
 
 	var buf [8192]byte
 	var buffer bytes.Buffer
 	n, _ := io.ReadFull(sfp, buf[:])
 	buffer.Write(buf[:n])
 
-	_, _, err := transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}
@@ -118,6 +122,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 
 func TestTryAgain(t *testing.T) {
 	var transport Transport
+	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Obfs4, Transport: transport})
 	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4)
 	defer c2p.Close()
@@ -129,22 +134,24 @@ func TestTryAgain(t *testing.T) {
 	for i := 0; i < 8191; i++ {
 		var b [1]byte
 		r.Read(b[:])
-		c2p.Write(b[:])
+		_, err := c2p.Write(b[:])
+		require.Nil(t, err)
 
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])
 
-		_, _, err := transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+		_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
 		if !errors.Is(err, transports.ErrTryAgain) {
 			t.Fatalf("expected ErrTryAgain, got %v", err)
 		}
 	}
 
-	c2p.Write([]byte{0})
+	_, err = c2p.Write([]byte{0})
+	require.Nil(t, err)
 
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
-	_, _, err := transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}
