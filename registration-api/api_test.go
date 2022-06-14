@@ -535,3 +535,30 @@ func TestAPIParseClientConf(t *testing.T) {
 	require.NotNil(t, s.latestClientConf)
 	require.Equal(t, uint32(1153), s.latestClientConf.GetGeneration())
 }
+
+func TestCompareCCGen(t *testing.T) {
+	s := server{
+		logger: logger,
+	}
+	s.logClientIP = true
+
+	s.config.ClientConfPath = "./test/ClientConf"
+
+	var err error
+	s.latestClientConf, err = parseClientConf(s.ClientConfPath)
+	if err != nil || s.latestClientConf == nil {
+		t.Fatalf("failed to parse test config")
+	}
+
+	// should include update for generation numbers less than server current
+	cc := s.compareClientConfGen(1152)
+	require.NotNil(t, cc)
+
+	// should NOT include update for generation numbers equal to server current
+	cc = s.compareClientConfGen(1153)
+	require.Nil(t, cc)
+
+	// should NOT include update for generation numbers greater than server current
+	cc = s.compareClientConfGen(1154)
+	require.Nil(t, cc)
+}
