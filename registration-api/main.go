@@ -319,7 +319,7 @@ func (s *server) compareClientConfGen(genNum uint32) *pb.ClientConf {
 
 	// s.logger.Printf("client: %d, stored: %d\n", genNum, s.latestClientConf.GetGeneration())
 	// Check if generation number param is greater than server's client config
-	if genNum > s.latestClientConf.GetGeneration() {
+	if genNum >= s.latestClientConf.GetGeneration() {
 		return nil
 	}
 
