@@ -3,6 +3,7 @@ package obfs4
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net"
 
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
@@ -27,11 +28,6 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 		return nil, nil, transports.ErrTryAgain
 	}
 
-	// If we read up to the max handshake length and didn't find the mark, move on.
-	if data.Len() >= MaxHandshakeLength {
-		return nil, nil, transports.ErrNotTransport
-	}
-
 	var representative ntor.Representative
 	copy(representative[:ntor.RepresentativeLength], data.Bytes()[:ntor.RepresentativeLength])
 
@@ -53,7 +49,12 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 		args.Add("drbg-seed", seed.Hex())
 
 		t := &obfs4.Transport{}
-		factory, err := t.ServerFactory("", &args)
+		stateDir, err := ioutil.TempDir("", "")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create tmp-dir for WrapConn")
+		}
+
+		factory, err := t.ServerFactory(stateDir, &args)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create server factory: %w", err)
 		}
@@ -62,6 +63,13 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 		wrapped, err := factory.WrapConn(mc)
 
 		return r, wrapped, err
+	}
+
+	// If we read more than min handshake len, but less than max and didn't find
+	// the mark get more bytes until we have reached the max handshake length.
+	// If we have reached the max handshake len and didn't find it return NotTransport
+	if data.Len() < MaxHandshakeLength {
+		return nil, nil, transports.ErrTryAgain
 	}
 
 	// The only time we'll make it here is if there are no obfs4 registrations

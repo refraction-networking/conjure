@@ -18,8 +18,14 @@ type Transport struct {
 
 var SharedSecret = []byte(`6a328b8ec2024dd92dd64332164cc0425ddbde40cb7b81e055bf7b099096d068`)
 
+// SetupPhantomConnections registers one session with the provided transport and
+// registration manager using a pre-determined kay and phantom subnet file.
 func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.TransportType) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
 	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	return SetupPhantomConnectionsSecret(manager, transport, SharedSecret, testSubnetPath)
+}
+
+func SetupPhantomConnectionsSecret(manager *dd.RegistrationManager, transport pb.TransportType, sharedSecret []byte, testSubnetPath string) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	phantom := bufconn.Listen(65535)
@@ -44,7 +50,7 @@ func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.Trans
 
 	wg.Wait()
 
-	keys, err := dd.GenSharedKeys(SharedSecret)
+	keys, err := dd.GenSharedKeys(sharedSecret)
 	if err != nil {
 		log.Fatalln("failed to generate shared keys:", err)
 	}
