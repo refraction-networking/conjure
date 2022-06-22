@@ -8,6 +8,8 @@ import (
 	"net/http"
 
 	"github.com/mingyech/conjure-dns-registrar/pkg/responder"
+	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"google.golang.org/protobuf/proto"
 )
 
 type DnsRegForwarder struct {
@@ -37,6 +39,15 @@ func NewDnsRegForwarder(endpoint string, dnsResponder *responder.Responder) (*Dn
 func (f *DnsRegForwarder) RecvAndForward() error {
 	// send the raw request payload to the api endpoint and forward its response
 	forwardWith := func(reqIn []byte) ([]byte, error) {
+		{
+			regReq := &pb.C2SWrapper{}
+			err := proto.Unmarshal(reqIn, regReq)
+			if err != nil {
+				return nil, err
+			}
+			log.Printf("ClientConf gen: [%d]", regReq.GetRegistrationPayload().GetDecoyListGeneration())
+		}
+
 		log.Println("forwarding request to API")
 		httpReq, err := http.NewRequest("POST", f.endpoint, bytes.NewReader(reqIn))
 		if err != nil {
@@ -57,6 +68,16 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
+		}
+
+		{
+			log.Printf("Response Len: [%d]", len(bodyBytes))
+			regResp := &pb.RegistrationResponse{}
+			err = proto.Unmarshal(bodyBytes, regResp)
+			if err != nil {
+				return nil, err
+			}
+			log.Printf("ClientConf gen: [%d]", regResp.ClientConf.GetGeneration())
 		}
 
 		log.Println("forwarding response to client")
