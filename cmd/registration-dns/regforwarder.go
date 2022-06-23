@@ -70,18 +70,25 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 			return nil, err
 		}
 
-		{
-			log.Printf("Response Len: [%d]", len(bodyBytes))
-			regResp := &pb.RegistrationResponse{}
-			err = proto.Unmarshal(bodyBytes, regResp)
-			if err != nil {
-				return nil, err
-			}
-			log.Printf("ClientConf gen: [%d]", regResp.ClientConf.GetGeneration())
+		log.Printf("Response Len: [%d]", len(bodyBytes))
+		regResp := &pb.RegistrationResponse{}
+		err = proto.Unmarshal(bodyBytes, regResp)
+		if err != nil {
+			return nil, err
+		}
+		if regResp.GetClientConf() != nil {
+			log.Printf("Removing ClientConf found in response")
+			regResp.ClientConf = nil
+		}
+
+		respPayload, err := proto.Marshal(regResp)
+
+		if err != nil {
+			return nil, err
 		}
 
 		log.Println("forwarding response to client")
-		return bodyBytes, nil
+		return respPayload, nil
 	}
 	f.dnsResponder.RecvAndRespond(forwardWith)
 
