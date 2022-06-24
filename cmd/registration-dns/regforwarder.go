@@ -31,6 +31,7 @@ func NewDnsRegForwarder(endpoint string, bdendpoint string, dnsResponder *respon
 	f.client = &http.Client{Transport: httpTransport}
 
 	f.endpoint = endpoint
+	f.bdendpoint = bdendpoint
 	f.dnsResponder = dnsResponder
 
 	return &f, nil
