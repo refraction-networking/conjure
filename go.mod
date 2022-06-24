@@ -13,9 +13,11 @@ require (
 	github.com/pelletier/go-toml v1.9.4
 	github.com/refraction-networking/gotapdance v0.0.0-20211215234154-01ce7114837a
 	github.com/refraction-networking/utls v1.0.0
-	github.com/stretchr/testify v1.7.0
-	gitlab.com/yawning/obfs4.git v0.0.0-20210511220700-e330d1b7024b
-	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+	github.com/stretchr/testify v1.7.1
+	gitlab.com/yawning/obfs4.git v0.0.0-20220204003609-77af0cba934d
+	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
 	google.golang.org/grpc v1.41.0
 	google.golang.org/protobuf v1.28.0
 )
+
+replace github.com/refraction-networking/gotapdance => github.com/mingyech/gotapdance v1.2.1-0.20220624192753-6eb51d057cfe

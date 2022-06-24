@@ -13,21 +13,22 @@ import (
 )
 
 type DnsRegForwarder struct {
-	// Endpoint to use in registration request
-	endpoint string
+	// Endpoints to use in registration request
+	endpoint   string
+	bdendpoint string // bidirectional
 
-	// HTTP client to use in request
+	// HTTP clients to use in request
 	client *http.Client
 
 	// dns responder to recieve and forward responses with
 	dnsResponder *responder.Responder
 }
 
-func NewDnsRegForwarder(endpoint string, dnsResponder *responder.Responder) (*DnsRegForwarder, error) {
+func NewDnsRegForwarder(endpoint string, bdendpoint string, dnsResponder *responder.Responder) (*DnsRegForwarder, error) {
 	f := DnsRegForwarder{}
 
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	f.client = &http.Client{Transport: t}
+	httpTransport := http.DefaultTransport.(*http.Transport).Clone()
+	f.client = &http.Client{Transport: httpTransport}
 
 	f.endpoint = endpoint
 	f.dnsResponder = dnsResponder
@@ -39,20 +40,31 @@ func NewDnsRegForwarder(endpoint string, dnsResponder *responder.Responder) (*Dn
 func (f *DnsRegForwarder) RecvAndForward() error {
 	// send the raw request payload to the api endpoint and forward its response
 	forwardWith := func(reqIn []byte) ([]byte, error) {
-		{
-			regReq := &pb.C2SWrapper{}
-			err := proto.Unmarshal(reqIn, regReq)
-			if err != nil {
-				return nil, err
-			}
-			log.Printf("ClientConf gen: [%d]", regReq.GetRegistrationPayload().GetDecoyListGeneration())
-		}
-
-		log.Println("forwarding request to API")
-		httpReq, err := http.NewRequest("POST", f.endpoint, bytes.NewReader(reqIn))
+		regReq := &pb.C2SWrapper{}
+		err := proto.Unmarshal(reqIn, regReq)
 		if err != nil {
 			return nil, err
 		}
+		log.Printf("ClientConf gen: [%d]", regReq.GetRegistrationPayload().GetDecoyListGeneration())
+
+		reqIsBd := regReq.GetRegistrationSource() == pb.RegistrationSource_BidirectionalDNS
+		if reqIsBd {
+			log.Println("Request is Bidirectional")
+		} else {
+			log.Println("Request is unidirectional")
+		}
+
+		log.Println("forwarding request to API")
+		endpointToUse := f.endpoint
+		if reqIsBd {
+			endpointToUse = f.bdendpoint
+		}
+
+		httpReq, err := http.NewRequest("POST", endpointToUse, bytes.NewReader(reqIn))
+		if err != nil {
+			return nil, err
+		}
+
 		resp, err := f.client.Do(httpReq)
 		if err != nil {
 			return nil, err
@@ -64,24 +76,38 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 			return nil, fmt.Errorf("non-success response code %d from %s", resp.StatusCode, f.endpoint)
 		}
 
+		regsuccess := true
+		clientconfOutdated := false
+		dnsResp := &pb.DnsResponse{
+			Success:            &regsuccess,
+			ClientconfOutdated: &clientconfOutdated,
+		}
+
+		// if the registration is unidirectional, immediately return
+		if regReq.GetRegistrationSource() == pb.RegistrationSource_DNS {
+			return proto.Marshal(dnsResp)
+		}
+
 		// Read the HTTP response body into []bytes
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
 		}
 
-		log.Printf("Response Len: [%d]", len(bodyBytes))
 		regResp := &pb.RegistrationResponse{}
+		log.Printf("Response Len: [%d]", len(bodyBytes))
 		err = proto.Unmarshal(bodyBytes, regResp)
 		if err != nil {
 			return nil, err
 		}
+		dnsResp.BidirectionalResponse = regResp
 		if regResp.GetClientConf() != nil {
 			log.Printf("Removing ClientConf found in response")
 			regResp.ClientConf = nil
+			clientconfOutdated = true
 		}
 
-		respPayload, err := proto.Marshal(regResp)
+		respPayload, err := proto.Marshal(dnsResp)
 
 		if err != nil {
 			return nil, err

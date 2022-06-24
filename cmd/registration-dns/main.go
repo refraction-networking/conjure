@@ -108,6 +108,7 @@ func run(forwarder *DnsRegForwarder) error {
 func main() {
 	var udpAddr string
 	var apiUrl string
+	var bdApiUrl string
 	var domain string
 	var privkeyFilename string
 	var pubkeyFilenameOut string
@@ -116,7 +117,8 @@ func main() {
 
 	flag.StringVar(&udpAddr, "addr", "[::]:53", "UDP address to listen on")
 	flag.StringVar(&domain, "domain", "", "base domain in requests")
-	flag.StringVar(&apiUrl, "api-endpoint", "https://registration.refraction.network/api/register-bidirectional", "API endpoint to use when performing API registration")
+	flag.StringVar(&apiUrl, "api-endpoint", "https://registration.refraction.network/api/register", "API endpoint to use when performing API registration")
+	flag.StringVar(&bdApiUrl, "bdapi-endpoint", "https://registration.refraction.network/api/register-bidirectional", "API endpoint to use when performing API registration")
 	flag.StringVar(&privkeyFilename, "privkey", "", "server private key filename")
 	flag.StringVar(&pubkeyFilenameOut, "pubkeyfilename", "", "generated server public key filename (only used with -genKey)")
 	flag.StringVar(&privkeyFilenameOut, "privkeyfilename", "", "generated server private key filename (only used with -genKey)")
@@ -155,7 +157,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	forwarder, err := NewDnsRegForwarder(apiUrl, respder)
+	forwarder, err := NewDnsRegForwarder(apiUrl, bdApiUrl, respder)
 	if err != nil {
 		log.Fatal(err)
 	}
