@@ -1,0 +1,13 @@
+version: 2
+ethernets:
+  enp1s0:
+    match:
+      macaddress: "52:54:00:00:01:03"
+    dhcp4: true
+  enp2s0:
+    match:
+      macaddress: "52:54:00:00:02:03"
+    dhcp4: true
+    routes:
+      - to: 0.0.0.0/0
+        via: 192.168.2.4

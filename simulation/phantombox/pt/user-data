@@ -1,0 +1,33 @@
+#cloud-config
+
+users:
+  - name: conjure-pt
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFO8fDGmKdJylCGqkcRC7lfEFzCWdfTppMFfQ2F2mLzT
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    groups: sudo
+    shell: /bin/bash
+
+packages:
+  - golang
+  - wget
+  - apt-transport-https
+
+write_files:
+  # Mount the conjure pt repository from the host
+  - content: |
+      #!/bin/bash
+      mkdir /home/conjure-pt/conjure
+      sudo mount -t virtiofs /repo /home/conjure-pt/conjure
+    path: /var/lib/cloud/scripts/per-boot/00-mount-repo
+    permissions: '0755'
+
+  # Install tor
+  - content: |
+      #!/bin/bash
+      echo -e "deb     [arch=amd64 signed-by=/usr/share/keyrings/tor-archive-keyring.gpg] https://deb.torproject.org/torproject.org focal main\ndeb-src [arch=amd64 signed-by=/usr/share/keyrings/tor-archive-keyring.gpg] https://deb.torproject.org/torproject.org focal main" > /etc/apt/tor.list
+      wget -qO- https://deb.torproject.org/torproject.org/A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89.asc | gpg --dearmor | tee /usr/share/keyrings/tor-archive-keyring.gpg >/dev/null
+      apt-get update
+      apt-get install -y tor
+    path: /var/lib/cloud/scripts/per-instance/00-install-tor
+    permissions: '0755'

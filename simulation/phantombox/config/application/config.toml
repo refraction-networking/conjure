@@ -1,0 +1,90 @@
+
+# Bool to enable or disable sharing of registrations over API when received over decoy registrar
+enable_share_over_api = false
+
+# REST endpoint to share decoy registrations.
+preshare_endpoint = ""
+
+# Name of abstract socket to bind proxy to
+socket_name = "zmq-proxy"
+
+# Absolute path to private key to use when authenticating with servers.
+# Can be either privkey or privkey || pubkey; only first 32 bytes will
+# be used.
+privkey_path = "/opt/conjure/sysconfig/privkey"
+
+# Time in milliseconds to wait between sending heartbeats.
+# Heartbeats are only sent when other traffic doesn't come through;
+# i.e. normal messages can "act" as a heartbeat by confirming
+# that the connection is alive.
+heartbeat_interval = 30000
+
+# Time in milliseconds after sending a heartbeat to wait for
+# a response before the connection is assumed to be dead.
+heartbeat_timeout = 1000
+
+# Time in hours to mark a cached live IP address as expired
+# in the liveness module.
+cache_expiration_time = "2.0h"
+
+# Allow the station to opt out of either version of internet protocol to limit a 
+# statio to handling one or the other. For example, v6 on small station deployment
+# with only v6 phantom subnet,  v4 only on station with no puvlic v6 address. 
+enable_v4 = true
+enable_v6 = false
+
+# If a registration is received with a covert address in one of these subnets it will
+# be ignored and dropped. This is to prevent clients leveraging the outgoing
+# connections from the station to connect to sation infrastructure that would 
+# be othewise firewalled.
+covert_blocklist_subnets = [
+    "127.0.0.1/32",     # localhost ipv4
+    "172.16.0.0/12",    # reserved ipv4
+    "fc00::/7 ",        # private network ipv6
+    "fe80::0/16",       # link local ipv6
+    "::1/128",           # localhost ipv6
+]
+
+covert_blocklist_domains = [
+    "localhost",
+]
+
+# If a registration is received and the phantom address is in one of these
+# subnets the registration will be dropped. This allows us to exclude subnets to
+# prevent stations from interfering.
+phantom_blocklist = [ ]
+
+# List of addresses to filter out traffic from the detector. The primary functionality
+# of this is to prevent liveness testing from other stations in a conjure cluster from
+# clogging up the logs with connection notifications. To accomplish this goal add all station
+# ip addresses to this list when configuring station detectors.
+detector_filter_list = [
+    "127.0.0.1",
+    "::1",
+]
+
+### ZMQ sockets to connect to and subscribe
+
+## Registration API
+[[connect_sockets]]
+
+# Address of the socket to connect to
+address = "tcp://127.0.0.1:5591"
+
+# Type of authenticaton method to use when connecting. Can be NULL for no
+# authentication or CURVE for public key-based authentication.
+type = "CURVE"
+
+# Public key of socket to use if using CURVE authentication
+# The default value is the public key for the API hosted at registration.refraction.network
+pubkey = "3Uc=IE>KE5Wmwg%*Z?1kM@o4J2A@Fjoia7KN41W*"
+
+
+# ZMQ subscription prefix for this socket. Leave as "" or omit to receive all messages
+subscription = ""
+
+## Detector
+[[connect_sockets]]
+
+address = "ipc://@detector"
+type = "NULL"
