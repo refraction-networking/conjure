@@ -3,6 +3,7 @@ api_port = 8080
 
 # The port on which to bind the ZMQ port
 zmq_port = 5591
+zmq_bind_addr = "127.0.0.1"
 
 # The path on disk to the private key used for the ZMQ socket
 privkey_path = "/opt/conjure/sysconfig/privkey"

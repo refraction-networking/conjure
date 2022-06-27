@@ -32,6 +32,7 @@ const (
 type config struct {
 	APIPort             uint16   `toml:"api_port"`
 	ZMQPort             uint16   `toml:"zmq_port"`
+	ZMQBindAddr         string   `toml:"zmq_bind_addr"`
 	PrivateKeyPath      string   `toml:"privkey_path"`
 	AuthType            string   `toml:"auth_type"`
 	AuthVerbose         bool     `toml:"auth_verbose"`
@@ -451,7 +452,7 @@ func main() {
 		}
 	}
 
-	err = sock.Bind(fmt.Sprintf("tcp://*:%d", s.ZMQPort))
+	err = sock.Bind(fmt.Sprintf("tcp://%s:%d", s.ZMQBindAddr, s.ZMQPort))
 	if err != nil {
 		s.logger.Fatalln("failed to bind zmq socket:", err)
 	}
