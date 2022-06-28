@@ -127,6 +127,19 @@ write_files:
       echo -e "y\nn" | sudo pf_ringcfg --configure-driver e1000e --rss-queues 1 || exit 0
     path: /var/lib/cloud/scripts/per-instance/01-pfring-configure
     permissions: '0755'
+  # Backup existing configs and copy in simulation specific configurations
+  - content: |
+      #!/bin/bash
+      mkdir -p /opt/conjure/backup/
+      [[ -e /opt/conjure/sysconfig ]] && cp -r /opt/conjure/sysconfig/ /opt/conjure/backup/
+      [[ -e /opt/conjure/application/config.toml ]] && cp -r /opt/conjure/application/config.toml /opt/conjure/backup/application.config.toml
+      [[ -e /opt/conjure/registration-api/config.toml ]] && cp -r /opt/conjure/registration-api/config.toml /opt/conjure/backup/regsitration-api.config.toml
+      cp -r /opt/conjure/simulation/phantombox/config/sysconfig /opt/conjure
+      cp -r /opt/conjure/simulation/phantombox/config/application/config.toml /opt/conjure/application/
+      cp -r /opt/conjure/simulation/phantombox/config/registration-api/config.toml /opt/conjure/registration-api/
+      systemctl start conjure-registration-api
+    path: /var/lib/cloud/scripts/per-instance/02-copy-configs
+    permissions: '0755'
   # Install conjure station
   - content: |
       #!/bin/bash
@@ -137,8 +150,8 @@ write_files:
       source /opt/rust/env
       rustup install stable
       rustup default stable
-      make
-    path: /var/lib/cloud/scripts/per-instance/02-install-conjure
+      make sim
+    path: /var/lib/cloud/scripts/per-instance/03-install-conjure
     permissions: '0755'
   # Enable systemd services
   - content: |
@@ -152,13 +165,13 @@ write_files:
       systemctl start conjure-det
       systemctl start conjure-app
       systemctl start conjure-registration-api
-    path: /var/lib/cloud/scripts/per-instance/03-enable-services
+    path: /var/lib/cloud/scripts/per-instance/04-enable-services
     permissions: '0755'
   # Mount the conjure station repository from the host
   - content: |
       #!/bin/bash
       mkdir /opt/conjure
-      sudo mount -t virtiofs /repo /opt/conjure
+      sudo mount -t virtiofs repo /opt/conjure
     path: /var/lib/cloud/scripts/per-boot/00-mount-repo
     permissions: '0755'
   # Set up networking for conjure detector

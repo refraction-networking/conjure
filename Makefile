@@ -31,7 +31,7 @@ conjure: detect.c loadkey.c rust_util.c rust libtapdance
 # gcc -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_RING_ZERO_COPY -O2 -o conjure detect.c loadkey.c rust_util.c ./target/release/librust_dark_decoy.a ./libtapdance/libtapdance.a -lpfring -lpcap -L/usr/local/lib -lzmq -lcrypto -lpthread -lrt -lgmp -ldl -lm
 
 conjure-sim: detect.c loadkey.c rust_util.c rust libtapdance
-	${CC} -Wall -02 -o conjure detect.c loadkey.c rust_util.c ${LIBS}
+	${CC} -Wall -O2 -o conjure detect.c loadkey.c rust_util.c ${LIBS}
 
 registration-api:
 	cd ./registration-api/ && make

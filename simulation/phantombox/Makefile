@@ -9,17 +9,16 @@ all : vms
 
 station : clean-station station/cidata.iso images/station.qcow2
 	@[ "${CONJURE_STATION_REPO}" ] || ( echo "Env var CONJURE_STATION_REPO is not set."; exit 1 )
-	virt-install --name=station --ram=6144 --vcpus=2 --cpu mode=host-passthrough --import --disk path=images/station.qcow2,format=qcow2 --disk path=station/cidata.iso,device=cdrom --os-variant=ubuntu20.04 --network network=default,mac='52:54:00:00:01:02' --network network=tap,mac='52:54:00:00:02:02',model='e1000e' --noautoconsole --filesystem="source=\"$(CONJURE_STATION_REPO)\",target='/repo',accessmode='passthrough'" --memorybacking access.mode='shared'
+	virt-install --name=station --ram=6144 --vcpus=2 --cpu mode=host-passthrough --import --disk path=images/station.qcow2,format=qcow2 --disk path=station/cidata.iso,device=cdrom --os-variant=ubuntu20.04 --network network=default,mac='52:54:00:00:01:02' --network network=tap,mac='52:54:00:00:02:02',model='e1000e' --noautoconsole --filesystem source="$(CONJURE_STATION_REPO)",type='mount',driver.type='virtiofs',target='repo',accessmode='passthrough'  --memorybacking access.mode='shared'
 	$(info ********** Installing station ***********)
 	$(info ********* this may take a while *********)
 	sleep 6m
 
 pt : clean-pt pt/cidata.iso images/pt.qcow2 tap
-	@[ "${CONJURE_PT_REPO}" ] || ( echo "Env var CONJURE_PT_REPO is not set."; exit 1 )
-	virt-install --name=pt --ram=2048 --vcpus=2 --cpu mode=host-passthrough --import --disk path=images/pt.qcow2,format=qcow2 --disk path=pt/cidata.iso,device=cdrom --os-variant=ubuntu20.04 --network network=default,mac='52:54:00:00:01:03' --network network=tap,mac='52:54:00:00:02:03' --noautoconsole --filesystem="source=\"$(CONJURE_PT_REPO)\",target='/repo',accessmode='passthrough'" --memorybacking access.mode='shared'
+	# @[ "${CONJURE_PT_REPO}" ] || ( echo "Env var CONJURE_PT_REPO is not set."; exit 1 )
+	virt-install --name=pt --ram=2048 --vcpus=2 --cpu mode=host-passthrough --import --disk path=images/pt.qcow2,format=qcow2 --disk path=pt/cidata.iso,device=cdrom --os-variant=ubuntu20.04 --network network=default,mac='52:54:00:00:01:03' --network network=tap,mac='52:54:00:00:02:03' --noautoconsole --memorybacking access.mode='shared'
 	$(info ********** Installing pt ***********)
-	$(info ********* this may take a while *********)
-	sleep 2m
+	sleep 1m
 
 tap : clean-tap tap/cidata.iso images/tap.qcow2
 	virt-install --name=tap --ram=1024 --vcpus=1 --cpu mode=host-passthrough --import --disk path=images/tap.qcow2,format=qcow2 --disk path=tap/cidata.iso,device=cdrom --os-variant=ubuntu20.04 --network network=default,mac='52:54:00:00:01:04' --network network=tap,mac='52:54:00:00:02:04' --noautoconsole

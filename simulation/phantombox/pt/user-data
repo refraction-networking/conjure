@@ -12,16 +12,9 @@ packages:
   - golang
   - wget
   - apt-transport-https
+  - git
 
 write_files:
-  # Mount the conjure pt repository from the host
-  - content: |
-      #!/bin/bash
-      mkdir /home/conjure-pt/conjure
-      sudo mount -t virtiofs /repo /home/conjure-pt/conjure
-    path: /var/lib/cloud/scripts/per-boot/00-mount-repo
-    permissions: '0755'
-
   # Install tor
   - content: |
       #!/bin/bash
