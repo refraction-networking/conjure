@@ -41,6 +41,13 @@ registration-api:
 custom-build:
 	docker build --build-arg CUSTOM_BUILD=1 -f docker/Dockerfile .
 
+
+backup-config:
+	mkdir -p backup
+	cp -rf sysconfig backup/
+	cp application/config.toml backup/application.config.toml
+	cp registration-api/config.toml backup/registration-api.config.toml
+
 restore-config:
 ifneq (,$(wildcard backup/sysconfig))
 	$(RM) -rf sysconfig
@@ -49,8 +56,8 @@ endif
 ifneq (,$(wildcard backup/application.config.toml))
 	mv backup/application.config.toml application/config.toml
 endif
-ifneq (,$(wildcard backup/regsitration-api.config.toml))
-	mv backup/regsitration-api.config.toml regsitration-api/config.toml
+ifneq (,$(wildcard backup/registration-api.config.toml))
+	mv backup/registration-api.config.toml registration-api/config.toml
 endif
 	$(RM) -rf backup
 

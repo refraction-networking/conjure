@@ -7,7 +7,7 @@ virsh net-update default add ip-dhcp-host \
            --live --config 2> /dev/null
 virsh net-update default add ip-dhcp-host \
           "<host mac='52:54:00:00:01:03' \
-           name='pt' ip='192.168.122.3' />" \
+           name='h1' ip='192.168.122.3' />" \
            --live --config 2> /dev/null
 virsh net-update default add ip-dhcp-host \
           "<host mac='52:54:00:00:01:04' \

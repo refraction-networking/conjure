@@ -1,7 +1,7 @@
 #cloud-config
 
 users:
-  - name: conjure-pt
+  - name: conjure-h1
     ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFO8fDGmKdJylCGqkcRC7lfEFzCWdfTppMFfQ2F2mLzT
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
@@ -15,6 +15,14 @@ packages:
   - git
 
 write_files:
+  # Mount CONJURE_H1_REPO repository from the host
+  - content: |
+      #!/bin/bash
+      mkdir /home/conjure-h1/host-repo
+      sudo mount -t virtiofs repo /home/conjure-h1/host-repo
+    path: /var/lib/cloud/scripts/per-boot/00-mount-repo
+    permissions: '0755'
+
   # Install tor
   - content: |
       #!/bin/bash
@@ -24,3 +32,4 @@ write_files:
       apt-get install -y tor
     path: /var/lib/cloud/scripts/per-instance/00-install-tor
     permissions: '0755'
+

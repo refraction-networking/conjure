@@ -1,8 +1,8 @@
 #!/bin/bash
 
 case $1 in
-    pt)
-        ssh conjure-pt@192.168.122.3 -i conjure -o IdentitiesOnly=yes
+    h1)
+        ssh conjure-h1@192.168.122.3 -i conjure -o IdentitiesOnly=yes
         ;;
     tap)
         ssh conjure-tap@192.168.122.4 -i conjure -o IdentitiesOnly=yes
@@ -11,5 +11,5 @@ case $1 in
         ssh conjure-station@192.168.122.2 -i conjure -o IdentitiesOnly=yes
         ;;
     *)
-        echo "Usage: ./conjure-ssh [pt|tap|station]"
+        echo "Usage: ./conjure-ssh [h1|tap|station]"
 esac
