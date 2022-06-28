@@ -130,10 +130,14 @@ write_files:
   # Backup existing configs and copy in simulation specific configurations
   - content: |
       #!/bin/bash
+      # if we already have a backed up config, don't overwrite
+      [[ -e /opt/conjure/backup ]] exit 0
+
+      # otherwise backup the config
       mkdir -p /opt/conjure/backup/
       [[ -e /opt/conjure/sysconfig ]] && cp -r /opt/conjure/sysconfig/ /opt/conjure/backup/
       [[ -e /opt/conjure/application/config.toml ]] && cp -r /opt/conjure/application/config.toml /opt/conjure/backup/application.config.toml
-      [[ -e /opt/conjure/registration-api/config.toml ]] && cp -r /opt/conjure/registration-api/config.toml /opt/conjure/backup/regsitration-api.config.toml
+      [[ -e /opt/conjure/registration-api/config.toml ]] && cp -r /opt/conjure/registration-api/config.toml /opt/conjure/backup/registration-api.config.toml
       cp -r /opt/conjure/simulation/phantombox/config/sysconfig /opt/conjure
       cp -r /opt/conjure/simulation/phantombox/config/application/config.toml /opt/conjure/application/
       cp -r /opt/conjure/simulation/phantombox/config/registration-api/config.toml /opt/conjure/registration-api/

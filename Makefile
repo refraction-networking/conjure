@@ -41,6 +41,18 @@ registration-api:
 custom-build:
 	docker build --build-arg CUSTOM_BUILD=1 -f docker/Dockerfile .
 
+restore-config:
+ifneq (,$(wildcard backup/sysconfig))
+	$(RM) -rf sysconfig
+	mv -f backup/sysconfig .
+endif
+ifneq (,$(wildcard backup/application.config.toml))
+	mv backup/application.config.toml application/config.toml
+endif
+ifneq (,$(wildcard backup/regsitration-api.config.toml))
+	mv backup/regsitration-api.config.toml regsitration-api/config.toml
+endif
+	$(RM) -rf backup
 
 clean:
 	cargo clean
