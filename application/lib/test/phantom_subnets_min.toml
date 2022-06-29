@@ -1,0 +1,12 @@
+
+# USED BY:
+# * lib/phantom_selector_test.go
+# * transports/wrapping/obfs4/obfs4_test.go
+#
+# Do not change without consulting those files and ensuring tests still pass.
+[Networks]
+	[Networks.1]
+        Generation = 1
+        [[Networks.1.WeightedSubnets]]
+            Weight = 1
+            Subnets = ["192.122.190.0/32", "2001:48a8:687f:1::/128"]
