@@ -102,7 +102,11 @@ func run(forwarder *DnsRegForwarder) error {
 
 	log.Println("Started Conjure DNS registration server")
 
-	forwarder.RecvAndForward()
+	err := forwarder.RecvAndForward()
+	if err != nil {
+		log.Printf("Forwarder RecvAndForward returned error: %v", err)
+		return err
+	}
 
 	return nil
 }
