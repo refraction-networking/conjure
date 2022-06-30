@@ -152,7 +152,7 @@ func (regManager *RegistrationManager) GetWrappingTransports() map[pb.TransportT
 func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
 
 	phantomAddr, err := regManager.PhantomSelector.Select(
-		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
+		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), uint(c2s.GetClientLibVersion()), includeV6)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to select phantom IP address: %v", err)
@@ -186,7 +186,7 @@ func (regManager *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWra
 	}
 
 	phantomAddr, err := regManager.PhantomSelector.Select(
-		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), includeV6)
+		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), uint(c2s.GetClientLibVersion()), includeV6)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to select phantom IP address: %v", err)

@@ -22,9 +22,20 @@ import (
 var (
 	secretHex = []byte(`1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef`)
 	secret    []byte
-
-	logger = log.New(os.Stdout, "[API] ", log.Ldate|log.Lmicroseconds)
 )
+
+func testLogger(t *testing.T) *log.Logger {
+	return log.New(testWriter{t}, "test", log.LstdFlags)
+}
+
+type testWriter struct {
+	t *testing.T
+}
+
+func (tw testWriter) Write(p []byte) (n int, err error) {
+	tw.t.Log(string(p))
+	return len(p), nil
+}
 
 func init() {
 	secret = make([]byte, SecretLength)
@@ -41,12 +52,14 @@ func generateC2SWrapperPayload() (c2API *pb.C2SWrapper, marshaledc2API []byte) {
 	// We need pointers to bools. This is nasty D:
 	trueBool := true
 	falseBool := false
+	v := uint32(1)
 
 	c2s := pb.ClientToStation{
 		DecoyListGeneration: &generation,
 		CovertAddress:       &covert,
 		V4Support:           &trueBool,
 		V6Support:           &falseBool,
+		ClientLibVersion:    &v,
 		Flags: &pb.RegistrationFlags{
 			ProxyHeader: &trueBool,
 			Use_TIL:     &trueBool,
@@ -74,7 +87,7 @@ func TestC2SWrapperProcessing(t *testing.T) {
 
 	s := server{
 		messageAccepter: accepter,
-		logger:          logger,
+		logger:          testLogger(t),
 	}
 
 	zmqPayload, err := s.processC2SWrapper(c2API, []byte(net.ParseIP("127.0.0.1").To16()))
@@ -139,7 +152,7 @@ func TestCorrectRegistrationAPI(t *testing.T) {
 
 	s := server{
 		messageAccepter: accepter,
-		logger:          logger,
+		logger:          testLogger(t),
 	}
 	s.logClientIP = true
 
@@ -187,7 +200,7 @@ func TestCorrectRegistrationPrescan(t *testing.T) {
 
 	s := server{
 		messageAccepter: accepter,
-		logger:          logger,
+		logger:          testLogger(t),
 	}
 	s.logClientIP = true
 	c2API, _ := generateC2SWrapperPayload()
@@ -227,7 +240,7 @@ func TestCorrectRegistrationPrescan(t *testing.T) {
 func TestIncorrectMethod(t *testing.T) {
 	s := server{
 		messageAccepter: nil,
-		logger:          logger,
+		logger:          testLogger(t),
 	}
 	s.logClientIP = true
 
@@ -272,7 +285,7 @@ func TestParseIP(t *testing.T) {
 func TestEmptyBody(t *testing.T) {
 	s := server{
 		messageAccepter: nil,
-		logger:          logger,
+		logger:          testLogger(t),
 	}
 
 	r := httptest.NewRequest("POST", "/register", nil)
@@ -293,7 +306,7 @@ func TestBadAccepter(t *testing.T) {
 
 	s := server{
 		messageAccepter: accepter,
-		logger:          logger,
+		logger:          testLogger(t),
 	}
 
 	_, body := generateC2SWrapperPayload()
@@ -371,7 +384,7 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 	// Create a server with the channel created above
 	s := server{
 		messageAccepter: accepter,
-		logger:          logger,
+		logger:          testLogger(t),
 	}
 	s.logClientIP = true
 
@@ -451,7 +464,7 @@ func TestBidirectionalAPIClientConf(t *testing.T) {
 	// Create a server with the channel created above
 	s := server{
 		messageAccepter: accepter,
-		logger:          logger,
+		logger:          testLogger(t),
 	}
 	s.logClientIP = true
 
@@ -538,7 +551,7 @@ func TestAPIParseClientConf(t *testing.T) {
 
 func TestCompareCCGen(t *testing.T) {
 	s := server{
-		logger: logger,
+		logger: testLogger(t),
 	}
 	s.logClientIP = true
 

@@ -1,0 +1,11 @@
+<network>
+    <name>tap</name>
+    <ip address="192.168.2.1" netmask="255.255.255.0">
+        <dhcp>
+            <range start='192.168.2.2' end='192.168.2.254'/>
+            <host mac='52:54:00:00:02:02' name='station' ip='192.168.2.2'/>
+            <host mac='52:54:00:00:02:03' name='h1' ip='192.168.2.3'/>
+            <host mac='52:54:00:00:02:04' name='tap' ip='192.168.2.4'/>
+        </dhcp>
+    </ip>
+</network>

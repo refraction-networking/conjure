@@ -1,0 +1,250 @@
+#cloud-config
+
+users:
+  - name: conjure-station
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFO8fDGmKdJylCGqkcRC7lfEFzCWdfTppMFfQ2F2mLzT
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    groups: sudo
+    shell: /bin/bash
+
+apt:
+  sources:
+    source1:
+      source: 'deb https://packages.ntop.org/apt-stable/20.04/ x64/'
+      filename: 'ntop-stable.list'
+    source2:
+      source: 'deb https://packages.ntop.org/apt-stable/20.04/ all/'
+      filename: 'ntop-stable.list'
+      key: |
+        -----BEGIN PGP PUBLIC KEY BLOCK-----
+        Version: GnuPG v1
+        
+        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
+        HQ==
+        =by6r
+        -----END PGP PUBLIC KEY BLOCK-----
+
+packages:
+  - wget
+  - git
+  - make
+  - gcc
+  - bison
+  - flex
+  - protobuf-compiler
+  - curl
+  - libssl-dev
+  - pkg-config
+  - libgmp3-dev
+  - libzmq3-dev
+  - golang
+  - software-properties-common
+  - redis-server
+  - pfring
+
+# Scripts
+write_files:
+  # Install rust
+  - content: |
+      #!/bin/bash
+      mkdir /opt/rust
+      export RUSTUP_HOME=/opt/rust
+      export CARGO_HOME=/opt/rust
+      curl https://sh.rustup.rs -sSf | sh -s -- -y --no-modify-path
+    path: /var/lib/cloud/scripts/per-instance/00-install-rust
+    permissions: '0755'
+  # Configure the pfring kernel module for tap interface
+  - content: |
+      #!/bin/bash
+      echo -e "y\nn" | sudo pf_ringcfg --configure-driver e1000e --rss-queues 1 || exit 0
+    path: /var/lib/cloud/scripts/per-instance/01-pfring-configure
+    permissions: '0755'
+  # copy in simulation specific configurations
+  - content: |
+      #!/bin/bash
+      mkdir -p /opt/conjure/backup/
+      cp -r /opt/conjure/simulation/phantombox/config/sysconfig /opt/conjure
+      cp -r /opt/conjure/simulation/phantombox/config/application/config.toml /opt/conjure/application/
+      cp -r /opt/conjure/simulation/phantombox/config/registration-api/config.toml /opt/conjure/registration-api/
+    path: /var/lib/cloud/scripts/per-instance/02-copy-configs
+    permissions: '0755'
+  # Install conjure station
+  - content: |
+      #!/bin/bash
+      cd /opt/conjure
+      export RUSTUP_HOME=/opt/rust
+      export CARGO_HOME=/opt/rust
+      export HOME=/root
+      source /opt/rust/env
+      rustup install stable
+      rustup default stable
+      make sim
+    path: /var/lib/cloud/scripts/per-instance/03-install-conjure
+    permissions: '0755'
+  # Enable systemd services
+  - content: |
+      #!/bin/bash
+      systemctl enable conjure-det
+      systemctl enable conjure-app
+      systemctl enable conjure-registration-api
+      echo "200 custom" >> /etc/iproute2/rt_tables
+      export CJ_PATH=/opt/conjure
+      bash /opt/conjure/on-reboot.sh # Note: this is run twice on first boot
+      systemctl start conjure-det
+      systemctl start conjure-app
+      systemctl start conjure-registration-api
+    path: /var/lib/cloud/scripts/per-instance/04-enable-services
+    permissions: '0755'
+  # Mount the conjure station repository from the host
+  - content: |
+      #!/bin/bash
+      mkdir /opt/conjure
+      sudo mount -t virtiofs repo /opt/conjure
+    path: /var/lib/cloud/scripts/per-boot/00-mount-repo
+    permissions: '0755'
+  # Set up networking for conjure detector
+  - content: |
+      #!/bin/bash
+      export CJ_PATH=/opt/conjure
+      bash /opt/conjure/on-reboot.sh
+      systemctl start conjure-det || exit 0 # Note: this will fail the first boot
+      systemctl start conjure-app
+      systemctl start conjure-registration-api
+    path: /var/lib/cloud/scripts/per-boot/01-detector-network
+    permissions: '0755'
+
+# Conjure config and service files
+  - content: |
+      # Conjure environment variables
+    path: /etc/conjure/conjure.conf
+    permissions: '0644'
+  - content: |
+      # Conjure environment variables
+    path: /etc/conjure/application.toml
+    permissions: '0644'
+  - content: |
+      # Conjure environment variables
+    path: /etc/conjure/registration-api.toml
+    permissions: '0644'
+  - content: |
+      # Conjure detector service file
+      [Unit]
+      Description=Conjure Detector
+
+      [Service]
+      Type=simple
+      WorkingDirectory=/opt/conjure/
+      SyslogIdentifier=conjure
+      EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
+      ExecStartPre=/bin/sleep 10
+      ExecStart=/opt/conjure/conjure -c ${CJ_CLUSTER_ID} -o ${CJ_COREBASE} -l ${CJ_LOG_INTERVAL} -K ${CJ_PRIVKEY} -i ${CJ_IFACE}
+      TimeoutStopSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    path: /etc/systemd/system/conjure-det.service
+    permissions: '0644'
+  - content: |
+      # Conjure application service file
+      [Unit]
+      Description=Conjure Application
+      After=conjure-detector.service
+
+      [Service]
+      Type=simple
+      WorkingDirectory=/opt/conjure/
+      SyslogIdentifier=conjure
+      EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
+      ExecStartPre=/bin/sleep 10
+      ExecStart=/opt/conjure/application/application
+      TimeoutStopSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    path: /etc/systemd/system/conjure-app.service
+    permissions: '0644'
+  - content: |
+      # Conjure registration api service file
+      [Unit]
+      Description=Conjure Registration API
+
+      [Service]
+      Type=simple
+      WorkingDirectory=/opt/conjure/
+      SyslogIdentifier=conjure
+      EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
+      ExecStart=/opt/conjure/registration-api/registration-api
+      TimeoutStopSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    path: /etc/systemd/system/conjure-registration-api.service
+    permissions: '0644'
