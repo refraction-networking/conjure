@@ -183,6 +183,12 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	// Create registration response object
 	regResp := &pb.RegistrationResponse{}
 
+	if payload.GetRegistrationPayload() == nil {
+		s.logger.Println("no C2S body:", err)
+		http.Error(w, "no C2S body", http.StatusBadRequest)
+		return
+	}
+
 	// Check server's client config -- add server's ClientConf if client is outdated
 	serverClientConf := s.compareClientConfGen(payload.GetRegistrationPayload().GetDecoyListGeneration())
 	if serverClientConf != nil {
@@ -194,6 +200,11 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 
 		// Replace the payload generation with correct generation from server's client config
 		payload.RegistrationPayload.DecoyListGeneration = serverClientConf.Generation
+	}
+
+	var clientLibVer uint = 0
+	if payload.GetRegistrationPayload() == nil {
+		clientLibVer = uint(payload.GetRegistrationPayload().GetClientLibVersion())
 	}
 
 	// Generate seed and phantom address
@@ -208,6 +219,7 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 		phantom4, err := s.IPSelector.Select(
 			cjkeys.DarkDecoySeed,
 			uint(s.BidirectionalAPIGen), //generation type uint
+			clientLibVer,
 			false,
 		)
 
@@ -225,6 +237,7 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 		phantom6, err := s.IPSelector.Select(
 			cjkeys.DarkDecoySeed,
 			uint(s.BidirectionalAPIGen),
+			clientLibVer,
 			true,
 		)
 		if err != nil {

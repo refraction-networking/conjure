@@ -88,7 +88,7 @@ func TestPhantomsSelectFromUnknownGen(t *testing.T) {
 
 	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
 
-	phantomAddr, err := phantomSelector.Select(seed, 0, false)
+	phantomAddr, err := phantomSelector.Select(seed, 0, phantomSelectionMinGeneration(), false)
 	require.Equal(t, err.Error(), "generation number not recognized")
 	assert.Nil(t, phantomAddr)
 }
@@ -110,7 +110,7 @@ func TestPhantomsSeededSelectionV4(t *testing.T) {
 	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
 	expectedAddr := "192.122.190.130"
 
-	phantomAddr, err := phantomSelector.Select(seed, newGen, false)
+	phantomAddr, err := phantomSelector.Select(seed, newGen, phantomSelectionMinGeneration(), false)
 	require.Nil(t, err)
 	assert.Equal(t, expectedAddr, phantomAddr.String())
 
@@ -133,7 +133,7 @@ func TestPhantomsSeededSelectionV6(t *testing.T) {
 	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
 	expectedAddr := "2001:48a8:687f:1:5fa4:c34c:434e:ddd"
 
-	phantomAddr, err := phantomSelector.Select(seed, newGen, true)
+	phantomAddr, err := phantomSelector.Select(seed, newGen, 1, true)
 	require.Nil(t, err)
 	assert.Equal(t, expectedAddr, phantomAddr.String())
 }
@@ -154,36 +154,36 @@ func TestPhantomsV6OnlyFilter(t *testing.T) {
 // they re useful to test limitations (i.e. multiple clients sharing a phantom
 // address)
 func TestPhantomsSeededSelectionV4Min(t *testing.T) {
-	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets_min.toml")
-	phantomSelector, err := NewPhantomIPSelector()
-	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
-
-	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
-
-	phantomAddr, err := phantomSelector.Select(seed, 1, false)
+	subnets, err := parseSubnets([]string{"192.122.190.0/32", "2001:48a8:687f:1::/128"})
 	require.Nil(t, err)
 
-	// expectedAddr := "192.122.190.0"
-	// assert.Equal(t, expectedAddr, phantomAddr.String())
-	t.Logf("%s", phantomAddr)
+	seed, err := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
+	require.Nil(t, err)
+
+	phantomAddr, err := selectPhantomImpl(seed, subnets)
+	require.Nil(t, err)
+
+	possibleAddrs := []string{"192.122.190.0", "2001:48a8:687f:1::"}
+	require.Contains(t, possibleAddrs, phantomAddr.String())
 }
 
+// TestPhantomSeededSelectionFuzz ensures that all phantom subnet sizes are
+// viable including small (/31, /32, etc.) subnets which were previously
+// experiencing a divide by 0.
 func TestPhantomSeededSelectionFuzz(t *testing.T) {
-	phantomSelector := PhantomIPSelector{
-		Networks: make(map[uint]*SubnetConfig),
-	}
+	_, defaultV6, err := net.ParseCIDR("2001:48a8:687f:1::/64")
+	require.Nil(t, err)
+
+	var randSeed int64 = 1234
+	r := rand.New(rand.NewSource(randSeed))
 
 	// Add generation with only one v4 subnet that has a varying mask len
 	for i := 0; i <= 32; i++ {
-		var newConf = &SubnetConfig{
-			WeightedSubnets: []ConjurePhantomSubnet{
-				{Weight: 10, Subnets: []string{"255.255.255.255/" + fmt.Sprint(i), "2001:48a8:687f:1::/64"}},
-			},
-		}
+		s := "255.255.255.255/" + fmt.Sprint(i)
+		_, variableSubnet, err := net.ParseCIDR(s)
+		require.Nil(t, err)
 
-		newGen := phantomSelector.AddGeneration(i, newConf)
-		var randSeed int64 = 1234
-		r := rand.New(rand.NewSource(randSeed))
+		subnets := []*net.IPNet{defaultV6, variableSubnet}
 
 		var seed = make([]byte, 32)
 		for j := 0; j < 10000; j++ {
@@ -191,7 +191,8 @@ func TestPhantomSeededSelectionFuzz(t *testing.T) {
 			require.Nil(t, err)
 			require.Equal(t, n, 32)
 
-			phantomAddr, err := phantomSelector.Select(seed, newGen, false)
+			// phantomAddr, err := phantomSelector.Select(seed, newGen, false)
+			phantomAddr, err := selectPhantomImpl(seed, subnets)
 			require.Nil(t, err, "i=%d, j=%d, seed='%s'", i, j, hex.EncodeToString(seed))
 			require.NotNil(t, phantomAddr)
 		}

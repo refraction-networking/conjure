@@ -110,13 +110,7 @@ func NewPhantomIPSelector() (*PhantomIPSelector, error) {
 }
 
 // Select - select an ip address from the list of subnets associated with the specified generation
-func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool) (net.IP, error) {
-
-	type idNet struct {
-		min, max big.Int
-		net      net.IPNet
-	}
-	var idNets []idNet
+func (p *PhantomIPSelector) Select(seed []byte, generation uint, clientLibVer uint, v6Support bool) (net.IP, error) {
 
 	genConfig := p.GetSubnetsByGeneration(generation)
 	if genConfig == nil {
@@ -137,10 +131,25 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool)
 		}
 	}
 
+	return selectPhantomImpl(seed, genSubnets)
+}
+
+// selectPhantomImpl - select an ip address from the list of subnets associated
+// with the specified generation by constructing a set of start and end values
+// for the high and low values in each allocation. The random number is then
+// bound between the global min and max of that set. This ensures that
+// addresses are chosen based on the number of addresses in the subnet.
+func selectPhantomImpl(seed []byte, subnets []*net.IPNet) (net.IP, error) {
+	type idNet struct {
+		min, max big.Int
+		net      net.IPNet
+	}
+	var idNets []idNet
+
 	// Compose a list of ID Nets with min, max and network associated and count
 	// the total number of available addresses.
 	addressTotal := big.NewInt(0)
-	for _, _net := range genSubnets {
+	for _, _net := range subnets {
 		netMaskOnes, _ := _net.Mask.Size()
 		if ipv4net := _net.IP.To4(); ipv4net != nil {
 			_idNet := idNet{}
@@ -150,14 +159,12 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool)
 			_idNet.net = *_net
 			idNets = append(idNets, _idNet)
 		} else if ipv6net := _net.IP.To16(); ipv6net != nil {
-			if v6Support {
-				_idNet := idNet{}
-				_idNet.min.Set(addressTotal)
-				addressTotal.Add(addressTotal, big.NewInt(2).Exp(big.NewInt(2), big.NewInt(int64(128-netMaskOnes)), nil))
-				_idNet.max.Sub(addressTotal, big.NewInt(1))
-				_idNet.net = *_net
-				idNets = append(idNets, _idNet)
-			}
+			_idNet := idNet{}
+			_idNet.min.Set(addressTotal)
+			addressTotal.Add(addressTotal, big.NewInt(2).Exp(big.NewInt(2), big.NewInt(int64(128-netMaskOnes)), nil))
+			_idNet.max.Sub(addressTotal, big.NewInt(1))
+			_idNet.net = *_net
+			idNets = append(idNets, _idNet)
 		} else {
 			return nil, fmt.Errorf("failed to parse %v", _net)
 		}
@@ -180,6 +187,7 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool)
 	// random address from that subnet.
 	// min >= id%total >= max
 	var result net.IP
+	var err error
 	for _, _idNet := range idNets {
 		// fmt.Printf("tot:%s, seed%%tot:%s     id cmp max: %d,  id cmp min: %d %s\n", addressTotal.String(), id, _idNet.max.Cmp(id), _idNet.min.Cmp(id), _idNet.net.String())
 		if _idNet.max.Cmp(id) >= 0 && _idNet.min.Cmp(id) <= 0 {
@@ -195,6 +203,12 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool)
 		return nil, errors.New("nil result should not be possible")
 	}
 	return result, nil
+}
+
+// selectV0 implements support for the legacy (buggy) client phantom address
+// selection algorithm.
+func selectPhantomImplV0(seed []byte, subnets []*net.IPNet) (net.IP, error) {
+	return nil, errors.New("not implemented yet")
 }
 
 // SelectAddrFromSubnet - given a seed and a CIDR block choose an address.
@@ -293,4 +307,8 @@ func (p *PhantomIPSelector) RemoveGeneration(generation uint) bool {
 func (p *PhantomIPSelector) UpdateGeneration(generation uint, subnets *SubnetConfig) bool {
 	p.Networks[generation] = subnets
 	return true
+}
+
+func phantomSelectionMinGeneration() uint {
+	return 1
 }
