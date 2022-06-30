@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/mingyech/conjure-dns-registrar/pkg/responder"
+	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/responder"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 )

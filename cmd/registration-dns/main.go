@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/mingyech/conjure-dns-registrar/pkg/encryption"
-	"github.com/mingyech/conjure-dns-registrar/pkg/responder"
+	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/encryption"
+	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/responder"
 )
 
 // readKeyFromFile reads a key from a named file.

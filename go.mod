@@ -7,7 +7,6 @@ require (
 	github.com/BurntSushi/toml v0.4.1
 	github.com/go-redis/redis/v8 v8.11.4
 	github.com/gorilla/mux v1.8.0
-	github.com/mingyech/conjure-dns-registrar v0.0.0-20220621214803-13e5f3f05c94
 	github.com/mroth/weightedrand v0.4.1
 	github.com/pebbe/zmq4 v1.2.7
 	github.com/pelletier/go-toml v1.9.4
@@ -20,4 +19,4 @@ require (
 	google.golang.org/protobuf v1.28.0
 )
 
-replace github.com/refraction-networking/gotapdance => github.com/mingyech/gotapdance v1.2.1-0.20220624192753-6eb51d057cfe
+replace github.com/refraction-networking/gotapdance => github.com/mingyech/gotapdance v1.2.1-0.20220630175922-0d2241058506
