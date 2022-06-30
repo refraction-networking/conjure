@@ -48,7 +48,11 @@ func wrapConnection(conn net.Conn, nodeID, publicKey string, wrapped chan (net.C
 }
 
 func TestSuccessfulWrap(t *testing.T) {
-	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	var err error
+
+	cwd, err := os.Getwd()
+	require.Nil(t, err)
+	testSubnetPath := cwd + "/../internal/tests/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	var transport Transport
@@ -64,7 +68,6 @@ func TestSuccessfulWrap(t *testing.T) {
 	var buf [4096]byte
 	var buffer bytes.Buffer
 	var wrappedsfp net.Conn
-	var err error
 	for {
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])
@@ -108,7 +111,11 @@ func TestSuccessfulWrap(t *testing.T) {
 // default map to the same phantom address (for n=5 registrations). We wrap the
 // last connection.
 func TestSuccessfulWrapMulti(t *testing.T) {
-	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets_min.toml"
+	var err error
+
+	cwd, err := os.Getwd()
+	require.Nil(t, err)
+	testSubnetPath := cwd + "/../internal/tests/phantom_subnets_min.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	sharedSecrets := [][]byte{
@@ -139,7 +146,6 @@ func TestSuccessfulWrapMulti(t *testing.T) {
 	var buf [4096]byte
 	var buffer bytes.Buffer
 	var wrappedsfp net.Conn
-	var err error
 	for {
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])

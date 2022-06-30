@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -10,6 +9,10 @@ import (
 	"net"
 
 	wr "github.com/mroth/weightedrand"
+)
+
+const (
+	phantomSelectionMinGeneration uint = 1
 )
 
 // getSubnets - return EITHER all subnet strings as one composite array if we are
@@ -21,8 +24,9 @@ func (sc *SubnetConfig) getSubnets(seed []byte, weighted bool) []string {
 
 	if weighted {
 		// seed random with hkdf derived seed provided by client
-		seedInt, err := binary.ReadVarint(bytes.NewBuffer(seed))
-		if err != nil {
+		seedInt, n := binary.Varint(seed)
+		if n == 0 {
+			fmt.Println("failed to seed random for weighted rand")
 			return nil
 		}
 		rand.Seed(seedInt)
@@ -110,13 +114,7 @@ func NewPhantomIPSelector() (*PhantomIPSelector, error) {
 }
 
 // Select - select an ip address from the list of subnets associated with the specified generation
-func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool) (net.IP, error) {
-
-	type idNet struct {
-		min, max big.Int
-		net      net.IPNet
-	}
-	var idNets []idNet
+func (p *PhantomIPSelector) Select(seed []byte, generation uint, clientLibVer uint, v6Support bool) (net.IP, error) {
 
 	genConfig := p.GetSubnetsByGeneration(generation)
 	if genConfig == nil {
@@ -137,8 +135,98 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool)
 		}
 	}
 
+	// handle legacy clientLibVersions for selecting phantoms.
+	if clientLibVer < phantomSelectionMinGeneration {
+		return selectPhantomImplV0(seed, genSubnets)
+	}
+
+	return selectPhantomImpl(seed, genSubnets)
+}
+
+// selectPhantomImpl - select an ip address from the list of subnets associated
+// with the specified generation by constructing a set of start and end values
+// for the high and low values in each allocation. The random number is then
+// bound between the global min and max of that set. This ensures that
+// addresses are chosen based on the number of addresses in the subnet.
+func selectPhantomImpl(seed []byte, subnets []*net.IPNet) (net.IP, error) {
+	type idNet struct {
+		min, max big.Int
+		net      net.IPNet
+	}
+	var idNets []idNet
+
+	// Compose a list of ID Nets with min, max and network associated and count
+	// the total number of available addresses.
 	addressTotal := big.NewInt(0)
-	for _, _net := range genSubnets {
+	for _, _net := range subnets {
+		netMaskOnes, _ := _net.Mask.Size()
+		if ipv4net := _net.IP.To4(); ipv4net != nil {
+			_idNet := idNet{}
+			_idNet.min.Set(addressTotal)
+			addressTotal.Add(addressTotal, big.NewInt(2).Exp(big.NewInt(2), big.NewInt(int64(32-netMaskOnes)), nil))
+			_idNet.max.Sub(addressTotal, big.NewInt(1))
+			_idNet.net = *_net
+			idNets = append(idNets, _idNet)
+		} else if ipv6net := _net.IP.To16(); ipv6net != nil {
+			_idNet := idNet{}
+			_idNet.min.Set(addressTotal)
+			addressTotal.Add(addressTotal, big.NewInt(2).Exp(big.NewInt(2), big.NewInt(int64(128-netMaskOnes)), nil))
+			_idNet.max.Sub(addressTotal, big.NewInt(1))
+			_idNet.net = *_net
+			idNets = append(idNets, _idNet)
+		} else {
+			return nil, fmt.Errorf("failed to parse %v", _net)
+		}
+	}
+
+	// If the total number of addresses is 0 something has gone wrong
+	if addressTotal.Cmp(big.NewInt(0)) <= 0 {
+		return nil, fmt.Errorf("no valid addresses specified")
+	}
+
+	// Pick a value using the seed in the range of between 0 and the total
+	// number of addresses.
+	id := &big.Int{}
+	id.SetBytes(seed)
+	if id.Cmp(addressTotal) >= 0 {
+		id.Mod(id, addressTotal)
+	}
+
+	// Find the network (ID net) that contains our random value and select a
+	// random address from that subnet.
+	// min >= id%total >= max
+	var result net.IP
+	var err error
+	for _, _idNet := range idNets {
+		// fmt.Printf("tot:%s, seed%%tot:%s     id cmp max: %d,  id cmp min: %d %s\n", addressTotal.String(), id, _idNet.max.Cmp(id), _idNet.min.Cmp(id), _idNet.net.String())
+		if _idNet.max.Cmp(id) >= 0 && _idNet.min.Cmp(id) <= 0 {
+			result, err = SelectAddrFromSubnet(seed, &_idNet.net)
+			if err != nil {
+				return nil, fmt.Errorf("failed to chose IP address: %v", err)
+			}
+		}
+	}
+
+	// We want to make it so this CANNOT happen
+	if result == nil {
+		return nil, errors.New("nil result should not be possible")
+	}
+	return result, nil
+}
+
+// selectV0 implements support for the legacy (buggy) client phantom address
+// selection algorithm.
+func selectPhantomImplV0(seed []byte, subnets []*net.IPNet) (net.IP, error) {
+
+	addressTotal := big.NewInt(0)
+
+	type idNet struct {
+		min, max big.Int
+		net      *net.IPNet
+	}
+	var idNets []idNet
+
+	for _, _net := range subnets {
 		netMaskOnes, _ := _net.Mask.Size()
 		if ipv4net := _net.IP.To4(); ipv4net != nil {
 			_idNet := idNet{}
@@ -146,38 +234,36 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, v6Support bool)
 			addressTotal.Add(addressTotal, big.NewInt(2).Exp(big.NewInt(2), big.NewInt(int64(32-netMaskOnes)), nil))
 			addressTotal.Sub(addressTotal, big.NewInt(1))
 			_idNet.max.Set(addressTotal)
-			_idNet.net = *_net
+			_idNet.net = _net
 			idNets = append(idNets, _idNet)
 		} else if ipv6net := _net.IP.To16(); ipv6net != nil {
-			if v6Support {
-				_idNet := idNet{}
-				_idNet.min.Set(addressTotal)
-				addressTotal.Add(addressTotal, big.NewInt(2).Exp(big.NewInt(2), big.NewInt(int64(128-netMaskOnes)), nil))
-				addressTotal.Sub(addressTotal, big.NewInt(1))
-				_idNet.max.Set(addressTotal)
-				_idNet.net = *_net
-				idNets = append(idNets, _idNet)
-			}
+			_idNet := idNet{}
+			_idNet.min.Set(addressTotal)
+			addressTotal.Add(addressTotal, big.NewInt(2).Exp(big.NewInt(2), big.NewInt(int64(128-netMaskOnes)), nil))
+			addressTotal.Sub(addressTotal, big.NewInt(1))
+			_idNet.max.Set(addressTotal)
+			_idNet.net = _net
+			idNets = append(idNets, _idNet)
 		} else {
 			return nil, fmt.Errorf("failed to parse %v", _net)
 		}
 	}
+
+	if addressTotal.Cmp(big.NewInt(0)) <= 0 {
+		return nil, fmt.Errorf("No valid addresses specified")
+	}
+
 	id := &big.Int{}
 	id.SetBytes(seed)
 	if id.Cmp(addressTotal) > 0 {
 		id.Mod(id, addressTotal)
 	}
-	if id.Cmp(addressTotal) == 0 {
-		return nil, fmt.Errorf("No valid addresses to select from")
-	}
-	if addressTotal.Cmp(big.NewInt(0)) <= 0 {
-		return nil, fmt.Errorf("No valid addresses specified")
-	}
 
 	var result net.IP
+	var err error
 	for _, _idNet := range idNets {
 		if _idNet.max.Cmp(id) >= 0 && _idNet.min.Cmp(id) == -1 {
-			result, err = SelectAddrFromSubnet(seed, &_idNet.net)
+			result, err = SelectAddrFromSubnet(seed, _idNet.net)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to chose IP address: %v", err)
 			}
@@ -204,14 +290,14 @@ func SelectAddrFromSubnet(seed []byte, net1 *net.IPNet) (net.IP, error) {
 		ipBigInt.SetBytes(net1.IP.To16())
 	}
 
-	seedInt, err := binary.ReadVarint(bytes.NewBuffer(seed))
-	if err != nil {
-		return nil, err
+	seedInt, n := binary.Varint(seed)
+	if n == 0 {
+		return nil, fmt.Errorf("failed to create seed ")
 	}
 
 	rand.Seed(seedInt)
 	randBytes := make([]byte, addrLen/8)
-	_, err = rand.Read(randBytes)
+	_, err := rand.Read(randBytes)
 	if err != nil {
 		return nil, err
 	}

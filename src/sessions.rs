@@ -176,13 +176,13 @@ pub struct SessionTracker {
     pub tracked_sessions: Arc<RwLock<HashMap<String, u64>>>,
 }
 
-impl<'a> Default for SessionTracker {
+impl Default for SessionTracker {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'a> SessionTracker {
+impl SessionTracker {
     pub fn new() -> SessionTracker {
         SessionTracker {
             tracked_sessions: Arc::new(RwLock::new(HashMap::new())),

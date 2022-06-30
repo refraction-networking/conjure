@@ -23,8 +23,10 @@ func mockReceiveFromDetector() (*pb.ClientToStation, dd.ConjureSharedKeys) {
 		fmt.Printf("Failed to unmarshal ClientToStation protobuf\n")
 	}
 
-	t := true
+	var t bool = true
+	var v uint32 = 1
 	clientToStation.Flags = &pb.RegistrationFlags{Use_TIL: &t}
+	clientToStation.ClientLibVersion = &v
 
 	conjureKeys, _ := dd.GenSharedKeys(sharedSecret)
 

@@ -55,10 +55,16 @@ func SetupPhantomConnectionsSecret(manager *dd.RegistrationManager, transport pb
 		log.Fatalln("failed to generate shared keys:", err)
 	}
 
+	v := uint32(1)
 	covert := "1.2.3.4:56789"
 	regType := pb.RegistrationSource_API
 	gen := uint32(1)
-	c2s := &pb.ClientToStation{Transport: &transport, CovertAddress: &covert, DecoyListGeneration: &gen}
+	c2s := &pb.ClientToStation{
+		Transport:           &transport,
+		CovertAddress:       &covert,
+		DecoyListGeneration: &gen,
+		ClientLibVersion:    &v,
+	}
 	reg, err = manager.NewRegistration(c2s, &keys, false, &regType)
 	if err != nil {
 		log.Fatalln("failed to create new Registration:", err)
