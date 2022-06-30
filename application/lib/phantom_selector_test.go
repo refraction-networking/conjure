@@ -88,7 +88,7 @@ func TestPhantomsSelectFromUnknownGen(t *testing.T) {
 
 	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
 
-	phantomAddr, err := phantomSelector.Select(seed, 0, phantomSelectionMinGeneration(), false)
+	phantomAddr, err := phantomSelector.Select(seed, 0, phantomSelectionMinGeneration, false)
 	require.Equal(t, err.Error(), "generation number not recognized")
 	assert.Nil(t, phantomAddr)
 }
@@ -110,7 +110,7 @@ func TestPhantomsSeededSelectionV4(t *testing.T) {
 	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
 	expectedAddr := "192.122.190.130"
 
-	phantomAddr, err := phantomSelector.Select(seed, newGen, phantomSelectionMinGeneration(), false)
+	phantomAddr, err := phantomSelector.Select(seed, newGen, phantomSelectionMinGeneration, false)
 	require.Nil(t, err)
 	assert.Equal(t, expectedAddr, phantomAddr.String())
 
@@ -197,4 +197,27 @@ func TestPhantomSeededSelectionFuzz(t *testing.T) {
 			require.NotNil(t, phantomAddr)
 		}
 	}
+}
+
+func TestPhantomsSeededSelectionLegacy(t *testing.T) {
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
+	phantomSelector, err := NewPhantomIPSelector()
+	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
+
+	var newConf = &SubnetConfig{
+		WeightedSubnets: []ConjurePhantomSubnet{
+			{Weight: 9, Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
+			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
+		},
+	}
+
+	newGen := phantomSelector.AddGeneration(-1, newConf)
+
+	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
+	expectedAddr := "192.122.190.130"
+
+	phantomAddr, err := phantomSelector.Select(seed, newGen, 0, false)
+	require.Nil(t, err)
+	assert.Equal(t, expectedAddr, phantomAddr.String())
+
 }

@@ -202,10 +202,7 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 		payload.RegistrationPayload.DecoyListGeneration = serverClientConf.Generation
 	}
 
-	var clientLibVer uint = 0
-	if payload.GetRegistrationPayload() == nil {
-		clientLibVer = uint(payload.GetRegistrationPayload().GetClientLibVersion())
-	}
+	clientLibVer := uint(payload.GetRegistrationPayload().GetClientLibVersion())
 
 	// Generate seed and phantom address
 	cjkeys, err := lib.GenSharedKeys(payload.SharedSecret)
