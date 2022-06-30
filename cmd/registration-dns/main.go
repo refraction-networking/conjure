@@ -100,7 +100,7 @@ func generateKeypair(privkeyFilename, pubkeyFilename string) (err error) {
 func run(forwarder *DnsRegForwarder) error {
 	defer forwarder.Close()
 
-	log.Println("Started Conjure DNS registration forwarder")
+	log.Println("Started Conjure DNS registration server")
 
 	forwarder.RecvAndForward()
 
