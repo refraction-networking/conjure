@@ -129,9 +129,7 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 		return respPayload, nil
 	}
 
-	f.dnsResponder.RecvAndRespond(forwardWith)
-
-	return nil
+	return f.dnsResponder.RecvAndRespond(forwardWith)
 }
 
 // Close the underlying dns responder.
