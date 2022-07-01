@@ -22,4 +22,4 @@ require (
 	google.golang.org/protobuf v1.28.0
 )
 
-replace github.com/refraction-networking/gotapdance => github.com/mingyech/gotapdance v1.2.1-0.20220630175922-0d2241058506
+replace github.com/refraction-networking/gotapdance => github.com/mingyech/gotapdance v1.2.1-0.20220630235546-0e2a28ff41d4
