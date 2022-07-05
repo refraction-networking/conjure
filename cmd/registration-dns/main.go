@@ -6,9 +6,18 @@ import (
 	"log"
 	"os"
 
+	"github.com/BurntSushi/toml"
 	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/encryption"
 	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/responder"
 )
+
+type config struct {
+	UdpAddr     string `toml:"addr"`
+	ApiUrl      string `toml:"api_url"`
+	BdApiUrl    string `toml:"bdapi_url"`
+	Domain      string `toml:"domain"`
+	PrivkeyPath string `toml:"private_key_path"`
+}
 
 // readKeyFromFile reads a key from a named file.
 func readKeyFromFile(filename string) ([]byte, error) {
@@ -116,19 +125,21 @@ func main() {
 	var apiUrl string
 	var bdApiUrl string
 	var domain string
-	var privkeyFilename string
+	var privkeyPath string
 	var pubkeyFilenameOut string
 	var privkeyFilenameOut string
 	var genKey bool
+	var configPath string
 
 	flag.StringVar(&udpAddr, "addr", "[::]:53", "UDP address to listen on")
 	flag.StringVar(&domain, "domain", "", "base domain in requests")
 	flag.StringVar(&apiUrl, "api-endpoint", "https://registration.refraction.network/api/register", "API endpoint to use when performing API registration")
 	flag.StringVar(&bdApiUrl, "bdapi-endpoint", "https://registration.refraction.network/api/register-bidirectional", "API endpoint to use when performing API registration")
-	flag.StringVar(&privkeyFilename, "privkey", "", "server private key filename")
+	flag.StringVar(&privkeyPath, "privkey", "", "server private key filename")
 	flag.StringVar(&pubkeyFilenameOut, "pubkeyfilename", "", "generated server public key filename (only used with -genKey)")
 	flag.StringVar(&privkeyFilenameOut, "privkeyfilename", "", "generated server private key filename (only used with -genKey)")
 	flag.BoolVar(&genKey, "genkey", false, "generate a server keypair; print to stdout or save to files")
+	flag.StringVar(&configPath, "config", "", "configuration file path")
 	flag.Parse()
 
 	if genKey {
@@ -139,8 +150,22 @@ func main() {
 		return
 	}
 
+	if configPath != "" {
+		var conf config
+		_, err := toml.DecodeFile(configPath, &conf)
+		if err != nil {
+			log.Fatalf("Error in reading config file: %v", err)
+		}
+
+		udpAddr = conf.UdpAddr
+		apiUrl = conf.ApiUrl
+		bdApiUrl = conf.BdApiUrl
+		domain = conf.Domain
+		privkeyPath = conf.PrivkeyPath
+	}
+
 	if udpAddr == "" {
-		fmt.Fprintf(os.Stderr, "the -addr option is required\n")
+		fmt.Fprintf(os.Stderr, "must specify address to listen on\n")
 		flag.Usage()
 		os.Exit(2)
 	}
@@ -153,7 +178,7 @@ func main() {
 
 	log.SetFlags(log.LstdFlags | log.LUTC)
 
-	privkey, err := readKeyFromFile(privkeyFilename)
+	privkey, err := readKeyFromFile(privkeyPath)
 	if err != nil {
 		log.Fatal(err)
 	}
