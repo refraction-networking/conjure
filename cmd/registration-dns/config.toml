@@ -9,4 +9,4 @@ bdapi_url = "http://localhost:8080/register-bidirectional"
 domain = "r.refraction.network"
 
 # Path to private key file for dns registrar (generated with -genKey flag)
-private_key_path = "/opt/conjure/sysconfig/registration-dns-privkey"
+private_key_path = "/opt/conjure/cmd/registration-dns/privkey"
