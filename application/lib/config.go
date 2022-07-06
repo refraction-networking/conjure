@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strconv"
 
 	"github.com/BurntSushi/toml"
 )
@@ -98,6 +99,11 @@ func (c *Config) ParseOrResolveBlocklisted(provided string) string {
 		return ""
 	}
 	if c.isBlocklistedCovertDomain(host) {
+		return ""
+	}
+
+	_, err = strconv.ParseUint(port, 10, 16)
+	if err != nil {
 		return ""
 	}
 
