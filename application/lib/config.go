@@ -77,33 +77,62 @@ func (c *Config) parseBlocklists() {
 	}
 }
 
-func (c *Config) IsBlocklisted(urlStr string) bool {
+// ParseOrResolveBlocklisted attempts to return an IP:port string whenever
+// possible either by parsing the IP to ensure correct format or resolving
+// domain names. It also checks the configuration blocklists for both domain
+// name and IP address. The intention of this function is that it be used to
+// prevent SSRF DNS rebinding by doing resolution to final address to be used by
+// net.Dial and checking blocklists in the same step.
+//
+// If a bad address / domain is given and empty string will be returned
+func (c *Config) ParseOrResolveBlocklisted(provided string) string {
 
-	host, _, err := net.SplitHostPort(urlStr)
-	if err != nil || host == "" {
-		// unable to parse host:port
-		return true
+	a := net.ParseIP(provided)
+	if a != nil {
+		// IP address with no port provided
+		return ""
 	}
 
-	if addr := net.ParseIP(host); addr != nil {
-		if !addr.IsGlobalUnicast() {
-			// No anycast / private / loopback allowed.
+	host, port, err := net.SplitHostPort(provided)
+	if err != nil {
+		return ""
+	}
+	if c.isBlocklistedCovertDomain(host) {
+		return ""
+	}
+
+	addr, err := net.ResolveIPAddr("ip", host)
+	if err != nil {
+		return ""
+	}
+	if addr == nil || c.isBlocklistedCovertAddr(addr.IP) {
+		return ""
+	}
+	return net.JoinHostPort(addr.String(), port)
+}
+
+// isBlocklistedCovertAddr checks if the provided host string should be
+// blocked by on of the blocklisted subnets
+func (c *Config) isBlocklistedCovertAddr(addr net.IP) bool {
+	for _, net := range c.covertBlocklistSubnets {
+		if net.Contains(addr) {
+			// blocked by IP address
 			return true
 		}
-		for _, net := range c.covertBlocklistSubnets {
-			if net.Contains(addr) {
-				// blocked by IP address
-				return true
-			}
-		}
-	} else {
-		for _, pattern := range c.covertBlocklistDomains {
-			if pattern.MatchString(host) {
-				// blocked by Domain pattern
-				return true
-			}
+	}
+
+	return false
+}
+
+// isBlocklistedCovertDomain checks if the provided host string should be
+// blocked by on of the blocklisted Domain patterns
+func (c *Config) isBlocklistedCovertDomain(provided string) bool {
+	for _, pattern := range c.covertBlocklistDomains {
+		if pattern.MatchString(provided) {
+			return true
 		}
 	}
+
 	return false
 }
 
