@@ -109,6 +109,7 @@ packages:
   - software-properties-common
   - redis-server
   - pfring
+  - coturn
 
 # Scripts
 write_files:
@@ -134,6 +135,8 @@ write_files:
       cp -r /opt/conjure/simulation/phantombox/config/sysconfig /opt/conjure
       cp -r /opt/conjure/simulation/phantombox/config/application/config.toml /opt/conjure/application/
       cp -r /opt/conjure/simulation/phantombox/config/registration-api/config.toml /opt/conjure/registration-api/
+      cp -r /opt/conjure/simulation/phantombox/config/registration-dns/config.toml /opt/conjure/cmd/registration-dns/
+      cp -r /opt/conjure/simulation/phantombox/config/registration-dns/privkey /opt/conjure/cmd/registration-dns/
     path: /var/lib/cloud/scripts/per-instance/02-copy-configs
     permissions: '0755'
   # Install conjure station
@@ -152,15 +155,21 @@ write_files:
   # Enable systemd services
   - content: |
       #!/bin/bash
+      systemctl disable systemd-resolved
       systemctl enable conjure-det
       systemctl enable conjure-app
       systemctl enable conjure-registration-api
+      systemctl enable conjure-registration-dns
+      systemctl enable coturn
       echo "200 custom" >> /etc/iproute2/rt_tables
       export CJ_PATH=/opt/conjure
       bash /opt/conjure/on-reboot.sh # Note: this is run twice on first boot
+      systemctl stop systemd-resolved
       systemctl start conjure-det
       systemctl start conjure-app
       systemctl start conjure-registration-api
+      systemctl start conjure-registration-dns
+      systemctl start coturn
     path: /var/lib/cloud/scripts/per-instance/04-enable-services
     permissions: '0755'
   # Mount the conjure station repository from the host
@@ -175,9 +184,15 @@ write_files:
       #!/bin/bash
       export CJ_PATH=/opt/conjure
       bash /opt/conjure/on-reboot.sh
+      systemctl stop systemd-resolved
+      rm /etc/resolv.conf
+      echo 'nameserver 1.1.1.1' > /etc/resolv.conf
+      chattr +i /etc/resolv.conf
       systemctl start conjure-det || exit 0 # Note: this will fail the first boot
       systemctl start conjure-app
       systemctl start conjure-registration-api
+      systemctl start conjure-registration-dns
+      systemctl start coturn
     path: /var/lib/cloud/scripts/per-boot/01-detector-network
     permissions: '0755'
 
@@ -247,4 +262,22 @@ write_files:
       [Install]
       WantedBy=multi-user.target
     path: /etc/systemd/system/conjure-registration-api.service
+    permissions: '0644'
+  - content: |
+      # Conjure DNS registrar service file
+      [Unit]
+      Description=Conjure DNS Registrar
+
+      [Service]
+      Type=simple
+      WorkingDirectory=/opt/conjure/cmd/registration-dns/
+      SyslogIdentifier=conjure
+      EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
+      ExecStart=/opt/conjure/cmd/registration-dns/registration-dns --config /opt/conjure/cmd/registration-dns/config.toml
+      # on stop processes will get SIGTERM, and after 10 secs - SIGKILL (default 90)
+      TimeoutStopSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    path: /etc/systemd/system/conjure-registration-dns.service
     permissions: '0644'
