@@ -45,7 +45,7 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 		regReq := &pb.C2SWrapper{}
 		err := proto.Unmarshal(reqIn, regReq)
 		if err != nil {
-			log.Infof("Error in recieved request unmarshal: [%v]", err)
+			log.Errorf("Error in recieved request unmarshal: [%v]", err)
 			return nil, err
 		}
 
@@ -80,17 +80,17 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 		defer resp.Body.Close()
 
 		regsuccess := true
-
-		// Check that the HTTP request returned a success code
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			log.Infof("API indicates that registration failed: status code [%d]", resp.StatusCode)
-			regsuccess = false
-		}
-
 		clientconfOutdated := false
 		dnsResp := &pb.DnsResponse{
 			Success:            &regsuccess,
 			ClientconfOutdated: &clientconfOutdated,
+		}
+
+		// Check that the HTTP request returned a success code
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			log.Errorf("Registration unsuccessful: HTTP API status code [%d]", resp.StatusCode)
+			regsuccess = false
+			return proto.Marshal(dnsResp)
 		}
 
 		// if the registration is unidirectional, immediately return
@@ -102,7 +102,7 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 		// Read the HTTP response body into []bytes
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.Errorf("Reading API HTTP response failed: %v", err)
+			log.Errorf("Reading API HTTP response failed: [%v]", err)
 			return nil, err
 		}
 
@@ -110,7 +110,7 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 		log.Debugf("API Response length: [%d]", len(bodyBytes))
 		err = proto.Unmarshal(bodyBytes, regResp)
 		if err != nil {
-			log.Errorf("Error in API response unmarshal: %v", err)
+			log.Errorf("Error in API response unmarshal: [%v]", err)
 			return nil, err
 		}
 
@@ -126,11 +126,11 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 		respPayload, err := proto.Marshal(dnsResp)
 
 		if err != nil {
-			log.Infof("Error in DNS registration response marshal: %v", err)
+			log.Errorf("Error in DNS registration response marshal: [%v]", err)
 			return nil, err
 		}
 
-		log.Infof("Sending DNS registration response to bidirectional request")
+		log.Infof("Bidirectional request successful, sending response")
 		return respPayload, nil
 	}
 
