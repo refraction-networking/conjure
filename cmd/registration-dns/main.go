@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// keyLen is the length of the private key
 const keyLen = 32
 
 // config defines the variables and options from the toml config file
@@ -26,11 +27,11 @@ type config struct {
 func run(forwarder *DnsRegForwarder) error {
 	defer forwarder.Close()
 
-	log.Println("Started Conjure DNS registration server")
+	log.Infof("Started Conjure DNS registration server")
 
 	err := forwarder.RecvAndForward()
 	if err != nil {
-		log.Printf("Forwarder RecvAndForward returned error: %v", err)
+		log.Errorf("Forwarder RecvAndForward returned error: %v", err)
 		return err
 	}
 
