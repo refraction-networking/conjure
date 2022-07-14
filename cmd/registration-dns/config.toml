@@ -8,7 +8,8 @@ bdapi_url = "http://localhost:8080/register-bidirectional"
 # Base domain authoritive to nameserver
 domain = "r.refraction.network"
 
-# Path to private key file for dns registrar (generated with -genKey flag)
-private_key_path = "/opt/conjure/cmd/registration-dns/privkey"
+# Path to Conjure private key file
+private_key_path = "/opt/conjure/sysconfig/privkey"
 
+# Log level, one of the following: panic, fatal, error, warn, info, debug, trace
 log_level = "info"

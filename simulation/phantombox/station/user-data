@@ -136,7 +136,6 @@ write_files:
       cp -r /opt/conjure/simulation/phantombox/config/application/config.toml /opt/conjure/application/
       cp -r /opt/conjure/simulation/phantombox/config/registration-api/config.toml /opt/conjure/registration-api/
       cp -r /opt/conjure/simulation/phantombox/config/registration-dns/config.toml /opt/conjure/cmd/registration-dns/
-      cp -r /opt/conjure/simulation/phantombox/config/registration-dns/privkey /opt/conjure/cmd/registration-dns/
     path: /var/lib/cloud/scripts/per-instance/02-copy-configs
     permissions: '0755'
   # Install conjure station
