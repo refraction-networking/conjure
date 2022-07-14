@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// config defines the variables and options from the toml config file
 type config struct {
 	UdpAddr     string `toml:"addr"`
 	ApiUrl      string `toml:"api_url"`

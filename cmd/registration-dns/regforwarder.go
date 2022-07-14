@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Interface to forward DNS registration requests. Use a dns responder to receive requests and send responses.
+// DnsRegForwarder provides an interface to forward DNS registration requests. Use a dns responder to receive requests and send responses.
 type DnsRegForwarder struct {
 	// Endpoints to use in registration request
 	endpoint   string
@@ -24,7 +24,7 @@ type DnsRegForwarder struct {
 	dnsResponder *responder.Responder
 }
 
-// Create new DnsRegForwarder.
+// NewDnsRegForwarder initializes a new DnsRegForwarder object.
 func NewDnsRegForwarder(endpoint string, bdendpoint string, dnsResponder *responder.Responder) (*DnsRegForwarder, error) {
 	f := DnsRegForwarder{}
 
@@ -38,8 +38,9 @@ func NewDnsRegForwarder(endpoint string, bdendpoint string, dnsResponder *respon
 	return &f, nil
 }
 
-// Define function on how to respond to incoming dns requests and pass it to dnsResponder.
+// RecvAndForward defines a function on how to respond to incoming dns requests and pass it to dnsResponder.
 func (f *DnsRegForwarder) RecvAndForward() error {
+
 	// send the raw request payload to the api endpoint and forward its response
 	forwardWith := func(reqIn []byte) ([]byte, error) {
 		regReq := &pb.C2SWrapper{}
@@ -137,7 +138,7 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 	return f.dnsResponder.RecvAndRespond(forwardWith)
 }
 
-// Close the underlying dns responder.
+// Close closes the underlying dns responder.
 func (f *DnsRegForwarder) Close() error {
 	return f.dnsResponder.Close()
 }
