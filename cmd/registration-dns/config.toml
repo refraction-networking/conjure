@@ -10,3 +10,5 @@ domain = "r.refraction.network"
 
 # Path to private key file for dns registrar (generated with -genKey flag)
 private_key_path = "/opt/conjure/cmd/registration-dns/privkey"
+
+log_level = "info"

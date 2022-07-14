@@ -17,6 +17,7 @@ type config struct {
 	BdApiUrl    string `toml:"bdapi_url"`
 	Domain      string `toml:"domain"`
 	PrivkeyPath string `toml:"private_key_path"`
+	LogLevel    string `toml:"log_level"`
 }
 
 // readKeyFromFile reads a key from a named file.
@@ -130,6 +131,7 @@ func main() {
 	var privkeyFilenameOut string
 	var genKey bool
 	var configPath string
+	var logLevelStr string
 
 	flag.StringVar(&udpAddr, "addr", "[::]:53", "UDP address to listen on")
 	flag.StringVar(&domain, "domain", "", "base domain in requests")
@@ -140,6 +142,7 @@ func main() {
 	flag.StringVar(&privkeyFilenameOut, "privkeyfilename", "", "generated server private key filename (only used with -genKey)")
 	flag.BoolVar(&genKey, "genkey", false, "generate a server keypair; print to stdout or save to files")
 	flag.StringVar(&configPath, "config", "", "configuration file path")
+	flag.StringVar(&logLevelStr, "loglevel", "info", "log level, one of the following: panic, fatal, error, warn, info, debug, trace")
 	flag.Parse()
 
 	logFormatter := &log.TextFormatter{
@@ -167,7 +170,15 @@ func main() {
 		bdApiUrl = conf.BdApiUrl
 		domain = conf.Domain
 		privkeyPath = conf.PrivkeyPath
+		logLevelStr = conf.LogLevel
 	}
+
+	// parse & set log level
+	logLevel, err := log.ParseLevel(logLevelStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.SetLevel(logLevel)
 
 	if udpAddr == "" {
 		fmt.Fprintf(os.Stderr, "must specify address to listen on\n")
