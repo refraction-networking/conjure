@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"io/ioutil"
 	"net/http"
 
@@ -50,18 +51,20 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 			return nil, err
 		}
 
-		log.Tracef("Request received: [%+v]", regReq)
+		reqLogger := log.WithField("RegID", hex.EncodeToString(regReq.GetSharedSecret()))
+
+		reqLogger.Tracef("Request received: [%+v]", regReq)
 
 		reqIsBd := regReq.GetRegistrationSource() == pb.RegistrationSource_BidirectionalDNS
 		if reqIsBd {
-			log.Debugf("Received bidirectional request")
+			reqLogger.Debugf("Received bidirectional request")
 		} else {
-			log.Debugf("Received unidirectional request")
+			reqLogger.Debugf("Received unidirectional request")
 		}
 
-		log.Debugf("Request ClientConf generation: [%d]", regReq.GetRegistrationPayload().GetDecoyListGeneration())
+		reqLogger.Debugf("Request ClientConf generation: [%d]", regReq.GetRegistrationPayload().GetDecoyListGeneration())
 
-		log.Debugf("forwarding request to API")
+		reqLogger.Debugf("forwarding request to API")
 		endpointToUse := f.endpoint
 		if reqIsBd {
 			endpointToUse = f.bdendpoint
@@ -69,13 +72,13 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 
 		httpReq, err := http.NewRequest("POST", endpointToUse, bytes.NewReader(reqIn))
 		if err != nil {
-			log.Errorf("Crafting HTTP request to API failed: %v", err)
+			reqLogger.Errorf("Crafting HTTP request to API failed: %v", err)
 			return nil, err
 		}
 
 		resp, err := f.client.Do(httpReq)
 		if err != nil {
-			log.Errorf("Sending HTTP request to API failed: %v", err)
+			reqLogger.Errorf("Sending HTTP request to API failed: %v", err)
 			return nil, err
 		}
 		defer resp.Body.Close()
@@ -89,37 +92,37 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 
 		// Check that the HTTP request returned a success code
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			log.Errorf("Registration unsuccessful: HTTP API status code [%d]", resp.StatusCode)
+			reqLogger.Errorf("Registration unsuccessful: HTTP API status code [%d]", resp.StatusCode)
 			regsuccess = false
 			return proto.Marshal(dnsResp)
 		}
 
 		// if the registration is unidirectional, immediately return
 		if regReq.GetRegistrationSource() == pb.RegistrationSource_DNS {
-			log.Infof("Unidirectional request successful")
+			reqLogger.Infof("Unidirectional request successful")
 			return proto.Marshal(dnsResp)
 		}
 
 		// Read the HTTP response body into []bytes
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.Errorf("Reading API HTTP response failed: [%v]", err)
+			reqLogger.Errorf("Reading API HTTP response failed: [%v]", err)
 			return nil, err
 		}
 
 		regResp := &pb.RegistrationResponse{}
-		log.Debugf("API Response length: [%d]", len(bodyBytes))
+		reqLogger.Debugf("API Response length: [%d]", len(bodyBytes))
 		err = proto.Unmarshal(bodyBytes, regResp)
 		if err != nil {
-			log.Errorf("Error in API response unmarshal: [%v]", err)
+			reqLogger.Errorf("Error in API response unmarshal: [%v]", err)
 			return nil, err
 		}
 
-		log.Tracef("API Response: [%+v]", regResp)
+		reqLogger.Tracef("API Response: [%+v]", regResp)
 
 		dnsResp.BidirectionalResponse = regResp
 		if regResp.GetClientConf() != nil {
-			log.Debugf("Removing ClientConf found in response and indicating client ClientConf is outdated")
+			reqLogger.Debugf("Removing ClientConf found in response and indicating client ClientConf is outdated")
 			regResp.ClientConf = nil
 			clientconfOutdated = true
 		}
@@ -127,11 +130,11 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 		respPayload, err := proto.Marshal(dnsResp)
 
 		if err != nil {
-			log.Errorf("Error in DNS registration response marshal: [%v]", err)
+			reqLogger.Errorf("Error in DNS registration response marshal: [%v]", err)
 			return nil, err
 		}
 
-		log.Infof("Bidirectional request successful, sending response")
+		reqLogger.Infof("Bidirectional request successful")
 		return respPayload, nil
 	}
 
