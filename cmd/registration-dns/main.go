@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/encryption"
 	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/responder"
 	log "github.com/sirupsen/logrus"
 )
@@ -22,93 +21,6 @@ type config struct {
 	Domain      string `toml:"domain"`
 	PrivkeyPath string `toml:"private_key_path"`
 	LogLevel    string `toml:"log_level"`
-}
-
-// readKeyFromFile reads a key from a named file.
-func readKeyFromFile(filename string) ([]byte, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return encryption.ReadKey(f)
-}
-
-// generateKeypair generates a private key and the corresponding public key. If
-// privkeyFilename and pubkeyFilename are respectively empty, it prints the
-// corresponding key to standard output; otherwise it saves the key to the given
-// file name. The private key is saved with mode 0400 and the public key is
-// saved with 0666 (before umask). In case of any error, it attempts to delete
-// any files it has created before returning.
-func generateKeypair(privkeyFilename, pubkeyFilename string) (err error) {
-	// Filenames to delete in case of error (avoid leaving partially written
-	// files).
-	var toDelete []string
-	defer func() {
-		for _, filename := range toDelete {
-			fmt.Fprintf(os.Stderr, "deleting partially written file %s\n", filename)
-			if closeErr := os.Remove(filename); closeErr != nil {
-				fmt.Fprintf(os.Stderr, "cannot remove %s: %v\n", filename, closeErr)
-				if err == nil {
-					err = closeErr
-				}
-			}
-		}
-	}()
-
-	privkey, err := encryption.GeneratePrivkey()
-	if err != nil {
-		return err
-	}
-	pubkey := encryption.PubkeyFromPrivkey(privkey)
-
-	if privkeyFilename != "" {
-		// Save the privkey to a file.
-		f, err := os.OpenFile(privkeyFilename, os.O_RDWR|os.O_CREATE, 0400)
-		if err != nil {
-			return err
-		}
-		toDelete = append(toDelete, privkeyFilename)
-		_, err = fmt.Fprintf(f, "%x\n", privkey)
-		if err2 := f.Close(); err == nil {
-			err = err2
-		}
-		if err != nil {
-			return err
-		}
-	}
-
-	if pubkeyFilename != "" {
-		// Save the pubkey to a file.
-		f, err := os.Create(pubkeyFilename)
-		if err != nil {
-			return err
-		}
-		toDelete = append(toDelete, pubkeyFilename)
-		_, err = fmt.Fprintf(f, "%x\n", pubkey)
-		if err2 := f.Close(); err == nil {
-			err = err2
-		}
-		if err != nil {
-			return err
-		}
-	}
-
-	// All good, allow the written files to remain.
-	toDelete = nil
-
-	if privkeyFilename != "" {
-		fmt.Printf("privkey written to %s\n", privkeyFilename)
-	} else {
-		fmt.Printf("privkey %x\n", privkey)
-	}
-	if pubkeyFilename != "" {
-		fmt.Printf("pubkey  written to %s\n", pubkeyFilename)
-	} else {
-		fmt.Printf("pubkey  %x\n", pubkey)
-	}
-
-	return nil
 }
 
 func run(forwarder *DnsRegForwarder) error {
@@ -133,7 +45,6 @@ func main() {
 	var privkeyPath string
 	var pubkeyFilenameOut string
 	var privkeyFilenameOut string
-	var genKey bool
 	var configPath string
 	var logLevelStr string
 
@@ -144,7 +55,6 @@ func main() {
 	flag.StringVar(&privkeyPath, "privkey", "", "server private key filename")
 	flag.StringVar(&pubkeyFilenameOut, "pubkeyfilename", "", "generated server public key filename (only used with -genKey)")
 	flag.StringVar(&privkeyFilenameOut, "privkeyfilename", "", "generated server private key filename (only used with -genKey)")
-	flag.BoolVar(&genKey, "genkey", false, "generate a server keypair; print to stdout or save to files")
 	flag.StringVar(&configPath, "config", "", "configuration file path")
 	flag.StringVar(&logLevelStr, "loglevel", "info", "log level, one of the following: panic, fatal, error, warn, info, debug, trace")
 	flag.Parse()
@@ -153,14 +63,6 @@ func main() {
 		FullTimestamp: true,
 	}
 	log.SetFormatter(logFormatter)
-
-	if genKey {
-		if err := generateKeypair(privkeyFilenameOut, pubkeyFilenameOut); err != nil {
-			fmt.Fprintf(os.Stderr, "cannot generate keypair: %v\n", err)
-			os.Exit(2)
-		}
-		return
-	}
 
 	if configPath != "" {
 		var conf config
