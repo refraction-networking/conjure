@@ -14,6 +14,7 @@ require (
 	github.com/pelletier/go-toml v1.9.4
 	github.com/refraction-networking/gotapdance v1.3.0
 	github.com/refraction-networking/utls v1.1.0
+	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.1
 	gitlab.com/yawning/obfs4.git v0.0.0-20220204003609-77af0cba934d
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d

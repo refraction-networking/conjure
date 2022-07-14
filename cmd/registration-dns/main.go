@@ -3,12 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/BurntSushi/toml"
 	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/encryption"
 	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/responder"
+	log "github.com/sirupsen/logrus"
 )
 
 type config struct {
@@ -175,8 +175,6 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
-
-	log.SetFlags(log.LstdFlags | log.LUTC)
 
 	privkey, err := readKeyFromFile(privkeyPath)
 	if err != nil {

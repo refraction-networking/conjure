@@ -3,11 +3,11 @@ package main
 import (
 	"bytes"
 	"io/ioutil"
-	"log"
 	"net/http"
 
 	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/responder"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -45,20 +45,22 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 		regReq := &pb.C2SWrapper{}
 		err := proto.Unmarshal(reqIn, regReq)
 		if err != nil {
-			log.Printf("Error in request unmarshal: [%v]", err)
+			log.Infof("Error in recieved request unmarshal: [%v]", err)
 			return nil, err
 		}
 
+		log.Tracef("Request received: [%+v]", regReq)
+
 		reqIsBd := regReq.GetRegistrationSource() == pb.RegistrationSource_BidirectionalDNS
 		if reqIsBd {
-			log.Println("Received bidirectional request")
+			log.Debugf("Received bidirectional request")
 		} else {
-			log.Println("Received unidirectional request")
+			log.Debugf("Received unidirectional request")
 		}
 
-		log.Printf("Request ClientConf generation: [%d]", regReq.GetRegistrationPayload().GetDecoyListGeneration())
+		log.Debugf("Request ClientConf generation: [%d]", regReq.GetRegistrationPayload().GetDecoyListGeneration())
 
-		log.Println("forwarding request to API")
+		log.Debugf("forwarding request to API")
 		endpointToUse := f.endpoint
 		if reqIsBd {
 			endpointToUse = f.bdendpoint
@@ -66,13 +68,13 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 
 		httpReq, err := http.NewRequest("POST", endpointToUse, bytes.NewReader(reqIn))
 		if err != nil {
-			log.Printf("Crafting HTTP request to API failed: %v", err)
+			log.Errorf("Crafting HTTP request to API failed: %v", err)
 			return nil, err
 		}
 
 		resp, err := f.client.Do(httpReq)
 		if err != nil {
-			log.Printf("Sending HTTP request to API failed: %v", err)
+			log.Errorf("Sending HTTP request to API failed: %v", err)
 			return nil, err
 		}
 		defer resp.Body.Close()
@@ -81,7 +83,7 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 
 		// Check that the HTTP request returned a success code
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			log.Printf("API indicates that registration failed")
+			log.Infof("API indicates that registration failed: status code [%d]", resp.StatusCode)
 			regsuccess = false
 		}
 
@@ -93,27 +95,30 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 
 		// if the registration is unidirectional, immediately return
 		if regReq.GetRegistrationSource() == pb.RegistrationSource_DNS {
-			log.Println("Responding DNS request to unidirectional request")
+			log.Infof("Unidirectional request successful")
 			return proto.Marshal(dnsResp)
 		}
 
 		// Read the HTTP response body into []bytes
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.Printf("Reading API HTTP response failed: %v", err)
+			log.Errorf("Reading API HTTP response failed: %v", err)
 			return nil, err
 		}
 
 		regResp := &pb.RegistrationResponse{}
-		log.Printf("API Response length: [%d]", len(bodyBytes))
+		log.Debugf("API Response length: [%d]", len(bodyBytes))
 		err = proto.Unmarshal(bodyBytes, regResp)
 		if err != nil {
-			log.Printf("Error in API response unmarshal: %v", err)
+			log.Errorf("Error in API response unmarshal: %v", err)
 			return nil, err
 		}
+
+		log.Tracef("API Response: [%+v]", regResp)
+
 		dnsResp.BidirectionalResponse = regResp
 		if regResp.GetClientConf() != nil {
-			log.Printf("Removing ClientConf found in response and indicating client ClientConf is outdated")
+			log.Debugf("Removing ClientConf found in response and indicating client ClientConf is outdated")
 			regResp.ClientConf = nil
 			clientconfOutdated = true
 		}
@@ -121,11 +126,11 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 		respPayload, err := proto.Marshal(dnsResp)
 
 		if err != nil {
-			log.Printf("Error in DNS registration response marshal: %v", err)
+			log.Infof("Error in DNS registration response marshal: %v", err)
 			return nil, err
 		}
 
-		log.Println("Sending DNS registration response to bidirectional request")
+		log.Infof("Sending DNS registration response to bidirectional request")
 		return respPayload, nil
 	}
 
