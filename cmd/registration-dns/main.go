@@ -142,6 +142,11 @@ func main() {
 	flag.StringVar(&configPath, "config", "", "configuration file path")
 	flag.Parse()
 
+	logFormatter := &log.TextFormatter{
+		FullTimestamp: true,
+	}
+	log.SetFormatter(logFormatter)
+
 	if genKey {
 		if err := generateKeypair(privkeyFilenameOut, pubkeyFilenameOut); err != nil {
 			fmt.Fprintf(os.Stderr, "cannot generate keypair: %v\n", err)
