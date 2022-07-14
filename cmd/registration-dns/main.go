@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -10,6 +11,8 @@ import (
 	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/responder"
 	log "github.com/sirupsen/logrus"
 )
+
+const keyLen = 32
 
 // config defines the variables and options from the toml config file
 type config struct {
@@ -193,7 +196,8 @@ func main() {
 		os.Exit(2)
 	}
 
-	privkey, err := readKeyFromFile(privkeyPath)
+	privkey, err := ioutil.ReadFile(privkeyPath)
+	privkey = privkey[:keyLen]
 	if err != nil {
 		log.Fatal(err)
 	}
