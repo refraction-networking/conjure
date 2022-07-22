@@ -45,7 +45,7 @@ type config struct {
 	logClientIP bool
 }
 
-type server struct {
+type APIRegServer struct {
 	sync.Mutex
 	config
 	IPSelector *lib.PhantomIPSelector
@@ -75,7 +75,7 @@ func getRemoteAddr(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-func (s *server) register(w http.ResponseWriter, r *http.Request) {
+func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 	requestIP := getRemoteAddr(r)
 
 	if s.logClientIP {
@@ -137,7 +137,7 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
+func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	requestIP := getRemoteAddr(r)
 
 	if s.logClientIP {
@@ -241,7 +241,7 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 } // registerBidirectional()
 
 // processBdReq reads a bidirectional request, generates phantom IPs, and returns a registration response for the client that has the ip filled out
-func (s *server) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.RegistrationResponse, error) {
+func (s *APIRegServer) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.RegistrationResponse, error) {
 	// Create registration response object
 	regResp := &pb.RegistrationResponse{}
 
@@ -298,19 +298,19 @@ func (s *server) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.RegistrationRespon
 	return regResp, nil
 }
 
-func (s *server) errNoC2SBody() error {
+func (s *APIRegServer) errNoC2SBody() error {
 	return errors.New("no C2S body")
 }
 
-func (s *server) errSelectIP() error {
+func (s *APIRegServer) errSelectIP() error {
 	return errors.New("failed to select IP")
 }
 
-func (s *server) errGenSharedKey() error {
-	return errors.New("failed to select IP")
+func (s *APIRegServer) errGenSharedKey() error {
+	return errors.New("failed to generate shared key")
 }
 
-func (s *server) sendToZMQ(message []byte) error {
+func (s *APIRegServer) sendToZMQ(message []byte) error {
 	s.Lock()
 	_, err := s.sock.SendBytes(message, zmq.DONTWAIT)
 	s.Unlock()
@@ -351,7 +351,7 @@ func parseClientConf(path string) (*pb.ClientConf, error) {
 
 // Use this function in registerBidirectional, if the returned ClientConfig is
 // not nil add it to the RegistrationResponse.
-func (s *server) compareClientConfGen(genNum uint32) *pb.ClientConf {
+func (s *APIRegServer) compareClientConfGen(genNum uint32) *pb.ClientConf {
 	// Check that server has a currnet (latest) client config
 	if s.latestClientConf == nil {
 		// s.logger.Println("Server latest ClientConf is nil")
@@ -368,7 +368,7 @@ func (s *server) compareClientConfGen(genNum uint32) *pb.ClientConf {
 	return s.latestClientConf
 }
 
-func (s *server) processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr []byte) ([]byte, error) {
+func (s *APIRegServer) processC2SWrapper(clientToAPIProto *pb.C2SWrapper, clientAddr []byte) ([]byte, error) {
 	payload := &pb.C2SWrapper{}
 
 	if clientToAPIProto == nil {
@@ -427,7 +427,7 @@ func parseIP(addrPort string) *net.IP {
 
 }
 
-func (s *server) initPhantomSelector() {
+func (s *APIRegServer) initPhantomSelector() {
 	phantomSelector, err := lib.GetPhantomSubnetSelector()
 	if err != nil {
 		s.logger.Fatalln("failed to create phantom selector:", err)
@@ -436,8 +436,19 @@ func (s *server) initPhantomSelector() {
 	s.IPSelector = phantomSelector
 }
 
+func (s *APIRegServer) ListenAndServe() error {
+	r := mux.NewRouter()
+	r.HandleFunc("/register", s.register)
+	r.HandleFunc("/register-bidirectional", s.registerBidirectional)
+	http.Handle("/", r)
+
+	err := http.ListenAndServe(fmt.Sprintf(":%d", s.APIPort), nil)
+
+	return err
+}
+
 func main() {
-	var s server
+	var s APIRegServer
 	s.logger = log.New(os.Stdout, "[API] ", log.Ldate|log.Lmicroseconds)
 	s.messageAccepter = s.sendToZMQ
 
@@ -502,10 +513,7 @@ func main() {
 
 	s.logger.Printf("starting HTTP API on port %d\n", s.APIPort)
 
-	r := mux.NewRouter()
-	r.HandleFunc("/register", s.register)
-	r.HandleFunc("/register-bidirectional", s.registerBidirectional)
-	http.Handle("/", r)
+	err = s.ListenAndServe()
 
-	s.logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", s.APIPort), nil))
+	s.logger.Fatalf(err.Error())
 }

@@ -85,7 +85,7 @@ func TestC2SWrapperProcessing(t *testing.T) {
 		return nil
 	}
 
-	s := server{
+	s := APIRegServer{
 		messageAccepter: accepter,
 		logger:          testLogger(t),
 	}
@@ -150,7 +150,7 @@ func TestCorrectRegistrationAPI(t *testing.T) {
 		return nil
 	}
 
-	s := server{
+	s := APIRegServer{
 		messageAccepter: accepter,
 		logger:          testLogger(t),
 	}
@@ -198,7 +198,7 @@ func TestCorrectRegistrationPrescan(t *testing.T) {
 		return nil
 	}
 
-	s := server{
+	s := APIRegServer{
 		messageAccepter: accepter,
 		logger:          testLogger(t),
 	}
@@ -238,7 +238,7 @@ func TestCorrectRegistrationPrescan(t *testing.T) {
 }
 
 func TestIncorrectMethod(t *testing.T) {
-	s := server{
+	s := APIRegServer{
 		messageAccepter: nil,
 		logger:          testLogger(t),
 	}
@@ -283,7 +283,7 @@ func TestParseIP(t *testing.T) {
 }
 
 func TestEmptyBody(t *testing.T) {
-	s := server{
+	s := APIRegServer{
 		messageAccepter: nil,
 		logger:          testLogger(t),
 	}
@@ -304,7 +304,7 @@ func TestBadAccepter(t *testing.T) {
 		return fmt.Errorf("simulated error")
 	}
 
-	s := server{
+	s := APIRegServer{
 		messageAccepter: accepter,
 		logger:          testLogger(t),
 	}
@@ -335,7 +335,7 @@ func BenchmarkRegistration(b *testing.B) {
 		log.Fatalln("failed to bind ZMQ socket:", err)
 	}
 
-	s := server{
+	s := APIRegServer{
 		logger: log.New(ioutil.Discard, "", 0),
 		sock:   sock,
 	}
@@ -382,7 +382,7 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 	generation957 := uint32(957)
 
 	// Create a server with the channel created above
-	s := server{
+	s := APIRegServer{
 		messageAccepter: accepter,
 		logger:          testLogger(t),
 	}
@@ -462,7 +462,7 @@ func TestBidirectionalAPIClientConf(t *testing.T) {
 	fmt.Println("Client config generation number used in register:", clientconfigGen)
 
 	// Create a server with the channel created above
-	s := server{
+	s := APIRegServer{
 		messageAccepter: accepter,
 		logger:          testLogger(t),
 	}
@@ -537,7 +537,7 @@ func TestBidirectionalAPIClientConf(t *testing.T) {
 }
 
 func TestAPIParseClientConf(t *testing.T) {
-	var s server
+	var s APIRegServer
 	s.logger = log.New(os.Stdout, "[TESTAPI] ", log.Ldate|log.Lmicroseconds)
 	s.ClientConfPath = "./test/ClientConf"
 
@@ -550,7 +550,7 @@ func TestAPIParseClientConf(t *testing.T) {
 }
 
 func TestCompareCCGen(t *testing.T) {
-	s := server{
+	s := APIRegServer{
 		logger: testLogger(t),
 	}
 	s.logClientIP = true
