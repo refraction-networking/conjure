@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -181,11 +182,17 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create registration response object
-	regResp := &pb.RegistrationResponse{}
+	regResp, err := s.processBdReq(payload)
 
-	if payload.GetRegistrationPayload() == nil {
-		s.logger.Println("no C2S body:", err)
-		http.Error(w, "no C2S body", http.StatusBadRequest)
+	if err != nil {
+		switch err {
+		case s.errNoC2SBody():
+			http.Error(w, "no C2S body", http.StatusBadRequest)
+		case s.errGenSharedKey(), s.errSelectIP():
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -201,53 +208,6 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 		// Replace the payload generation with correct generation from server's client config
 		payload.RegistrationPayload.DecoyListGeneration = serverClientConf.Generation
 	}
-
-	clientLibVer := uint(payload.GetRegistrationPayload().GetClientLibVersion())
-
-	// Generate seed and phantom address
-	cjkeys, err := lib.GenSharedKeys(payload.SharedSecret)
-	if err != nil {
-		s.logger.Println("Failed to generate the shared key using SharedSecret:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if *payload.RegistrationPayload.V4Support {
-		phantom4, err := s.IPSelector.Select(
-			cjkeys.DarkDecoySeed,
-			uint(s.BidirectionalAPIGen), //generation type uint
-			clientLibVer,
-			false,
-		)
-
-		if err != nil {
-			s.logger.Println("Failed to select IPv4Address:", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		addr4 := binary.BigEndian.Uint32(phantom4.To4())
-		regResp.Ipv4Addr = &addr4
-	}
-
-	if *payload.RegistrationPayload.V6Support {
-		phantom6, err := s.IPSelector.Select(
-			cjkeys.DarkDecoySeed,
-			uint(s.BidirectionalAPIGen),
-			clientLibVer,
-			true,
-		)
-		if err != nil {
-			s.logger.Println("Failed to select IPv4Address:", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		regResp.Ipv6Addr = phantom6
-	}
-
-	port := uint32(443)
-	regResp.Port = &port // future  -change to randomized
 
 	// Create payload to send out to all servers
 	zmqPayload, err := s.processC2SWrapper(payload, clientAddrBytes)
@@ -279,6 +239,76 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 } // registerBidirectional()
+
+// processBdReq reads a bidirectional request, generates phantom IPs, and returns a registration response for the client that has the ip filled out
+func (s *server) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.RegistrationResponse, error) {
+	// Create registration response object
+	regResp := &pb.RegistrationResponse{}
+
+	if c2sPayload.GetRegistrationPayload() == nil {
+		s.logger.Println("no C2S body:")
+		return nil, s.errNoC2SBody()
+	}
+
+	clientLibVer := uint(c2sPayload.GetRegistrationPayload().GetClientLibVersion())
+
+	// Generate seed and phantom address
+	cjkeys, err := lib.GenSharedKeys(c2sPayload.SharedSecret)
+
+	if err != nil {
+		s.logger.Println("Failed to generate the shared key using SharedSecret:", err)
+		return nil, s.errGenSharedKey()
+	}
+
+	if *c2sPayload.RegistrationPayload.V4Support {
+		phantom4, err := s.IPSelector.Select(
+			cjkeys.DarkDecoySeed,
+			uint(s.BidirectionalAPIGen), //generation type uint
+			clientLibVer,
+			false,
+		)
+
+		if err != nil {
+			s.logger.Println("Failed to select IPv4Address:", err)
+			return nil, s.errSelectIP()
+		}
+
+		addr4 := binary.BigEndian.Uint32(phantom4.To4())
+		regResp.Ipv4Addr = &addr4
+	}
+
+	if *c2sPayload.RegistrationPayload.V6Support {
+		phantom6, err := s.IPSelector.Select(
+			cjkeys.DarkDecoySeed,
+			uint(s.BidirectionalAPIGen),
+			clientLibVer,
+			true,
+		)
+		if err != nil {
+			s.logger.Println("Failed to select IPv6Address:", err)
+			return nil, s.errSelectIP()
+		}
+
+		regResp.Ipv6Addr = phantom6
+	}
+
+	port := uint32(443)
+	regResp.Port = &port // future  -change to randomized
+
+	return regResp, nil
+}
+
+func (s *server) errNoC2SBody() error {
+	return errors.New("no C2S body")
+}
+
+func (s *server) errSelectIP() error {
+	return errors.New("failed to select IP")
+}
+
+func (s *server) errGenSharedKey() error {
+	return errors.New("failed to select IP")
+}
 
 func (s *server) sendToZMQ(message []byte) error {
 	s.Lock()
