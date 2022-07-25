@@ -18,6 +18,7 @@ var (
 	ErrSelectIP     = errors.New("failed to select IP")
 	ErrGenSharedKey = errors.New("failed to generate shared key")
 	ErrZmqSocket    = errors.New("failed to create zmq socket")
+	ErrZmqAuthFail  = errors.New("failed to set up auth on zmq socket")
 	ErrRegPubFailed = errors.New("failed to publish to registration")
 )
 
@@ -41,13 +42,22 @@ type RegProcessor struct {
 }
 
 // NewRegProcessor initialize a new RegProcessor
-func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVerbose bool) (*RegProcessor, error) {
+func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVerbose bool, stationPublicKeys []string) (*RegProcessor, error) {
 	s := &RegProcessor{}
 	s.ipSelector = *lib.NewRegistrationManager().PhantomSelector
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, ErrZmqSocket
 	}
+
+	zmq.AuthSetVerbose(authVerbose)
+	zmq.AuthAllow("*")
+	zmq.AuthCurveAdd("*", stationPublicKeys...)
+	err = sock.ServerAuthCurve("*", privkey)
+	if err != nil {
+		return nil, ErrZmqAuthFail
+	}
+
 	s.sock = sock
 	s.messageAccepter = s.sendToZMQ
 	return s, nil
