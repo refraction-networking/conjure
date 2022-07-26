@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -18,6 +17,7 @@ import (
 	"github.com/gorilla/mux"
 	zmq "github.com/pebbe/zmq4"
 	lib "github.com/refraction-networking/conjure/application/lib"
+	"github.com/refraction-networking/conjure/pkg/regprocessor"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -59,6 +59,8 @@ type APIRegServer struct {
 
 	// Latest clientConf for sharing over RegistrationResponse channel.
 	latestClientConf *pb.ClientConf
+
+	processor *regprocessor.RegProcessor
 }
 
 // Get the first element of the X-Forwarded-For header if it is available, this
@@ -75,6 +77,37 @@ func getRemoteAddr(r *http.Request) string {
 	return r.RemoteAddr
 }
 
+func (s *APIRegServer) getC2SFromReq(w http.ResponseWriter, r *http.Request) (*pb.C2SWrapper, error) {
+	const MinimumRequestLength = SecretLength + 1 // shared_secret + VSP
+	if r.Method != "POST" {
+		s.logger.Printf("rejecting request due to incorrect method %s\n", r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return nil, errors.New("incorrect method")
+	}
+
+	if r.ContentLength < MinimumRequestLength {
+		s.logger.Printf("rejecting request due to short content-length of %d, expecting at least %d\n", r.ContentLength, MinimumRequestLength)
+		http.Error(w, "Payload too small", http.StatusBadRequest)
+		return nil, errors.New("payload too small")
+	}
+
+	in, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		s.logger.Println("failed to read request body:", err)
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return nil, errors.New("failed to read request body")
+	}
+
+	payload := &pb.C2SWrapper{}
+	if err = proto.Unmarshal(in, payload); err != nil {
+		s.logger.Println("failed to decode protobuf body:", err)
+		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
+		return nil, errors.New("failed to decode protobuf body")
+	}
+
+	return payload, nil
+}
+
 func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 	requestIP := getRemoteAddr(r)
 
@@ -84,30 +117,8 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 		s.logger.Printf("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
 	}
 
-	const MinimumRequestLength = SecretLength + 1 // shared_secret + VSP
-	if r.Method != "POST" {
-		s.logger.Printf("rejecting request due to incorrect method %s\n", r.Method)
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	if r.ContentLength < MinimumRequestLength {
-		s.logger.Printf("rejecting request due to short content-length of %d, expecting at least %d\n", r.ContentLength, MinimumRequestLength)
-		http.Error(w, "Payload too small", http.StatusBadRequest)
-		return
-	}
-
-	in, err := ioutil.ReadAll(r.Body)
+	payload, err := s.getC2SFromReq(w, r)
 	if err != nil {
-		s.logger.Println("failed to read request body:", err)
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
-		return
-	}
-
-	payload := &pb.C2SWrapper{}
-	if err = proto.Unmarshal(in, payload); err != nil {
-		s.logger.Println("failed to decode protobuf body:", err)
-		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
 		return
 	}
 
@@ -117,19 +128,7 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 		clientAddrBytes = []byte(clientAddr.To16())
 	}
 
-	zmqPayload, err := s.processC2SWrapper(payload, clientAddrBytes)
-	if err != nil {
-		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	err = s.messageAccepter(zmqPayload)
-	if err != nil {
-		s.logger.Println("failed to publish registration:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	s.processor.RegisterUnidirectional(payload, clientAddrBytes, pb.RegistrationSource_API)
 
 	// We could send an HTTP response earlier to avoid waiting
 	// while the zmq socket is locked, but this ensures that
@@ -146,32 +145,8 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 		s.logger.Printf("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
 	}
 
-	const MinimumRequestLength = SecretLength + 1 // shared_secret + VSP
-	if r.Method != "POST" {
-		s.logger.Printf("rejecting request due to incorrect method %s\n", r.Method)
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	if r.ContentLength < MinimumRequestLength {
-		s.logger.Printf("rejecting request due to short content-length of %d, expecting at least %d\n", r.ContentLength, MinimumRequestLength)
-		http.Error(w, "Payload too small", http.StatusBadRequest)
-		return
-	}
-
-	// Deserialize the body of the request, result is a pb
-	in, err := ioutil.ReadAll(r.Body)
+	payload, err := s.getC2SFromReq(w, r)
 	if err != nil {
-		s.logger.Println("failed to read request body:", err)
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
-		return
-	}
-
-	payload := &pb.C2SWrapper{}
-	// Unmarshal pb into payload C2SWrapper
-	if err = proto.Unmarshal(in, payload); err != nil {
-		s.logger.Println("failed to decode protobuf body:", err)
-		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
 		return
 	}
 
@@ -181,47 +156,29 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 		clientAddrBytes = []byte(clientAddr.To16())
 	}
 
+	// Check server's client config -- add server's ClientConf if client is outdated
+	serverClientConf := s.compareClientConfGen(payload.GetRegistrationPayload().GetDecoyListGeneration())
+	if serverClientConf != nil {
+		// Replace the payload generation with correct generation from server's client config
+		payload.RegistrationPayload.DecoyListGeneration = serverClientConf.Generation
+	}
+
 	// Create registration response object
-	regResp, err := s.processBdReq(payload)
+	regResp, err := s.processor.RegisterBidirectional(payload, pb.RegistrationSource_BidirectionalAPI, clientAddrBytes)
 
 	if err != nil {
 		switch err {
-		case s.errNoC2SBody():
+		case regprocessor.ErrNoC2SBody:
 			http.Error(w, "no C2S body", http.StatusBadRequest)
-		case s.errGenSharedKey(), s.errSelectIP():
-			w.WriteHeader(http.StatusInternalServerError)
 		default:
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		return
 	}
 
-	// Check server's client config -- add server's ClientConf if client is outdated
-	serverClientConf := s.compareClientConfGen(payload.GetRegistrationPayload().GetDecoyListGeneration())
 	if serverClientConf != nil {
-		// s.logger.Printf("Providing updated clientconf in reg resp %d -> %d\n",
-		// serverClientConf.GetGeneration(), payload.GetRegistrationPayload().GetDecoyListGeneration())
-
 		// Save the client config from server to return to client
 		regResp.ClientConf = serverClientConf
-
-		// Replace the payload generation with correct generation from server's client config
-		payload.RegistrationPayload.DecoyListGeneration = serverClientConf.Generation
-	}
-
-	// Create payload to send out to all servers
-	zmqPayload, err := s.processC2SWrapper(payload, clientAddrBytes)
-	if err != nil {
-		s.logger.Println("failed to marshal ClientToStation into VSP:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	err = s.messageAccepter(zmqPayload)
-	if err != nil {
-		s.logger.Println("failed to publish registration:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
 	}
 
 	// Add header to w (server response)
@@ -239,76 +196,6 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 		return
 	}
 } // registerBidirectional()
-
-// processBdReq reads a bidirectional request, generates phantom IPs, and returns a registration response for the client that has the ip filled out
-func (s *APIRegServer) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.RegistrationResponse, error) {
-	// Create registration response object
-	regResp := &pb.RegistrationResponse{}
-
-	if c2sPayload.GetRegistrationPayload() == nil {
-		s.logger.Println("no C2S body:")
-		return nil, s.errNoC2SBody()
-	}
-
-	clientLibVer := uint(c2sPayload.GetRegistrationPayload().GetClientLibVersion())
-
-	// Generate seed and phantom address
-	cjkeys, err := lib.GenSharedKeys(c2sPayload.SharedSecret)
-
-	if err != nil {
-		s.logger.Println("Failed to generate the shared key using SharedSecret:", err)
-		return nil, s.errGenSharedKey()
-	}
-
-	if *c2sPayload.RegistrationPayload.V4Support {
-		phantom4, err := s.IPSelector.Select(
-			cjkeys.DarkDecoySeed,
-			uint(s.BidirectionalAPIGen), //generation type uint
-			clientLibVer,
-			false,
-		)
-
-		if err != nil {
-			s.logger.Println("Failed to select IPv4Address:", err)
-			return nil, s.errSelectIP()
-		}
-
-		addr4 := binary.BigEndian.Uint32(phantom4.To4())
-		regResp.Ipv4Addr = &addr4
-	}
-
-	if *c2sPayload.RegistrationPayload.V6Support {
-		phantom6, err := s.IPSelector.Select(
-			cjkeys.DarkDecoySeed,
-			uint(s.BidirectionalAPIGen),
-			clientLibVer,
-			true,
-		)
-		if err != nil {
-			s.logger.Println("Failed to select IPv6Address:", err)
-			return nil, s.errSelectIP()
-		}
-
-		regResp.Ipv6Addr = phantom6
-	}
-
-	port := uint32(443)
-	regResp.Port = &port // future  -change to randomized
-
-	return regResp, nil
-}
-
-func (s *APIRegServer) errNoC2SBody() error {
-	return errors.New("no C2S body")
-}
-
-func (s *APIRegServer) errSelectIP() error {
-	return errors.New("failed to select IP")
-}
-
-func (s *APIRegServer) errGenSharedKey() error {
-	return errors.New("failed to generate shared key")
-}
 
 func (s *APIRegServer) sendToZMQ(message []byte) error {
 	s.Lock()
