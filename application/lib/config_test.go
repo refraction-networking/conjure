@@ -127,3 +127,70 @@ func TestConjureLibConfigBlocklistPhantoms(t *testing.T) {
 	}
 
 }
+
+func TestConjureLibConfigResolveAllowlisted(t *testing.T) {
+
+	conf := &Config{
+		CovertAllowlistSubnets: []string{
+			"128.138.0.1/16",
+			"2001:db8::1/64",
+		},
+	}
+
+	conf.parseBlocklists()
+	goodTestCases := map[string][]string{
+		"128.138.2.1:25":   []string{"128.138.2.1:25"},
+		"[2001:db8::1]:80": []string{"[2001:db8::1]:80"},
+	}
+
+	for input, expected := range goodTestCases {
+		output := conf.ParseOrResolveBlocklisted(input)
+		require.Contains(t, expected, output)
+	}
+
+	blocklistedTestCases := []string{
+		"[::1]:443",
+		"blocked.com:443",
+		"abc.blocked.com:443",
+		"blocked1.com:443",
+		"192.0.2.1:http",
+		"127.0.0.1:443",
+		"localhost:443",
+	}
+
+	for _, input := range blocklistedTestCases {
+		output := conf.ParseOrResolveBlocklisted(input)
+		require.Equal(t, "", output, "should be blocklisted")
+	}
+}
+
+func TestConjureLibConfigBlocklistPublic(t *testing.T) {
+	conf := &Config{
+		CovertBlocklistPublicAddrs: true,
+	}
+
+	conf.parseBlocklists()
+
+	conf.parseBlocklists()
+	goodTestCases := map[string][]string{
+		"128.138.2.1:25":   []string{"128.138.2.1:25"},
+		"[2001:db8::1]:80": []string{"[2001:db8::1]:80"},
+	}
+
+	for input, expected := range goodTestCases {
+		output := conf.ParseOrResolveBlocklisted(input)
+		require.Contains(t, expected, output)
+	}
+
+	blocklistedTestCases := []string{
+		"[::1]:443",
+		"127.0.0.1:443",
+		"192.168.1.156:443",
+		"[fd2a:80f5:c377:0:d25a:110:1465:aea3]:443",
+	}
+
+	for _, input := range blocklistedTestCases {
+		output := conf.ParseOrResolveBlocklisted(input)
+		require.Equal(t, "", output, "should be blocklisted")
+	}
+}
