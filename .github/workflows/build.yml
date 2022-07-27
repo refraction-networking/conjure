@@ -36,7 +36,7 @@ jobs:
           sudo apt-get install protobuf-compiler gcc curl git wget software-properties-common -y -q
           sudo apt-get install libzmq3-dev libssl-dev pkg-config libgmp3-dev -y -q
           sudo add-apt-repository universe
-          wget https://packages.ntop.org/apt-stable/20.04/all/apt-ntop-stable.deb
+          wget https://packages.ntop.org/apt-stable/22.04/all/apt-ntop-stable.deb
           sudo apt-get install ./apt-ntop-stable.deb
           sudo apt-get update
           sudo apt-get install pfring
@@ -57,7 +57,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17.x
+          go-version: 1.18.x
 
       - name: Build app
         run: |
