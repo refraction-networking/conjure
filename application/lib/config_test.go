@@ -185,8 +185,6 @@ func TestConjureLibConfigBlocklistPublic(t *testing.T) {
 	blocklistedTestCases := []string{
 		"[::1]:443",
 		"127.0.0.1:443",
-		"192.168.1.156:443",
-		"[fd2a:80f5:c377:0:d25a:110:1465:aea3]:443",
 	}
 
 	for _, input := range blocklistedTestCases {
