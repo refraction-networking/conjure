@@ -251,15 +251,24 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					cj.Stat().AddErrReg()
 				}
 
-				// If registration is trying to connect to a dark decoy that is
-				// blocklisted continue
-				if reg.Covert == "" || conf.IsBlocklisted(reg.Covert) {
+				// If registration is trying to connect to a covert address that
+				// is blocklisted consider registration INVALID and continue
+				covert := conf.ParseOrResolveBlocklisted(reg.Covert)
+				if covert == "" {
 					// We log client IPs for clients attempting to connect to
 					// blocklisted covert addresses.
 					logger.Printf("Dropping reg, malformed or blocklisted covert: %v, %s -> %s", reg.IDString(), reg.GetRegistrationAddress(), reg.Covert)
 					cj.Stat().AddErrReg()
 					continue
 				}
+
+				// Overwrite provided covert with resolved address. This kind of
+				// sucks because net.Dial can try multiple addresses for domain
+				// names w/ multiple records when resolved and we lock to one
+				// address. However, this step is required to prevent SSRF via
+				// DNS rebinding. Clients generally shouldn't be providing
+				// hostnames as coverts anyways.
+				reg.Covert = covert
 
 				if !reg.PreScanned() {
 					// New registration received over channel that requires liveness scan for the phantom
