@@ -32,13 +32,9 @@ const (
 
 // RegProcessor provides an interface to publish registrations and helper functions to process registration requests
 type RegProcessor struct {
-	sync.Mutex
+	zmqMutex   sync.Mutex
 	ipSelector lib.PhantomIPSelector
 	sock       *zmq.Socket
-
-	// Function to accept message into processing queue.
-	// Abstracted to allow mocking of ZMQ send flow
-	messageAccepter func([]byte) error
 }
 
 // NewRegProcessor initialize a new RegProcessor
@@ -59,15 +55,22 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 	}
 
 	s.sock = sock
-	s.messageAccepter = s.sendToZMQ
+
+	phantomSelector, err := lib.GetPhantomSubnetSelector()
+	if err != nil {
+		return nil, err
+	}
+
+	s.ipSelector = *phantomSelector
+
 	return s, nil
 }
 
 // sendToZMQ sends registration message to zmq
 func (s *RegProcessor) sendToZMQ(message []byte) error {
-	s.Lock()
+	s.zmqMutex.Lock()
 	_, err := s.sock.SendBytes(message, zmq.DONTWAIT)
-	s.Unlock()
+	s.zmqMutex.Unlock()
 
 	return err
 }
