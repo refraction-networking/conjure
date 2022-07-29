@@ -3,6 +3,7 @@ package regprocessor
 import (
 	"encoding/binary"
 	"errors"
+	"net"
 	"sync"
 
 	zmq "github.com/pebbe/zmq4"
@@ -30,17 +31,25 @@ const (
 	SecretLength = 32
 )
 
+type zmqSender interface {
+	SendBytes(data []byte, flags zmq.Flag) (int, error)
+}
+
+type ipSelector interface {
+	Select(seed []byte, generation uint, clientLibVer uint, v6Support bool) (net.IP, error)
+}
+
 // RegProcessor provides an interface to publish registrations and helper functions to process registration requests
 type RegProcessor struct {
 	zmqMutex   sync.Mutex
-	ipSelector lib.PhantomIPSelector
-	sock       *zmq.Socket
+	ipSelector ipSelector
+	sock       zmqSender
 }
 
 // NewRegProcessor initialize a new RegProcessor
 func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVerbose bool, stationPublicKeys []string) (*RegProcessor, error) {
 	s := &RegProcessor{}
-	s.ipSelector = *lib.NewRegistrationManager().PhantomSelector
+	// s.ipSelector = *lib.NewRegistrationManager().PhantomSelector
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, ErrZmqSocket
@@ -61,7 +70,7 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 		return nil, err
 	}
 
-	s.ipSelector = *phantomSelector
+	s.ipSelector = phantomSelector
 
 	return s, nil
 }
