@@ -25,18 +25,18 @@ var (
 
 const (
 	// The length of the shared secret sent by the client in bytes.
-	regIDLen = 16
+	RegIDLen = 16
 
 	// SecretLength gives the length of a secret (used for minimum registration body len)
 	SecretLength = 32
 )
 
 type zmqSender interface {
-	SendBytes(data []byte, flags zmq.Flag) (int, error)
+	SendBytes([]byte, zmq.Flag) (int, error)
 }
 
 type ipSelector interface {
-	Select(seed []byte, generation uint, clientLibVer uint, v6Support bool) (net.IP, error)
+	Select([]byte, uint, uint, bool) (net.IP, error)
 }
 
 // RegProcessor provides an interface to publish registrations and helper functions to process registration requests
@@ -185,7 +185,7 @@ func processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr []byte, regMethod p
 		return nil, ErrNilC2S
 	}
 
-	if len(c2sPayload.GetSharedSecret()) < regIDLen/2 {
+	if len(c2sPayload.GetSharedSecret()) < RegIDLen/2 {
 		return nil, ErrSharedSecret
 	}
 
