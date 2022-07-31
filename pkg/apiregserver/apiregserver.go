@@ -1,0 +1,220 @@
+package apiregserver
+
+import (
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net"
+	"net/http"
+	"strings"
+
+	"github.com/gorilla/mux"
+	"github.com/refraction-networking/conjure/pkg/regprocessor"
+	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"google.golang.org/protobuf/proto"
+)
+
+type APIRegServer struct {
+	apiPort uint16
+
+	// logger *log.Logger
+
+	// Latest clientConf for sharing over RegistrationResponse channel.
+	latestClientConf *pb.ClientConf
+
+	processor *regprocessor.RegProcessor
+}
+
+// Get the first element of the X-Forwarded-For header if it is available, this
+// will be the clients address if intermediate proxies follow X-Forwarded-For
+// specification (as seen here: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For).
+// Otherwise return the remote address specified in the request.
+//
+// In the future this may need to handle True-Client-IP headers.
+func getRemoteAddr(r *http.Request) string {
+	if r.Header.Get("X-Forwarded-For") != "" {
+		addrList := r.Header.Get("X-Forwarded-For")
+		return strings.Trim(strings.Split(addrList, ",")[0], " \t")
+	}
+	return r.RemoteAddr
+}
+
+func (s *APIRegServer) getC2SFromReq(w http.ResponseWriter, r *http.Request) (*pb.C2SWrapper, error) {
+	const MinimumRequestLength = regprocessor.SecretLength + 1 // shared_secret + VSP
+	if r.Method != "POST" {
+		log.Printf("rejecting request due to incorrect method %s\n", r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return nil, errors.New("incorrect method")
+	}
+
+	if r.ContentLength < MinimumRequestLength {
+		log.Printf("rejecting request due to short content-length of %d, expecting at least %d\n", r.ContentLength, MinimumRequestLength)
+		http.Error(w, "Payload too small", http.StatusBadRequest)
+		return nil, errors.New("payload too small")
+	}
+
+	in, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Println("failed to read request body:", err)
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return nil, errors.New("failed to read request body")
+	}
+
+	payload := &pb.C2SWrapper{}
+	if err = proto.Unmarshal(in, payload); err != nil {
+		log.Println("failed to decode protobuf body:", err)
+		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
+		return nil, errors.New("failed to decode protobuf body")
+	}
+
+	return payload, nil
+}
+
+func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
+	requestIP := getRemoteAddr(r)
+
+	// if s.logClientIP {
+	// 	log.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
+	// } else {
+	// 	log.Printf("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
+	// }
+
+	payload, err := s.getC2SFromReq(w, r)
+	if err != nil {
+		return
+	}
+
+	clientAddr := parseIP(requestIP)
+	var clientAddrBytes = make([]byte, 16)
+	if clientAddr != nil {
+		clientAddrBytes = []byte(clientAddr.To16())
+	}
+
+	s.processor.RegisterUnidirectional(payload, clientAddrBytes, pb.RegistrationSource_API)
+
+	// We could send an HTTP response earlier to avoid waiting
+	// while the zmq socket is locked, but this ensures that
+	// a 204 truly indicates registration success.
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Request) {
+	requestIP := getRemoteAddr(r)
+
+	// if s.logClientIP {
+	// 	log.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
+	// } else {
+	// 	log.Printf("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
+	// }
+
+	payload, err := s.getC2SFromReq(w, r)
+	if err != nil {
+		return
+	}
+
+	clientAddr := parseIP(requestIP)
+	var clientAddrBytes = make([]byte, 16)
+	if clientAddr != nil {
+		clientAddrBytes = []byte(clientAddr.To16())
+	}
+
+	// Check server's client config -- add server's ClientConf if client is outdated
+	serverClientConf := s.compareClientConfGen(payload.GetRegistrationPayload().GetDecoyListGeneration())
+	if serverClientConf != nil {
+		// Replace the payload generation with correct generation from server's client config
+		payload.RegistrationPayload.DecoyListGeneration = serverClientConf.Generation
+	}
+
+	// Create registration response object
+	regResp, err := s.processor.RegisterBidirectional(payload, pb.RegistrationSource_BidirectionalAPI, clientAddrBytes)
+
+	if err != nil {
+		switch err {
+		case regprocessor.ErrNoC2SBody:
+			http.Error(w, "no C2S body", http.StatusBadRequest)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if serverClientConf != nil {
+		// Save the client config from server to return to client
+		regResp.ClientConf = serverClientConf
+	}
+
+	// Add header to w (server response)
+	w.WriteHeader(http.StatusOK)
+	// Marshal (serialize) registration response object and then write it to w
+	body, err := proto.Marshal(regResp)
+	if err != nil {
+		// log.Println("failed to write registration into response:", err)
+		return
+	}
+
+	_, err = w.Write(body)
+	if err != nil {
+		// log.Println("failed to write registration into response:", err)
+		return
+	}
+} // registerBidirectional()
+
+// Use this function in registerBidirectional, if the returned ClientConfig is
+// not nil add it to the RegistrationResponse.
+func (s *APIRegServer) compareClientConfGen(genNum uint32) *pb.ClientConf {
+	// Check that server has a currnet (latest) client config
+	if s.latestClientConf == nil {
+		// log.Println("Server latest ClientConf is nil")
+		return nil
+	}
+
+	// log.Printf("client: %d, stored: %d\n", genNum, s.latestClientConf.GetGeneration())
+	// Check if generation number param is greater than server's client config
+	if genNum >= s.latestClientConf.GetGeneration() {
+		return nil
+	}
+
+	// Otherwise, return server's client config
+	return s.latestClientConf
+}
+
+// parseIP attempts to parse the IP address of a request from string format wether
+// it has a port attached to it or not. Returns nil if parse fails.
+func parseIP(addrPort string) *net.IP {
+
+	// by default format from r.RemoteAddr is host:port
+	host, _, err := net.SplitHostPort(addrPort)
+	if err != nil || host == "" {
+		// if the request ends up as host only this should catch it.
+		addr := net.ParseIP(addrPort)
+		if addr == nil {
+			return nil
+		}
+		return &addr
+	}
+
+	addr := net.ParseIP(host)
+
+	return &addr
+
+}
+
+func (s *APIRegServer) ListenAndServe() error {
+	r := mux.NewRouter()
+	r.HandleFunc("/register", s.register)
+	r.HandleFunc("/register-bidirectional", s.registerBidirectional)
+	http.Handle("/", r)
+
+	err := http.ListenAndServe(fmt.Sprintf(":%d", s.apiPort), nil)
+
+	return err
+}
+
+func NewAPIRegServer(apiPort uint16, regprocessor *regprocessor.RegProcessor, latestCC *pb.ClientConf) (APIRegServer, error) {
+	return APIRegServer{
+		apiPort:          apiPort,
+		processor:        regprocessor,
+		latestClientConf: latestCC,
+	}, nil
+}
