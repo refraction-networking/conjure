@@ -3,6 +3,7 @@ package regprocessor
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 
@@ -13,14 +14,15 @@ import (
 )
 
 var (
-	ErrNoC2SBody    = errors.New("no C2S body")
-	ErrNilC2S       = errors.New("C2S is nil")
+	ErrNoC2SBody = errors.New("no C2S body")
+	// ErrNilC2S       = errors.New("C2S is nil")
 	ErrSharedSecret = errors.New("shared secret undefined or insufficient length")
-	ErrSelectIP     = errors.New("failed to select IP")
-	ErrGenSharedKey = errors.New("failed to generate shared key")
-	ErrZmqSocket    = errors.New("failed to create zmq socket")
-	ErrZmqAuthFail  = errors.New("failed to set up auth on zmq socket")
-	ErrRegPubFailed = errors.New("failed to publish to registration")
+	// ErrSelectIP     = errors.New("failed to select IP")
+	// ErrGenSharedKey = errors.New("failed to generate shared key")
+	ErrZmqSocket   = errors.New("failed to create zmq socket")
+	ErrZmqAuthFail = errors.New("failed to set up auth on zmq socket")
+	// ErrRegPubFailed = errors.New("failed to publish to registration")
+	ErrRegProcessFailed = errors.New("failed to process registration")
 )
 
 const (
@@ -48,8 +50,6 @@ type RegProcessor struct {
 
 // NewRegProcessor initialize a new RegProcessor
 func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVerbose bool, stationPublicKeys []string) (*RegProcessor, error) {
-	s := &RegProcessor{}
-	// s.ipSelector = *lib.NewRegistrationManager().PhantomSelector
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, ErrZmqSocket
@@ -63,16 +63,45 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 		return nil, ErrZmqAuthFail
 	}
 
-	s.sock = sock
+	err = sock.Bind(fmt.Sprintf("tcp://%s:%d", zmqBindAddr, zmqPort))
+	if err != nil {
+		return nil, ErrZmqSocket
+	}
 
 	phantomSelector, err := lib.GetPhantomSubnetSelector()
 	if err != nil {
 		return nil, err
 	}
 
-	s.ipSelector = phantomSelector
+	return &RegProcessor{
+		zmqMutex:   sync.Mutex{},
+		ipSelector: phantomSelector,
+		sock:       sock,
+	}, nil
+}
 
-	return s, nil
+// NewRegProcessorNoAuth creates a regprocessor without authentication to zmq address
+func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16) (*RegProcessor, error) {
+	sock, err := zmq.NewSocket(zmq.PUB)
+	if err != nil {
+		return nil, ErrZmqSocket
+	}
+
+	err = sock.Bind(fmt.Sprintf("tcp://%s:%d", zmqBindAddr, zmqPort))
+	if err != nil {
+		return nil, ErrZmqSocket
+	}
+
+	phantomSelector, err := lib.GetPhantomSubnetSelector()
+	if err != nil {
+		return nil, err
+	}
+
+	return &RegProcessor{
+		zmqMutex:   sync.Mutex{},
+		ipSelector: phantomSelector,
+		sock:       sock,
+	}, nil
 }
 
 // sendToZMQ sends registration message to zmq
@@ -85,7 +114,7 @@ func (s *RegProcessor) sendToZMQ(message []byte) error {
 }
 
 // RegisterUnidirectional process a unidirectional registration request and publish it to zmq
-func (p *RegProcessor) RegisterUnidirectional(c2sPayload *pb.C2SWrapper, clientAddr []byte, regMethod pb.RegistrationSource) error {
+func (p *RegProcessor) RegisterUnidirectional(c2sPayload *pb.C2SWrapper, regMethod pb.RegistrationSource, clientAddr []byte) error {
 	zmqPayload, err := processC2SWrapper(c2sPayload, clientAddr, regMethod)
 	if err != nil {
 		return err
@@ -93,7 +122,7 @@ func (p *RegProcessor) RegisterUnidirectional(c2sPayload *pb.C2SWrapper, clientA
 
 	err = p.sendToZMQ(zmqPayload)
 	if err != nil {
-		return ErrRegPubFailed
+		return ErrRegProcessFailed
 	}
 
 	return nil
@@ -113,7 +142,7 @@ func (p *RegProcessor) RegisterBidirectional(c2sPayload *pb.C2SWrapper, regMetho
 
 	err = p.sendToZMQ(zmqPayload)
 	if err != nil {
-		return nil, ErrRegPubFailed
+		return nil, ErrRegProcessFailed
 	}
 
 	return regResp, nil
@@ -136,7 +165,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 
 	if err != nil {
 		// p.logger.Println("Failed to generate the shared key using SharedSecret:", err)
-		return nil, ErrGenSharedKey
+		return nil, ErrRegProcessFailed
 	}
 
 	if *c2sPayload.RegistrationPayload.V4Support {
@@ -149,7 +178,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 
 		if err != nil {
 			// p.logger.Println("Failed to select IPv4Address:", err)
-			return nil, ErrSelectIP
+			return nil, ErrRegProcessFailed
 		}
 
 		addr4 := binary.BigEndian.Uint32(phantom4.To4())
@@ -165,7 +194,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		)
 		if err != nil {
 			// p.logger.Println("Failed to select IPv6Address:", err)
-			return nil, ErrSelectIP
+			return nil, ErrRegProcessFailed
 		}
 
 		regResp.Ipv6Addr = phantom6
@@ -182,7 +211,7 @@ func processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr []byte, regMethod p
 	payload := &pb.C2SWrapper{}
 
 	if c2sPayload == nil {
-		return nil, ErrNilC2S
+		return nil, ErrNoC2SBody
 	}
 
 	if len(c2sPayload.GetSharedSecret()) < RegIDLen/2 {

@@ -15,15 +15,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type registrar interface {
+	RegisterUnidirectional(*pb.C2SWrapper, pb.RegistrationSource, []byte) error
+	RegisterBidirectional(*pb.C2SWrapper, pb.RegistrationSource, []byte) (*pb.RegistrationResponse, error)
+}
+
 type APIRegServer struct {
-	apiPort uint16
-
-	// logger *log.Logger
-
-	// Latest clientConf for sharing over RegistrationResponse channel.
-	latestClientConf *pb.ClientConf
-
-	processor *regprocessor.RegProcessor
+	apiPort          uint16
+	latestClientConf *pb.ClientConf // Latest clientConf for sharing over RegistrationResponse channel.
+	processor        registrar
 }
 
 // Get the first element of the X-Forwarded-For header if it is available, this
@@ -91,7 +91,12 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 		clientAddrBytes = []byte(clientAddr.To16())
 	}
 
-	s.processor.RegisterUnidirectional(payload, clientAddrBytes, pb.RegistrationSource_API)
+	err = s.processor.RegisterUnidirectional(payload, pb.RegistrationSource_API, clientAddrBytes)
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	// We could send an HTTP response earlier to avoid waiting
 	// while the zmq socket is locked, but this ensures that

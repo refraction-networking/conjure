@@ -135,7 +135,7 @@ func BenchmarkRegistration(b *testing.B) {
 	sourceIP := net.ParseIP("1.2.3.4:443")
 
 	for i := 0; i < b.N; i++ {
-		s.RegisterUnidirectional(body, []byte(sourceIP), pb.RegistrationSource_API)
+		s.RegisterUnidirectional(body, pb.RegistrationSource_API, []byte(sourceIP))
 	}
 }
 
@@ -180,7 +180,46 @@ func TestRegisterUnidirectional(t *testing.T) {
 		sock: fakeSender,
 	}
 
-	s.RegisterUnidirectional(c2sPayload, net.ParseIP(updatedIP), regSrc)
+	s.RegisterUnidirectional(c2sPayload, regSrc, net.ParseIP(updatedIP))
+
+}
+
+func TestUpdateIP(t *testing.T) {
+	originalIP := "1.2.3.4"
+	updatedIP := "4.3.2.1"
+
+	c2sRegSrc := pb.RegistrationSource_DetectorPrescan
+	usedRegSrc := pb.RegistrationSource_API
+
+	c2sPayload, _ := generateC2SWrapperPayload()
+	c2sPayload.RegistrationSource = &c2sRegSrc
+	c2sPayload.RegistrationAddress = net.ParseIP(originalIP).To16()
+
+	fakeSendFunc := func(m []byte, flag zmq.Flag) (int, error) {
+		// We already tested the payload generation above, so here we're just
+		// confirming it arrives with the correct modifications
+		payload := &pb.C2SWrapper{}
+		if err := proto.Unmarshal(m, payload); err != nil {
+			t.Fatalf("Bad C2Swrapper returned")
+		}
+
+		// If the Address isn't re-written for specified registrar source throw error
+		if net.IP(payload.GetRegistrationAddress()).String() != originalIP {
+			t.Fatalf("Registration Address should NOT be overwritten for specified registrar")
+		}
+
+		return len(m), nil
+	}
+
+	fakeSender := fakeZmqSender{
+		fakeSend: fakeSendFunc,
+	}
+
+	s := RegProcessor{
+		sock: fakeSender,
+	}
+
+	s.RegisterUnidirectional(c2sPayload, usedRegSrc, net.ParseIP(updatedIP))
 
 }
 
