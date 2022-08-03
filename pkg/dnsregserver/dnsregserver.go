@@ -22,11 +22,11 @@ type DNSRegServer struct {
 	dnsResponder *responder.Responder
 	processor    registrar
 	latestCCGen  uint32
-	logger       *log.Logger
+	logger       log.FieldLogger
 }
 
 // NewDNSRegServer creates a new DNSRegServer object.
-func NewDNSRegServer(domain string, udpAddr string, privkey []byte, regprocessor *regprocessor.RegProcessor, latestClientConfGeneration uint32, logger *log.Logger) (*DNSRegServer, error) {
+func NewDNSRegServer(domain string, udpAddr string, privkey []byte, regprocessor *regprocessor.RegProcessor, latestClientConfGeneration uint32, logger log.FieldLogger) (*DNSRegServer, error) {
 
 	respder, err := responder.NewDnsResponder(domain, udpAddr, privkey)
 	if err != nil {

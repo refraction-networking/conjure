@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +16,7 @@ import (
 	zmq "github.com/pebbe/zmq4"
 	"github.com/refraction-networking/conjure/pkg/regprocessor"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
@@ -86,7 +86,10 @@ func (f *fakeRegistrar) RegisterBidirectional(c2sPayload *pb.C2SWrapper, regMeth
 }
 
 func TestIncorrectMethod(t *testing.T) {
-	s := APIRegServer{}
+	s := APIRegServer{
+		logger:      log.New(),
+		logClientIP: true,
+	}
 
 	r := httptest.NewRequest("GET", "/register", nil)
 	w := httptest.NewRecorder()
@@ -127,7 +130,10 @@ func TestParseIP(t *testing.T) {
 }
 
 func TestEmptyBody(t *testing.T) {
-	s := APIRegServer{}
+	s := APIRegServer{
+		logger:      log.New(),
+		logClientIP: true,
+	}
 
 	r := httptest.NewRequest("POST", "/register", nil)
 	w := httptest.NewRecorder()
@@ -150,6 +156,8 @@ func TestBadAccepter(t *testing.T) {
 		processor: &fakeRegistrar{
 			fakeRegisterUnidirectionalFunc: regFail,
 		},
+		logger:      log.New(),
+		logClientIP: true,
 	}
 
 	_, body := generateC2SWrapperPayload()
@@ -199,6 +207,8 @@ func BenchmarkRegistration(b *testing.B) {
 		processor: &fakeRegistrar{
 			fakeRegisterUnidirectionalFunc: regSim,
 		},
+		logger:      log.New(),
+		logClientIP: true,
 	}
 
 	_, body := generateC2SWrapperPayload()
@@ -246,6 +256,8 @@ func TestCorrectUnidirectionalAPI(t *testing.T) {
 		processor: &fakeRegistrar{
 			fakeRegisterUnidirectionalFunc: fakeUniRegFunc,
 		},
+		logger:      log.New(),
+		logClientIP: true,
 	}
 
 	// Client sends to station v4 or v6, shared secret, etc.
@@ -296,6 +308,8 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 		processor: &fakeRegistrar{
 			fakeRegisterBidirectionalFunc: fakeBdRegFunc,
 		},
+		logger:      log.New(),
+		logClientIP: true,
 	}
 
 	c2sPayload, _ := generateC2SWrapperPayload()
@@ -370,6 +384,8 @@ func TestBidirectionalAPIClientConf(t *testing.T) {
 			fakeRegisterBidirectionalFunc: fakeBdRegFunc,
 		},
 		latestClientConf: testCC,
+		logger:           log.New(),
+		logClientIP:      true,
 	}
 
 	// Client sends to station v4 or v6, shared secret, etc.
@@ -420,6 +436,8 @@ func TestCompareCCGen(t *testing.T) {
 
 	s := APIRegServer{
 		latestClientConf: testCC,
+		logger:           log.New(),
+		logClientIP:      true,
 	}
 
 	cc := s.compareClientConfGen(testCCGeneration - 1)

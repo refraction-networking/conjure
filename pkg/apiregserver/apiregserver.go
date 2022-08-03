@@ -1,10 +1,10 @@
 package apiregserver
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/refraction-networking/conjure/pkg/regprocessor"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -24,6 +25,8 @@ type APIRegServer struct {
 	apiPort          uint16
 	latestClientConf *pb.ClientConf // Latest clientConf for sharing over RegistrationResponse channel.
 	processor        registrar
+	logger           log.FieldLogger
+	logClientIP      bool
 }
 
 // Get the first element of the X-Forwarded-For header if it is available, this
@@ -43,27 +46,27 @@ func getRemoteAddr(r *http.Request) string {
 func (s *APIRegServer) getC2SFromReq(w http.ResponseWriter, r *http.Request) (*pb.C2SWrapper, error) {
 	const MinimumRequestLength = regprocessor.SecretLength + 1 // shared_secret + VSP
 	if r.Method != "POST" {
-		log.Printf("rejecting request due to incorrect method %s\n", r.Method)
+		s.logger.Errorf("rejecting request due to incorrect method %s\n", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return nil, errors.New("incorrect method")
 	}
 
 	if r.ContentLength < MinimumRequestLength {
-		log.Printf("rejecting request due to short content-length of %d, expecting at least %d\n", r.ContentLength, MinimumRequestLength)
+		s.logger.Errorf("rejecting request due to short content-length of %d, expecting at least %d\n", r.ContentLength, MinimumRequestLength)
 		http.Error(w, "Payload too small", http.StatusBadRequest)
 		return nil, errors.New("payload too small")
 	}
 
 	in, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		log.Println("failed to read request body:", err)
+		s.logger.Errorf("failed to read request body:", err)
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return nil, errors.New("failed to read request body")
 	}
 
 	payload := &pb.C2SWrapper{}
 	if err = proto.Unmarshal(in, payload); err != nil {
-		log.Println("failed to decode protobuf body:", err)
+		s.logger.Errorf("failed to decode protobuf body:", err)
 		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
 		return nil, errors.New("failed to decode protobuf body")
 	}
@@ -74,16 +77,21 @@ func (s *APIRegServer) getC2SFromReq(w http.ResponseWriter, r *http.Request) (*p
 func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 	requestIP := getRemoteAddr(r)
 
-	// if s.logClientIP {
-	// 	log.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
-	// } else {
-	// 	log.Printf("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
-	// }
+	logFields := log.Fields{"method": r.Method, "content-length": r.ContentLength}
+	if s.logClientIP {
+		logFields["IP"] = requestIP
+	}
+	reqLogger := s.logger.WithFields(logFields)
+
+	reqLogger.Infof("recived new request")
 
 	payload, err := s.getC2SFromReq(w, r)
 	if err != nil {
+		reqLogger.Errorf("registration failed: %v", err)
 		return
 	}
+
+	reqLogger = reqLogger.WithField("RegID", hex.EncodeToString(payload.GetSharedSecret()))
 
 	clientAddr := parseIP(requestIP)
 	var clientAddrBytes = make([]byte, 16)
@@ -98,6 +106,8 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	reqLogger.Infof("registration successful")
+
 	// We could send an HTTP response earlier to avoid waiting
 	// while the zmq socket is locked, but this ensures that
 	// a 204 truly indicates registration success.
@@ -107,11 +117,11 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	requestIP := getRemoteAddr(r)
 
-	// if s.logClientIP {
-	// 	log.Printf("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
-	// } else {
-	// 	log.Printf("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
-	// }
+	if s.logClientIP {
+		s.logger.Infof("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
+	} else {
+		s.logger.Infof("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
+	}
 
 	payload, err := s.getC2SFromReq(w, r)
 	if err != nil {
@@ -154,13 +164,13 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 	// Marshal (serialize) registration response object and then write it to w
 	body, err := proto.Marshal(regResp)
 	if err != nil {
-		// log.Println("failed to write registration into response:", err)
+		s.logger.Errorf("failed to write registration into response:", err)
 		return
 	}
 
 	_, err = w.Write(body)
 	if err != nil {
-		// log.Println("failed to write registration into response:", err)
+		s.logger.Errorf("failed to write registration into response:", err)
 		return
 	}
 } // registerBidirectional()
@@ -170,11 +180,11 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 func (s *APIRegServer) compareClientConfGen(genNum uint32) *pb.ClientConf {
 	// Check that server has a currnet (latest) client config
 	if s.latestClientConf == nil {
-		// log.Println("Server latest ClientConf is nil")
+		s.logger.Debugf("Server latest ClientConf is nil")
 		return nil
 	}
 
-	// log.Printf("client: %d, stored: %d\n", genNum, s.latestClientConf.GetGeneration())
+	s.logger.Debugf("client: %d, stored: %d\n", genNum, s.latestClientConf.GetGeneration())
 	// Check if generation number param is greater than server's client config
 	if genNum >= s.latestClientConf.GetGeneration() {
 		return nil
@@ -216,10 +226,15 @@ func (s *APIRegServer) ListenAndServe() error {
 	return err
 }
 
-func NewAPIRegServer(apiPort uint16, regprocessor *regprocessor.RegProcessor, latestCC *pb.ClientConf) (APIRegServer, error) {
-	return APIRegServer{
+func NewAPIRegServer(apiPort uint16, regprocessor *regprocessor.RegProcessor, latestCC *pb.ClientConf, logger log.FieldLogger, logClientIP bool) (*APIRegServer, error) {
+	if regprocessor == nil || latestCC == nil || logger == nil {
+		return nil, errors.New("arguments cannot be nil")
+	}
+	return &APIRegServer{
 		apiPort:          apiPort,
 		processor:        regprocessor,
 		latestClientConf: latestCC,
+		logger:           logger,
+		logClientIP:      logClientIP,
 	}, nil
 }
