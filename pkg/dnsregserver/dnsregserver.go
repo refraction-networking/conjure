@@ -28,6 +28,10 @@ type DNSRegServer struct {
 // NewDNSRegServer creates a new DNSRegServer object.
 func NewDNSRegServer(domain string, udpAddr string, privkey []byte, regprocessor *regprocessor.RegProcessor, latestClientConfGeneration uint32, logger log.FieldLogger) (*DNSRegServer, error) {
 
+	if domain == "" || udpAddr == "" || privkey == nil || regprocessor == nil || logger == nil {
+		return nil, errors.New("all arguments must not be nil")
+	}
+
 	respder, err := responder.NewDnsResponder(domain, udpAddr, privkey)
 	if err != nil {
 		return nil, errors.New("failed to create DNS responder")
