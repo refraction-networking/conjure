@@ -117,11 +117,13 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	requestIP := getRemoteAddr(r)
 
+	logFields := log.Fields{"method": r.Method, "content-length": r.ContentLength}
 	if s.logClientIP {
-		s.logger.Infof("received %s request from IP %v with content-length %d\n", r.Method, requestIP, r.ContentLength)
-	} else {
-		s.logger.Infof("received %s request from IP _ with content-length %d\n", r.Method, r.ContentLength)
+		logFields["IP"] = requestIP
 	}
+	reqLogger := s.logger.WithFields(logFields)
+
+	reqLogger.Infof("recived new request")
 
 	payload, err := s.getC2SFromReq(w, r)
 	if err != nil {
@@ -164,15 +166,18 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 	// Marshal (serialize) registration response object and then write it to w
 	body, err := proto.Marshal(regResp)
 	if err != nil {
-		s.logger.Errorf("failed to write registration into response:", err)
+		reqLogger.Errorf("failed to write registration into response:", err)
 		return
 	}
 
 	_, err = w.Write(body)
 	if err != nil {
-		s.logger.Errorf("failed to write registration into response:", err)
+		reqLogger.Errorf("failed to write registration into response:", err)
 		return
 	}
+
+	reqLogger.Infof("registration successful")
+
 } // registerBidirectional()
 
 // Use this function in registerBidirectional, if the returned ClientConfig is
