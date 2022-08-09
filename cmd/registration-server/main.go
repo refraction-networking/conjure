@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sync"
 
 	"github.com/BurntSushi/toml"
 	zmq "github.com/pebbe/zmq4"
@@ -75,9 +76,20 @@ func parseClientConf(path string) (*pb.ClientConf, error) {
 func run(regServers []regServer) {
 	log.Infof("Started Conjure registration server")
 
-	for _, regServer := range regServers {
-		go regServer.ListenAndServe()
+	var wg sync.WaitGroup
+
+	for _, curRegServer := range regServers {
+		wg.Add(1)
+		go func(regServer regServer) {
+			defer wg.Done()
+			err := regServer.ListenAndServe()
+			if err != nil {
+				log.Errorf("regServer stopped: %v", err)
+			}
+		}(curRegServer)
 	}
+
+	wg.Wait()
 }
 
 func readKey(path string) ([]byte, error) {
