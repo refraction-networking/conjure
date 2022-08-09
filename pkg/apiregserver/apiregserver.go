@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -57,7 +57,7 @@ func (s *APIRegServer) getC2SFromReq(w http.ResponseWriter, r *http.Request) (*p
 		return nil, errors.New("payload too small")
 	}
 
-	in, err := ioutil.ReadAll(r.Body)
+	in, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.logger.Errorf("failed to read request body:", err)
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)

@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -337,7 +337,7 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 	defer respPayload.Body.Close()
 	// resp stores the server response from w
 	// Read (desearialize) resp's body into type []byte
-	bodyBytes, err := ioutil.ReadAll(respPayload.Body)
+	bodyBytes, err := io.ReadAll(respPayload.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +411,7 @@ func TestBidirectionalAPIClientConf(t *testing.T) {
 	defer respPayload.Body.Close()
 	// resp stores the server response from w
 	// Read (desearialize) resp's body into type []byte
-	bodyBytes, err := ioutil.ReadAll(respPayload.Body)
+	bodyBytes, err := io.ReadAll(respPayload.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
