@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/BurntSushi/toml"
@@ -131,6 +132,12 @@ func main() {
 	_, err := toml.DecodeFile(configPath, &conf)
 	if err != nil {
 		log.Fatalf("Error in reading config file: %v", err)
+	}
+
+	conf.logClientIP, err = strconv.ParseBool(os.Getenv("LOG_CLIENT_IP"))
+	if err != nil {
+		log.Errorf("failed parse client ip logging setting: %v\n", err)
+		conf.logClientIP = false
 	}
 
 	logLevel, err := log.ParseLevel(conf.LogLevel)
