@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sync"
 
@@ -54,7 +53,7 @@ func parseClientConf(path string) (*pb.ClientConf, error) {
 	}
 
 	// Open file path that stores the client config
-	in, err := ioutil.ReadFile(path)
+	in, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Println("failed to read client config filepath:", err)
 		return emptyPayload, err
@@ -93,7 +92,7 @@ func run(regServers []regServer) {
 }
 
 func readKey(path string) ([]byte, error) {
-	privkey, err := ioutil.ReadFile(path)
+	privkey, err := os.ReadFile(path)
 	privkey = privkey[:32]
 	if err != nil {
 		return nil, err
