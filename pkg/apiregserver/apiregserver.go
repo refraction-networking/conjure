@@ -77,9 +77,9 @@ func (s *APIRegServer) getC2SFromReq(w http.ResponseWriter, r *http.Request) (*p
 func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 	requestIP := getRemoteAddr(r)
 
-	logFields := log.Fields{"method": r.Method, "content-length": r.ContentLength}
+	logFields := log.Fields{"http_method": r.Method, "content_length": r.ContentLength, "registration_type": "unidirectional"}
 	if s.logClientIP {
-		logFields["IP"] = requestIP
+		logFields["ip_address"] = requestIP
 	}
 	reqLogger := s.logger.WithFields(logFields)
 
@@ -91,7 +91,7 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reqLogger = reqLogger.WithField("RegID", hex.EncodeToString(payload.GetSharedSecret()))
+	reqLogger = reqLogger.WithField("reg_id", hex.EncodeToString(payload.GetSharedSecret()))
 
 	clientAddr := parseIP(requestIP)
 	var clientAddrBytes = make([]byte, 16)
@@ -117,9 +117,9 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	requestIP := getRemoteAddr(r)
 
-	logFields := log.Fields{"method": r.Method, "content-length": r.ContentLength}
+	logFields := log.Fields{"http_method": r.Method, "content_length": r.ContentLength, "registration_type": "bidirectional"}
 	if s.logClientIP {
-		logFields["IP"] = requestIP
+		logFields["ip_address"] = requestIP
 	}
 	reqLogger := s.logger.WithFields(logFields)
 
@@ -129,6 +129,8 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		return
 	}
+
+	reqLogger = reqLogger.WithField("reg_id", hex.EncodeToString(payload.GetSharedSecret()))
 
 	clientAddr := parseIP(requestIP)
 	var clientAddrBytes = make([]byte, 16)

@@ -61,7 +61,7 @@ func (s *DNSRegServer) processRequest(reqIn []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	reqLogger := s.logger.WithField("RegID", hex.EncodeToString(c2sPayload.GetSharedSecret()))
+	reqLogger := s.logger.WithField("regid", hex.EncodeToString(c2sPayload.GetSharedSecret()))
 	reqLogger.Tracef("Request received: [%+v]", c2sPayload)
 
 	clientconfOutdated := false
@@ -75,10 +75,12 @@ func (s *DNSRegServer) processRequest(reqIn []byte) ([]byte, error) {
 
 	reqIsBd := c2sPayload.GetRegistrationSource() == pb.RegistrationSource_BidirectionalDNS
 	if reqIsBd {
+		reqLogger = s.logger.WithField("registration-type", "bidirectional")
 		var regResponse *pb.RegistrationResponse
 		regResponse, err = s.processor.RegisterBidirectional(c2sPayload, pb.RegistrationSource_BidirectionalDNS, nil)
 		dnsResp.BidirectionalResponse = regResponse
 	} else {
+		reqLogger = s.logger.WithField("registration-type", "unidirectional")
 		err = s.processor.RegisterUnidirectional(c2sPayload, pb.RegistrationSource_DNS, nil)
 	}
 
