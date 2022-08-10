@@ -1,0 +1,38 @@
+# Address on which to listen for dns registration requests
+dns_listen_addr = "[::]:53"
+
+# Base domain authoritive to nameserver
+domain = "r.refraction.network"
+
+# Path to Conjure private key file
+dns_private_key_path = "/opt/conjure/sysconfig/privkey"
+
+# Log level, one of the following: panic, fatal, error, warn, info, debug, trace
+log_level = "info"
+
+# The port on which to host the API
+api_port = 58080
+
+# The port on which to bind the ZMQ port
+zmq_port = 5599
+zmq_bind_addr = "*"
+
+# The path on disk to the private key used for the ZMQ socket
+zmq_privkey_path = "/opt/conjure/sysconfig/privkey"
+
+# Whether ZMQ should emit verbose logs pertaining to auth (successful connections, failed connections, etc.)
+zmq_auth_verbose = true
+
+# The public keys used to authorize ZMQ connections in the CURVE type.
+# These should be the Z85-encoded versions of the 32-byte public keys,
+# giving 40-character strings.
+station_pubkeys = [
+	"",
+]
+
+# This field specifies the generation number that the Bidirectional API
+# registrar will use when selecting phantoms.
+bidirectional_api_generation = 957
+
+# Path on disk to the latest ClientConfig file that the station should use
+clientconf_path = "/opt/conjure/sysconfig/ClientConf"
