@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -99,7 +98,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	privkey, err := ioutil.ReadFile(privkeyPath)
+	privkey, err := os.ReadFile(privkeyPath)
 	privkey = privkey[:keyLen]
 	if err != nil {
 		log.Fatal(err)

@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/hex"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/responder"
@@ -104,7 +104,7 @@ func (f *DnsRegForwarder) RecvAndForward() error {
 		}
 
 		// Read the HTTP response body into []bytes
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			reqLogger.Errorf("Reading API HTTP response failed: [%v]", err)
 			return nil, err
