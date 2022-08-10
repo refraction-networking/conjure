@@ -3,8 +3,8 @@ package obfs4
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
 	dd "github.com/refraction-networking/conjure/application/lib"
@@ -49,7 +49,7 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 		args.Add("drbg-seed", seed.Hex())
 
 		t := &obfs4.Transport{}
-		stateDir, err := ioutil.TempDir("", "")
+		stateDir, err := os.MkdirTemp("", "")
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create tmp-dir for WrapConn")
 		}

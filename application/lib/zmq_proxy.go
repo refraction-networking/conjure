@@ -4,7 +4,6 @@ package lib
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"time"
@@ -40,7 +39,7 @@ func ZMQProxy(c ZMQConfig) {
 	var p proxy
 	p.logger = log.New(os.Stdout, "[ZMQ_PROXY] ", log.Ldate|log.Lmicroseconds)
 
-	privkey, err := ioutil.ReadFile(c.PrivateKeyPath)
+	privkey, err := os.ReadFile(c.PrivateKeyPath)
 	if err != nil {
 		p.logger.Fatalln("failed to load private key:", err)
 	}
