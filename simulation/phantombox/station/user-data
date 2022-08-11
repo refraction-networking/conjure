@@ -201,10 +201,6 @@ write_files:
     path: /etc/conjure/application.toml
     permissions: '0644'
   - content: |
-      # Conjure environment variables
-    path: /etc/conjure/registration-api.toml
-    permissions: '0644'
-  - content: |
       # Conjure detector service file
       [Unit]
       Description=Conjure Detector
@@ -242,7 +238,7 @@ write_files:
     path: /etc/systemd/system/conjure-app.service
     permissions: '0644'
   - content: |
-      # Conjure DNS registration service file
+      # Conjure registration service file
       [Unit]
       Description=Conjure Registration Server
 
