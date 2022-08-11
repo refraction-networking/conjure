@@ -33,7 +33,7 @@ conjure: detect.c loadkey.c rust_util.c rust libtapdance
 conjure-sim: detect.c loadkey.c rust_util.c rust libtapdance
 	${CC} -Wall -O2 -o conjure detect.c loadkey.c rust_util.c ${LIBS}
 
-registration-dns:
+registration-server:
 	cd ./cmd/registration-server/ && make
 
 # Note this copies in the whole current directory as context and results in
