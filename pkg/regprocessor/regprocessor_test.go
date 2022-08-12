@@ -135,7 +135,10 @@ func BenchmarkRegistration(b *testing.B) {
 	sourceIP := net.ParseIP("1.2.3.4:443")
 
 	for i := 0; i < b.N; i++ {
-		s.RegisterUnidirectional(body, pb.RegistrationSource_API, []byte(sourceIP))
+		err := s.RegisterUnidirectional(body, pb.RegistrationSource_API, []byte(sourceIP))
+		if err != nil {
+			b.Errorf("error in sending registration request: %v", err)
+		}
 	}
 }
 
@@ -180,7 +183,11 @@ func TestRegisterUnidirectional(t *testing.T) {
 		sock: fakeSender,
 	}
 
-	s.RegisterUnidirectional(c2sPayload, regSrc, net.ParseIP(updatedIP))
+	err := s.RegisterUnidirectional(c2sPayload, regSrc, net.ParseIP(updatedIP))
+
+	if err != nil {
+		t.Errorf("error in sending registration request: %v", err)
+	}
 
 }
 
@@ -219,8 +226,11 @@ func TestUpdateIP(t *testing.T) {
 		sock: fakeSender,
 	}
 
-	s.RegisterUnidirectional(c2sPayload, usedRegSrc, net.ParseIP(updatedIP))
+	err := s.RegisterUnidirectional(c2sPayload, usedRegSrc, net.ParseIP(updatedIP))
 
+	if err != nil {
+		t.Errorf("error in sending registration request: %v", err)
+	}
 }
 
 type fakeIpSelector struct {
