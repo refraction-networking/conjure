@@ -12,7 +12,7 @@ require (
 	github.com/mroth/weightedrand v0.4.1
 	github.com/pebbe/zmq4 v1.2.7
 	github.com/pelletier/go-toml v1.9.4
-	github.com/refraction-networking/gotapdance v1.3.0
+	github.com/refraction-networking/gotapdance v1.3.1
 	github.com/refraction-networking/utls v1.1.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.7.1
@@ -21,5 +21,3 @@ require (
 	google.golang.org/grpc v1.41.0
 	google.golang.org/protobuf v1.28.0
 )
-
-replace github.com/refraction-networking/gotapdance => github.com/mingyech/gotapdance v1.2.1-0.20220630235546-0e2a28ff41d4

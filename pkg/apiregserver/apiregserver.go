@@ -168,13 +168,13 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 	// Marshal (serialize) registration response object and then write it to w
 	body, err := proto.Marshal(regResp)
 	if err != nil {
-		reqLogger.Errorf("failed to write registration into response:", err)
+		reqLogger.Errorf("failed to write registration into response: %v", err)
 		return
 	}
 
 	_, err = w.Write(body)
 	if err != nil {
-		reqLogger.Errorf("failed to write registration into response:", err)
+		reqLogger.Errorf("failed to write registration into response: %v", err)
 		return
 	}
 

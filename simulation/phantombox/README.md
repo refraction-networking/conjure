@@ -35,8 +35,10 @@ the conjure station to be mounted on the `station` vm and launched by the
 automatic setup.
 
 ```sh
-git clone https://github.com/cohosh/conjure.git conjure-station
-cd conjure-station
+# pull the station if you haven't already
+git clone https://github.com/refraction-networking/conjure.git
+
+cd conjure
 export CONJURE_STATION_REPO=`pwd`
 ```
 
@@ -52,7 +54,7 @@ development using:
 # git clone https://github.com/refraaction-networking/gotapdance.git
 
 cd <path-to>/gotapdance
-export CONJURE_H1_REPO=`pwd`
+export CONJURE_H1_REPO=`pwd`/
 
 # build and start the environment
 sudo -E make

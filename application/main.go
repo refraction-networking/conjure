@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
@@ -110,11 +109,11 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 		cj.Stat().AddMissedReg()
 		cj.Stat().CloseConn()
 
-		// Copy into ioutil.Discard to keep ACKing until the deadline.
+		// Copy into io.Discard to keep ACKing until the deadline.
 		// This should help prevent fingerprinting; if we let the read
 		// buffer fill up and stopped ACKing after 8192 + (buffer size)
 		// bytes for obfs4, as an example, that would be quite clear.
-		_, err = io.Copy(ioutil.Discard, clientConn)
+		_, err = io.Copy(io.Discard, clientConn)
 		if err != nil {
 			logger.Println("error occurred discarding data:", err)
 		}
@@ -134,7 +133,7 @@ readLoop:
 		if len(possibleTransports) < 1 {
 			logger.Printf("ran out of possible transports, reading for %v then giving up\n", time.Until(deadline))
 			cj.Stat().ConnErr()
-			_, err = io.Copy(ioutil.Discard, clientConn)
+			_, err = io.Copy(io.Discard, clientConn)
 			if err != nil {
 				logger.Println("error occurred discarding data:", err)
 			}
@@ -251,15 +250,24 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					cj.Stat().AddErrReg()
 				}
 
-				// If registration is trying to connect to a dark decoy that is
-				// blocklisted continue
-				if reg.Covert == "" || conf.IsBlocklisted(reg.Covert) {
+				// If registration is trying to connect to a covert address that
+				// is blocklisted consider registration INVALID and continue
+				covert := conf.ParseOrResolveBlocklisted(reg.Covert)
+				if covert == "" {
 					// We log client IPs for clients attempting to connect to
 					// blocklisted covert addresses.
 					logger.Printf("Dropping reg, malformed or blocklisted covert: %v, %s -> %s", reg.IDString(), reg.GetRegistrationAddress(), reg.Covert)
 					cj.Stat().AddErrReg()
 					continue
 				}
+
+				// Overwrite provided covert with resolved address. This kind of
+				// sucks because net.Dial can try multiple addresses for domain
+				// names w/ multiple records when resolved and we lock to one
+				// address. However, this step is required to prevent SSRF via
+				// DNS rebinding. Clients generally shouldn't be providing
+				// hostnames as coverts anyways.
+				reg.Covert = covert
 
 				if !reg.PreScanned() {
 					// New registration received over channel that requires liveness scan for the phantom

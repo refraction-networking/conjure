@@ -148,13 +148,14 @@ size_t get_payload_from_tag(const unsigned char *station_privkey,
 }
 
 
-// Client calls this to get a random shared secret and public point,
-// given the station's public key.
+// Client calls this to get a random shared secret and public point, given the
+// station's public key. Disabled in conjure because unused - client 25519 happens
+// in golang.
 void get_encoded_point_and_secret(const unsigned char *station_public,
                                   unsigned char *shared_secret_out,
                                   unsigned char *encoded_point_out)
 {
-
+    /*
     // First, generate an ECC point
     unsigned char base_point[32] = {9};
     unsigned char client_secret[32];        // e
@@ -192,31 +193,32 @@ void get_encoded_point_and_secret(const unsigned char *station_public,
 
     memset(client_secret, 0, sizeof(client_secret));
     memset(client_public, 0, sizeof(client_public));
-
+    */ 
     return;
 }
 
-// tag_out length must be at least 32 + payload_len + 16 to be safe
-// For the client; given a payload and a station public key, provides
-// a tag (and returns its length). This tag is constructed by generating a
-// private_key, its associated public point, and a shared_secret with the station.
-// shared_secret is computed as SHA256(private_key*station_pubkey)
+// tag_out length must be at least 32 + payload_len + 16 to be safe For the
+// client; given a payload and a station public key, provides a tag (and returns
+// its length). This tag is constructed by generating a private_key, its
+// associated public point, and a shared_secret with the station. shared_secret
+// is computed as SHA256(private_key*station_pubkey)
 //
-// The tag is then:
-//   [      32 bytes            ]   [    payload_len + 16 bytes   ]
-// Elligator.encode(public_point) + AES_GCM(shared_secret[0:16], payload)
-//      (Note: IV provided to AES_GCM is shared_secret[16:32])
+// The tag is then: [      32 bytes            ]   [    payload_len + 16 bytes
+//   ] Elligator.encode(public_point) + AES_GCM(shared_secret[0:16], payload)
+//   (Note: IV provided to AES_GCM is shared_secret[16:32])
 //
-//  Note that there is no length or header that tells the station how large
-//  the payload. (It can't be in the clear; though we could do something like:
-//    AES_GCM(shared_secret[0:16], header) + AES_GCM(shared_secret[0:16], payload)
-//    with different IVs in each AES_GCM invocation. This would add
-//    len(header)+16 bytes overhead.)
+//  Note that there is no length or header that tells the station how large the
+//  payload. (It can't be in the clear; though we could do something like:
+//  AES_GCM(shared_secret[0:16], header) + AES_GCM(shared_secret[0:16], payload)
+//  with different IVs in each AES_GCM invocation. This would add len(header)+16
+//  bytes overhead.)
 //
+// Disabled in conjure because unused - tag creation happens in golang
 size_t get_tag_from_payload(const unsigned char *payload, size_t payload_len,
                             const unsigned char *station_pubkey,
                             unsigned char *tag_out)
 {
+    /*
     unsigned char shared_secret[32];
     size_t len = 0;
 
@@ -278,8 +280,8 @@ size_t get_tag_from_payload(const unsigned char *payload, size_t payload_len,
     }
     len += 16;
     EVP_CIPHER_CTX_free(ctx);
-
-    return len;
+    */
+    return 0;
 }
 
 int elligator_init = 0;

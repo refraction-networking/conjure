@@ -1,3 +1,6 @@
+//go:build !race
+// +build !race
+
 package lib
 
 import (
@@ -18,7 +21,7 @@ const (
 	messagesPerSocket = 10000
 )
 
-// This Test itself is a Data race issue, as the concurrect access to the
+// This Test itself is a Data race issue, as the concurrent access to the
 // subscribe socket is not safe. So I think his test indicates that ZMQProxy is
 // now threadsafe through the use of channels (none of the messages get mangled
 // and the process doesn't segfault). However, the test to fail when
