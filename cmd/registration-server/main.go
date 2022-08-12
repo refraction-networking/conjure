@@ -23,13 +23,10 @@ type regServer interface {
 
 // config defines the variables and options from the toml config file
 type config struct {
-	// conf for DNS registrar
-	DNSListenAddr  string `toml:"dns_listen_addr"`
-	Domain         string `toml:"domain"`
-	DNSPrivkeyPath string `toml:"dns_private_key_path"`
-
-	APIPort uint16 `toml:"api_port"`
-
+	DNSListenAddr     string   `toml:"dns_listen_addr"`
+	Domain            string   `toml:"domain"`
+	DNSPrivkeyPath    string   `toml:"dns_private_key_path"`
+	APIPort           uint16   `toml:"api_port"`
 	ZMQAuthVerbose    bool     `toml:"zmq_auth_verbose"`
 	ZMQAuthType       string   `toml:"zmq_auth_type"`
 	ZMQPort           uint16   `toml:"zmq_port"`
@@ -37,13 +34,10 @@ type config struct {
 	ZMQPrivateKeyPath string   `toml:"zmq_privkey_path"`
 	StationPublicKeys []string `toml:"station_pubkeys"`
 	ClientConfPath    string   `toml:"clientconf_path"`
-
-	LogLevel string `toml:"log_level"`
-	// Parsed from conjure.conf environment vars
-	logClientIP bool
+	LogLevel          string   `toml:"log_level"`
 }
 
-// Function to parse the latest ClientConf based on path file
+// parseClientConf parse the latest ClientConf based on path file
 func parseClientConf(path string) (*pb.ClientConf, error) {
 	// Create empty client config protobuf to return in case of error
 	emptyPayload := &pb.ClientConf{}
@@ -135,10 +129,10 @@ func main() {
 		log.Fatalf("Error in reading config file: %v", err)
 	}
 
-	conf.logClientIP, err = strconv.ParseBool(os.Getenv("LOG_CLIENT_IP"))
+	logClientIP, err := strconv.ParseBool(os.Getenv("LOG_CLIENT_IP"))
 	if err != nil {
 		log.Errorf("failed parse client ip logging setting: %v\n", err)
-		conf.logClientIP = false
+		logClientIP = false
 	}
 
 	logLevel, err := log.ParseLevel(conf.LogLevel)
@@ -182,7 +176,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	apiRegServer, err := apiregserver.NewAPIRegServer(conf.APIPort, processor, latestClientConf, log.WithField("registrar", "API"), conf.logClientIP)
+	apiRegServer, err := apiregserver.NewAPIRegServer(conf.APIPort, processor, latestClientConf, log.WithField("registrar", "API"), logClientIP)
 	if err != nil {
 		log.Fatal(err)
 	}
