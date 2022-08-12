@@ -31,6 +31,7 @@ type config struct {
 	APIPort uint16 `toml:"api_port"`
 
 	ZMQAuthVerbose    bool     `toml:"zmq_auth_verbose"`
+	ZMQAuthType       string   `toml:"zmq_auth_type"`
 	ZMQPort           uint16   `toml:"zmq_port"`
 	ZMQBindAddr       string   `toml:"zmq_bind_addr"`
 	ZMQPrivateKeyPath string   `toml:"zmq_privkey_path"`
@@ -151,7 +152,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	processor, err := regprocessor.NewRegProcessor(conf.ZMQBindAddr, conf.ZMQPort, zmqPrivkey, conf.ZMQAuthVerbose, conf.StationPublicKeys)
+	var processor *regprocessor.RegProcessor
+
+	switch conf.ZMQAuthType {
+	case "CURVE":
+		processor, err = regprocessor.NewRegProcessor(conf.ZMQBindAddr, conf.ZMQPort, zmqPrivkey, conf.ZMQAuthVerbose, conf.StationPublicKeys)
+	case "NULL":
+		processor, err = regprocessor.NewRegProcessorNoAuth(conf.ZMQBindAddr, conf.ZMQPort)
+	default:
+		log.Fatalf("Unknown ZMQ auth type: %s", conf.ZMQAuthType)
+	}
+
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -20,6 +20,12 @@ zmq_bind_addr = "127.0.0.1"
 # The path on disk to the private key used for the ZMQ socket
 zmq_privkey_path = "/opt/conjure/sysconfig/privkey"
 
+# The type of authentication to use on the ZMQ socket.
+# Can be set to "NULL" which allows all connections, or "CURVE"
+# which only allows clients presenting public keys listed in
+# station_pubkeys below.
+zmq_auth_type = "CURVE"
+
 # Whether ZMQ should emit verbose logs pertaining to auth (successful connections, failed connections, etc.)
 zmq_auth_verbose = true
 
