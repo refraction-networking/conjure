@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -432,7 +431,7 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 	finalTargetConn = serverBufConn
 	finalClientConn = clientBufConn
 
-	decryptedFirstAppData, err := ioutil.ReadAll(inMemTlsConn)
+	decryptedFirstAppData, err := io.ReadAll(inMemTlsConn)
 	if err != nil || len(decryptedFirstAppData) == 0 {
 		logger.Printf("not tagged: %s", err)
 	} else {

@@ -10,9 +10,9 @@ CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_R
 PROTO_RS_PATH=src/signalling.rs
 
 
-all: rust libtd conjure app registration-api ${PROTO_RS_PATH}
+all: rust libtd conjure app registration-api registration-dns ${PROTO_RS_PATH}
 
-sim: rust libtd conjure-sim app registration-api ${PROTO_RS_PATH}
+sim: rust libtd conjure-sim app registration-api registration-dns ${PROTO_RS_PATH}
 
 rust: ./src/*.rs
 	cargo build --${DEBUG_OR_RELEASE}
@@ -35,6 +35,9 @@ conjure-sim: detect.c loadkey.c rust_util.c rust libtapdance
 
 registration-api:
 	cd ./registration-api/ && make
+
+registration-dns:
+	cd ./cmd/registration-dns/ && make
 
 # Note this copies in the whole current directory as context and results in
 # overly large context. should not be used to build release/production images.

@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
@@ -110,11 +109,11 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 		cj.Stat().AddMissedReg()
 		cj.Stat().CloseConn()
 
-		// Copy into ioutil.Discard to keep ACKing until the deadline.
+		// Copy into io.Discard to keep ACKing until the deadline.
 		// This should help prevent fingerprinting; if we let the read
 		// buffer fill up and stopped ACKing after 8192 + (buffer size)
 		// bytes for obfs4, as an example, that would be quite clear.
-		_, err = io.Copy(ioutil.Discard, clientConn)
+		_, err = io.Copy(io.Discard, clientConn)
 		if err != nil {
 			logger.Println("error occurred discarding data:", err)
 		}
@@ -134,7 +133,7 @@ readLoop:
 		if len(possibleTransports) < 1 {
 			logger.Printf("ran out of possible transports, reading for %v then giving up\n", time.Until(deadline))
 			cj.Stat().ConnErr()
-			_, err = io.Copy(ioutil.Discard, clientConn)
+			_, err = io.Copy(io.Discard, clientConn)
 			if err != nil {
 				logger.Println("error occurred discarding data:", err)
 			}

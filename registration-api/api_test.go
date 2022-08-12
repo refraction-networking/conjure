@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -336,7 +336,7 @@ func BenchmarkRegistration(b *testing.B) {
 	}
 
 	s := server{
-		logger: log.New(ioutil.Discard, "", 0),
+		logger: log.New(io.Discard, "", 0),
 		sock:   sock,
 	}
 	s.messageAccepter = s.sendToZMQ
@@ -433,7 +433,7 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 	defer resp.Body.Close()
 	// resp stores the server response from w
 	// Read (desearialize) resp's body into type []byte
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -518,7 +518,7 @@ func TestBidirectionalAPIClientConf(t *testing.T) {
 	defer resp.Body.Close()
 	// resp stores the server response from w
 	// Read (desearialize) resp's body into type []byte
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}

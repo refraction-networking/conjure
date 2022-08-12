@@ -4,3 +4,5 @@ conjure
 application/application
 registration-api/registration-api
 libtapdance/genkey
+cmd/registration-dns/registration-dns
+cmd/registration-dns/*.key

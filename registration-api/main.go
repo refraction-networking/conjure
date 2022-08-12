@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -96,7 +96,7 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	in, err := ioutil.ReadAll(r.Body)
+	in, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.logger.Println("failed to read request body:", err)
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
@@ -159,7 +159,7 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Deserialize the body of the request, result is a pb
-	in, err := ioutil.ReadAll(r.Body)
+	in, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.logger.Println("failed to read request body:", err)
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
@@ -300,7 +300,7 @@ func parseClientConf(path string) (*pb.ClientConf, error) {
 	}
 
 	// Open file path that stores the client config
-	in, err := ioutil.ReadFile(path)
+	in, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Println("failed to read client config filepath:", err)
 		return emptyPayload, err
@@ -439,7 +439,7 @@ func main() {
 	s.initPhantomSelector()
 
 	if s.AuthType == "CURVE" {
-		privkeyBytes, err := ioutil.ReadFile(s.PrivateKeyPath)
+		privkeyBytes, err := os.ReadFile(s.PrivateKeyPath)
 		if err != nil {
 			s.logger.Fatalln("failed to get private key:", err)
 		}
