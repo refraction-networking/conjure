@@ -73,7 +73,7 @@ jobs:
         run: |
           mkdir -p  $GITHUB_WORKSPACE/bin
           cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
-          cp conjure application/application registration-server/registration-server $GITHUB_WORKSPACE/bin
+          cp conjure application/application cmd/registration-server/registration-server $GITHUB_WORKSPACE/bin
           cd $GITHUB_WORKSPACE && tar -czf conjure-station.tar.gz bin
 
       - name: Save build artifacts
