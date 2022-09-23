@@ -208,8 +208,6 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 
 // processC2SWrapper adds missing variables to the input c2s and returns the payload in format ready to be published to zmq
 func processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr []byte, regMethod pb.RegistrationSource) ([]byte, error) {
-	payload := &pb.C2SWrapper{}
-
 	if c2sPayload == nil {
 		return nil, ErrNoC2SBody
 	}
@@ -218,8 +216,10 @@ func processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr []byte, regMethod p
 		return nil, ErrSharedSecret
 	}
 
+	payload := &pb.C2SWrapper{}
+
 	// If the channel that the registration was received over was not specified
-	// in the C2SWrapper set it here as API.
+	// in the C2SWrapper set it here as the source.
 	if c2sPayload.GetRegistrationSource() == pb.RegistrationSource_Unspecified {
 		source := regMethod
 		payload.RegistrationSource = &source
@@ -229,9 +229,9 @@ func processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr []byte, regMethod p
 	}
 
 	// If the address that the registration was received from was NOT set in the
-	// C2SWrapper set it here to the source address of the API (uni or bidirectional) request.
-	if c2sPayload.GetRegistrationAddress() == nil ||
-		c2sPayload.GetRegistrationSource() == regMethod {
+	// C2SWrapper set it here to the source address of the request.
+	if (c2sPayload.GetRegistrationAddress() == nil ||
+		c2sPayload.GetRegistrationSource() == regMethod) && clientAddr != nil {
 		payload.RegistrationAddress = clientAddr
 	} else {
 		payload.RegistrationAddress = c2sPayload.GetRegistrationAddress()
@@ -240,6 +240,5 @@ func processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr []byte, regMethod p
 	payload.SharedSecret = c2sPayload.GetSharedSecret()
 	payload.RegistrationPayload = c2sPayload.GetRegistrationPayload()
 
-	// s.logger.Printf("forwarding registration %s source %v \n", hex.EncodeToString(payload.GetSharedSecret())[:regIDLen], payload.GetRegistrationSource())
 	return proto.Marshal(payload)
 }
