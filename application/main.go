@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -185,6 +186,29 @@ readLoop:
 	cj.Stat().CloseConn()
 }
 
+// UDP-TODO:
+// Handle new registration from client for UDP Transports
+// NOTE: this is called within a goroutine in get_zmq_updates
+func handleConnectingTpReg(regManager *cj.RegistrationManager, reg *cj.DecoyRegistration) {
+	// using a Connecting Transport
+	for tptype, tp := range regManager.GetConnectingTransports() {
+		if tptype == reg.Transport { // correct transport name
+			ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+			go func() {
+				defer cancelFunc()
+				conn, err := tp.Connect(ctx, reg)
+				if err != nil {
+					logger.Printf("error handling Connecting Transport Registration: %v\n", err)
+					return
+				}
+				cj.Stat().AddConn()
+				cj.Proxy(reg, conn, logger)
+				cj.Stat().CloseConn()
+			}()
+		}
+	}
+}
+
 func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, conf *cj.Config) {
 	logger := log.New(os.Stdout, "[ZMQ] ", log.Ldate|log.Lmicroseconds)
 	sub, err := zmq.NewSocket(zmq.SUB)
@@ -302,6 +326,9 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 				regManager.AddRegistration(reg)
 				logger.Printf("Adding registration %v\n", reg.IDString())
 				cj.Stat().AddReg(reg.DecoyListVersion, reg.RegistrationSource)
+
+				// UDP-TODO: Notify the Connecting Transports there's a new registration
+				handleConnectingTpReg(regManager, reg)
 			}
 		}()
 
@@ -347,8 +374,8 @@ func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint s
 // **NOTE2**: If the registration address is IPv4 we will create registrations
 // for both IPv4 decoy and IPv6 decoy. However, If the client Address from
 // registrations is IPv6 we will only create an ipv6 registration because
-// 		1) we have no client address to match on for ipv4
-//	 	2) the client _should_ support ipv6
+//  1. we have no client address to match on for ipv4
+//  2. the client _should_ support ipv6
 func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, conf *cj.Config) ([]*cj.DecoyRegistration, error) {
 	msg, err := sub.RecvBytes(0)
 	if err != nil {
@@ -463,6 +490,7 @@ func main() {
 	if err != nil {
 		logger.Printf("failed to add transport: %v", err)
 	}
+	// UDP-TODO: Setup all UDP transports and add them to the registration manager.
 
 	// Receive registration updates from ZMQ Proxy as subscriber
 	go get_zmq_updates(zmqAddress, regManager, conf)

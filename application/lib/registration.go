@@ -70,6 +70,11 @@ type WrappingTransport interface {
 	WrapConnection(data *bytes.Buffer, conn net.Conn, phantom net.IP, rm *RegistrationManager) (reg *DecoyRegistration, wrapped net.Conn, err error)
 }
 
+// UDP-TODO: ConnectingTransport could be used for UDP Transports.
+// In the nature that UDP Transport per se needs to be bound to
+// a socket/port when setup and doesn't require an incoming connection
+// at call time.
+
 // ConnectingTransport describes transports that actively form an
 // outgoing connection to clients to initiate the conversation.
 type ConnectingTransport interface {
@@ -147,6 +152,25 @@ func (regManager *RegistrationManager) GetWrappingTransports() map[pb.TransportT
 	return m
 }
 
+// UDP-TODO: GetConnectingTransports could be used for UDP Transport when receiving registrations.
+
+// GetConnectingTransports Returns a map of the connecting transport types to their transports. This return value
+// can be mutated freely.
+func (regManager *RegistrationManager) GetConnectingTransports() map[pb.TransportType]ConnectingTransport {
+	m := make(map[pb.TransportType]ConnectingTransport)
+	regManager.registeredDecoys.m.RLock()
+	defer regManager.registeredDecoys.m.RUnlock()
+
+	for k, v := range regManager.registeredDecoys.transports {
+		ct, ok := v.(ConnectingTransport)
+		if ok {
+			m[k] = ct
+		}
+	}
+
+	return m
+}
+
 // NewRegistration creates a new registration from details provided. Adds the registration
 // to tracking map, But marks it as not valid.
 func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
@@ -158,6 +182,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		return nil, fmt.Errorf("Failed to select phantom IP address: %v", err)
 	}
 
+	// UDP-TODO: UDP Transport may need payload sent from client to be copied to registration.
 	reg := DecoyRegistration{
 		DarkDecoy:          phantomAddr,
 		Keys:               conjureKeys,
@@ -213,6 +238,9 @@ func (regManager *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWra
 		RegistrationTime:   time.Now(),
 		RegistrationSource: &regSrc,
 		regCount:           0,
+
+		// UDP-TODO: TransportPayload copied here
+		// TransportPayload:   c2s.GetTransportPayload(),
 	}
 
 	return &reg, nil
@@ -266,8 +294,9 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 // https://www.usenix.org/system/files/conference/usenixsecurity13/sec13-paper_durumeric.pdf
 //
 // return:	bool	true  - host is live
-// 					false - host is not liev
-//			error	reason decision was made
+//
+//			false - host is not liev
+//	error	reason decision was made
 func (regManager *RegistrationManager) PhantomIsLive(addr string, port uint16) (bool, error) {
 	return regManager.LivenessTester.PhantomIsLive(addr, port)
 }
@@ -285,13 +314,16 @@ type DecoyRegistration struct {
 	DecoyListVersion   uint32
 	regCount           int32
 
+	// UDP-TODO: TransportPayload here
+	// TransportPayload   *pb.TransportPayload
+
 	// validity marks whether the registration has been validated through liveness and other checks.
 	// This also denotes whether the registration has been shared with the detector.
 	Valid bool
 }
 
 // String -- Print a digest of the important identifying information for this registration.
-//[TODO]{priority:soon} Find a way to add the client IP to this logging for now it is logged
+// [TODO]{priority:soon} Find a way to add the client IP to this logging for now it is logged
 // in the detector associating registrant IP with shared secret.
 func (reg *DecoyRegistration) String() string {
 	if reg == nil {
