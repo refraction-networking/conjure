@@ -15,15 +15,17 @@ var once sync.Once
 // Redis client is already multiplexed and long lived. It is threadsafe so it
 // should be able to be accessed by multiple registration threads concurrently
 // with no issues. PoolSize is tunable in case this ends up being an issue.
-func getRedisClient() *redis.Client {
-	once.Do(initRedisClient)
+func getRedisClient(pwd string) *redis.Client {
+	once.Do(func() {
+		initRedisClient(pwd)
+	})
 	return client
 }
 
-func initRedisClient() {
+func initRedisClient(pwd string) {
 	client = redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
-		Password: "",
+		Password: pwd,
 		DB:       0,
 		PoolSize: 100,
 	})

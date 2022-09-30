@@ -513,7 +513,7 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 	}
 
 	reg.Valid = true
-	registerForDetector(reg)
+	registerForDetector(reg, pwd)
 
 	return nil
 }
@@ -684,8 +684,8 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 // **NOTE**: If you mess with this function make sure the
 // session tracking tests on the detector side do what you expect
 // them to do. (conjure/src/session.rs)
-func registerForDetector(reg *DecoyRegistration) {
-	client := getRedisClient()
+func registerForDetector(reg *DecoyRegistration, pwd string) {
+	client := getRedisClient(pwd)
 	if client == nil {
 		fmt.Printf("couldn't connect to redis")
 		return

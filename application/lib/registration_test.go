@@ -112,7 +112,7 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := getRedisClient()
+	client := getRedisClient("")
 	if client == nil {
 		t.Fatalf("couldn't connect to redis\n")
 	}
@@ -167,7 +167,7 @@ func TestRegisterForDetectorArray(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := getRedisClient()
+	client := getRedisClient("")
 	if client == nil {
 		t.Fatalf("couldn't connect to redis\n")
 	}
@@ -229,7 +229,7 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := getRedisClient()
+	client := getRedisClient("")
 	if client == nil {
 		t.Fatalf("couldn't connect to redis\n")
 	}
