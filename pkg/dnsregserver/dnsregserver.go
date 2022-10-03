@@ -99,7 +99,7 @@ func (s *DNSRegServer) processRequest(reqIn []byte) ([]byte, error) {
 
 	regSuccess := true
 	dnsResp.Success = &regSuccess
-	reqLogger.Infof("registration request successful")
+	reqLogger.Debugf("registration request successful")
 	responsePayload, err := proto.Marshal(dnsResp)
 	if err != nil {
 		reqLogger.Errorf("response marshal failed")

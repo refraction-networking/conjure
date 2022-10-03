@@ -83,7 +83,7 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 	}
 	reqLogger := s.logger.WithFields(logFields)
 
-	reqLogger.Infof("recived new request")
+	reqLogger.Debugf("recived new request")
 
 	payload, err := s.getC2SFromReq(w, r)
 	if err != nil {
@@ -106,7 +106,7 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reqLogger.Infof("registration successful")
+	reqLogger.Debugf("registration successful")
 
 	// We could send an HTTP response earlier to avoid waiting
 	// while the zmq socket is locked, but this ensures that
@@ -123,7 +123,7 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 	}
 	reqLogger := s.logger.WithFields(logFields)
 
-	reqLogger.Infof("recived new request")
+	reqLogger.Debugf("recived new request")
 
 	payload, err := s.getC2SFromReq(w, r)
 	if err != nil {
@@ -178,7 +178,7 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	reqLogger.Infof("registration successful")
+	reqLogger.Debugf("registration successful")
 
 } // registerBidirectional()
 
