@@ -1,73 +1,17 @@
 package lib
 
 import (
-	"bufio"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
-	tls "github.com/refraction-networking/utls"
+	log "github.com/refraction-networking/conjure/application/log"
 )
-
-const (
-	tlsRecordTypeChangeCipherSpec = byte(20)
-	tlsRecordTypeHandshake        = byte(22)
-	// tlsRecordTypeAlert            = byte(21)
-	// tlsRecordTypeApplicationData  = byte(23)
-	// tlsRecordTypeHearbeat         = byte(24)
-)
-
-const (
-	TlsHandshakeTypeHelloRequest       = byte(0)
-	TlsHandshakeTypeClientHello        = byte(1)
-	TlsHandshakeTypeServerHello        = byte(2)
-	TlsHandshakeTypeNewSessionTicket   = byte(4)
-	TlsHandshakeTypeCertificate        = byte(11)
-	TlsHandshakeTypeServerKeyExchange  = byte(12)
-	TlsHandshakeTypeCertificateRequest = byte(13)
-	TlsHandshakeTypeServerHelloDone    = byte(14)
-	TlsHandshakeTypeCertificateVerify  = byte(15)
-	TlsHandshakeTypeClientKeyExchange  = byte(16)
-	TlsHandshakeTypeFinished           = byte(20)
-	TlsHandshakeTypeCertificateStatus  = byte(22)
-	TlsHandshakeTypeNextProtocol       = byte(67)
-)
-
-const (
-	TdFlagUploadOnly  = uint8(1 << 7)
-	TdFlagDarkDecoy   = uint8(1 << 6)
-	TdFlagProxyHeader = uint8(1 << 1)
-	TdFlagUseTIL      = uint8(1 << 0)
-)
-
-// ProxyFactory returns an internal proxy
-func ProxyFactory(reg *DecoyRegistration, proxyProtocol uint) func(*DecoyRegistration, *net.TCPConn, net.IP) {
-	switch proxyProtocol {
-	case 0:
-		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
-			twoWayProxy(reg, clientConn, originalDstIP)
-		}
-	case 1:
-		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
-			threeWayProxy(reg, clientConn, originalDstIP)
-		}
-	case 2:
-		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
-			// Obfs4 handler
-		}
-	default:
-		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
-		}
-	}
-}
 
 type sessionStats struct {
 	Duration int64
@@ -213,6 +157,46 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	wg.Wait()
 }
 
+func writePROXYHeader(conn net.Conn, originalIPPort string) error {
+
+	if len(originalIPPort) == 0 {
+		return errors.New("can't write PROXY header: empty IP")
+	}
+	transportProtocol := "TCP4"
+	if !strings.Contains(originalIPPort, ".") {
+		transportProtocol = "TCP6"
+	}
+	host, port, err := net.SplitHostPort(originalIPPort)
+	if err != nil {
+		return err
+	}
+	proxyHeader := fmt.Sprintf("PROXY %s %s 127.0.0.1 %s 1234\r\n", transportProtocol, host, port)
+	_, err = conn.Write([]byte(proxyHeader))
+	return err
+}
+
+// // ProxyFactory returns an internal proxy
+// func ProxyFactory(reg *DecoyRegistration, proxyProtocol uint) func(*DecoyRegistration, *net.TCPConn, net.IP) {
+// 	switch proxyProtocol {
+// 	case 0:
+// 		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
+// 			twoWayProxy(reg, clientConn, originalDstIP)
+// 		}
+// 	case 1:
+// 		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
+// 			threeWayProxy(reg, clientConn, originalDstIP)
+// 		}
+// 	case 2:
+// 		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
+// 			// Obfs4 handler
+// 		}
+// 	default:
+// 		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
+// 		}
+// 	}
+// }
+
+/*
 func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
 	var err error
 	originalDst := originalDstIP.String()
@@ -245,24 +229,40 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down")
 	wg.Wait()
 }
+*/
 
-func writePROXYHeader(conn net.Conn, originalIPPort string) error {
+/*
 
-	if len(originalIPPort) == 0 {
-		return errors.New("can't write PROXY header: empty IP")
-	}
-	transportProtocol := "TCP4"
-	if !strings.Contains(originalIPPort, ".") {
-		transportProtocol = "TCP6"
-	}
-	host, port, err := net.SplitHostPort(originalIPPort)
-	if err != nil {
-		return err
-	}
-	proxyHeader := fmt.Sprintf("PROXY %s %s 127.0.0.1 %s 1234\r\n", transportProtocol, host, port)
-	_, err = conn.Write([]byte(proxyHeader))
-	return err
-}
+const (
+	tlsRecordTypeChangeCipherSpec = byte(20)
+	tlsRecordTypeHandshake        = byte(22)
+	// tlsRecordTypeAlert            = byte(21)
+	// tlsRecordTypeApplicationData  = byte(23)
+	// tlsRecordTypeHearbeat         = byte(24)
+)
+
+const (
+	TlsHandshakeTypeHelloRequest       = byte(0)
+	TlsHandshakeTypeClientHello        = byte(1)
+	TlsHandshakeTypeServerHello        = byte(2)
+	TlsHandshakeTypeNewSessionTicket   = byte(4)
+	TlsHandshakeTypeCertificate        = byte(11)
+	TlsHandshakeTypeServerKeyExchange  = byte(12)
+	TlsHandshakeTypeCertificateRequest = byte(13)
+	TlsHandshakeTypeServerHelloDone    = byte(14)
+	TlsHandshakeTypeCertificateVerify  = byte(15)
+	TlsHandshakeTypeClientKeyExchange  = byte(16)
+	TlsHandshakeTypeFinished           = byte(20)
+	TlsHandshakeTypeCertificateStatus  = byte(22)
+	TlsHandshakeTypeNextProtocol       = byte(67)
+)
+
+const (
+	TdFlagUploadOnly  = uint8(1 << 7)
+	TdFlagDarkDecoy   = uint8(1 << 6)
+	TdFlagProxyHeader = uint8(1 << 1)
+	TdFlagUseTIL      = uint8(1 << 0)
+)
 
 func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
 	maskHostPort := reg.Mask
@@ -470,3 +470,4 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 	wg.Wait()
 	// closes for all the things are deferred
 }
+*/

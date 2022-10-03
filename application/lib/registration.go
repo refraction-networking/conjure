@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
+	golog "log"
 	"net"
 	"os"
 	"strings"
@@ -14,6 +14,7 @@ import (
 	"time"
 
 	lt "github.com/refraction-networking/conjure/application/liveness"
+	"github.com/refraction-networking/conjure/application/log"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -88,8 +89,11 @@ type RegistrationManager struct {
 	LivenessTester   lt.LivenessTester
 }
 
+// NewRegistrationManager returns a newly initialized registration Manager
 func NewRegistrationManager() *RegistrationManager {
-	logger := log.New(os.Stdout, "[REG] ", log.Ldate|log.Lmicroseconds)
+
+	logger := log.New(os.Stdout, "[REG] ", golog.Ldate|golog.Lmicroseconds)
+
 	var ult *lt.UncachedLivenessTester = new(lt.UncachedLivenessTester)
 	p, err := NewPhantomIPSelector()
 	if err != nil {
@@ -108,17 +112,7 @@ func NewRegistrationManager() *RegistrationManager {
 // clients register.
 func (regManager *RegistrationManager) AddTransport(index pb.TransportType, t Transport) error {
 	if regManager == nil {
-		logger := log.New(os.Stdout, "[REG] ", log.Ldate|log.Lmicroseconds)
-
-		p, err := NewPhantomIPSelector()
-		if err != nil {
-			return fmt.Errorf("failed to create the PhantomIPSelector object: %v", err)
-		}
-		regManager = &RegistrationManager{
-			Logger:           logger,
-			registeredDecoys: NewRegisteredDecoys(),
-			PhantomSelector:  p,
-		}
+		regManager = NewRegistrationManager()
 	}
 	if regManager.registeredDecoys == nil {
 		regManager.registeredDecoys = NewRegisteredDecoys()
@@ -266,8 +260,9 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 // https://www.usenix.org/system/files/conference/usenixsecurity13/sec13-paper_durumeric.pdf
 //
 // return:	bool	true  - host is live
-// 					false - host is not liev
-//			error	reason decision was made
+//
+//			false - host is not liev
+//	error	reason decision was made
 func (regManager *RegistrationManager) PhantomIsLive(addr string, port uint16) (bool, error) {
 	return regManager.LivenessTester.PhantomIsLive(addr, port)
 }
@@ -291,7 +286,7 @@ type DecoyRegistration struct {
 }
 
 // String -- Print a digest of the important identifying information for this registration.
-//[TODO]{priority:soon} Find a way to add the client IP to this logging for now it is logged
+// [TODO]{priority:soon} Find a way to add the client IP to this logging for now it is logged
 // in the detector associating registrant IP with shared secret.
 func (reg *DecoyRegistration) String() string {
 	if reg == nil {
@@ -349,6 +344,8 @@ func (reg *DecoyRegistration) IDString() string {
 	return string(secret[:regIDLen])
 }
 
+// GenerateClientToStation creates a clientToStation struct. This is used in registration sharing
+// between stations where the station notifies other stations of a registration.
 func (reg *DecoyRegistration) GenerateClientToStation() *pb.ClientToStation {
 	v4 := false
 	if reg.DarkDecoy.To4() != nil {
@@ -373,6 +370,8 @@ func (reg *DecoyRegistration) GenerateClientToStation() *pb.ClientToStation {
 	return initProto
 }
 
+// GenerateC2SWrapper creates a C2SWrapper struct. This is used in registration sharing between
+// stations where the station notifies other stations of a registration.
 func (reg *DecoyRegistration) GenerateC2SWrapper() *pb.C2SWrapper {
 	boolHolder := true
 	c2s := reg.GenerateClientToStation()
@@ -396,6 +395,8 @@ func (reg *DecoyRegistration) GenerateC2SWrapper() *pb.C2SWrapper {
 	return protoPayload
 }
 
+// PreScanned returns true if a regisration has been pre-scanned - i.e scanned by another station
+// before being shared
 func (reg *DecoyRegistration) PreScanned() bool {
 	if reg == nil || reg.Flags == nil {
 		return false
@@ -403,13 +404,14 @@ func (reg *DecoyRegistration) PreScanned() bool {
 	return reg.Flags.GetPrescanned()
 }
 
-// GetRegistrationAddress returns the address that was used to create this
-// registration. This should almost never be used - it exists to get the address
-// for debugging and for logging misbehaving client IPs.
+// GetRegistrationAddress returns the address that was used to create this registration. This should
+// almost never be used - it exists to get the address for debugging and for logging misbehaving
+// client IPs.
 func (reg *DecoyRegistration) GetRegistrationAddress() string {
 	return reg.registrationAddr.String()
 }
 
+// DecoyTimeout contains all fields required to track registration validity / expiration.
 type DecoyTimeout struct {
 	decoy            string
 	identifier       string
@@ -417,6 +419,7 @@ type DecoyTimeout struct {
 	regID            string
 }
 
+// RegisteredDecoys provides a container stuct for tracking all registrations and their expiration.
 type RegisteredDecoys struct {
 	// decoys will be a map from decoy_ip to a:
 	// map from "registration identifier" to registration.
@@ -431,6 +434,7 @@ type RegisteredDecoys struct {
 	m              sync.RWMutex
 }
 
+// NewRegisteredDecoys returns a new struct with which to track registrations.
 func NewRegisteredDecoys() *RegisteredDecoys {
 	return &RegisteredDecoys{
 		decoys:         make(map[string]map[string]*DecoyRegistration),
@@ -439,6 +443,8 @@ func NewRegisteredDecoys() *RegisteredDecoys {
 	}
 }
 
+// Track informs the registered decoys struct of a new registration to track.
+//
 // For use outside of this struct (so there are no data races.)
 func (r *RegisteredDecoys) Track(d *DecoyRegistration) error {
 	r.m.Lock()
@@ -537,6 +543,7 @@ func (r *RegisteredDecoys) getRegistrations(darkDecoyAddr net.IP) map[string]*De
 	return regs
 }
 
+// TotalRegistrations return the total number of current registrations
 func (r *RegisteredDecoys) TotalRegistrations() int {
 	r.m.RLock()
 	defer r.m.RUnlock()

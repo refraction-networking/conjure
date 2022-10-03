@@ -44,6 +44,9 @@ type Config struct {
 
 	// Expiration duration for cached live hosts
 	CacheExpirationTime string `toml:"cache_expiration_time"`
+
+	// Log verbosity level
+	LogLevel string `toml:"log_level"`
 }
 
 // ParseConfig parses the config from the CJ_STATION_CONFIG environment

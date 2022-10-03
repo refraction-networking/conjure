@@ -6,7 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
+	golog "log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -16,11 +16,12 @@ import (
 	"time"
 
 	zmq "github.com/pebbe/zmq4"
-	cj "github.com/refraction-networking/conjure/application/lib"
-	lt "github.com/refraction-networking/conjure/application/liveness"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 
+	cj "github.com/refraction-networking/conjure/application/lib"
+	lt "github.com/refraction-networking/conjure/application/liveness"
+	"github.com/refraction-networking/conjure/application/log"
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
@@ -43,6 +44,7 @@ func getOriginalDst(fd uintptr) (net.IP, error) {
 // NOTE: this is called as a goroutine
 func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) {
 	defer clientConn.Close()
+	logger := sharedLogger
 
 	fd, err := clientConn.File()
 	if err != nil {
@@ -75,7 +77,7 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 	}
 	originalDst = originalDstIP.String()
 	flowDescription := fmt.Sprintf("%s -> %s ", originalSrc, originalDst)
-	logger := log.New(os.Stdout, "[CONN] "+flowDescription, log.Ldate|log.Lmicroseconds)
+	logger = log.New(os.Stdout, "[CONN] "+flowDescription, golog.Ldate|golog.Lmicroseconds)
 
 	count := regManager.CountRegistrations(originalDstIP)
 	logger.Printf("new connection (%d potential registrations)\n", count)
@@ -186,7 +188,7 @@ readLoop:
 }
 
 func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, conf *cj.Config) {
-	logger := log.New(os.Stdout, "[ZMQ] ", log.Ldate|log.Lmicroseconds)
+	logger := log.New(os.Stdout, "[ZMQ] ", golog.Ldate|golog.Lmicroseconds)
 	sub, err := zmq.NewSocket(zmq.SUB)
 	if err != nil {
 		logger.Printf("could not create new ZMQ socket: %v\n", err)
@@ -207,7 +209,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 
 	for {
 
-		newRegs, err := recieve_zmq_message(sub, regManager, conf)
+		newRegs, err := receiveZMQMessage(sub, regManager, conf)
 		if err != nil {
 			logger.Printf("Encountered err when creating Reg: %v\n", err)
 			continue
@@ -309,6 +311,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 }
 
 func tryShareRegistrationOverAPI(reg *cj.DecoyRegistration, apiEndpoint string) {
+	logger := sharedLogger
 	c2a := reg.GenerateC2SWrapper()
 
 	payload, err := proto.Marshal(c2a)
@@ -324,6 +327,7 @@ func tryShareRegistrationOverAPI(reg *cj.DecoyRegistration, apiEndpoint string) 
 }
 
 func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint string) error {
+	logger := sharedLogger
 	resp, err := http.Post(apiEndpoint, "", bytes.NewReader(payload))
 	if err != nil {
 		logger.Printf("%v failed to do HTTP request to registration endpoint %s: %v", reg.IDString(), apiEndpoint, err)
@@ -339,7 +343,7 @@ func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint s
 	return nil
 }
 
-// recieve_zmq_message  ingests messages from zmq and parses them into
+// receiveZMQMessage ingests messages from zmq and parses them into
 // registration structs for the registration manager to process.
 // **NOTE** : Avoid ALL blocking calls (i.e. things that require a lock on the
 // registration tracking structs) in this method because it will block and
@@ -347,9 +351,10 @@ func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint s
 // **NOTE2**: If the registration address is IPv4 we will create registrations
 // for both IPv4 decoy and IPv6 decoy. However, If the client Address from
 // registrations is IPv6 we will only create an ipv6 registration because
-// 		1) we have no client address to match on for ipv4
-//	 	2) the client _should_ support ipv6
-func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, conf *cj.Config) ([]*cj.DecoyRegistration, error) {
+//  1. we have no client address to match on for ipv4
+//  2. the client _should_ support ipv6
+func receiveZMQMessage(sub *zmq.Socket, regManager *cj.RegistrationManager, conf *cj.Config) ([]*cj.DecoyRegistration, error) {
+	logger := sharedLogger
 	msg, err := sub.RecvBytes(0)
 	if err != nil {
 		logger.Printf("error reading from ZMQ socket: %v\n", err)
@@ -413,7 +418,7 @@ func recieve_zmq_message(sub *zmq.Socket, regManager *cj.RegistrationManager, co
 	return newRegs, nil
 }
 
-var logger *log.Logger
+var sharedLogger *log.Logger
 var logClientIP = false
 
 func main() {
@@ -424,7 +429,8 @@ func main() {
 	flag.Parse()
 
 	regManager := cj.NewRegistrationManager()
-	logger = regManager.Logger
+	sharedLogger = regManager.Logger
+	logger := sharedLogger
 
 	// Should we log client IP addresses
 	logClientIP, err = strconv.ParseBool(os.Getenv("LOG_CLIENT_IP"))
@@ -441,6 +447,13 @@ func main() {
 	if err != nil {
 		logger.Fatalf("failed to parse app config: %v", err)
 	}
+
+	// parse & set log level
+	logLevel, err := log.ParseLevel(conf.LogLevel)
+	if err != nil {
+		log.Fatal(err)
+	}
+	regManager.Logger.SetLevel(logLevel)
 
 	if conf.CacheExpirationTime != "" {
 		clt := &lt.CachedLivenessTester{}
