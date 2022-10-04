@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regprocessor"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	log "github.com/sirupsen/logrus"
@@ -27,6 +28,7 @@ type APIRegServer struct {
 	processor        registrar
 	logger           log.FieldLogger
 	logClientIP      bool
+	metrics          *metrics.Metrics
 }
 
 // Get the first element of the X-Forwarded-For header if it is available, this
@@ -75,6 +77,8 @@ func (s *APIRegServer) getC2SFromReq(w http.ResponseWriter, r *http.Request) (*p
 }
 
 func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
+	s.metrics.Add("api_requests_total", 1)
+
 	requestIP := getRemoteAddr(r)
 
 	logFields := log.Fields{"http_method": r.Method, "content_length": r.ContentLength, "registration_type": "unidirectional"}
@@ -115,6 +119,7 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Request) {
+	s.metrics.Add("bdapi_requests_total", 1)
 	requestIP := getRemoteAddr(r)
 
 	logFields := log.Fields{"http_method": r.Method, "content_length": r.ContentLength, "registration_type": "bidirectional"}
@@ -198,6 +203,7 @@ func (s *APIRegServer) compareClientConfGen(genNum uint32) *pb.ClientConf {
 	}
 
 	// Otherwise, return server's client config
+	s.metrics.Add("cc_updated", 1)
 	return s.latestClientConf
 }
 
@@ -233,7 +239,7 @@ func (s *APIRegServer) ListenAndServe() error {
 	return err
 }
 
-func NewAPIRegServer(apiPort uint16, regprocessor *regprocessor.RegProcessor, latestCC *pb.ClientConf, logger log.FieldLogger, logClientIP bool) (*APIRegServer, error) {
+func NewAPIRegServer(apiPort uint16, regprocessor *regprocessor.RegProcessor, latestCC *pb.ClientConf, logger log.FieldLogger, logClientIP bool, metrics *metrics.Metrics) (*APIRegServer, error) {
 	if regprocessor == nil || latestCC == nil || logger == nil {
 		return nil, errors.New("arguments cannot be nil")
 	}
@@ -243,5 +249,6 @@ func NewAPIRegServer(apiPort uint16, regprocessor *regprocessor.RegProcessor, la
 		latestClientConf: latestCC,
 		logger:           logger,
 		logClientIP:      logClientIP,
+		metrics:          metrics,
 	}, nil
 }

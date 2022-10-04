@@ -9,6 +9,7 @@ import (
 
 	zmq "github.com/pebbe/zmq4"
 	"github.com/refraction-networking/conjure/application/lib"
+	"github.com/refraction-networking/conjure/pkg/metrics"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -46,10 +47,11 @@ type RegProcessor struct {
 	zmqMutex   sync.Mutex
 	ipSelector ipSelector
 	sock       zmqSender
+	metrics    *metrics.Metrics
 }
 
 // NewRegProcessor initialize a new RegProcessor
-func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVerbose bool, stationPublicKeys []string) (*RegProcessor, error) {
+func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics) (*RegProcessor, error) {
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, ErrZmqSocket
@@ -77,11 +79,12 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 		zmqMutex:   sync.Mutex{},
 		ipSelector: phantomSelector,
 		sock:       sock,
+		metrics:    metrics,
 	}, nil
 }
 
 // NewRegProcessorNoAuth creates a regprocessor without authentication to zmq address
-func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16) (*RegProcessor, error) {
+func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.Metrics) (*RegProcessor, error) {
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, ErrZmqSocket
@@ -101,6 +104,7 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16) (*RegProcessor, e
 		zmqMutex:   sync.Mutex{},
 		ipSelector: phantomSelector,
 		sock:       sock,
+		metrics:    metrics,
 	}, nil
 }
 
@@ -115,7 +119,7 @@ func (s *RegProcessor) sendToZMQ(message []byte) error {
 
 // RegisterUnidirectional process a unidirectional registration request and publish it to zmq
 func (p *RegProcessor) RegisterUnidirectional(c2sPayload *pb.C2SWrapper, regMethod pb.RegistrationSource, clientAddr []byte) error {
-	zmqPayload, err := processC2SWrapper(c2sPayload, clientAddr, regMethod)
+	zmqPayload, err := p.processC2SWrapper(c2sPayload, clientAddr, regMethod)
 	if err != nil {
 		return err
 	}
@@ -135,7 +139,7 @@ func (p *RegProcessor) RegisterBidirectional(c2sPayload *pb.C2SWrapper, regMetho
 		return nil, err
 	}
 
-	zmqPayload, err := processC2SWrapper(c2sPayload, clientAddr, regMethod)
+	zmqPayload, err := p.processC2SWrapper(c2sPayload, clientAddr, regMethod)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +211,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 }
 
 // processC2SWrapper adds missing variables to the input c2s and returns the payload in format ready to be published to zmq
-func processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr []byte, regMethod pb.RegistrationSource) ([]byte, error) {
+func (p *RegProcessor) processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr []byte, regMethod pb.RegistrationSource) ([]byte, error) {
 	if c2sPayload == nil {
 		return nil, ErrNoC2SBody
 	}
@@ -215,6 +219,8 @@ func processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr []byte, regMethod p
 	if len(c2sPayload.GetSharedSecret()) < RegIDLen/2 {
 		return nil, ErrSharedSecret
 	}
+
+	p.metrics.Add("reg_processed_"+regMethod.String(), 1)
 
 	payload := &pb.C2SWrapper{}
 

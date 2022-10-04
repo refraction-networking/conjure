@@ -3,20 +3,28 @@ package regprocessor
 import (
 	"encoding/binary"
 	"encoding/hex"
-	"log"
 	"net"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
 	zmq "github.com/pebbe/zmq4"
+	"github.com/refraction-networking/conjure/pkg/metrics"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
 	secretHex = []byte(`1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef`)
 	secret    []byte
 )
+
+func newRegProcessor() RegProcessor {
+	return RegProcessor{
+		metrics: metrics.NewMetrics(log.NewEntry(log.StandardLogger()), 5*time.Second),
+	}
+}
 
 func init() {
 	secret = make([]byte, SecretLength)
@@ -61,7 +69,9 @@ func generateC2SWrapperPayload() (c2sPayload *pb.C2SWrapper, c2sPayloadBytes []b
 func TestC2SWrapperProcessing(t *testing.T) {
 	c2sPayload, _ := generateC2SWrapperPayload()
 
-	zmqPayload, err := processC2SWrapper(c2sPayload, []byte(net.ParseIP("127.0.0.1").To16()), pb.RegistrationSource_API)
+	p := newRegProcessor()
+
+	zmqPayload, err := p.processC2SWrapper(c2sPayload, []byte(net.ParseIP("127.0.0.1").To16()), pb.RegistrationSource_API)
 	if err != nil {
 		t.Fatalf("failed to generate ZMQ payload: expected nil, got %v", err)
 	}
@@ -98,7 +108,7 @@ func TestC2SWrapperProcessing(t *testing.T) {
 
 	altSource := pb.RegistrationSource_DetectorPrescan
 	c2sPayload.RegistrationSource = &altSource
-	zmqPayload, err = processC2SWrapper(c2sPayload, []byte(net.ParseIP("127.0.0.1").To16()), pb.RegistrationSource_API)
+	zmqPayload, err = p.processC2SWrapper(c2sPayload, []byte(net.ParseIP("127.0.0.1").To16()), pb.RegistrationSource_API)
 	if err != nil {
 		t.Fatalf("failed to generate ZMQ payload: expected nil, got %v", err)
 	}
@@ -125,9 +135,8 @@ func BenchmarkRegistration(b *testing.B) {
 		log.Fatalln("failed to bind ZMQ socket:", err)
 	}
 
-	s := RegProcessor{
-		sock: sock,
-	}
+	s := newRegProcessor()
+	s.sock = sock
 
 	body, _ := generateC2SWrapperPayload()
 	b.ResetTimer()
@@ -184,9 +193,8 @@ func TestRegisterUnidirectional(t *testing.T) {
 		fakeSend: fakeSendFunc,
 	}
 
-	s := RegProcessor{
-		sock: fakeSender,
-	}
+	s := newRegProcessor()
+	s.sock = fakeSender
 
 	err := s.RegisterUnidirectional(c2sPayload, regSrc, net.ParseIP(updatedIP))
 
@@ -231,9 +239,8 @@ func TestUnspecifiedReg(t *testing.T) {
 		fakeSend: fakeSendFunc,
 	}
 
-	s := RegProcessor{
-		sock: fakeSender,
-	}
+	s := newRegProcessor()
+	s.sock = fakeSender
 
 	err := s.RegisterUnidirectional(c2sPayload, realRegSrc, net.ParseIP(updatedIP))
 
@@ -274,9 +281,8 @@ func TestUpdateIP(t *testing.T) {
 		fakeSend: fakeSendFunc,
 	}
 
-	s := RegProcessor{
-		sock: fakeSender,
-	}
+	s := newRegProcessor()
+	s.sock = fakeSender
 
 	err := s.RegisterUnidirectional(c2sPayload, usedRegSrc, net.ParseIP(updatedIP))
 
@@ -336,10 +342,9 @@ func TestRegisterBidirectional(t *testing.T) {
 		v6Addr: net.ParseIP(fakeV6Phantom),
 	}
 
-	s := RegProcessor{
-		sock:       fakeSender,
-		ipSelector: fakeSelector,
-	}
+	s := newRegProcessor()
+	s.sock = fakeSender
+	s.ipSelector = fakeSelector
 
 	// Client sends to station v4 or v6, shared secret, etc.
 	c2sPayload, _ := generateC2SWrapperPayload() // v4 support

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
+	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regprocessor"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	log "github.com/sirupsen/logrus"
@@ -23,6 +25,13 @@ func init() {
 	_, err := hex.Decode(secret, secretHex)
 	if err != nil {
 		panic(err)
+	}
+}
+
+func newDNSRegServer() DNSRegServer {
+	return DNSRegServer{
+		logger:  log.New(),
+		metrics: metrics.NewMetrics(log.NewEntry(log.StandardLogger()), 5*time.Second),
 	}
 }
 
@@ -84,11 +93,9 @@ func TestBadAccepter(t *testing.T) {
 		return regprocessor.ErrRegProcessFailed
 	}
 
-	s := DNSRegServer{
-		processor: &fakeRegistrar{
-			fakeRegisterUnidirectionalFunc: regFail,
-		},
-		logger: log.New(),
+	s := newDNSRegServer()
+	s.processor = &fakeRegistrar{
+		fakeRegisterUnidirectionalFunc: regFail,
 	}
 
 	_, body := generateC2SWrapperPayload()
@@ -120,11 +127,9 @@ func TestCorrectUnidirectionalDNS(t *testing.T) {
 		return nil
 	}
 
-	s := DNSRegServer{
-		processor: &fakeRegistrar{
-			fakeRegisterUnidirectionalFunc: fakeUniRegFunc,
-		},
-		logger: log.New(),
+	s := newDNSRegServer()
+	s.processor = &fakeRegistrar{
+		fakeRegisterUnidirectionalFunc: fakeUniRegFunc,
 	}
 
 	c2sPayload, _ := generateC2SWrapperPayload()
@@ -172,13 +177,11 @@ func TestCorrectBidirectionalDNS(t *testing.T) {
 		}, nil
 	}
 
-	s := DNSRegServer{
-		processor: &fakeRegistrar{
-			fakeRegisterBidirectionalFunc: fakeBdRegFunc,
-		},
-		latestCCGen: ccGen,
-		logger:      log.New(),
+	s := newDNSRegServer()
+	s.processor = &fakeRegistrar{
+		fakeRegisterBidirectionalFunc: fakeBdRegFunc,
 	}
+	s.latestCCGen = ccGen
 
 	c2sPayload, _ := generateC2SWrapperPayload()
 	regSrc := pb.RegistrationSource_BidirectionalDNS
@@ -244,13 +247,11 @@ func TestCorrectClientConfGen(t *testing.T) {
 		return &pb.RegistrationResponse{}, nil
 	}
 
-	s := DNSRegServer{
-		processor: &fakeRegistrar{
-			fakeRegisterBidirectionalFunc: fakeBdRegFunc,
-		},
-		latestCCGen: ccGenUpToDate,
-		logger:      log.New(),
+	s := newDNSRegServer()
+	s.processor = &fakeRegistrar{
+		fakeRegisterBidirectionalFunc: fakeBdRegFunc,
 	}
+	s.latestCCGen = ccGenUpToDate
 
 	c2sPayload, _ := generateC2SWrapperPayload()
 	regSrc := pb.RegistrationSource_BidirectionalDNS

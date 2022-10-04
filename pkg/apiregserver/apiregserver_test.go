@@ -12,8 +12,10 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	zmq "github.com/pebbe/zmq4"
+	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regprocessor"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	log "github.com/sirupsen/logrus"
@@ -32,6 +34,15 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func newAPIREgServer() APIRegServer {
+	return APIRegServer{
+		logger:      log.New(),
+		logClientIP: true,
+		metrics:     metrics.NewMetrics(log.NewEntry(log.StandardLogger()), 5*time.Second),
+	}
+
 }
 
 func generateC2SWrapperPayload() (c2API *pb.C2SWrapper, marshaledc2API []byte) {
@@ -86,11 +97,7 @@ func (f *fakeRegistrar) RegisterBidirectional(c2sPayload *pb.C2SWrapper, regMeth
 }
 
 func TestIncorrectMethod(t *testing.T) {
-	s := APIRegServer{
-		logger:      log.New(),
-		logClientIP: true,
-	}
-
+	s := newAPIREgServer()
 	r := httptest.NewRequest("GET", "/register", nil)
 	w := httptest.NewRecorder()
 
@@ -130,11 +137,7 @@ func TestParseIP(t *testing.T) {
 }
 
 func TestEmptyBody(t *testing.T) {
-	s := APIRegServer{
-		logger:      log.New(),
-		logClientIP: true,
-	}
-
+	s := newAPIREgServer()
 	r := httptest.NewRequest("POST", "/register", nil)
 	w := httptest.NewRecorder()
 
@@ -152,12 +155,9 @@ func TestBadAccepter(t *testing.T) {
 		return regprocessor.ErrRegProcessFailed
 	}
 
-	s := APIRegServer{
-		processor: &fakeRegistrar{
-			fakeRegisterUnidirectionalFunc: regFail,
-		},
-		logger:      log.New(),
-		logClientIP: true,
+	s := newAPIREgServer()
+	s.processor = &fakeRegistrar{
+		fakeRegisterUnidirectionalFunc: regFail,
 	}
 
 	_, body := generateC2SWrapperPayload()
@@ -203,12 +203,9 @@ func BenchmarkRegistration(b *testing.B) {
 		return nil
 	}
 
-	s := APIRegServer{
-		processor: &fakeRegistrar{
-			fakeRegisterUnidirectionalFunc: regSim,
-		},
-		logger:      log.New(),
-		logClientIP: true,
+	s := newAPIREgServer()
+	s.processor = &fakeRegistrar{
+		fakeRegisterUnidirectionalFunc: regSim,
 	}
 
 	_, body := generateC2SWrapperPayload()
@@ -252,12 +249,9 @@ func TestCorrectUnidirectionalAPI(t *testing.T) {
 		return nil
 	}
 
-	s := APIRegServer{
-		processor: &fakeRegistrar{
-			fakeRegisterUnidirectionalFunc: fakeUniRegFunc,
-		},
-		logger:      log.New(),
-		logClientIP: true,
+	s := newAPIREgServer()
+	s.processor = &fakeRegistrar{
+		fakeRegisterUnidirectionalFunc: fakeUniRegFunc,
 	}
 
 	// Client sends to station v4 or v6, shared secret, etc.
@@ -304,12 +298,9 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 		}, nil
 	}
 
-	s := APIRegServer{
-		processor: &fakeRegistrar{
-			fakeRegisterBidirectionalFunc: fakeBdRegFunc,
-		},
-		logger:      log.New(),
-		logClientIP: true,
+	s := newAPIREgServer()
+	s.processor = &fakeRegistrar{
+		fakeRegisterBidirectionalFunc: fakeBdRegFunc,
 	}
 
 	c2sPayload, _ := generateC2SWrapperPayload()
@@ -379,14 +370,11 @@ func TestBidirectionalAPIClientConf(t *testing.T) {
 		return &pb.RegistrationResponse{}, nil
 	}
 
-	s := APIRegServer{
-		processor: &fakeRegistrar{
-			fakeRegisterBidirectionalFunc: fakeBdRegFunc,
-		},
-		latestClientConf: testCC,
-		logger:           log.New(),
-		logClientIP:      true,
+	s := newAPIREgServer()
+	s.processor = &fakeRegistrar{
+		fakeRegisterBidirectionalFunc: fakeBdRegFunc,
 	}
+	s.latestClientConf = testCC
 
 	// Client sends to station v4 or v6, shared secret, etc.
 	c2sPayload, _ := generateC2SWrapperPayload() // v4 support
@@ -434,11 +422,8 @@ func TestCompareCCGen(t *testing.T) {
 		Generation: &testCCGeneration,
 	}
 
-	s := APIRegServer{
-		latestClientConf: testCC,
-		logger:           log.New(),
-		logClientIP:      true,
-	}
+	s := newAPIREgServer()
+	s.latestClientConf = testCC
 
 	cc := s.compareClientConfGen(testCCGeneration - 1)
 	if cc == nil {

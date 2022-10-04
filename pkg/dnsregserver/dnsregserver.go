@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regprocessor"
 	"github.com/refraction-networking/gotapdance/pkg/dns-registrar/responder"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
@@ -23,10 +24,11 @@ type DNSRegServer struct {
 	processor    registrar
 	latestCCGen  uint32
 	logger       log.FieldLogger
+	metrics      *metrics.Metrics
 }
 
 // NewDNSRegServer creates a new DNSRegServer object.
-func NewDNSRegServer(domain string, udpAddr string, privkey []byte, regprocessor *regprocessor.RegProcessor, latestClientConfGeneration uint32, logger log.FieldLogger) (*DNSRegServer, error) {
+func NewDNSRegServer(domain string, udpAddr string, privkey []byte, regprocessor *regprocessor.RegProcessor, latestClientConfGeneration uint32, logger log.FieldLogger, metrics *metrics.Metrics) (*DNSRegServer, error) {
 
 	if domain == "" || udpAddr == "" || privkey == nil || regprocessor == nil || logger == nil {
 		return nil, errors.New("all arguments must not be nil")
@@ -42,6 +44,7 @@ func NewDNSRegServer(domain string, udpAddr string, privkey []byte, regprocessor
 		processor:    regprocessor,
 		latestCCGen:  latestClientConfGeneration,
 		logger:       logger,
+		metrics:      metrics,
 	}, nil
 }
 
@@ -54,6 +57,8 @@ func (s *DNSRegServer) ListenAndServe() error {
 }
 
 func (s *DNSRegServer) processRequest(reqIn []byte) ([]byte, error) {
+	s.metrics.Add("dns_requests_total", 1)
+
 	c2sPayload := &pb.C2SWrapper{}
 	err := proto.Unmarshal(reqIn, c2sPayload)
 	if err != nil {

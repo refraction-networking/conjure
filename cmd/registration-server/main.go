@@ -6,11 +6,13 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	zmq "github.com/pebbe/zmq4"
 	"github.com/refraction-networking/conjure/pkg/apiregserver"
 	"github.com/refraction-networking/conjure/pkg/dnsregserver"
+	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regprocessor"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	log "github.com/sirupsen/logrus"
@@ -146,13 +148,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	metrics := metrics.NewMetrics(log.NewEntry(log.StandardLogger()), 5*time.Second)
+
 	var processor *regprocessor.RegProcessor
 
 	switch conf.ZMQAuthType {
 	case "CURVE":
-		processor, err = regprocessor.NewRegProcessor(conf.ZMQBindAddr, conf.ZMQPort, zmqPrivkey, conf.ZMQAuthVerbose, conf.StationPublicKeys)
+		processor, err = regprocessor.NewRegProcessor(conf.ZMQBindAddr, conf.ZMQPort, zmqPrivkey, conf.ZMQAuthVerbose, conf.StationPublicKeys, metrics)
 	case "NULL":
-		processor, err = regprocessor.NewRegProcessorNoAuth(conf.ZMQBindAddr, conf.ZMQPort)
+		processor, err = regprocessor.NewRegProcessorNoAuth(conf.ZMQBindAddr, conf.ZMQPort, metrics)
 	default:
 		log.Fatalf("Unknown ZMQ auth type: %s", conf.ZMQAuthType)
 	}
@@ -171,12 +175,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	dnsRegServer, err := dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey, processor, latestClientConf.GetGeneration(), log.WithField("registrar", "DNS"))
+	dnsRegServer, err := dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey, processor, latestClientConf.GetGeneration(), log.WithField("registrar", "DNS"), metrics)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	apiRegServer, err := apiregserver.NewAPIRegServer(conf.APIPort, processor, latestClientConf, log.WithField("registrar", "API"), logClientIP)
+	apiRegServer, err := apiregserver.NewAPIRegServer(conf.APIPort, processor, latestClientConf, log.WithField("registrar", "API"), logClientIP, metrics)
 	if err != nil {
 		log.Fatal(err)
 	}
