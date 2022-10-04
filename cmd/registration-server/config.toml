@@ -10,6 +10,9 @@ dns_private_key_path = "/opt/conjure/sysconfig/privkey"
 # Log level, one of the following: panic, fatal, error, warn, info, debug, trace
 log_level = "info"
 
+# Interval in seconds between every metrics log
+log_metrics_interval = 5
+
 # The port on which to host the API
 api_port = 8080
 
@@ -18,7 +21,7 @@ zmq_port = 5591
 zmq_bind_addr = "*"
 
 # The path on disk to the private key used for the ZMQ socket
-zmq_privkey_path = "/opt/conjure/sysconfig/privkey"
+zmq_privkey_path = "privkey"
 
 # The type of authentication to use on the ZMQ socket.
 # Can be set to "NULL" which allows all connections, or "CURVE"

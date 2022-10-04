@@ -25,18 +25,19 @@ type regServer interface {
 
 // config defines the variables and options from the toml config file
 type config struct {
-	DNSListenAddr     string   `toml:"dns_listen_addr"`
-	Domain            string   `toml:"domain"`
-	DNSPrivkeyPath    string   `toml:"dns_private_key_path"`
-	APIPort           uint16   `toml:"api_port"`
-	ZMQAuthVerbose    bool     `toml:"zmq_auth_verbose"`
-	ZMQAuthType       string   `toml:"zmq_auth_type"`
-	ZMQPort           uint16   `toml:"zmq_port"`
-	ZMQBindAddr       string   `toml:"zmq_bind_addr"`
-	ZMQPrivateKeyPath string   `toml:"zmq_privkey_path"`
-	StationPublicKeys []string `toml:"station_pubkeys"`
-	ClientConfPath    string   `toml:"clientconf_path"`
-	LogLevel          string   `toml:"log_level"`
+	DNSListenAddr      string   `toml:"dns_listen_addr"`
+	Domain             string   `toml:"domain"`
+	DNSPrivkeyPath     string   `toml:"dns_private_key_path"`
+	APIPort            uint16   `toml:"api_port"`
+	ZMQAuthVerbose     bool     `toml:"zmq_auth_verbose"`
+	ZMQAuthType        string   `toml:"zmq_auth_type"`
+	ZMQPort            uint16   `toml:"zmq_port"`
+	ZMQBindAddr        string   `toml:"zmq_bind_addr"`
+	ZMQPrivateKeyPath  string   `toml:"zmq_privkey_path"`
+	StationPublicKeys  []string `toml:"station_pubkeys"`
+	ClientConfPath     string   `toml:"clientconf_path"`
+	LogLevel           string   `toml:"log_level"`
+	LogMetricsInterval uint16   `toml:"log_metrics_interval"`
 }
 
 // parseClientConf parse the latest ClientConf based on path file
@@ -148,7 +149,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	metrics := metrics.NewMetrics(log.NewEntry(log.StandardLogger()), 5*time.Second)
+	metrics := metrics.NewMetrics(log.NewEntry(log.StandardLogger()), time.Duration(conf.LogMetricsInterval)*time.Second)
 
 	var processor *regprocessor.RegProcessor
 
