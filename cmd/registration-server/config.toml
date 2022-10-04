@@ -21,7 +21,7 @@ zmq_port = 5591
 zmq_bind_addr = "*"
 
 # The path on disk to the private key used for the ZMQ socket
-zmq_privkey_path = "privkey"
+zmq_privkey_path = "/opt/conjure/sysconfig/privkey"
 
 # The type of authentication to use on the ZMQ socket.
 # Can be set to "NULL" which allows all connections, or "CURVE"
