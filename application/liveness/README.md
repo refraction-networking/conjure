@@ -19,10 +19,10 @@ To check if an IP address is live in the network, call `PhantomIsLive(addr strin
 
 ## Network Survey Result
 
-|![Scanning Data(3 weeks)](https://raw.githubusercontent.com/kkz13250/conjure_related/main/3_weeks_scanning_plot.png)|
+|![Scanning Data(3 weeks)](../../.github/images/3_weeks_scanning_plot.png)|
 |:--:| 
 | *Survey data for 3 weeks* |
-|![Scanning Data(48 hours)](https://raw.githubusercontent.com/kkz13250/conjure_related/main/48_hours_scanning_plot.png)|
+|![Scanning Data(48 hours)](../../.github/images/48_hours_scanning_plot.png)|
 | *Survey data for first 48 hours* |
 
 Percentages of the number of current live hosts divided by the number of cached
@@ -34,3 +34,8 @@ network over time. Instead, we decided to cache individual IP addresses that are
 timestamp when its liveness status is checked, cached addresses with expired
 timestamp will no longer be considered as live hosts by the module. Expiration
 duration can be set in the config file.
+
+
+## Caching Flow Diagram
+
+![Liveness Cache Flow Diagram](../../.github/images/Cached_Tester_Flowchart.png)
