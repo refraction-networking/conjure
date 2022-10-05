@@ -9,6 +9,7 @@ require (
 	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/go-redis/redis/v8 v8.11.4
 	github.com/gorilla/mux v1.8.0
+	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/mroth/weightedrand v0.4.1
 	github.com/pebbe/zmq4 v1.2.7
 	github.com/pelletier/go-toml v1.9.4
