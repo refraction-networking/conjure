@@ -71,8 +71,8 @@ detector_filter_list = [
     "::1",
 ]
 
-# Log level, one of the following: panic, fatal, error, warn, info, debug, trace
-log_level = "info"
+# Log level, one of the following: info, error, warn, debug, trace
+log_level = "error"
 
 ### ZMQ sockets to connect to and subscribe
 

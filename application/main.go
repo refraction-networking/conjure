@@ -133,18 +133,18 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 readLoop:
 	for {
 		if len(possibleTransports) < 1 {
-			logger.Printf("ran out of possible transports, reading for %v then giving up\n", time.Until(deadline))
+			logger.Warnf("ran out of possible transports, reading for %v then giving up\n", time.Until(deadline))
 			cj.Stat().ConnErr()
 			_, err = io.Copy(io.Discard, clientConn)
 			if err != nil {
-				logger.Println("error occurred discarding data:", err)
+				logger.Errorln("error occurred discarding data:", err)
 			}
 			return
 		}
 
 		n, err := clientConn.Read(buf[:])
 		if err != nil {
-			logger.Printf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len(), err)
+			logger.Errorf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len(), err)
 			cj.Stat().ConnErr()
 			return
 		}
@@ -165,7 +165,7 @@ readLoop:
 				// to wrap the connection, which means received and the connection
 				// may no longer be valid. We should just give up on this connection.
 				d := time.Until(deadline)
-				logger.Printf("got unexpected error from transport %s, sleeping %v then giving up: %v\n", t.Name(), d, err)
+				logger.Warnf("got unexpected error from transport %s, sleeping %v then giving up: %v\n", t.Name(), d, err)
 				cj.Stat().ConnErr()
 				time.Sleep(d)
 				return
@@ -174,11 +174,11 @@ readLoop:
 			// We found our transport! First order of business: disable deadline
 			err = wrapped.SetDeadline(time.Time{})
 			if err != nil {
-				logger.Println("error occurred while setting deadline:", err)
+				logger.Errorln("error occurred while setting deadline:", err)
 			}
 
 			logger.SetPrefix(fmt.Sprintf("[%s] %s ", t.LogPrefix(), reg.IDString()))
-			logger.Printf("registration found {reg_id: %s, phantom: %s, transport: %s}\n", reg.IDString(), originalDstIP, t.Name())
+			logger.Debugf("registration found {reg_id: %s, phantom: %s, transport: %s}\n", reg.IDString(), originalDstIP, t.Name())
 			break readLoop
 		}
 	}
@@ -191,27 +191,27 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 	logger := log.New(os.Stdout, "[ZMQ] ", golog.Ldate|golog.Lmicroseconds)
 	sub, err := zmq.NewSocket(zmq.SUB)
 	if err != nil {
-		logger.Printf("could not create new ZMQ socket: %v\n", err)
+		logger.Errorf("could not create new ZMQ socket: %v\n", err)
 		return
 	}
 	defer sub.Close()
 
 	err = sub.Connect(connectAddr)
 	if err != nil {
-		logger.Println("error connecting to zmq publisher:", err)
+		logger.Errorln("error connecting to zmq publisher:", err)
 	}
 	err = sub.SetSubscribe("")
 	if err != nil {
-		logger.Println("error subscribing to zmq:", err)
+		logger.Errorln("error subscribing to zmq:", err)
 	}
 
-	logger.Printf("ZMQ connected to %v\n", connectAddr)
+	logger.Infof("ZMQ connected to %v\n", connectAddr)
 
 	for {
 
 		newRegs, err := receiveZMQMessage(sub, regManager, conf)
 		if err != nil {
-			logger.Printf("Encountered err when creating Reg: %v\n", err)
+			logger.Errorf("Encountered err when creating Reg: %v\n", err)
 			continue
 		}
 		if len(newRegs) == 0 {
@@ -229,26 +229,26 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 
 				if regManager.RegistrationExists(reg) {
 					// log phantom IP, shared secret, ipv6 support
-					logger.Printf("Duplicate registration: %v %s\n", reg.IDString(), reg.RegistrationSource)
+					logger.Debugf("Duplicate registration: %v %s\n", reg.IDString(), reg.RegistrationSource)
 					cj.Stat().AddDupReg()
 
 					// Track the received registration, if it is already tracked
 					// it will just update the record
 					err := regManager.TrackRegistration(reg)
 					if err != nil {
-						logger.Println("error tracking registration: ", err)
+						logger.Errorln("error tracking registration: ", err)
 						cj.Stat().AddErrReg()
 					}
 					continue
 				}
 
 				// log phantom IP, shared secret, ipv6 support
-				logger.Printf("New registration: %s %v\n", reg.IDString(), reg.String())
+				logger.Debugf("New registration: %s %v\n", reg.IDString(), reg.String())
 
 				// Track the received registration
 				err := regManager.TrackRegistration(reg)
 				if err != nil {
-					logger.Println("error tracking registration: ", err)
+					logger.Errorln("error tracking registration: ", err)
 					cj.Stat().AddErrReg()
 				}
 
@@ -258,7 +258,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 				if covert == "" {
 					// We log client IPs for clients attempting to connect to
 					// blocklisted covert addresses.
-					logger.Printf("Dropping reg, malformed or blocklisted covert: %v, %s -> %s", reg.IDString(), reg.GetRegistrationAddress(), reg.Covert)
+					logger.Infof("Dropping reg, malformed or blocklisted covert: %v, %s -> %s", reg.IDString(), reg.GetRegistrationAddress(), reg.Covert)
 					cj.Stat().AddErrReg()
 					continue
 				}
@@ -276,7 +276,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					liveness, response := regManager.PhantomIsLive(reg.DarkDecoy.String(), 443)
 
 					if liveness {
-						logger.Printf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
+						logger.Warnf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
 						if response.Error() == lt.CACHED_PHANTOM_MSG {
 							cj.Stat().AddLivenessCached()
 						}
@@ -295,14 +295,14 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					// Note: Phantom blocklist is applied at this stage because the phantom may only be blocked on this
 					// station. We may want other stations to be informed about the registration, but prevent this station
 					// specifically from handling / interfering in any subsequent connection. See PR #75
-					logger.Printf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
+					logger.Warnf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
 					cj.Stat().AddErrReg()
 					continue
 				}
 
 				// validate the registration
 				regManager.AddRegistration(reg)
-				logger.Printf("Adding registration %v\n", reg.IDString())
+				logger.Debugf("Adding registration %v\n", reg.IDString())
 				cj.Stat().AddReg(reg.DecoyListVersion, reg.RegistrationSource)
 			}
 		}()

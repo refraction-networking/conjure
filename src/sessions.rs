@@ -289,7 +289,7 @@ impl SessionTracker {
         // Get rid of writable reference to map.
         drop(mmap);
 
-        debug!("Added registered ip {} from redis", session);
+        // debug!("Added registered ip {} from redis", session);
     }
 
     // explicitly used for testing
@@ -383,7 +383,7 @@ fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u64>>>) {
         // when they fall out of scope but this is more clear.)
         drop(mmap);
 
-        debug!("Added registered ip {} from redis", sd);
+        // debug!("Added registered ip {} from redis", sd);
     }
 }
 
