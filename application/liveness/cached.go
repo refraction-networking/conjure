@@ -24,7 +24,7 @@ type cacheElement struct {
 // PhantomIsLive will check historical results first before using the network to
 // determine phantom liveness.
 type CachedLivenessTester struct {
-	ipCache             map[string]cacheElement
+	ipCache             map[string]*cacheElement
 	lru                 *lru.Cache
 	lruSize             int
 	signal              chan bool
@@ -50,7 +50,7 @@ func (blt *CachedLivenessTester) Init(expirationTime string) error {
 		return err
 	}
 
-	blt.ipCache = make(map[string]cacheElement)
+	blt.ipCache = make(map[string]*cacheElement)
 	blt.signal = make(chan bool)
 	blt.lru = lruCache
 
@@ -124,9 +124,10 @@ func (blt *CachedLivenessTester) PeriodicScan(t string) {
 						defer blt.m.Unlock()
 
 						if _, ok := blt.ipCache[ip[0]]; !ok {
-							var val cacheElement
-							val.isLive = true
-							val.cachedTime = time.Now()
+							var val = &cacheElement{
+								isLive:     true,
+								cachedTime: time.Now(),
+							}
 							blt.ipCache[ip[0]] = val
 							_, err := f.WriteString(ip[0] + "/32" + "\n")
 							if err != nil {
@@ -185,9 +186,10 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 		blt.m.Lock()
 		defer blt.m.Unlock()
 
-		var val cacheElement
-		val.isLive = isLive
-		val.cachedTime = time.Now()
+		var val = &cacheElement{
+			isLive:     isLive,
+			cachedTime: time.Now(),
+		}
 		blt.ipCache[addr] = val
 
 		// add the address to the LRU cache - potentially evicting an entry

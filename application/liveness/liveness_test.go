@@ -86,8 +86,8 @@ func TestCachedLiveness(t *testing.T) {
 	if liveness != false {
 		t.Fatalf("Host is NOT live, detected as live: %v\n", response)
 	}
-	if status, ok := clt.ipCache["192.0.0.2"]; !ok || status.isLive != false {
-		t.Fatalf("Host is NOT live, but cached as live")
+	if status, ok := clt.ipCache["192.0.0.2"]; ok || status != nil {
+		t.Fatalf("Non-live host present in cache")
 	}
 
 	liveness, response = clt.PhantomIsLive("2606:4700:4700::64", 443)
