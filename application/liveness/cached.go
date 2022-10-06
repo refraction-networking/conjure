@@ -11,6 +11,13 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/refraction-networking/conjure/application/log"
+)
+
+const (
+
+	// CachedPhantomMessage provides a constant expected error returned for cached liveness hits
+	CachedPhantomMessage = "cached live host"
 )
 
 const defaultSizeLRU = 100000
@@ -30,6 +37,7 @@ type CachedLivenessTester struct {
 	signal              chan bool
 	cacheExpirationTime time.Duration
 	m                   sync.RWMutex
+	*stats
 }
 
 // Init parses cache expiry duration and initializes the Cache.
@@ -173,6 +181,9 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 		blt.m.Lock()
 		defer blt.m.Unlock()
 
+		// add to stats
+		blt.stats.incCached()
+
 		// refresh this address in the LRU cache
 		blt.lru.Add(addr, struct{}{})
 		return live, err
@@ -192,8 +203,15 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 		}
 		blt.ipCache[addr] = val
 
+		// add to stats
+		blt.stats.incFail()
+
 		// add the address to the LRU cache - potentially evicting an entry
 		blt.lru.Add(addr, struct{}{})
+	} else {
+		// add to stats
+		blt.stats.incPass()
+
 	}
 
 	return isLive, err
@@ -206,9 +224,26 @@ func (blt *CachedLivenessTester) phantomLookup(addr string, port uint16) (bool, 
 	if status, ok := blt.ipCache[addr]; ok {
 		if time.Since(status.cachedTime) < blt.cacheExpirationTime {
 			if status.isLive {
-				return true, fmt.Errorf(CACHED_PHANTOM_MSG)
+				return true, fmt.Errorf(CachedPhantomMessage)
 			}
 		}
 	}
 	return false, nil
+}
+
+// PrintStats extends the Liveness testing Stats interface to add logging for the cache capacity
+func (blt *CachedLivenessTester) PrintStats(logger *log.Logger) {
+	s := blt.stats
+	defer s.m.RUnlock()
+	epochDur := time.Since(s.epochStart).Milliseconds()
+	log.Infof("liveness-stats: %d (%f/s) valid %d (%f/s) live %d (%f/s) cached, capacity:%d/%d",
+		s.newLivenessPass,
+		float64(s.newLivenessPass)/float64(epochDur)*1000,
+		s.newLivenessFail,
+		float64(s.newLivenessFail)/float64(epochDur)*1000,
+		s.newLivenessCached,
+		float64(s.newLivenessCached)/float64(epochDur)*1000,
+		len(blt.ipCache),
+		blt.lruSize,
+	)
 }

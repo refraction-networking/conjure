@@ -13,8 +13,9 @@ import (
 	"sync"
 	"time"
 
-	lt "github.com/refraction-networking/conjure/application/liveness"
+	"github.com/refraction-networking/conjure/application/liveness"
 	"github.com/refraction-networking/conjure/application/log"
+
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -86,7 +87,7 @@ type RegistrationManager struct {
 	registeredDecoys *RegisteredDecoys
 	Logger           *log.Logger
 	PhantomSelector  *PhantomIPSelector
-	LivenessTester   lt.LivenessTester
+	LivenessTester   liveness.Tester
 }
 
 // NewRegistrationManager returns a newly initialized registration Manager
@@ -94,7 +95,7 @@ func NewRegistrationManager() *RegistrationManager {
 
 	logger := log.New(os.Stdout, "[REG] ", golog.Ldate|golog.Lmicroseconds)
 
-	var ult *lt.UncachedLivenessTester = new(lt.UncachedLivenessTester)
+	var ult *liveness.UncachedLivenessTester = new(liveness.UncachedLivenessTester)
 	p, err := NewPhantomIPSelector()
 	if err != nil {
 		// fmt.Errorf("failed to create the PhantomIPSelector object: %v", err)

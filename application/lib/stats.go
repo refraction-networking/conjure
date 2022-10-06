@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/refraction-networking/conjure/application/liveness"
 	"github.com/refraction-networking/conjure/application/log"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
@@ -28,15 +29,17 @@ type Stats struct {
 	newErrRegistrations     int64 // number of registrations that had some kinda error
 	newDupRegistrations     int64 // number of duplicate registrations (doesn't uniquify, so might have some double counting)
 
-	newLivenessPass   int64 // Liveness tests that passed (non-live phantom) since reset()
-	newLivenessFail   int64 // Liveness tests that failed (live phantom) since reset()
-	newLivenessCached int64 // Liveness tests that failed because they were in cache since reset(). Also counted in newLivenessFail
-
 	genMutex    *sync.Mutex      // Lock for generations map
 	generations map[uint32]int64 // Map from ClientConf generation to number of registrations we saw using it
 
 	newBytesUp   int64 // TODO: need to redo halfPipe to make this not really jumpy
 	newBytesDown int64 // ditto
+
+	livenessStats liveness.Stats
+	// TODO JMWAMPLE REMOVE
+	newLivenessPass   int64 // Liveness tests that passed (non-live phantom) since reset()
+	newLivenessFail   int64 // Liveness tests that failed (live phantom) since reset()
+	newLivenessCached int64 // Liveness tests that failed because they were in cache since reset(). Also counted in newLivenessFail
 }
 
 var statInstance Stats
@@ -84,6 +87,12 @@ func (s *Stats) Reset() {
 }
 
 func (s *Stats) PrintStats() {
+
+	if s.livenessStats != nil {
+		s.livenessStats.PrintStats(s.logger)
+		s.livenessStats.Reset()
+	}
+
 	s.logger.Infof("Conns: %d cur %d new %d err Regs: %d cur %d new (%d local %d API %d shared %d unknown) %d miss %d err %d dup LiveT: %d valid %d live %d cached Byte: %d up %d down",
 		atomic.LoadInt64(&s.activeConns), atomic.LoadInt64(&s.newConns), atomic.LoadInt64(&s.newErrConns),
 		atomic.LoadInt64(&s.activeRegistrations),
@@ -94,6 +103,12 @@ func (s *Stats) PrintStats() {
 		atomic.LoadInt64(&s.newLivenessPass), atomic.LoadInt64(&s.newLivenessFail), atomic.LoadInt64(&s.newLivenessCached),
 		atomic.LoadInt64(&s.newBytesUp), atomic.LoadInt64(&s.newBytesDown))
 	s.Reset()
+}
+
+func (s *Stats) SetLivenessStats(ls liveness.Stats) {
+	if s != nil {
+		s.livenessStats = ls
+	}
 }
 
 func (s *Stats) AddConn() {

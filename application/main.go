@@ -275,9 +275,10 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					// New registration received over channel that requires liveness scan for the phantom
 					liveness, response := regManager.PhantomIsLive(reg.DarkDecoy.String(), 443)
 
+					// TODO JMWAMPLE remove this
 					if liveness {
 						logger.Warnf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
-						if response.Error() == lt.CACHED_PHANTOM_MSG {
+						if response.Error() == lt.CachedPhantomMessage {
 							cj.Stat().AddLivenessCached()
 						}
 						cj.Stat().AddLivenessFail()
@@ -455,6 +456,7 @@ func main() {
 	}
 	regManager.Logger.SetLevel(logLevel)
 
+	// If CacheExpirationTime is set enable the Cached liveness tester.
 	if conf.CacheExpirationTime != "" {
 		clt := &lt.CachedLivenessTester{}
 		err = clt.Init(conf.CacheExpirationTime)
@@ -463,6 +465,7 @@ func main() {
 		}
 		regManager.LivenessTester = clt
 	}
+	cj.Stat().SetLivenessStats(regManager.LivenessTester)
 
 	// Launch local ZMQ proxy
 	go cj.ZMQProxy(conf.ZMQConfig)
