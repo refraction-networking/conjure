@@ -23,6 +23,26 @@ type Stats interface {
 	Reset()
 }
 
+// Config provides all params relating to liveness testing construction
+type Config struct {
+	CacheDuration string
+}
+
+// New provides a builder for the proper tester based on config.
+func New(c *Config) (Tester, error) {
+	if c.CacheDuration == "" {
+		return &UncachedLivenessTester{
+			stats: &stats{},
+		}, nil
+	}
+
+	clt := &CachedLivenessTester{
+		stats: &stats{},
+	}
+	err := clt.Init(c.CacheDuration)
+	return clt, err
+}
+
 func phantomIsLive(address string) (bool, error) {
 
 	width := 4

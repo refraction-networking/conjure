@@ -47,7 +47,8 @@ func TestStop(t *testing.T) {
 
 func TestUncachedLiveness(t *testing.T) {
 
-	ult := UncachedLivenessTester{}
+	ult, err := New(&Config{})
+	require.Nil(t, err)
 
 	liveness, response := ult.PhantomIsLive("1.1.1.1.", 80)
 
@@ -67,12 +68,11 @@ func TestUncachedLiveness(t *testing.T) {
 }
 
 func TestCachedLiveness(t *testing.T) {
-
-	clt := CachedLivenessTester{}
-	err := clt.Init("1h")
-	if err != nil {
-		t.Fatalf("failed to init cached liveness tester: %s", err)
+	clt := CachedLivenessTester{
+		stats: &stats{},
 	}
+	err := clt.Init("1h")
+	require.Nil(t, err)
 
 	liveness, response := clt.PhantomIsLive("1.1.1.1.", 80)
 	if liveness != true {
@@ -124,11 +124,8 @@ func TestCachedLivenessThreaded(t *testing.T) {
 	failed := false
 	var wg sync.WaitGroup
 
-	clt := CachedLivenessTester{}
-	err := clt.Init("1h")
-	if err != nil {
-		t.Fatalf("failed to init cached liveness tester: %s", err)
-	}
+	clt, err := New(&Config{CacheDuration: "1h"})
+	require.Nil(t, err)
 
 	for i := 0; i < iterations; i++ {
 		wg.Add(1)
@@ -153,6 +150,7 @@ func TestCachedLivenessThreaded(t *testing.T) {
 func TestCachedLivenessLRU(t *testing.T) {
 	clt := CachedLivenessTester{
 		lruSize: 3,
+		stats:   &stats{},
 	}
 	err := clt.Init("1h")
 	require.Nil(t, err)

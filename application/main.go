@@ -458,8 +458,7 @@ func main() {
 
 	// If CacheExpirationTime is set enable the Cached liveness tester.
 	if conf.CacheExpirationTime != "" {
-		clt := &lt.CachedLivenessTester{}
-		err = clt.Init(conf.CacheExpirationTime)
+		clt, err := lt.New(&lt.Config{CacheDuration: conf.CacheExpirationTime})
 		if err != nil {
 			logger.Fatal(err)
 		}

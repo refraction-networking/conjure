@@ -95,7 +95,11 @@ func NewRegistrationManager() *RegistrationManager {
 
 	logger := log.New(os.Stdout, "[REG] ", golog.Ldate|golog.Lmicroseconds)
 
-	var ult *liveness.UncachedLivenessTester = new(liveness.UncachedLivenessTester)
+	ult, err := liveness.New(&liveness.Config{})
+	if err != nil {
+		return nil
+	}
+
 	p, err := NewPhantomIPSelector()
 	if err != nil {
 		// fmt.Errorf("failed to create the PhantomIPSelector object: %v", err)

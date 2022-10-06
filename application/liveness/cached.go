@@ -167,7 +167,7 @@ func (blt *CachedLivenessTester) PeriodicScan(t string) {
 	}
 }
 
-// PhantomIsLive first checks the cached set of addressses for a fresh entry.
+// PhantomIsLive first checks the cached set of addresses for a fresh entry.
 // If one is available and the host was measured to be live this is returned
 // immediately and no network probes are sent. If the host was measured not
 // live, the entry is stale, or there is no entry then network probes are sent
