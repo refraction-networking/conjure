@@ -268,7 +268,7 @@ func GetProxyStats() *ProxyStats {
 
 // getProxyStats returns our singleton for proxy stats
 func getProxyStats() *ProxyStats {
-	statsOnce.Do(initProxyStats)
+	proxyStatsOnce.Do(initProxyStats)
 	return &proxyStatsInstance
 }
 
