@@ -12,6 +12,13 @@ import (
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
+type stats interface {
+	// PrintAndReset is intended to allow each stats module to summarize metrics
+	// from the current epoch out through the logger and then reset any stats
+	// that need reset as the start of a new epoch.
+	PrintAndReset(logger *log.Logger)
+}
+
 // Stats contains counts of many things we want to keep track of in any given epoch
 // as well as reference to modular metrics interfaces from related modules. These
 // are used to print usage in a regulated and consumable way.
@@ -19,28 +26,32 @@ import (
 // fields are int64 because we occasionally need to atomically subtract, which is
 // not supported for uint64
 type Stats struct {
-	logger      *log.Logger
+	logger *log.Logger
+
+	connStats   stats
 	activeConns int64 // incremented on add, decremented on remove, not reset
 	newConns    int64 // new connections since last stats.reset()
 	newErrConns int64 // new connections that had some sort of error since last reset()
 
-	activeRegistrations     int64 // Current number of active registrations we have (marked valid - no error in validation i.e. bad phantom, bad covert, live phantom)
-	newLocalRegistrations   int64 // Current registrations that were picked up from this detector (also included in newRegistrations)
-	newApiRegistrations     int64 // Current registrations that we heard about from the API (also included in newRegistrations)
-	newSharedRegistrations  int64 // Current registrations that we heard about from the API sharing system (also included in newRegistrations)
-	newUnknownRegistrations int64 // Current registrations that we heard about with unknown source (also included in newRegistrations)a
-	newRegistrations        int64 // Added valid registrations since last reset() - non valid registrations should be counted entirely in newErrRegistrations
-	newMissedRegistrations  int64 // number of "missed" registrations (as seen by a connection with no registration)
-	newErrRegistrations     int64 // number of registrations that had some kinda error
-	newDupRegistrations     int64 // number of duplicate registrations (doesn't uniquify, so might have some double counting)
+	registrationStats       stats
+	activeRegistrations     int64            // Current number of active registrations we have (marked valid - no error in validation i.e. bad phantom, bad covert, live phantom)
+	newLocalRegistrations   int64            // Current registrations that were picked up from this detector (also included in newRegistrations)
+	newApiRegistrations     int64            // Current registrations that we heard about from the API (also included in newRegistrations)
+	newSharedRegistrations  int64            // Current registrations that we heard about from the API sharing system (also included in newRegistrations)
+	newUnknownRegistrations int64            // Current registrations that we heard about with unknown source (also included in newRegistrations)a
+	newRegistrations        int64            // Added valid registrations since last reset() - non valid registrations should be counted entirely in newErrRegistrations
+	newMissedRegistrations  int64            // number of "missed" registrations (as seen by a connection with no registration)
+	newErrRegistrations     int64            // number of registrations that had some kinda error
+	newDupRegistrations     int64            // number of duplicate registrations (doesn't uniquify, so might have some double counting)
+	genMutex                *sync.Mutex      // Lock for generations map
+	generations             map[uint32]int64 // Map from ClientConf generation to number of registrations we saw using it
 
-	genMutex    *sync.Mutex      // Lock for generations map
-	generations map[uint32]int64 // Map from ClientConf generation to number of registrations we saw using it
-
+	proxyStats stats
+	// TODO JMWAMPLE REMOVE
 	newBytesUp   int64 // TODO: need to redo halfPipe to make this not really jumpy
 	newBytesDown int64 // ditto
 
-	livenessStats liveness.Stats
+	livenessStats stats
 	// TODO JMWAMPLE REMOVE
 	newLivenessPass   int64 // Liveness tests that passed (non-live phantom) since reset()
 	newLivenessFail   int64 // Liveness tests that failed (live phantom) since reset()
@@ -91,10 +102,24 @@ func (s *Stats) Reset() {
 	atomic.StoreInt64(&s.newBytesDown, 0)
 }
 
-func (s *Stats) PrintStats() {
-
+func (s *Stats) ResetAll() {
 	if s.livenessStats != nil {
 		s.livenessStats.PrintAndReset(s.logger)
+	}
+	s.Reset()
+}
+
+func (s *Stats) PrintStats() {
+	statsModules := []stats{
+		s.livenessStats,
+		s.connStats,
+		s.registrationStats,
+		s.proxyStats,
+	}
+	for _, module := range statsModules {
+		if module != nil {
+			module.PrintAndReset(s.logger)
+		}
 	}
 
 	s.logger.Infof("Conns: %d cur %d new %d err Regs: %d cur %d new (%d local %d API %d shared %d unknown) %d miss %d err %d dup LiveT: %d valid %d live %d cached Byte: %d up %d down",
@@ -110,8 +135,14 @@ func (s *Stats) PrintStats() {
 }
 
 func (s *Stats) SetLivenessStats(ls liveness.Stats) {
-	if s != nil {
+	if ls != nil {
 		s.livenessStats = ls
+	}
+}
+
+func (s *Stats) SetProxyStats(ps stats) {
+	if ps != nil {
+		s.proxyStats = ps
 	}
 }
 

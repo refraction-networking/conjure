@@ -8,9 +8,10 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	log "github.com/refraction-networking/conjure/application/log"
+	"github.com/refraction-networking/conjure/application/log"
 )
 
 type sessionStats struct {
@@ -29,6 +30,7 @@ func halfPipe(src, dst net.Conn,
 	tag string) {
 
 	var proxyStartTime = time.Now()
+	isUpload := strings.HasPrefix(tag, "Up")
 
 	// using io.CopyBuffer doesn't let us see
 	// bytes / second (until very end of connect, then only avg)
@@ -59,7 +61,8 @@ func halfPipe(src, dst net.Conn,
 				nw, ew := dst.Write(buf[0:nr])
 				totWritten += int64(nw)
 				// Update stats:
-				if strings.HasPrefix(tag, "Up") {
+				getProxyStats().addBytes(int64(nw), isUpload)
+				if isUpload {
 					Stat().AddBytesUp(int64(nw))
 				} else {
 					Stat().AddBytesDown(int64(nw))
@@ -118,16 +121,13 @@ func halfPipe(src, dst net.Conn,
 	if err != nil {
 		stats.Err = err.Error()
 	}
-	statsStr, _ := json.Marshal(stats)
-	logger.Printf("stopping forwarding %s", statsStr)
-	//TODO JMWAMPLE IS THIS REQUIRED
-	/*
-		if strings.HasPrefix(tag, "Up") {
-			Stat().AddBytesUp(written)
-		} else {
-			Stat().AddBytesDown(written)
-		}*/
 
+	getProxyStats().addCompleted(stats.Written, isUpload)
+
+	if stats.Written != 0 {
+		statsStr, _ := json.Marshal(stats)
+		logger.Printf("stopping forwarding %s", statsStr)
+	}
 	wg.Done()
 }
 
@@ -174,6 +174,102 @@ func writePROXYHeader(conn net.Conn, originalIPPort string) error {
 	proxyHeader := fmt.Sprintf("PROXY %s %s 127.0.0.1 %s 1234\r\n", transportProtocol, host, port)
 	_, err = conn.Write([]byte(proxyHeader))
 	return err
+}
+
+// ProxyStats track metrics about byte transfer.
+type ProxyStats struct {
+	sync.RWMutex
+	time.Time // epoch start time
+
+	newBytesUp   int64 // Number of bytes transferred during epoch
+	newBytesDown int64 // Number of bytes transferred during epoch
+
+	completeBytesUp   int64 // number of bytes transferred through completed connections UP
+	completeBytesDown int64 // number of bytes transferred through completed connections DOWN
+
+	zeroByteTunnelsUp   int64 // number of closed tunnels that uploaded 0 bytes
+	zeroByteTunnelsDown int64 // number of closed tunnels that downloaded 0 bytes
+	completedSessions   int64 // number of completed sessions
+}
+
+// PrintAndReset implements the stats interface
+func (s *ProxyStats) PrintAndReset(logger *log.Logger) {
+	s.RLock()
+	defer s.RUnlock()
+	s.printStats(logger)
+	s.reset()
+}
+
+func (s *ProxyStats) printStats(logger *log.Logger) {
+	epochDur := time.Since(s.Time).Milliseconds()
+	// fmtStr := "proxy-stats: %d (%f/s) up %d (%f/s) down %d completed %d 0up %d 0down  %f avg-non-0-up, %f avg-non-0-down"
+	fmtStr := "proxy-stats: %d %f %d %f %d %d %d %f %f"
+
+	logger.Infof(fmtStr,
+		s.newBytesUp,
+		float64(s.newBytesUp)/float64(epochDur)*1000,
+		s.newBytesDown,
+		float64(s.newBytesDown)/float64(epochDur)*1000,
+		s.completedSessions,
+		s.zeroByteTunnelsUp,
+		s.zeroByteTunnelsDown,
+		float64(s.completeBytesUp)/float64(s.completedSessions-s.zeroByteTunnelsUp),
+		float64(s.completeBytesDown)/float64(s.completedSessions-s.zeroByteTunnelsDown),
+	)
+}
+
+func (s *ProxyStats) reset() {
+	atomic.StoreInt64(&s.newBytesUp, 0)
+	atomic.StoreInt64(&s.newBytesDown, 0)
+	atomic.StoreInt64(&s.completeBytesUp, 0)
+	atomic.StoreInt64(&s.completeBytesDown, 0)
+	atomic.StoreInt64(&s.zeroByteTunnelsUp, 0)
+	atomic.StoreInt64(&s.zeroByteTunnelsDown, 0)
+	atomic.StoreInt64(&s.completedSessions, 0)
+}
+
+func (s *ProxyStats) addCompleted(nb int64, isUpload bool) {
+	if isUpload {
+		atomic.AddInt64(&s.completeBytesUp, nb)
+		if nb == 0 {
+			atomic.AddInt64(&s.zeroByteTunnelsUp, 1)
+		}
+
+		// Only add to session count on closed upload stream to prevent double count
+		atomic.AddInt64(&s.completedSessions, 1)
+	} else {
+		atomic.AddInt64(&s.completeBytesDown, nb)
+		if nb == 0 {
+			atomic.AddInt64(&s.zeroByteTunnelsDown, 1)
+		}
+	}
+
+}
+
+func (s *ProxyStats) addBytes(nb int64, isUpload bool) {
+	if isUpload {
+		atomic.AddInt64(&s.newBytesUp, nb)
+	} else {
+		atomic.AddInt64(&s.newBytesDown, nb)
+	}
+}
+
+var proxyStatsInstance ProxyStats
+var proxyStatsOnce sync.Once
+
+func initProxyStats() {
+	proxyStatsInstance = ProxyStats{}
+}
+
+// GetProxyStats returns our singleton for proxy stats
+func GetProxyStats() *ProxyStats {
+	return getProxyStats()
+}
+
+// getProxyStats returns our singleton for proxy stats
+func getProxyStats() *ProxyStats {
+	statsOnce.Do(initProxyStats)
+	return &proxyStatsInstance
 }
 
 // // ProxyFactory returns an internal proxy

@@ -465,6 +465,7 @@ func main() {
 		regManager.LivenessTester = clt
 	}
 	cj.Stat().SetLivenessStats(regManager.LivenessTester)
+	cj.Stat().SetProxyStats(cj.GetProxyStats())
 
 	// Launch local ZMQ proxy
 	go cj.ZMQProxy(conf.ZMQConfig)
