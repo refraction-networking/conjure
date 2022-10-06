@@ -11,7 +11,8 @@ import (
 )
 
 // To run the measuremest commands set the environment variable when running go test
-//     $ MEASUREMENTS=1 go test -v
+//
+//	$ MEASUREMENTS=1 go test -v
 func TestBasic(t *testing.T) {
 	if os.Getenv("MEASUREMENTS") != "1" {
 		t.Skip("skiping long running measurement based tests")
@@ -28,7 +29,8 @@ func TestBasic(t *testing.T) {
 }
 
 // To run the measuremest commands set the environment variable when running go test
-//     $ MEASUREMENTS=1 go test -v
+//
+//	$ MEASUREMENTS=1 go test -v
 func TestStop(t *testing.T) {
 	if os.Getenv("MEASUREMENTS") != "1" {
 		t.Skip("skiping long running measurement based tests")
@@ -84,8 +86,8 @@ func TestCachedLiveness(t *testing.T) {
 	if liveness != false {
 		t.Fatalf("Host is NOT live, detected as live: %v\n", response)
 	}
-	if status, ok := clt.ipCache["192.0.0.2"]; !ok || status.isLive != false {
-		t.Fatalf("Host is NOT live, but cached as live")
+	if status, ok := clt.ipCache["192.0.0.2"]; ok || status != nil {
+		t.Fatalf("Non-live host present in cache")
 	}
 
 	liveness, response = clt.PhantomIsLive("2606:4700:4700::64", 443)
@@ -108,7 +110,7 @@ func TestCachedLiveness(t *testing.T) {
 
 func TestCachedLivenessThreaded(t *testing.T) {
 
-	test_cases := [...]struct {
+	testCases := [...]struct {
 		address  string
 		port     uint16
 		expected bool
@@ -132,7 +134,7 @@ func TestCachedLivenessThreaded(t *testing.T) {
 		wg.Add(1)
 
 		go func(j int) {
-			test := test_cases[j%len(test_cases)]
+			test := testCases[j%len(testCases)]
 			liveness, response := clt.PhantomIsLive(test.address, test.port)
 			if liveness != test.expected {
 				t.Logf("%s:%d -> %v (expected %v)\n", test.address, test.port, response, test.expected)
@@ -146,4 +148,39 @@ func TestCachedLivenessThreaded(t *testing.T) {
 	if failed {
 		t.Fatalf("failed")
 	}
+}
+
+func TestCachedLivenessLRU(t *testing.T) {
+	clt := CachedLivenessTester{
+		lruSize: 3,
+	}
+	err := clt.Init("1h")
+	require.Nil(t, err)
+
+	// Our three test cases are public DNS servers that implement DoH and DoT so
+	// they should always have TCP 443 listening (Live). This test ensures that
+	// even if we have 4 live hosts only 3 end up in the cache due to the set
+	// LRU capacity constraint. We also test that the LRU gets refreshed for a
+	// key when an address is seen a second time.
+	testCases := [...]struct {
+		address string
+		port    uint16
+	}{
+		{"8.8.8.8", 443},
+		{"8.8.4.4", 443},
+		{"1.1.1.1", 443},
+		{"1.0.0.1", 443},
+		{"8.8.4.4", 443},
+	}
+
+	for _, test := range testCases {
+		liveness, _ := clt.PhantomIsLive(test.address, test.port)
+		require.True(t, liveness, "received not live for: %s", test.address)
+	}
+
+	require.Equal(t, 3, len(clt.ipCache), "Incorrect number of entries in cache")
+
+	oldest, _, ok := clt.lru.RemoveOldest()
+	require.True(t, ok)
+	require.Equal(t, "1.1.1.1", oldest.(string))
 }
