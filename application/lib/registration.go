@@ -227,7 +227,7 @@ func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 	darkDecoyAddr := d.DarkDecoy.String()
 	err := regManager.registeredDecoys.register(darkDecoyAddr, d)
 	if err != nil {
-		regManager.Logger.Printf("Error registering decoy: %s", err)
+		regManager.Logger.Errorf("Error registering decoy: %s", err)
 	}
 }
 
@@ -675,7 +675,7 @@ func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
 func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 	var expiredRegTimeoutIndices = r.getExpiredRegistrations()
 
-	logger.Printf("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
+	logger.Infof("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
 		r.TotalRegistrations(), len(r.decoysTimeouts), len(expiredRegTimeoutIndices))
 
 	for _, idx := range expiredRegTimeoutIndices {
@@ -684,6 +684,7 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
 		if stats != nil {
 			statsStr, _ := json.Marshal(stats)
 			logger.Printf("expired registration %s", statsStr)
+			// TODO JMWAMPLE LOG SESSIONS WITH NON-ZERO TRANSFER, COUNT OF ZERO
 		}
 	}
 }

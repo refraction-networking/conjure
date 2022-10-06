@@ -48,7 +48,7 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 
 	fd, err := clientConn.File()
 	if err != nil {
-		logger.Println("failed to get file descriptor on clientConn:", err)
+		logger.Errorln("failed to get file descriptor on clientConn:", err)
 		return
 	}
 
@@ -56,7 +56,7 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 	fdPtr := fd.Fd()
 	originalDstIP, err := getOriginalDst(fdPtr)
 	if err != nil {
-		logger.Println("failed to getOriginalDst from fd:", err)
+		logger.Errorln("failed to getOriginalDst from fd:", err)
 		return
 	}
 
@@ -65,7 +65,7 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 	// mode), or else deadlines won't work.
 	err = syscall.SetNonblock(int(fdPtr), true)
 	if err != nil {
-		logger.Println("failed to set non-blocking mode on fd:", err)
+		logger.Errorln("failed to set non-blocking mode on fd:", err)
 	}
 	fd.Close()
 
@@ -80,7 +80,7 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 	logger = log.New(os.Stdout, "[CONN] "+flowDescription, golog.Ldate|golog.Lmicroseconds)
 
 	count := regManager.CountRegistrations(originalDstIP)
-	logger.Printf("new connection (%d potential registrations)\n", count)
+	logger.Debugf("new connection (%d potential registrations)\n", count)
 	cj.Stat().AddConn()
 
 	// Pick random timeout between 10 and 60 seconds, down to millisecond precision
@@ -93,7 +93,7 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 	deadline := time.Now().Add(timeout)
 	err = clientConn.SetDeadline(deadline)
 	if err != nil {
-		logger.Println("error occurred while setting deadline:", err)
+		logger.Errorln("error occurred while setting deadline:", err)
 	}
 
 	if count < 1 {
@@ -107,7 +107,7 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 		// Possible TODO: use NFQUEUE to be able to drop the connection
 		// in userspace before the SYN-ACK is sent, increasing probe
 		// resistance.
-		logger.Printf("no possible registrations, reading for %v then dropping connection\n", timeout)
+		logger.Debugf("no possible registrations, reading for %v then dropping connection\n", timeout)
 		cj.Stat().AddMissedReg()
 		cj.Stat().CloseConn()
 
@@ -117,7 +117,7 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 		// bytes for obfs4, as an example, that would be quite clear.
 		_, err = io.Copy(io.Discard, clientConn)
 		if err != nil {
-			logger.Println("error occurred discarding data:", err)
+			logger.Errorln("error occurred discarding data:", err)
 		}
 
 		return
@@ -149,7 +149,7 @@ readLoop:
 			return
 		}
 		received.Write(buf[:n])
-		// logger.Printf("read %d bytes so far", received.Len())
+		logger.Tracef("read %d bytes so far", received.Len())
 
 	transports:
 		for i, t := range possibleTransports {
@@ -157,7 +157,7 @@ readLoop:
 			if errors.Is(err, transports.ErrTryAgain) {
 				continue transports
 			} else if errors.Is(err, transports.ErrNotTransport) {
-				// logger.Printf("not transport %s, removing from checks\n", t.Name())
+				logger.Tracef("not transport %s, removing from checks\n", t.Name())
 				delete(possibleTransports, i)
 				continue transports
 			} else if err != nil {
@@ -316,13 +316,13 @@ func tryShareRegistrationOverAPI(reg *cj.DecoyRegistration, apiEndpoint string) 
 
 	payload, err := proto.Marshal(c2a)
 	if err != nil {
-		logger.Printf("%v failed to marshal C2SWrapper payload: %v", reg.IDString(), err)
+		logger.Errorf("%v failed to marshal C2SWrapper payload: %v", reg.IDString(), err)
 		return
 	}
 
 	err = executeHTTPRequest(reg, payload, apiEndpoint)
 	if err != nil {
-		logger.Printf("%v failed to share Registration over API: %v", reg.IDString(), err)
+		logger.Errorf("%v failed to share Registration over API: %v", reg.IDString(), err)
 	}
 }
 
@@ -330,13 +330,13 @@ func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint s
 	logger := sharedLogger
 	resp, err := http.Post(apiEndpoint, "", bytes.NewReader(payload))
 	if err != nil {
-		logger.Printf("%v failed to do HTTP request to registration endpoint %s: %v", reg.IDString(), apiEndpoint, err)
+		logger.Errorf("%v failed to do HTTP request to registration endpoint %s: %v", reg.IDString(), apiEndpoint, err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		logger.Printf("%v got non-success response code %d from registration endpoint %v", reg.IDString(), resp.StatusCode, apiEndpoint)
+		logger.Errorf("%v got non-success response code %d from registration endpoint %v", reg.IDString(), resp.StatusCode, apiEndpoint)
 		return fmt.Errorf("non-success response code %d on %s", resp.StatusCode, apiEndpoint)
 	}
 
@@ -357,14 +357,14 @@ func receiveZMQMessage(sub *zmq.Socket, regManager *cj.RegistrationManager, conf
 	logger := sharedLogger
 	msg, err := sub.RecvBytes(0)
 	if err != nil {
-		logger.Printf("error reading from ZMQ socket: %v\n", err)
+		logger.Errorf("error reading from ZMQ socket: %v\n", err)
 		return nil, err
 	}
 
 	parsed := &pb.C2SWrapper{}
 	err = proto.Unmarshal(msg, parsed)
 	if err != nil {
-		logger.Printf("Failed to unmarshall ClientToStation: %v", err)
+		logger.Errorf("Failed to unmarshall ClientToStation: %v", err)
 		return nil, err
 	}
 
@@ -389,7 +389,7 @@ func receiveZMQMessage(sub *zmq.Socket, regManager *cj.RegistrationManager, conf
 	if parsed.GetRegistrationPayload().GetV4Support() && conf.EnableIPv4 && sourceAddr.To4() != nil {
 		reg, err := regManager.NewRegistrationC2SWrapper(parsed, false)
 		if err != nil {
-			logger.Printf("Failed to create registration: %v", err)
+			logger.Errorf("Failed to create registration from v4 C2S: %v", err)
 			return nil, err
 		}
 
@@ -400,7 +400,7 @@ func receiveZMQMessage(sub *zmq.Socket, regManager *cj.RegistrationManager, conf
 	if parsed.GetRegistrationPayload().GetV6Support() && conf.EnableIPv6 {
 		reg, err := regManager.NewRegistrationC2SWrapper(parsed, true)
 		if err != nil {
-			logger.Printf("Failed to create registration: %v", err)
+			logger.Errorf("Failed to create registration from v6 C2S: %v", err)
 			return nil, err
 		}
 		// add to list of new registrations to be processed.
@@ -410,9 +410,9 @@ func receiveZMQMessage(sub *zmq.Socket, regManager *cj.RegistrationManager, conf
 	// log decoy connection and id string
 	if len(newRegs) > 0 {
 		if logClientIP {
-			logger.Printf("received registration: '%v' -> '%v' %v %s\n", sourceAddr, phantomAddr, newRegs[0].IDString(), parsed.GetRegistrationSource())
+			logger.Debugf("received registration: '%v' -> '%v' %v %s\n", sourceAddr, phantomAddr, newRegs[0].IDString(), parsed.GetRegistrationSource())
 		} else {
-			logger.Printf("received registration: '_' -> '%v' %v %s\n", phantomAddr, newRegs[0].IDString(), parsed.GetRegistrationSource())
+			logger.Debugf("received registration: '_' -> '%v' %v %s\n", phantomAddr, newRegs[0].IDString(), parsed.GetRegistrationSource())
 		}
 	}
 	return newRegs, nil
@@ -435,7 +435,7 @@ func main() {
 	// Should we log client IP addresses
 	logClientIP, err = strconv.ParseBool(os.Getenv("LOG_CLIENT_IP"))
 	if err != nil {
-		logger.Printf("failed parse client ip logging setting: %v\n", err)
+		logger.Errorf("failed parse client ip logging setting: %v\n", err)
 		logClientIP = false
 	}
 
@@ -470,11 +470,11 @@ func main() {
 	// Add registration channel options
 	err = regManager.AddTransport(pb.TransportType_Min, min.Transport{})
 	if err != nil {
-		logger.Printf("failed to add transport: %v", err)
+		logger.Errorf("failed to add transport: %v", err)
 	}
 	err = regManager.AddTransport(pb.TransportType_Obfs4, obfs4.Transport{})
 	if err != nil {
-		logger.Printf("failed to add transport: %v", err)
+		logger.Errorf("failed to add transport: %v", err)
 	}
 
 	// Receive registration updates from ZMQ Proxy as subscriber
@@ -492,16 +492,16 @@ func main() {
 	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
 	ln, err := net.ListenTCP("tcp", listenAddr)
 	if err != nil {
-		logger.Printf("failed to listen on %v: %v\n", listenAddr, err)
+		logger.Errorf("failed to listen on %v: %v\n", listenAddr, err)
 		return
 	}
 	defer ln.Close()
-	logger.Printf("[STARTUP] Listening on %v\n", ln.Addr())
+	logger.Infof("[STARTUP] Listening on %v\n", ln.Addr())
 
 	for {
 		newConn, err := ln.AcceptTCP()
 		if err != nil {
-			logger.Printf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
+			logger.Errorf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
 			continue
 		}
 		go handleNewConn(regManager, newConn)

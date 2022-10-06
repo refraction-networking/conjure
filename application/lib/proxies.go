@@ -92,7 +92,7 @@ func halfPipe(src, dst net.Conn,
 		CloseWrite() error
 	}); ok {
 		err = closeWriter.CloseWrite()
-		logger.Printf("error closing writer: %s", err)
+		logger.Errorf("error closing writer: %s", err)
 	} else {
 		dst.Close()
 	}
@@ -102,7 +102,7 @@ func halfPipe(src, dst net.Conn,
 		CloseRead() error
 	}); ok {
 		err = closeReader.CloseRead()
-		logger.Printf("error closing reader: %s", err)
+		logger.Errorf("error closing reader: %s", err)
 	} else {
 		src.Close()
 	}
@@ -120,6 +120,7 @@ func halfPipe(src, dst net.Conn,
 	}
 	statsStr, _ := json.Marshal(stats)
 	logger.Printf("stopping forwarding %s", statsStr)
+	//TODO JMWAMPLE IS THIS REQUIRED
 	/*
 		if strings.HasPrefix(tag, "Up") {
 			Stat().AddBytesUp(written)
@@ -135,7 +136,7 @@ func halfPipe(src, dst net.Conn,
 func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	covertConn, err := net.Dial("tcp", reg.Covert)
 	if err != nil {
-		logger.Printf("failed to dial target: %s", err)
+		logger.Errorf("failed to dial target: %s", err)
 		return
 	}
 	defer covertConn.Close()
@@ -143,7 +144,7 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	if reg.Flags.GetProxyHeader() {
 		err = writePROXYHeader(covertConn, clientConn.RemoteAddr().String())
 		if err != nil {
-			logger.Printf("failed to send PROXY header: %s", err)
+			logger.Errorf("failed to send PROXY header: %s", err)
 			return
 		}
 	}
@@ -204,11 +205,11 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 	flowDescription := fmt.Sprintf("[%s -> %s (covert=%s)] ",
 		notReallyOriginalSrc, originalDst, reg.Covert)
 	logger := log.New(os.Stdout, "[2WP] "+flowDescription, log.Ldate|log.Lmicroseconds)
-	logger.Println("new flow")
+	logger.Debugln("new flow")
 
 	covertConn, err := net.Dial("tcp", reg.Covert)
 	if err != nil {
-		logger.Printf("failed to dial target: %s", err)
+		logger.Errorf("failed to dial target: %s", err)
 		return
 	}
 	defer covertConn.Close()
@@ -216,7 +217,7 @@ func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP 
 	if reg.Flags.GetProxyHeader() {
 		err = writePROXYHeader(covertConn, clientConn.RemoteAddr().String())
 		if err != nil {
-			logger.Printf("failed to send PROXY header to covert: %s", err)
+			logger.Errorf("failed to send PROXY header to covert: %s", err)
 			return
 		}
 	}
@@ -279,15 +280,15 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 		maskHostPort = net.JoinHostPort(maskHostPort, "443")
 	} else {
 		if mPort != "443" {
-			logger.Printf("port %v is not allowed in masked host", mPort)
+			logger.Errorf("port %v is not allowed in masked host", mPort)
 			return
 		}
 	}
-	logger.Println("new flow")
+	logger.Debugln("new flow")
 
 	maskedConn, err := net.DialTimeout("tcp", maskHostPort, time.Second*10)
 	if err != nil {
-		logger.Printf("failed to dial masked host: %v", err)
+		logger.Errorf("failed to dial masked host: %v", err)
 		return
 	}
 	defer maskedConn.Close()
@@ -399,7 +400,7 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 
 	err = readFromClientAndParse()
 	if err != nil {
-		logger.Printf("failed to readFromClientAndParse: %v", err)
+		logger.Errorf("failed to readFromClientAndParse: %v", err)
 		return
 	}
 
@@ -408,7 +409,7 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 	//   readFromServerAndParse is still in Peek()
 	firstAppData, err := clientBufConn.Peek(clientBufferedRecordSize)
 	if err != nil {
-		logger.Printf("failed to peek into first app data: %v", err)
+		logger.Errorf("failed to peek into first app data: %v", err)
 		return
 	}
 
@@ -420,7 +421,7 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 
 	go func() {
 		_, err := p2.Write(firstAppData)
-		logger.Printf("error closing %s", err)
+		logger.Errorf("error closing %s", err)
 
 		p2.Close()
 	}()
@@ -433,14 +434,14 @@ func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstI
 
 	decryptedFirstAppData, err := io.ReadAll(inMemTlsConn)
 	if err != nil || len(decryptedFirstAppData) == 0 {
-		logger.Printf("not tagged: %s", err)
+		logger.Debugf("not tagged: %s", err)
 	} else {
 		// almost success! now need to dial targetHostPort (TODO: do it in advance!)
 		targetConn, err := net.Dial("tcp", targetHostPort)
 		if err != nil {
-			logger.Printf("failed to dial target: %s", err)
+			logger.Errorf("failed to dial target: %s", err)
 		} else {
-			logger.Printf("flow is tagged")
+			logger.Debugf("flow is tagged")
 			defer targetConn.Close()
 			serverBufConn.Close()
 			forgedTlsConn := tls.MakeConnWithCompleteHandshake(

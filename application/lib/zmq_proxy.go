@@ -4,11 +4,13 @@ package lib
 
 import (
 	"fmt"
-	"log"
+	golog "log"
 	"os"
 	"time"
 
 	zmq "github.com/pebbe/zmq4"
+
+	"github.com/refraction-networking/conjure/application/log"
 )
 
 // ZMQConfig - Configuration options relevant to the ZMQ Proxy utility
@@ -37,7 +39,7 @@ type proxy struct {
 // the CJ_PROXY_CONFIG environment variable.
 func ZMQProxy(c ZMQConfig) {
 	var p proxy
-	p.logger = log.New(os.Stdout, "[ZMQ_PROXY] ", log.Ldate|log.Lmicroseconds)
+	p.logger = log.New(os.Stdout, "[ZMQ_PROXY] ", golog.Ldate|golog.Lmicroseconds)
 
 	privkey, err := os.ReadFile(c.PrivateKeyPath)
 	if err != nil {
@@ -72,36 +74,36 @@ func ZMQProxy(c ZMQConfig) {
 	for _, connectSocket := range c.ConnectSockets {
 		sock, err := zmq.NewSocket(zmq.SUB)
 		if err != nil {
-			p.logger.Printf("failed to create subscriber zmq socket for %s: %v\n", connectSocket.Address, err)
+			p.logger.Errorf("failed to create subscriber zmq socket for %s: %v\n", connectSocket.Address, err)
 		}
 
 		err = sock.SetHeartbeatIvl(time.Duration(c.HeartbeatInterval) * time.Millisecond)
 		if err != nil {
-			p.logger.Printf("failed to set heartbeat interval of %v for %s: %v\n", c.HeartbeatInterval, connectSocket.Address, err)
+			p.logger.Errorf("failed to set heartbeat interval of %v for %s: %v\n", c.HeartbeatInterval, connectSocket.Address, err)
 		}
 
 		err = sock.SetHeartbeatTimeout(time.Duration(c.HeartbeatTimeout) * time.Millisecond)
 		if err != nil {
-			p.logger.Printf("failed to set heartbeat timeout of %v for %s: %v\n", c.HeartbeatTimeout, connectSocket.Address, err)
+			p.logger.Errorf("failed to set heartbeat timeout of %v for %s: %v\n", c.HeartbeatTimeout, connectSocket.Address, err)
 		}
 
 		if connectSocket.AuthenticationType == "CURVE" {
 			err = sock.ClientAuthCurve(connectSocket.PublicKey, pubkey_z85, privkey_z85)
 			if err != nil {
-				p.logger.Printf("failed to set up CURVE authentication for %s: %v\n", connectSocket.Address, err)
+				p.logger.Errorf("failed to set up CURVE authentication for %s: %v\n", connectSocket.Address, err)
 				continue
 			}
 		}
 
 		err = sock.SetSubscribe(connectSocket.SubscriptionPrefix)
 		if err != nil {
-			p.logger.Printf("failed to set subscription prefix for %s: %v\n", connectSocket.Address, err)
+			p.logger.Errorf("failed to set subscription prefix for %s: %v\n", connectSocket.Address, err)
 			continue
 		}
 
 		err = sock.Connect(connectSocket.Address)
 		if err != nil {
-			p.logger.Printf("failed to connect to %s: %v\n", connectSocket.Address, err)
+			p.logger.Errorf("failed to connect to %s: %v\n", connectSocket.Address, err)
 			continue
 		}
 		defer sock.Close()
@@ -110,7 +112,7 @@ func ZMQProxy(c ZMQConfig) {
 			for {
 				msg, err := sub.RecvBytes(0)
 				if err != nil {
-					p.logger.Printf("read from %s failed: %v\n", config.Address, err)
+					p.logger.Errorf("read from %s failed: %v\n", config.Address, err)
 					continue
 				}
 				messages <- msg
@@ -121,7 +123,7 @@ func ZMQProxy(c ZMQConfig) {
 	for msg := range messages {
 		_, err := pubSock.SendBytes(msg, 0)
 		if err != nil {
-			p.logger.Printf("write to pubSock failed: %v\n", err)
+			p.logger.Errorf("write to pubSock failed: %v\n", err)
 		}
 	}
 }

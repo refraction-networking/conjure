@@ -1,12 +1,13 @@
 package lib
 
 import (
-	"log"
+	golog "log"
 	"os"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/refraction-networking/conjure/application/log"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
@@ -48,7 +49,7 @@ func Stat() *Stats {
 }
 
 func initStats() {
-	logger := log.New(os.Stdout, "[STATS] ", log.Ldate|log.Lmicroseconds)
+	logger := log.New(os.Stdout, "[STATS] ", golog.Ldate|golog.Lmicroseconds)
 	statInstance = Stats{
 		logger:      logger,
 		generations: make(map[uint32]int64),
@@ -83,7 +84,7 @@ func (s *Stats) Reset() {
 }
 
 func (s *Stats) PrintStats() {
-	s.logger.Printf("Conns: %d cur %d new %d err Regs: %d cur %d new (%d local %d API %d shared %d unknown) %d miss %d err %d dup LiveT: %d valid %d live %d cached Byte: %d up %d down",
+	s.logger.Infof("Conns: %d cur %d new %d err Regs: %d cur %d new (%d local %d API %d shared %d unknown) %d miss %d err %d dup LiveT: %d valid %d live %d cached Byte: %d up %d down",
 		atomic.LoadInt64(&s.activeConns), atomic.LoadInt64(&s.newConns), atomic.LoadInt64(&s.newErrConns),
 		atomic.LoadInt64(&s.activeRegistrations),
 		atomic.LoadInt64(&s.newRegistrations),
