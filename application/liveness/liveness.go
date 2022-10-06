@@ -19,6 +19,7 @@ type Tester interface {
 
 // Stats provides an interface to write out the collected metrics about liveness tester usage
 type Stats interface {
+	PrintAndReset(logger *log.Logger)
 	PrintStats(logger *log.Logger)
 	Reset()
 }
@@ -95,9 +96,21 @@ type stats struct {
 	epochStart time.Time
 }
 
+func (s *stats) PrintAndReset(logger *log.Logger) {
+	s.m.Lock()
+	defer s.m.Unlock()
+	s.printStats(logger)
+	s.reset()
+}
+
 func (s *stats) PrintStats(logger *log.Logger) {
+
 	s.m.RLock()
 	defer s.m.RUnlock()
+	s.printStats(logger)
+}
+
+func (s *stats) printStats(logger *log.Logger) {
 	epochDur := time.Since(s.epochStart).Milliseconds()
 	log.Infof("liveness-stats: %d (%f/s) valid %d (%f/s) live %d (%f/s) cached",
 		s.newLivenessPass,
@@ -112,6 +125,11 @@ func (s *stats) PrintStats(logger *log.Logger) {
 func (s *stats) Reset() {
 	s.m.Lock()
 	defer s.m.Unlock()
+	s.reset()
+}
+
+func (s *stats) reset() {
+
 	s.newLivenessPass = 0
 	s.newLivenessFail = 0
 	s.newLivenessCached = 0

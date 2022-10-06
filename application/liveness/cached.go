@@ -231,10 +231,27 @@ func (blt *CachedLivenessTester) phantomLookup(addr string, port uint16) (bool, 
 	return false, nil
 }
 
-// PrintStats extends the Liveness testing Stats interface to add logging for the cache capacity
+// PrintStats implements the Stats interface extending from the stats struct
+// to add logging for the cache capacity
 func (blt *CachedLivenessTester) PrintStats(logger *log.Logger) {
+	blt.stats.m.RLock()
+	defer blt.stats.m.RUnlock()
+
+	blt.printStats(logger)
+}
+
+// PrintAndReset implements the Stats interface extending from the stats struct
+// to add logging for the cache capacity
+func (blt *CachedLivenessTester) PrintAndReset(logger *log.Logger) {
+	blt.stats.m.Lock()
+	defer blt.stats.m.Unlock()
+
+	blt.printStats(logger)
+	blt.stats.reset()
+}
+
+func (blt *CachedLivenessTester) printStats(logger *log.Logger) {
 	s := blt.stats
-	defer s.m.RUnlock()
 	epochDur := time.Since(s.epochStart).Milliseconds()
 	log.Infof("liveness-stats: %d (%f/s) valid %d (%f/s) live %d (%f/s) cached, capacity:%d/%d",
 		s.newLivenessPass,

@@ -12,7 +12,12 @@ import (
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
-// We would use uint64, but we want to atomically subtract sometimes
+// Stats contains counts of many things we want to keep track of in any given epoch
+// as well as reference to modular metrics interfaces from related modules. These
+// are used to print usage in a regulated and consumable way.
+//
+// fields are int64 because we occasionally need to atomically subtract, which is
+// not supported for uint64
 type Stats struct {
 	logger      *log.Logger
 	activeConns int64 // incremented on add, decremented on remove, not reset
@@ -45,7 +50,7 @@ type Stats struct {
 var statInstance Stats
 var statsOnce sync.Once
 
-// Returns our singleton stats
+// Stat returns our singleton for stats
 func Stat() *Stats {
 	statsOnce.Do(initStats)
 	return &statInstance
@@ -89,8 +94,7 @@ func (s *Stats) Reset() {
 func (s *Stats) PrintStats() {
 
 	if s.livenessStats != nil {
-		s.livenessStats.PrintStats(s.logger)
-		s.livenessStats.Reset()
+		s.livenessStats.PrintAndReset(s.logger)
 	}
 
 	s.logger.Infof("Conns: %d cur %d new %d err Regs: %d cur %d new (%d local %d API %d shared %d unknown) %d miss %d err %d dup LiveT: %d valid %d live %d cached Byte: %d up %d down",
