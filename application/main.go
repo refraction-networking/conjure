@@ -446,9 +446,12 @@ func main() {
 
 	// parse & set log level for the lib for which sets the default level all
 	// loggers created by subroutines routines.
-	logLevel, err := log.ParseLevel(conf.LogLevel)
-	if err != nil {
-		log.Fatal(err)
+	var logLevel = log.ErrorLevel
+	if conf.LogLevel != "" {
+		logLevel, err = log.ParseLevel(conf.LogLevel)
+		if err != nil || logLevel == log.UnknownLevel {
+			log.Fatal(err)
+		}
 	}
 	log.SetLevel(logLevel)
 
