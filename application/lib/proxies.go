@@ -95,7 +95,9 @@ func halfPipe(src, dst net.Conn,
 		CloseWrite() error
 	}); ok {
 		err = closeWriter.CloseWrite()
-		logger.Errorf("error closing writer: %s", err)
+		if err != nil {
+			logger.Errorf("error closing writer: %s", err)
+		}
 	} else {
 		dst.Close()
 	}
@@ -105,7 +107,9 @@ func halfPipe(src, dst net.Conn,
 		CloseRead() error
 	}); ok {
 		err = closeReader.CloseRead()
-		logger.Errorf("error closing reader: %s", err)
+		if err != nil {
+			logger.Errorf("error closing reader: %s", err)
+		}
 	} else {
 		src.Close()
 	}
