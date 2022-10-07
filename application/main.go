@@ -435,6 +435,23 @@ func main() {
 	flag.StringVar(&zmqAddress, "zmq-address", "ipc://@zmq-proxy", "Address of ZMQ proxy")
 	flag.Parse()
 
+	// Init stats
+	cj.Stat()
+
+	// parse toml station configuration
+	conf, err := cj.ParseConfig()
+	if err != nil {
+		log.Fatalf("failed to parse app config: %v", err)
+	}
+
+	// parse & set log level for the lib for which sets the default level all
+	// loggers created by subroutines routines.
+	logLevel, err := log.ParseLevel(conf.LogLevel)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.SetLevel(logLevel)
+
 	regManager := cj.NewRegistrationManager()
 	sharedLogger = regManager.Logger
 	logger := sharedLogger
@@ -445,22 +462,6 @@ func main() {
 		logger.Errorf("failed parse client ip logging setting: %v\n", err)
 		logClientIP = false
 	}
-
-	// Init stats
-	cj.Stat()
-
-	// parse toml station configuration
-	conf, err := cj.ParseConfig()
-	if err != nil {
-		logger.Fatalf("failed to parse app config: %v", err)
-	}
-
-	// parse & set log level
-	logLevel, err := log.ParseLevel(conf.LogLevel)
-	if err != nil {
-		log.Fatal(err)
-	}
-	regManager.Logger.SetLevel(logLevel)
 
 	// If CacheExpirationTime is set enable the Cached liveness tester.
 	if conf.CacheExpirationTime != "" {
