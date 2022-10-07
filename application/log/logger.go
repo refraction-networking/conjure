@@ -40,15 +40,15 @@ const (
 	InfoLevel
 )
 
-var levelStrings = []string{
-	"trace",
-	"debug",
-	"warn",
-	"error",
-	"info",
+var levelStrings = map[string]Level{
+	"trace": TraceLevel,
+	"debug": DebugLevel,
+	"warn":  WarnLevel,
+	"error": ErrorLevel,
+	"info":  InfoLevel,
 }
 
-var level = DebugLevel
+var level = ErrorLevel
 
 // SetLevel Sets the log level for the log package function calls,
 func SetLevel(l Level) {
@@ -58,9 +58,9 @@ func SetLevel(l Level) {
 // ParseLevel takes a string and returns the equivalent log Level struct.
 func ParseLevel(levelStr string) (Level, error) {
 	lowerLevelStr := strings.ToLower(levelStr)
-	for i := 0; i < len(levelStr); i++ {
-		if lowerLevelStr == levelStrings[i] {
-			return Level(i), nil
+	for name, l := range levelStrings {
+		if lowerLevelStr == name {
+			return l, nil
 		}
 	}
 	return UnknownLevel, fmt.Errorf("unknown logging level string provided: \"%s\"", levelStr)
@@ -152,99 +152,105 @@ func Writer() io.Writer {
 
 // Trace provides the most verbose logging - wraps Print
 func Trace(v ...interface{}) {
-	log.Print(v...)
+	if level <= TraceLevel {
+		log.Print(v...)
+	}
 }
 
 // Traceln provides the most verbose logging - wraps Println
 func Traceln(v ...interface{}) {
-	log.Println(v...)
+	if level <= TraceLevel {
+		log.Println(v...)
+	}
 }
 
 // Tracef provides the most verbose logging - wraps Printf
 func Tracef(format string, v ...interface{}) {
-	log.Printf(format, v...)
+	if level <= TraceLevel {
+		log.Printf(format, v...)
+	}
 }
 
 // Debug provides verbose logging beyond regular function - wraps Print
 func Debug(v ...interface{}) {
-	if level >= DebugLevel {
+	if level <= DebugLevel {
 		log.Print(v...)
 	}
 }
 
 // Debugln provides verbose logging beyond regular function - wraps Println
 func Debugln(v ...interface{}) {
-	if level >= DebugLevel {
+	if level <= DebugLevel {
 		log.Println(v...)
 	}
 }
 
 // Debugf provides verbose logging beyond regular function - wraps Printf
 func Debugf(format string, v ...interface{}) {
-	if level >= DebugLevel {
+	if level <= DebugLevel {
 		log.Printf(format, v...)
 	}
 }
 
 // Warn provides slightly more verbose logging - wraps Print
 func Warn(v ...interface{}) {
-	if level >= WarnLevel {
+	if level <= WarnLevel {
 		log.Print(v...)
 	}
 }
 
 // Warnln provides slightly more verbose logging- wraps Println
 func Warnln(v ...interface{}) {
-	if level >= WarnLevel {
+	if level <= WarnLevel {
 		log.Println(v...)
 	}
 }
 
 // Warnf provides slightly more verbose logging - wraps Printf
 func Warnf(format string, v ...interface{}) {
-	if level >= WarnLevel {
+	if level <= WarnLevel {
 		log.Printf(format, v...)
 	}
 }
 
 // Error provides a "normal production" logging level - wraps Print
 func Error(v ...interface{}) {
-	if level >= ErrorLevel {
+	if level <= ErrorLevel {
 		log.Print(v...)
 	}
 }
 
 // Errorln provides a "normal production" logging level - wraps Println
 func Errorln(v ...interface{}) {
-	if level >= ErrorLevel {
+	if level <= ErrorLevel {
 		log.Println(v...)
 	}
 }
 
 // Errorf provides a "normal production" logging level - wraps Printf
 func Errorf(format string, v ...interface{}) {
-	if level >= ErrorLevel {
+	if level <= ErrorLevel {
 		log.Printf(format, v...)
 	}
 }
 
 // Info provides only informational logging that would typically be written to stdout - wraps Print
 func Info(v ...interface{}) {
-	if level >= InfoLevel {
+	if level <= InfoLevel {
 		log.Print(v...)
 	}
 }
 
 // Infoln  provides only informational logging that would typically be written to stdout - wraps Println
 func Infoln(v ...interface{}) {
-	if level >= InfoLevel {
+	if level <= InfoLevel {
 		log.Println(v...)
 	}
 }
 
 // Infof  provides only informational logging that would typically be written to stdout - wraps Printf
 func Infof(format string, v ...interface{}) {
-	if level >= InfoLevel {
+	if level <= InfoLevel {
 		log.Printf(format, v...)
 	}
 }
@@ -268,99 +274,105 @@ func (l *Logger) SetLevel(ll Level) {
 
 // Trace provides the most verbose logging - wraps Print
 func (l *Logger) Trace(v ...interface{}) {
-	l.Print(v...)
+	if l.level <= TraceLevel {
+		l.Print(v...)
+	}
 }
 
 // Traceln provides the most verbose logging - wraps Println
 func (l *Logger) Traceln(v ...interface{}) {
-	l.Println(v...)
+	if l.level <= TraceLevel {
+		l.Println(v...)
+	}
 }
 
 // Tracef provides the most verbose logging - wraps Printf
 func (l *Logger) Tracef(format string, v ...interface{}) {
-	l.Printf(format, v...)
+	if l.level <= TraceLevel {
+		l.Printf(format, v...)
+	}
 }
 
 // Debug provides verbose logging beyond regular function - wraps Print
 func (l *Logger) Debug(v ...interface{}) {
-	if level >= DebugLevel {
+	if l.level <= DebugLevel {
 		l.Print(v...)
 	}
 }
 
 // Debugln provides verbose logging beyond regular function - wraps Println
 func (l *Logger) Debugln(v ...interface{}) {
-	if level >= DebugLevel {
+	if l.level <= DebugLevel {
 		l.Println(v...)
 	}
 }
 
 // Debugf provides verbose logging beyond regular function - wraps Printf
 func (l *Logger) Debugf(format string, v ...interface{}) {
-	if level >= DebugLevel {
+	if l.level <= DebugLevel {
 		l.Printf(format, v...)
 	}
 }
 
 // Warn provides slightly more verbose logging - wraps Print
 func (l *Logger) Warn(v ...interface{}) {
-	if level >= WarnLevel {
+	if l.level <= WarnLevel {
 		l.Print(v...)
 	}
 }
 
 // Warnln provides slightly more verbose logging- wraps Println
 func (l *Logger) Warnln(v ...interface{}) {
-	if level >= WarnLevel {
+	if l.level <= WarnLevel {
 		l.Println(v...)
 	}
 }
 
 // Warnf provides slightly more verbose logging - wraps Printf
 func (l *Logger) Warnf(format string, v ...interface{}) {
-	if level >= WarnLevel {
+	if l.level <= WarnLevel {
 		l.Printf(format, v...)
 	}
 }
 
 // Error provides a "normal production" logging level - wraps Print
 func (l *Logger) Error(v ...interface{}) {
-	if level >= ErrorLevel {
+	if l.level <= ErrorLevel {
 		l.Print(v...)
 	}
 }
 
 // Errorln provides a "normal production" logging level - wraps Println
 func (l *Logger) Errorln(v ...interface{}) {
-	if level >= ErrorLevel {
+	if l.level <= ErrorLevel {
 		l.Println(v...)
 	}
 }
 
 // Errorf provides a "normal production" logging level - wraps Printf
 func (l *Logger) Errorf(format string, v ...interface{}) {
-	if level >= ErrorLevel {
+	if l.level <= ErrorLevel {
 		l.Printf(format, v...)
 	}
 }
 
 // Info provides only informational logging that would typically be written to stdout - wraps Print
 func (l *Logger) Info(v ...interface{}) {
-	if level >= InfoLevel {
+	if l.level <= InfoLevel {
 		l.Print(v...)
 	}
 }
 
 // Infoln  provides only informational logging that would typically be written to stdout - wraps Println
 func (l *Logger) Infoln(v ...interface{}) {
-	if level >= InfoLevel {
+	if l.level <= InfoLevel {
 		l.Println(v...)
 	}
 }
 
 // Infof  provides only informational logging that would typically be written to stdout - wraps Printf
 func (l *Logger) Infof(format string, v ...interface{}) {
-	if level >= InfoLevel {
+	if l.level <= InfoLevel {
 		l.Printf(format, v...)
 	}
 }
