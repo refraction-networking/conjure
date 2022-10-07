@@ -3,6 +3,7 @@ package liveness
 import (
 	"encoding/csv"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -253,7 +254,7 @@ func (blt *CachedLivenessTester) PrintAndReset(logger *log.Logger) {
 func (blt *CachedLivenessTester) printStats(logger *log.Logger) {
 	s := blt.stats
 	epochDur := time.Since(s.epochStart).Milliseconds()
-	log.Infof("liveness-stats: %d (%f/s) valid %d (%f/s) live %d (%f/s) cached, capacity:%d/%d",
+	log.Infof("liveness-stats: %d (%f/s) valid %d (%f/s) live %d (%f/s) cached, capacity:%d/%d (%f%%)",
 		s.newLivenessPass,
 		float64(s.newLivenessPass)/float64(epochDur)*1000,
 		s.newLivenessFail,
@@ -262,5 +263,6 @@ func (blt *CachedLivenessTester) printStats(logger *log.Logger) {
 		float64(s.newLivenessCached)/float64(epochDur)*1000,
 		len(blt.ipCache),
 		blt.lruSize,
+		float64(len(blt.ipCache))/float64(math.Max(float64(blt.lruSize), 1)),
 	)
 }

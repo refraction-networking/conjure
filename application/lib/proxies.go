@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"strings"
 	"sync"
@@ -95,30 +96,30 @@ func halfPipe(src, dst net.Conn,
 	}()
 
 	// Close dst
-	if closeWriter, ok := dst.(interface {
-		CloseWrite() error
-	}); ok {
-		err = closeWriter.CloseWrite()
-		if err != nil {
-			logger.Errorf("error closing writer: %s", err)
-		}
-	} else {
-		dst.Close()
+	errDst := dst.Close()
+	if errors.Is(errDst, net.ErrClosed) {
+		err = nil
+	} else if errors.Is(errDst, syscall.ECONNRESET) {
+		// get simple communication of reset into logs without IPs
+		err = errCONNRESET
+	} else if errDst != nil {
+		logger.Errorf("error closing writer: %s", err)
+		err = errDst
 	}
 
 	// Close src
-	err = src.Close()
-	if errors.Is(err, net.ErrClosed) {
+	errSrc := src.Close()
+	if errors.Is(errSrc, net.ErrClosed) {
 		err = nil
-	} else if errors.Is(err, syscall.ECONNRESET) {
+	} else if errors.Is(errSrc, syscall.ECONNRESET) {
 		// get simple communication of reset into logs without IPs
 		err = errCONNRESET
-	} else if err != nil {
-		logger.Errorf("error closing reader: %s", err)
+	} else if errSrc != nil {
+		logger.Errorf("error closing reader: %s", errSrc)
+		err = errSrc
 	}
 
 	// Compute/log stats
-
 	proxyEndTime := time.Since(proxyStartTime)
 	stats := sessionStats{
 		Duration: int64(proxyEndTime / time.Millisecond),
@@ -220,8 +221,8 @@ func (s *ProxyStats) printStats(logger *log.Logger) {
 		s.completedSessions,
 		s.zeroByteTunnelsUp,
 		s.zeroByteTunnelsDown,
-		float64(s.completeBytesUp)/float64(s.completedSessions-s.zeroByteTunnelsUp),
-		float64(s.completeBytesDown)/float64(s.completedSessions-s.zeroByteTunnelsDown),
+		float64(s.completeBytesUp)/math.Max(float64(s.completedSessions-s.zeroByteTunnelsUp), 1),
+		float64(s.completeBytesDown)/math.Max(float64(s.completedSessions-s.zeroByteTunnelsDown), 1),
 	)
 }
 
