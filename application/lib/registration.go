@@ -149,12 +149,17 @@ func (regManager *RegistrationManager) GetWrappingTransports() map[pb.TransportT
 // NewRegistration creates a new registration from details provided. Adds the registration
 // to tracking map, But marks it as not valid.
 func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
-
+	gen := uint(c2s.GetDecoyListGeneration())
+	clientLibVer := uint(c2s.GetClientLibVersion())
 	phantomAddr, err := regManager.PhantomSelector.Select(
-		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), uint(c2s.GetClientLibVersion()), includeV6)
+		conjureKeys.DarkDecoySeed, gen, clientLibVer, includeV6)
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to select phantom IP address: %v", err)
+		return nil, fmt.Errorf("failed phantom select: gen %d libv %d v6 %t err: %v",
+			gen,
+			clientLibVer,
+			includeV6,
+			err)
 	}
 
 	reg := DecoyRegistration{
@@ -184,11 +189,17 @@ func (regManager *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWra
 		return nil, fmt.Errorf("Failed to generate keys: %v", err)
 	}
 
+	gen := uint(c2s.GetDecoyListGeneration())
+	clientLibVer := uint(c2s.GetClientLibVersion())
 	phantomAddr, err := regManager.PhantomSelector.Select(
-		conjureKeys.DarkDecoySeed, uint(c2s.GetDecoyListGeneration()), uint(c2s.GetClientLibVersion()), includeV6)
+		conjureKeys.DarkDecoySeed, gen, clientLibVer, includeV6)
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to select phantom IP address: %v", err)
+		return nil, fmt.Errorf("failed phantom select: gen %d libv %d v6 %t err: %v",
+			gen,
+			clientLibVer,
+			includeV6,
+			err)
 	}
 
 	clientAddr := net.IP(c2sw.GetRegistrationAddress())
