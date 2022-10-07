@@ -112,7 +112,7 @@ func (s *stats) PrintStats(logger *log.Logger) {
 
 func (s *stats) printStats(logger *log.Logger) {
 	epochDur := time.Since(s.epochStart).Milliseconds()
-	log.Infof("liveness-stats: %d (%f/s) valid %d (%f/s) live %d (%f/s) cached",
+	logger.Infof("liveness-stats: %d (%f/s) valid %d (%f/s) live %d (%f/s) cached",
 		s.newLivenessPass,
 		float64(s.newLivenessPass)/float64(epochDur)*1000,
 		s.newLivenessFail,

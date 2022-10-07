@@ -17,6 +17,8 @@ type stats interface {
 	// from the current epoch out through the logger and then reset any stats
 	// that need reset as the start of a new epoch.
 	PrintAndReset(logger *log.Logger)
+
+	Reset()
 }
 
 // Stats contains counts of many things we want to keep track of in any given epoch
@@ -103,8 +105,16 @@ func (s *Stats) Reset() {
 }
 
 func (s *Stats) ResetAll() {
-	if s.livenessStats != nil {
-		s.livenessStats.PrintAndReset(s.logger)
+	statsModules := []stats{
+		s.livenessStats,
+		s.connStats,
+		s.registrationStats,
+		s.proxyStats,
+	}
+	for _, module := range statsModules {
+		if module != nil {
+			module.Reset()
+		}
 	}
 	s.Reset()
 }

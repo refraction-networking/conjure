@@ -225,6 +225,13 @@ func (s *ProxyStats) printStats(logger *log.Logger) {
 	)
 }
 
+// Reset implements the stats interface
+func (s *ProxyStats) Reset() {
+	s.RLock()
+	defer s.RUnlock()
+	s.reset()
+}
+
 func (s *ProxyStats) reset() {
 	atomic.StoreInt64(&s.newBytesUp, 0)
 	atomic.StoreInt64(&s.newBytesDown, 0)
