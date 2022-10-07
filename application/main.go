@@ -144,7 +144,13 @@ readLoop:
 
 		n, err := clientConn.Read(buf[:])
 		if err != nil {
-			logger.Errorf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len(), err)
+			if err, ok := err.(net.Error); ok && err.Timeout() {
+				continue
+			} else if errors.Is(err, syscall.ECONNRESET) {
+				logger.Errorf("got error while reading from connection, giving up after %d bytes: rst\n", received.Len())
+			} else {
+				logger.Errorf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len(), err)
+			}
 			cj.Stat().ConnErr()
 			return
 		}

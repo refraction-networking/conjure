@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/refraction-networking/conjure/application/log"
@@ -20,6 +21,9 @@ type sessionStats struct {
 	Tag      string
 	Err      string
 }
+
+// errCONNRESET replaces the reset error in the halfpipe to remove ips and extra bytes
+var errCONNRESET = errors.New("rst")
 
 // this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to pass around
 // TODO: refactor
@@ -103,15 +107,14 @@ func halfPipe(src, dst net.Conn,
 	}
 
 	// Close src
-	if closeReader, ok := src.(interface {
-		CloseRead() error
-	}); ok {
-		err = closeReader.CloseRead()
-		if err != nil {
-			logger.Errorf("error closing reader: %s", err)
-		}
-	} else {
-		src.Close()
+	err = src.Close()
+	if errors.Is(err, net.ErrClosed) {
+		err = nil
+	} else if errors.Is(err, syscall.ECONNRESET) {
+		// get simple communication of reset into logs without IPs
+		err = errCONNRESET
+	} else if err != nil {
+		logger.Errorf("error closing reader: %s", err)
 	}
 
 	// Compute/log stats
