@@ -228,8 +228,6 @@ func (blt *LRULivenessTester) phantomLookup(addr string, port uint16) (bool, err
 // PrintStats implements the Stats interface extending from the stats struct
 // to add logging for the cache capacity
 func (blt *LRULivenessTester) PrintStats(logger *log.Logger) {
-	blt.stats.m.RLock()
-	defer blt.stats.m.RUnlock()
 
 	blt.printStats(logger)
 }
@@ -237,11 +235,9 @@ func (blt *LRULivenessTester) PrintStats(logger *log.Logger) {
 // PrintAndReset implements the Stats interface extending from the stats struct
 // to add logging for the cache capacity
 func (blt *LRULivenessTester) PrintAndReset(logger *log.Logger) {
-	blt.stats.m.Lock()
-	defer blt.stats.m.Unlock()
 
 	blt.printStats(logger)
-	blt.stats.reset()
+	blt.stats.Reset()
 }
 
 func (blt *LRULivenessTester) printStats(logger *log.Logger) {
