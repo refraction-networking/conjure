@@ -3,7 +3,7 @@ package liveness
 import (
 	"fmt"
 	"net"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/refraction-networking/conjure/application/log"
@@ -82,7 +82,6 @@ func phantomIsLive(address string) (bool, error) {
 }
 
 type stats struct {
-	m sync.RWMutex
 	// newLivenessPass count of liveness tests that passed (non-live phantom) since reset()
 	newLivenessPass int64
 
@@ -97,60 +96,47 @@ type stats struct {
 }
 
 func (s *stats) PrintAndReset(logger *log.Logger) {
-	s.m.Lock()
-	defer s.m.Unlock()
 	s.printStats(logger)
-	s.reset()
+	s.Reset()
 }
 
 func (s *stats) PrintStats(logger *log.Logger) {
-
-	s.m.RLock()
-	defer s.m.RUnlock()
 	s.printStats(logger)
 }
 
 func (s *stats) printStats(logger *log.Logger) {
 	epochDur := time.Since(s.epochStart).Milliseconds()
+
+	nlp := atomic.LoadInt64(&s.newLivenessPass)
+	nlf := atomic.LoadInt64(&s.newLivenessFail)
+	nlc := atomic.LoadInt64(&s.newLivenessCached)
+
 	logger.Infof("liveness-stats: %d (%f/s) valid %d (%f/s) live %d (%f/s) cached",
-		s.newLivenessPass,
-		float64(s.newLivenessPass)/float64(epochDur)*1000,
-		s.newLivenessFail,
-		float64(s.newLivenessFail)/float64(epochDur)*1000,
-		s.newLivenessCached,
-		float64(s.newLivenessCached)/float64(epochDur)*1000,
+		nlp,
+		float64(nlp)/float64(epochDur)*1000,
+		nlf,
+		float64(nlf)/float64(epochDur)*1000,
+		nlc,
+		float64(nlc)/float64(epochDur)*1000,
 	)
 }
 
 func (s *stats) Reset() {
-	s.m.Lock()
-	defer s.m.Unlock()
-	s.reset()
-}
-
-func (s *stats) reset() {
-
-	s.newLivenessPass = 0
-	s.newLivenessFail = 0
-	s.newLivenessCached = 0
+	atomic.StoreInt64(&s.newLivenessPass, 0)
+	atomic.StoreInt64(&s.newLivenessFail, 0)
+	atomic.StoreInt64(&s.newLivenessCached, 0)
 
 	s.epochStart = time.Now()
 }
 
 func (s *stats) incPass() {
-	s.m.Lock()
-	defer s.m.Unlock()
-	s.newLivenessPass++
+	atomic.AddInt64(&s.newLivenessPass, 1)
 }
 
 func (s *stats) incFail() {
-	s.m.Lock()
-	defer s.m.Unlock()
-	s.newLivenessFail++
+	atomic.AddInt64(&s.newLivenessFail, 1)
 }
 
 func (s *stats) incCached() {
-	s.m.Lock()
-	defer s.m.Unlock()
-	s.newLivenessCached++
+	atomic.AddInt64(&s.newLivenessCached, 1)
 }
