@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/refraction-networking/conjure/application/liveness"
 	"github.com/refraction-networking/conjure/application/log"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
@@ -50,14 +49,10 @@ type Stats struct {
 	genMutex                *sync.Mutex      // Lock for generations map
 	generations             map[uint32]int64 // Map from ClientConf generation to number of registrations we saw using it
 
-	droppedZMQMessages int64
-
-	proxyStats stats
 	// TODO JMWAMPLE REMOVE
 	newBytesUp   int64 // TODO: need to redo halfPipe to make this not really jumpy
 	newBytesDown int64 // ditto
 
-	livenessStats stats
 	// TODO JMWAMPLE REMOVE
 	newLivenessPass   int64 // Liveness tests that passed (non-live phantom) since reset()
 	newLivenessFail   int64 // Liveness tests that failed (live phantom) since reset()
@@ -117,13 +112,7 @@ func (s *Stats) Reset() {
 }
 
 func (s *Stats) ResetAll() {
-	statsModules := []stats{
-		s.livenessStats,
-		s.connStats,
-		s.registrationStats,
-		s.proxyStats,
-	}
-	for _, module := range statsModules {
+	for _, module := range s.moduleStats {
 		if module != nil {
 			module.Reset()
 		}
@@ -132,13 +121,7 @@ func (s *Stats) ResetAll() {
 }
 
 func (s *Stats) PrintStats() {
-	statsModules := []stats{
-		s.livenessStats,
-		s.connStats,
-		s.registrationStats,
-		s.proxyStats,
-	}
-	for _, module := range statsModules {
+	for _, module := range s.moduleStats {
 		if module != nil {
 			module.PrintAndReset(s.logger)
 		}
@@ -153,22 +136,7 @@ func (s *Stats) PrintStats() {
 		atomic.LoadInt64(&s.newErrRegistrations), atomic.LoadInt64(&s.newDupRegistrations),
 		atomic.LoadInt64(&s.newLivenessPass), atomic.LoadInt64(&s.newLivenessFail), atomic.LoadInt64(&s.newLivenessCached),
 		atomic.LoadInt64(&s.newBytesUp), atomic.LoadInt64(&s.newBytesDown))
-
-	s.logger.Infof("zmq-stats: %d dropped",
-		atomic.LoadInt64(&s.droppedZMQMessages))
 	s.Reset()
-}
-
-func (s *Stats) SetLivenessStats(ls liveness.Stats) {
-	if ls != nil {
-		s.livenessStats = ls
-	}
-}
-
-func (s *Stats) SetProxyStats(ps stats) {
-	if ps != nil {
-		s.proxyStats = ps
-	}
 }
 
 func (s *Stats) AddConn() {

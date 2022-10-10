@@ -452,8 +452,10 @@ func main() {
 		}
 		regManager.LivenessTester = clt
 	}
-	cj.Stat().SetLivenessStats(regManager.LivenessTester)
-	cj.Stat().SetProxyStats(cj.GetProxyStats())
+	cj.Stat().AddStatsModule(regManager.LivenessTester)
+	cj.Stat().AddStatsModule(cj.GetProxyStats())
+	// cj.Stat().AddStatsModule(regmManager)
+	// cj.Stat().AddStatsModule(connStats)
 
 	// Add registration channel options
 	err = regManager.AddTransport(pb.TransportType_Min, min.Transport{})
