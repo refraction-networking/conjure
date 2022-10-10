@@ -38,8 +38,9 @@ type ZMQIngester struct {
 	connectAddr string
 
 	// stats
-	epochStart         time.Time
-	droppedZMQMessages int64 // if the ingest channel ends up blocking how many registrations are dropped?
+	epochStart              time.Time
+	droppedZMQMessages      int64 // if the ingest channel ends up blocking how many registrations were dropped this epoch
+	totalDroppedZMQMessages int64 // how many registrations have been dropped total due to full channel
 }
 
 func NewZMQIngest(connectAddr string, regchan chan<- interface{}, conf *ZMQConfig) *ZMQIngester {
@@ -51,7 +52,7 @@ func NewZMQIngest(connectAddr string, regchan chan<- interface{}, conf *ZMQConfi
 		regchan,
 		connectAddr,
 		time.Now(),
-		0}
+		0, 0}
 }
 
 // RunZMQ start the receive loop that writes into the provided message receive channel
@@ -100,6 +101,7 @@ func (zi *ZMQIngester) Reset() {
 
 func (zi *ZMQIngester) addDroppedZMQMessage() {
 	atomic.AddInt64(&zi.droppedZMQMessages, 1)
+	atomic.AddInt64(&zi.totalDroppedZMQMessages, 1)
 }
 
 func (zi *ZMQIngester) PrintAndReset(logger *log.Logger) {
@@ -107,13 +109,15 @@ func (zi *ZMQIngester) PrintAndReset(logger *log.Logger) {
 	c := cap(zi.regChan)
 	epochDur := time.Since(zi.epochStart).Milliseconds()
 
-	logger.Infof("zmq-stats: %d (%.3f/s) dropped %d/%d %.3f%%",
+	logger.Infof("zmq-stats: %d %d (%.3f/s) dropped %d/%d %.3f%%",
 		atomic.LoadInt64(&zi.droppedZMQMessages),
+		atomic.LoadInt64(&zi.totalDroppedZMQMessages),
 		float64(atomic.LoadInt64(&zi.droppedZMQMessages))/float64(epochDur)*1000,
 		l,
 		c,
 		float64(l)/float64(c)*100,
 	)
+	zi.Reset()
 }
 
 // ZMQProxy - centralizing proxy used to channel multiple registration sources into

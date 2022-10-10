@@ -31,12 +31,10 @@ type Stats struct {
 
 	moduleStats []stats
 
-	connStats   stats
 	activeConns int64 // incremented on add, decremented on remove, not reset
 	newConns    int64 // new connections since last stats.reset()
 	newErrConns int64 // new connections that had some sort of error since last reset()
 
-	registrationStats       stats
 	activeRegistrations     int64            // Current number of active registrations we have (marked valid - no error in validation i.e. bad phantom, bad covert, live phantom)
 	newLocalRegistrations   int64            // Current registrations that were picked up from this detector (also included in newRegistrations)
 	newApiRegistrations     int64            // Current registrations that we heard about from the API (also included in newRegistrations)
