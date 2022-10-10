@@ -127,3 +127,43 @@ func ZMQProxy(c ZMQConfig) {
 		}
 	}
 }
+
+// RunZMQ start the receive loop that writes into the provided message receive channel
+func RunZMQ(connectAddr string, regChan chan<- interface{}, conf *Config) {
+	logger := log.New(os.Stdout, "[ZMQ] ", golog.Ldate|golog.Lmicroseconds)
+	sub, err := zmq.NewSocket(zmq.SUB)
+	if err != nil {
+		logger.Errorf("could not create new ZMQ socket: %v\n", err)
+		return
+	}
+	defer sub.Close()
+
+	err = sub.Connect(connectAddr)
+	if err != nil {
+		logger.Errorln("error connecting to zmq publisher:", err)
+	}
+	err = sub.SetSubscribe("")
+	if err != nil {
+		logger.Errorln("error subscribing to zmq:", err)
+	}
+
+	logger.Infof("ZMQ connected to %v\n", connectAddr)
+
+	for {
+
+		msg, err := sub.RecvBytes(0)
+		if err != nil {
+			logger.Fatalf("error reading from ZMQ socket: %v\n", err)
+		}
+		select {
+		case regChan <- msg:
+			continue
+		default:
+			// drop reg, ingest is too busy to handle it.
+			logger.Warnln("ingest full, dropping zmq message")
+			//TODO JMWAMPLE STATS
+			Stat().AddDroppedZMQMessage()
+		}
+
+	}
+}

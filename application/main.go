@@ -15,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	zmq "github.com/pebbe/zmq4"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 
@@ -193,29 +192,10 @@ readLoop:
 	cj.Stat().CloseConn()
 }
 
-func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, conf *cj.Config) {
-	logger := log.New(os.Stdout, "[ZMQ] ", golog.Ldate|golog.Lmicroseconds)
-	sub, err := zmq.NewSocket(zmq.SUB)
-	if err != nil {
-		logger.Errorf("could not create new ZMQ socket: %v\n", err)
-		return
-	}
-	defer sub.Close()
-
-	err = sub.Connect(connectAddr)
-	if err != nil {
-		logger.Errorln("error connecting to zmq publisher:", err)
-	}
-	err = sub.SetSubscribe("")
-	if err != nil {
-		logger.Errorln("error subscribing to zmq:", err)
-	}
-
-	logger.Infof("ZMQ connected to %v\n", connectAddr)
-
-	for {
-
-		newRegs, err := receiveZMQMessage(sub, regManager, conf)
+func handleRegUpdates(regManager *cj.RegistrationManager, regChan <-chan interface{}, conf *cj.Config) {
+	logger := regManager.Logger
+	for msg := range regChan {
+		newRegs, err := handleRegMessage(msg.([]byte), regManager, conf)
 		if err != nil {
 			logger.Errorf("Encountered err when creating Reg: %v\n", err)
 			continue
@@ -225,13 +205,15 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 			continue
 		}
 
-		go func() {
-			// Handle multiple as receive_zmq_messages returns separate
-			// registrations for v4 and v6
-			for _, reg := range newRegs {
-				if reg == nil {
-					continue
-				}
+		// Handle multiple as receive_zmq_messages returns separate
+		// registrations for v4 and v6
+		for _, reg := range newRegs {
+
+			if reg == nil {
+				continue
+			}
+
+			go func(reg *cj.DecoyRegistration) {
 
 				if regManager.RegistrationExists(reg) {
 					// log phantom IP, shared secret, ipv6 support
@@ -245,7 +227,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 						logger.Errorln("error tracking registration: ", err)
 						cj.Stat().AddErrReg()
 					}
-					continue
+					return
 				}
 
 				// log phantom IP, shared secret, ipv6 support
@@ -266,7 +248,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					// blocklisted covert addresses.
 					logger.Infof("Dropping reg, malformed or blocklisted covert: %v, %s -> %s", reg.IDString(), reg.GetRegistrationAddress(), reg.Covert)
 					cj.Stat().AddErrReg()
-					continue
+					return
 				}
 
 				// Overwrite provided covert with resolved address. This kind of
@@ -288,7 +270,7 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 							cj.Stat().AddLivenessCached()
 						}
 						cj.Stat().AddLivenessFail()
-						continue
+						return
 					}
 					cj.Stat().AddLivenessPass()
 				}
@@ -304,16 +286,17 @@ func get_zmq_updates(connectAddr string, regManager *cj.RegistrationManager, con
 					// specifically from handling / interfering in any subsequent connection. See PR #75
 					logger.Warnf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
 					cj.Stat().AddErrReg()
-					continue
+					return
 				}
 
 				// validate the registration
 				regManager.AddRegistration(reg)
 				logger.Debugf("Adding registration %v\n", reg.IDString())
 				cj.Stat().AddReg(reg.DecoyListVersion, reg.RegistrationSource)
-			}
-		}()
 
+			}(reg)
+
+		}
 	}
 }
 
@@ -350,7 +333,7 @@ func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint s
 	return nil
 }
 
-// receiveZMQMessage ingests messages from zmq and parses them into
+// handleRegMessage ingests messages from zmq and parses them into
 // registration structs for the registration manager to process.
 // **NOTE** : Avoid ALL blocking calls (i.e. things that require a lock on the
 // registration tracking structs) in this method because it will block and
@@ -360,16 +343,11 @@ func executeHTTPRequest(reg *cj.DecoyRegistration, payload []byte, apiEndpoint s
 // registrations is IPv6 we will only create an ipv6 registration because
 //  1. we have no client address to match on for ipv4
 //  2. the client _should_ support ipv6
-func receiveZMQMessage(sub *zmq.Socket, regManager *cj.RegistrationManager, conf *cj.Config) ([]*cj.DecoyRegistration, error) {
+func handleRegMessage(msg []byte, regManager *cj.RegistrationManager, conf *cj.Config) ([]*cj.DecoyRegistration, error) {
 	logger := sharedLogger
-	msg, err := sub.RecvBytes(0)
-	if err != nil {
-		logger.Errorf("error reading from ZMQ socket: %v\n", err)
-		return nil, err
-	}
 
 	parsed := &pb.C2SWrapper{}
-	err = proto.Unmarshal(msg, parsed)
+	err := proto.Unmarshal(msg, parsed)
 	if err != nil {
 		logger.Errorf("Failed to unmarshall ClientToStation: %v", err)
 		return nil, err
@@ -477,9 +455,6 @@ func main() {
 	cj.Stat().SetLivenessStats(regManager.LivenessTester)
 	cj.Stat().SetProxyStats(cj.GetProxyStats())
 
-	// Launch local ZMQ proxy
-	go cj.ZMQProxy(conf.ZMQConfig)
-
 	// Add registration channel options
 	err = regManager.AddTransport(pb.TransportType_Min, min.Transport{})
 	if err != nil {
@@ -490,8 +465,13 @@ func main() {
 		logger.Errorf("failed to add transport: %v", err)
 	}
 
+	// Launch local ZMQ proxy
+	go cj.ZMQProxy(conf.ZMQConfig)
+
 	// Receive registration updates from ZMQ Proxy as subscriber
-	go get_zmq_updates(zmqAddress, regManager, conf)
+	regChan := make(chan interface{}, 1000)
+	go cj.RunZMQ(zmqAddress, regChan, conf)
+	go handleRegUpdates(regManager, regChan, conf)
 
 	// Periodically clean old registrations
 	go func() {

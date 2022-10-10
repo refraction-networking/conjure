@@ -48,6 +48,8 @@ type Stats struct {
 	genMutex                *sync.Mutex      // Lock for generations map
 	generations             map[uint32]int64 // Map from ClientConf generation to number of registrations we saw using it
 
+	droppedZMQMessages int64 // if the ingest channel ends up blocking how many registrations are dropped?
+
 	proxyStats stats
 	// TODO JMWAMPLE REMOVE
 	newBytesUp   int64 // TODO: need to redo halfPipe to make this not really jumpy
@@ -102,6 +104,7 @@ func (s *Stats) Reset() {
 	atomic.StoreInt64(&s.newLivenessCached, 0)
 	atomic.StoreInt64(&s.newBytesUp, 0)
 	atomic.StoreInt64(&s.newBytesDown, 0)
+	atomic.StoreInt64(&s.droppedZMQMessages, 0)
 }
 
 func (s *Stats) ResetAll() {
@@ -141,6 +144,9 @@ func (s *Stats) PrintStats() {
 		atomic.LoadInt64(&s.newErrRegistrations), atomic.LoadInt64(&s.newDupRegistrations),
 		atomic.LoadInt64(&s.newLivenessPass), atomic.LoadInt64(&s.newLivenessFail), atomic.LoadInt64(&s.newLivenessCached),
 		atomic.LoadInt64(&s.newBytesUp), atomic.LoadInt64(&s.newBytesDown))
+
+	s.logger.Infof("zmq-stats: %d dropped",
+		atomic.LoadInt64(&s.droppedZMQMessages))
 	s.Reset()
 }
 
@@ -236,4 +242,8 @@ func (s *Stats) AddBytes(n int64, dir string) {
 	} else {
 		s.AddBytesDown(n)
 	}
+}
+
+func (s *Stats) AddDroppedZMQMessage() {
+	atomic.AddInt64(&s.newBytesDown, 1)
 }
