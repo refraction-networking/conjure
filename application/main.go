@@ -465,13 +465,13 @@ func main() {
 		logger.Errorf("failed to add transport: %v", err)
 	}
 
-	// Launch local ZMQ proxy
-	go cj.ZMQProxy(conf.ZMQConfig)
-
 	// Receive registration updates from ZMQ Proxy as subscriber
-	regChan := make(chan interface{}, 1000)
-	go cj.RunZMQ(zmqAddress, regChan, conf)
+	regChan := make(chan interface{}, 10000)
+	zmqIngester := cj.NewZMQIngest(zmqAddress, regChan, &conf.ZMQConfig)
+	go zmqIngester.RunZMQ()
 	go handleRegUpdates(regManager, regChan, conf)
+
+	cj.Stat().AddStatsModule(zmqIngester)
 
 	// Periodically clean old registrations
 	go func() {

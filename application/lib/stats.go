@@ -30,6 +30,8 @@ type stats interface {
 type Stats struct {
 	logger *log.Logger
 
+	moduleStats []stats
+
 	connStats   stats
 	activeConns int64 // incremented on add, decremented on remove, not reset
 	newConns    int64 // new connections since last stats.reset()
@@ -48,7 +50,7 @@ type Stats struct {
 	genMutex                *sync.Mutex      // Lock for generations map
 	generations             map[uint32]int64 // Map from ClientConf generation to number of registrations we saw using it
 
-	droppedZMQMessages int64 // if the ingest channel ends up blocking how many registrations are dropped?
+	droppedZMQMessages int64
 
 	proxyStats stats
 	// TODO JMWAMPLE REMOVE
@@ -69,6 +71,14 @@ var statsOnce sync.Once
 func Stat() *Stats {
 	statsOnce.Do(initStats)
 	return &statInstance
+}
+
+func (s *Stats) AddStatsModule(sm stats) {
+	if sm == nil {
+		return
+	}
+
+	s.moduleStats = append(s.moduleStats, sm)
 }
 
 func initStats() {
@@ -104,7 +114,6 @@ func (s *Stats) Reset() {
 	atomic.StoreInt64(&s.newLivenessCached, 0)
 	atomic.StoreInt64(&s.newBytesUp, 0)
 	atomic.StoreInt64(&s.newBytesDown, 0)
-	atomic.StoreInt64(&s.droppedZMQMessages, 0)
 }
 
 func (s *Stats) ResetAll() {
@@ -242,8 +251,4 @@ func (s *Stats) AddBytes(n int64, dir string) {
 	} else {
 		s.AddBytesDown(n)
 	}
-}
-
-func (s *Stats) AddDroppedZMQMessage() {
-	atomic.AddInt64(&s.newBytesDown, 1)
 }
