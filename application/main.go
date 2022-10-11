@@ -19,7 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	cj "github.com/refraction-networking/conjure/application/lib"
-	lt "github.com/refraction-networking/conjure/application/liveness"
+	"github.com/refraction-networking/conjure/application/liveness"
 	"github.com/refraction-networking/conjure/application/log"
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
@@ -275,12 +275,12 @@ func handleRegUpdates(regManager *cj.RegistrationManager, regChan <-chan interfa
 
 				if !reg.PreScanned() {
 					// New registration received over channel that requires liveness scan for the phantom
-					liveness, response := regManager.PhantomIsLive(reg.DarkDecoy.String(), 443)
+					live, response := regManager.PhantomIsLive(reg.DarkDecoy.String(), 443)
 
 					// TODO JMWAMPLE remove this
-					if liveness {
+					if live {
 						logger.Warnf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
-						if response.Error() == lt.CachedPhantomMessage {
+						if errors.Is(response, liveness.ErrCachedPhantom) {
 							cj.Stat().AddLivenessCached()
 						}
 						cj.Stat().AddLivenessFail()
@@ -459,8 +459,11 @@ func main() {
 	}
 
 	// If CacheExpirationTime is set enable the Cached liveness tester.
-	if conf.CacheExpirationTime != "" {
-		clt, err := lt.New(&lt.Config{CacheDuration: conf.CacheExpirationTime})
+	if conf.CacheExpirationTime != "" || conf.CacheExpirationNonLive != "" {
+		clt, err := liveness.New(&liveness.Config{
+			CacheDuration:        conf.CacheExpirationTime,
+			CacheDurationNonLive: conf.CacheExpirationNonLive,
+		})
 		if err != nil {
 			logger.Fatal(err)
 		}

@@ -209,7 +209,9 @@ func (s *ProxyStats) PrintAndReset(logger *log.Logger) {
 }
 
 func (s *ProxyStats) printStats(logger *log.Logger) {
-	epochDur := time.Since(s.Time).Milliseconds()
+	// prevent div by 0 if thread starvation happens
+	var epochDur float64 = math.Max(float64(time.Since(s.Time).Milliseconds()), 1)
+
 	// fmtStr := "proxy-stats: %d (%f/s) up %d (%f/s) down %d completed %d 0up %d 0down  %f avg-non-0-up, %f avg-non-0-down"
 	fmtStr := "proxy-stats: %d %f %d %f %d %d %d %f %f"
 

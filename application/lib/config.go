@@ -43,7 +43,8 @@ type Config struct {
 	phantomBlocklist []*net.IPNet
 
 	// Expiration duration for cached live hosts
-	CacheExpirationTime string `toml:"cache_expiration_time"`
+	CacheExpirationTime    string `toml:"cache_expiration_time"`
+	CacheExpirationNonLive string `toml:"cache_expiration_nonlive"`
 
 	// Log verbosity level
 	LogLevel string `toml:"log_level"`
