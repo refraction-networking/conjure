@@ -115,7 +115,14 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 		// buffer fill up and stopped ACKing after 8192 + (buffer size)
 		// bytes for obfs4, as an example, that would be quite clear.
 		_, err = io.Copy(io.Discard, clientConn)
-		if err != nil {
+		if errors.Is(err, syscall.ECONNRESET) {
+			// log reset error without client ip
+			logger.Errorln("error occurred discarding data: rst")
+		} else if err, ok := err.(net.Error); ok && !err.Timeout() {
+			// log non-timeout net.Error
+			logger.Errorln("error occurred discarding data:", err)
+		} else {
+			//Log any other (non-net.Error) error
 			logger.Errorln("error occurred discarding data:", err)
 		}
 
@@ -135,7 +142,14 @@ readLoop:
 			logger.Warnf("ran out of possible transports, reading for %v then giving up\n", time.Until(deadline))
 			cj.Stat().ConnErr()
 			_, err = io.Copy(io.Discard, clientConn)
-			if err != nil {
+			if errors.Is(err, syscall.ECONNRESET) {
+				// log reset error without client ip
+				logger.Errorln("error occurred discarding data: rst")
+			} else if err, ok := err.(net.Error); ok && !err.Timeout() {
+				// log non-timeout net.Error
+				logger.Errorln("error occurred discarding data:", err)
+			} else {
+				//Log any other (non-net.Error) error
 				logger.Errorln("error occurred discarding data:", err)
 			}
 			return

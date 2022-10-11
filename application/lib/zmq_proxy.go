@@ -110,8 +110,8 @@ func (zi *ZMQIngester) PrintAndReset(logger *log.Logger) {
 	epochDur := time.Since(zi.epochStart).Milliseconds()
 
 	logger.Infof("zmq-stats: %d %d (%.3f/s) dropped %d/%d %.3f%%",
-		atomic.LoadInt64(&zi.droppedZMQMessages),
 		atomic.LoadInt64(&zi.totalDroppedZMQMessages),
+		atomic.LoadInt64(&zi.droppedZMQMessages),
 		float64(atomic.LoadInt64(&zi.droppedZMQMessages))/float64(epochDur)*1000,
 		l,
 		c,
