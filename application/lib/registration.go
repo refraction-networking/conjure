@@ -85,10 +85,15 @@ type ConnectingTransport interface {
 // RegistrationManager manages registration tracking for the station.
 type RegistrationManager struct {
 	*RegConfig
+	*RegistrationStats
 	registeredDecoys *RegisteredDecoys
 	Logger           *log.Logger
 	PhantomSelector  *PhantomIPSelector
 	LivenessTester   liveness.Tester
+
+	// ingestChan is included here so that the capacity and use is available to
+	// stats
+	ingestChan <-chan interface{}
 }
 
 // NewRegistrationManager returns a newly initialized registration Manager
@@ -107,11 +112,12 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 		return nil
 	}
 	return &RegistrationManager{
-		RegConfig:        conf,
-		Logger:           logger,
-		registeredDecoys: NewRegisteredDecoys(),
-		PhantomSelector:  p,
-		LivenessTester:   ult,
+		RegConfig:         conf,
+		RegistrationStats: newRegistrationStats(),
+		Logger:            logger,
+		registeredDecoys:  NewRegisteredDecoys(),
+		PhantomSelector:   p,
+		LivenessTester:    ult,
 	}
 }
 
@@ -219,7 +225,8 @@ func (regManager *RegistrationManager) CountRegistrations(phantomAddr net.IP) in
 
 // RemoveOldRegistrations garbage collects old registrations
 func (regManager *RegistrationManager) RemoveOldRegistrations() {
-	regManager.registeredDecoys.removeOldRegistrations(regManager.Logger)
+	expired, validExpired := regManager.registeredDecoys.removeOldRegistrations(regManager.Logger)
+	regManager.AddExpiredRegs(int64(expired), int64(validExpired))
 }
 
 // PhantomIsLive - Test whether the phantom is live using
@@ -387,7 +394,7 @@ type DecoyTimeout struct {
 	regID            string
 }
 
-// RegisteredDecoys provides a container stuct for tracking all registrations and their expiration.
+// RegisteredDecoys provides a container struct for tracking all registrations and their expiration.
 type RegisteredDecoys struct {
 	// decoys will be a map from decoy_ip to a:
 	// map from "registration identifier" to registration.
@@ -575,6 +582,7 @@ func (r *RegisteredDecoys) registrationExists(d *DecoyRegistration) *DecoyRegist
 }
 
 type regExpireLogMsg struct {
+	Valid      bool
 	DecoyAddr  string
 	Reg2expire int64
 	RegID      string
@@ -611,6 +619,7 @@ func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
 	}
 
 	stats := &regExpireLogMsg{
+		Valid:      expiredRegObj.Valid,
 		DecoyAddr:  expiredReg.decoy,
 		Reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
 		RegID:      expiredReg.regID,
@@ -640,21 +649,30 @@ func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
 // makes less and less sense every time I come back to it.
 // Note: please try to limit duration that this process is capable of taking the
 // lock on the RegisteredDecoys mutex to prevent thread locking.
-func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
+//
+// returns the number of expired registrations total and the number marked valid
+func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) (int, int) {
 	var expiredRegTimeoutIndices = r.getExpiredRegistrations()
 
+	// TODO JMWAMPLE REMOVE
 	logger.Infof("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
 		r.TotalRegistrations(), len(r.decoysTimeouts), len(expiredRegTimeoutIndices))
 
+	expiredValid := 0
 	for _, idx := range expiredRegTimeoutIndices {
 
 		stats := r.removeRegistration(idx)
 		if stats != nil {
+			if stats.Valid {
+				expiredValid++
+			}
 			statsStr, _ := json.Marshal(stats)
 			logger.Printf("expired registration %s", statsStr)
 			// TODO JMWAMPLE LOG SESSIONS WITH NON-ZERO TRANSFER, COUNT OF ZERO
 		}
 	}
+
+	return len(expiredRegTimeoutIndices), expiredValid
 }
 
 // **NOTE**: If you mess with this function make sure the

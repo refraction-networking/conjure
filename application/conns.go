@@ -138,7 +138,7 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 		} else if err, ok := err.(net.Error); ok && !err.Timeout() {
 			// log non-timeout net.Error
 			logger.Errorln("error occurred discarding data:", err)
-		} else {
+		} else if err != nil {
 			//Log any other (non-net.Error) error
 			logger.Errorln("error occurred discarding data:", err)
 		}
@@ -165,7 +165,7 @@ readLoop:
 			} else if err, ok := err.(net.Error); ok && !err.Timeout() {
 				// log non-timeout net.Error
 				logger.Errorln("error occurred discarding data:", err)
-			} else {
+			} else if err != nil {
 				//Log any other (non-net.Error) error
 				logger.Errorln("error occurred discarding data:", err)
 			}

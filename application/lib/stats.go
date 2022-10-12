@@ -31,17 +31,18 @@ type Stats struct {
 
 	moduleStats []stats
 
-	activeConns int64 // incremented on add, decremented on remove, not reset
-	newConns    int64 // new connections since last stats.reset()
-	newErrConns int64 // new connections that had some sort of error since last reset()
+	activeConns            int64 // incremented on add, decremented on remove, not reset
+	newConns               int64 // new connections since last stats.reset()
+	newErrConns            int64 // new connections that had some sort of error since last reset()
+	newMissedRegistrations int64 // number of "missed" registrations (as seen by a connection with no registration)
 
+	// TODO JMWAMPLE REMOVE
 	activeRegistrations     int64            // Current number of active registrations we have (marked valid - no error in validation i.e. bad phantom, bad covert, live phantom)
 	newLocalRegistrations   int64            // Current registrations that were picked up from this detector (also included in newRegistrations)
-	newApiRegistrations     int64            // Current registrations that we heard about from the API (also included in newRegistrations)
+	newAPIRegistrations     int64            // Current registrations that we heard about from the API (also included in newRegistrations)
 	newSharedRegistrations  int64            // Current registrations that we heard about from the API sharing system (also included in newRegistrations)
 	newUnknownRegistrations int64            // Current registrations that we heard about with unknown source (also included in newRegistrations)a
 	newRegistrations        int64            // Added valid registrations since last reset() - non valid registrations should be counted entirely in newErrRegistrations
-	newMissedRegistrations  int64            // number of "missed" registrations (as seen by a connection with no registration)
 	newErrRegistrations     int64            // number of registrations that had some kinda error
 	newDupRegistrations     int64            // number of duplicate registrations (doesn't uniquify, so might have some double counting)
 	genMutex                *sync.Mutex      // Lock for generations map
@@ -96,7 +97,7 @@ func (s *Stats) Reset() {
 	atomic.StoreInt64(&s.newErrConns, 0)
 	atomic.StoreInt64(&s.newRegistrations, 0)
 	atomic.StoreInt64(&s.newLocalRegistrations, 0)
-	atomic.StoreInt64(&s.newApiRegistrations, 0)
+	atomic.StoreInt64(&s.newAPIRegistrations, 0)
 	atomic.StoreInt64(&s.newSharedRegistrations, 0)
 	atomic.StoreInt64(&s.newUnknownRegistrations, 0)
 	atomic.StoreInt64(&s.newMissedRegistrations, 0)
@@ -129,7 +130,7 @@ func (s *Stats) PrintStats() {
 		atomic.LoadInt64(&s.activeConns), atomic.LoadInt64(&s.newConns), atomic.LoadInt64(&s.newErrConns),
 		atomic.LoadInt64(&s.activeRegistrations),
 		atomic.LoadInt64(&s.newRegistrations),
-		atomic.LoadInt64(&s.newLocalRegistrations), atomic.LoadInt64(&s.newApiRegistrations), atomic.LoadInt64(&s.newSharedRegistrations), atomic.LoadInt64(&s.newUnknownRegistrations),
+		atomic.LoadInt64(&s.newLocalRegistrations), atomic.LoadInt64(&s.newAPIRegistrations), atomic.LoadInt64(&s.newSharedRegistrations), atomic.LoadInt64(&s.newUnknownRegistrations),
 		atomic.LoadInt64(&s.newMissedRegistrations),
 		atomic.LoadInt64(&s.newErrRegistrations), atomic.LoadInt64(&s.newDupRegistrations),
 		atomic.LoadInt64(&s.newLivenessPass), atomic.LoadInt64(&s.newLivenessFail), atomic.LoadInt64(&s.newLivenessCached),
@@ -159,7 +160,7 @@ func (s *Stats) AddReg(generation uint32, source *pb.RegistrationSource) {
 	if *source == pb.RegistrationSource_Detector {
 		atomic.AddInt64(&s.newLocalRegistrations, 1)
 	} else if *source == pb.RegistrationSource_API {
-		atomic.AddInt64(&s.newApiRegistrations, 1)
+		atomic.AddInt64(&s.newAPIRegistrations, 1)
 	} else if *source == pb.RegistrationSource_DetectorPrescan {
 		atomic.AddInt64(&s.newSharedRegistrations, 1)
 	} else {

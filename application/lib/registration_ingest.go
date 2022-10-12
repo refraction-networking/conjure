@@ -47,6 +47,9 @@ func (rm *RegistrationManager) HandleRegUpdates(ctx context.Context, regChan <-c
 	shallowBuffer := make(chan interface{}, jobBufferMultiplier*workers)
 	defer close(shallowBuffer)
 
+	// Add to registration manager so that we cann access it for stats printing.
+	rm.ingestChan = shallowBuffer
+
 	// launch workers
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
@@ -56,6 +59,7 @@ func (rm *RegistrationManager) HandleRegUpdates(ctx context.Context, regChan <-c
 	// distribute messages to workers. When workers are unavailable messages are
 	// added into channel buffer until full, then dropped.
 	for msg := range regChan {
+		rm.addIngestMessage()
 		select {
 		case <-ctx.Done():
 			logger.Infof("closing all ingest threads")
@@ -63,7 +67,7 @@ func (rm *RegistrationManager) HandleRegUpdates(ctx context.Context, regChan <-c
 		case shallowBuffer <- msg:
 		default:
 			logger.Tracef("dropping registration")
-			//TODO JMWAMPLE - dropped count
+			rm.addDroppedMessage()
 		}
 	}
 
@@ -114,6 +118,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 		// log phantom IP, shared secret, ipv6 support
 		logger.Debugf("Duplicate registration: %v %s\n", reg.IDString(), reg.RegistrationSource)
 		Stat().AddDupReg()
+		rm.AddDupReg()
 
 		// Track the received registration, if it is already tracked
 		// it will just update the record
@@ -121,6 +126,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 		if err != nil {
 			logger.Errorln("error tracking registration: ", err)
 			Stat().AddErrReg()
+			rm.AddErrReg()
 		}
 		return
 	}
@@ -133,6 +139,8 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 	if err != nil {
 		logger.Errorln("error tracking registration: ", err)
 		Stat().AddErrReg()
+		rm.AddErrReg()
+
 	}
 
 	// If registration is trying to connect to a covert address that
@@ -143,6 +151,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 		// blocklisted covert addresses.
 		logger.Infof("Dropping reg, malformed or blocklisted covert: %v, %s -> %s", reg.IDString(), reg.GetRegistrationAddress(), reg.Covert)
 		Stat().AddErrReg()
+		rm.AddErrReg()
 		return
 	}
 
@@ -158,7 +167,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 		// New registration received over channel that requires liveness scan for the phantom
 		live, response := rm.PhantomIsLive(reg.DarkDecoy.String(), 443)
 
-		// TODO JMWAMPLE remove this
+		// TODO JMWAMPLE REMOVE
 		if live {
 			logger.Warnf("Dropping registration %v -- live phantom: %v\n", reg.IDString(), response)
 			if errors.Is(response, liveness.ErrCachedPhantom) {
@@ -181,6 +190,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 		// specifically from handling / interfering in any subsequent connection. See PR #75
 		logger.Warnf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
 		Stat().AddErrReg()
+		rm.AddErrReg()
 		return
 	}
 
@@ -188,7 +198,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 	rm.AddRegistration(reg)
 	logger.Debugf("Adding registration %v\n", reg.IDString())
 	Stat().AddReg(reg.DecoyListVersion, reg.RegistrationSource)
-
+	rm.AddReg(reg.DecoyListVersion, reg.RegistrationSource)
 }
 
 func tryShareRegistrationOverAPI(reg *DecoyRegistration, apiEndpoint string, logger *log.Logger) {

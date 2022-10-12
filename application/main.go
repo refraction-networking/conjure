@@ -93,7 +93,7 @@ func main() {
 	cj.Stat().AddStatsModule(zmqIngester)
 	cj.Stat().AddStatsModule(regManager.LivenessTester)
 	cj.Stat().AddStatsModule(cj.GetProxyStats())
-	// cj.Stat().AddStatsModule(regManager)
+	cj.Stat().AddStatsModule(regManager)
 	// cj.Stat().AddStatsModule(connStats)
 
 	// Periodically clean old registrations
