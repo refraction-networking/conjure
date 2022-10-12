@@ -143,10 +143,23 @@ func halfPipe(src, dst net.Conn,
 // clients covert destination.
 func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	covertConn, err := net.Dial("tcp", reg.Covert)
+	if errors.Is(err, syscall.ECONNRESET) {
+		err = fmt.Errorf("rst")
+	} else if errors.Is(err, syscall.ECONNREFUSED) {
+		err = fmt.Errorf("refused")
+	} else if errors.Is(err, syscall.ECONNABORTED) {
+		err = fmt.Errorf("aborted")
+	} else if errN, ok := err.(net.Error); ok && !errN.Timeout() {
+		err = fmt.Errorf("timeout")
+	}
+
+	// Any common error that is a non-station issue should have covert IP
+	// removed.
 	if err != nil {
 		logger.Errorf("failed to dial target: %s", err)
 		return
 	}
+
 	defer covertConn.Close()
 
 	if reg.Flags.GetProxyHeader() {

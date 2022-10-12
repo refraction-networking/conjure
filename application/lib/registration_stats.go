@@ -78,7 +78,7 @@ func (s *RegistrationStats) PrintAndReset(logger *log.Logger) {
 	ner := atomic.LoadInt64(&s.newErrRegistrations)
 	ndr := atomic.LoadInt64(&s.newDupRegistrations)
 
-	logger.Infof("reg-stats: Regs: 0 %d %d %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f/s %d %.3f/s",
+	logger.Infof("reg-stats: 0 %d %d %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f/s %d %.3f/s",
 		atomic.LoadInt64(&s.activeRegistrations),
 		nr, float64(nr)/epochDur*100,
 
@@ -135,7 +135,7 @@ func (s *RegistrationManager) PrintAndReset(logger *log.Logger) {
 	ner := atomic.LoadInt64(&s.newErrRegistrations)
 	ndr := atomic.LoadInt64(&s.newDupRegistrations)
 
-	logger.Infof("reg-stats: Regs: %d %d %d %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f/s %d %.3f/s",
+	logger.Infof("reg-stats: %d %d %d %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f/s %d %.3f/s",
 		s.registeredDecoys.TotalRegistrations(),
 		atomic.LoadInt64(&s.activeRegistrations),
 		nr, float64(nr)/epochDur*100,
