@@ -79,7 +79,7 @@ func TestCachedLiveness(t *testing.T) {
 
 }
 
-func TestCachedLivenessNonLiveDisabled(t *testing.T) {
+func TestCachedLivenessLiveOnly(t *testing.T) {
 
 	_, err := New(&Config{"1h", ""})
 	require.Nil(t, err)

@@ -84,6 +84,7 @@ type ConnectingTransport interface {
 
 // RegistrationManager manages registration tracking for the station.
 type RegistrationManager struct {
+	*RegConfig
 	registeredDecoys *RegisteredDecoys
 	Logger           *log.Logger
 	PhantomSelector  *PhantomIPSelector
@@ -91,7 +92,7 @@ type RegistrationManager struct {
 }
 
 // NewRegistrationManager returns a newly initialized registration Manager
-func NewRegistrationManager() *RegistrationManager {
+func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 
 	logger := log.New(os.Stdout, "[REG] ", golog.Ldate|golog.Lmicroseconds)
 
@@ -117,7 +118,7 @@ func NewRegistrationManager() *RegistrationManager {
 // clients register.
 func (regManager *RegistrationManager) AddTransport(index pb.TransportType, t Transport) error {
 	if regManager == nil {
-		regManager = NewRegistrationManager()
+		regManager = NewRegistrationManager(regManager.RegConfig)
 	}
 	if regManager.registeredDecoys == nil {
 		regManager.registeredDecoys = NewRegisteredDecoys()
@@ -172,56 +173,6 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		DecoyListVersion:   c2s.GetDecoyListGeneration(),
 		RegistrationTime:   time.Now(),
 		RegistrationSource: registrationSource,
-		regCount:           0,
-	}
-
-	return &reg, nil
-}
-
-// NewRegistrationC2SWrapper creates a new registration from details provided. Adds the registration
-// to tracking map, But marks it as not valid.
-func (regManager *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, includeV6 bool) (*DecoyRegistration, error) {
-	c2s := c2sw.GetRegistrationPayload()
-
-	// Generate keys from shared secret using HKDF
-	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret())
-	if err != nil {
-		return nil, fmt.Errorf("Failed to generate keys: %v", err)
-	}
-
-	gen := uint(c2s.GetDecoyListGeneration())
-	clientLibVer := uint(c2s.GetClientLibVersion())
-	phantomAddr, err := regManager.PhantomSelector.Select(
-		conjureKeys.DarkDecoySeed, gen, clientLibVer, includeV6)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed phantom select: gen %d libv %d v6 %t err: %v",
-			gen,
-			clientLibVer,
-			includeV6,
-			err)
-	}
-
-	clientAddr := net.IP(c2sw.GetRegistrationAddress())
-
-	if phantomAddr.To4() != nil && clientAddr.To4() == nil {
-		// This can happen if the client chooses from a set that contains no
-		// ipv6 options even if include ipv6 is enabled they will get ipv4.
-		return nil, fmt.Errorf("Failed because IPv6 client chose IPv4 phantom")
-	}
-
-	regSrc := c2sw.GetRegistrationSource()
-	reg := DecoyRegistration{
-		DarkDecoy:          phantomAddr,
-		registrationAddr:   net.IP(c2sw.GetRegistrationAddress()),
-		Keys:               &conjureKeys,
-		Covert:             c2s.GetCovertAddress(),
-		Mask:               c2s.GetMaskedDecoyServerName(),
-		Flags:              c2s.Flags,
-		Transport:          c2s.GetTransport(),
-		DecoyListVersion:   c2s.GetDecoyListGeneration(),
-		RegistrationTime:   time.Now(),
-		RegistrationSource: &regSrc,
 		regCount:           0,
 	}
 

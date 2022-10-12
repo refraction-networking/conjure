@@ -2,32 +2,14 @@ package lib
 
 import (
 	"net"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestConjureLibParseConfig(t *testing.T) {
-	os.Setenv("CJ_STATION_CONFIG", "../config.toml")
-
-	conf, err := ParseConfig()
-	if err != nil {
-		t.Fatalf("failed to parse app config: %v", err)
-	}
-
-	if len(conf.ZMQConfig.ConnectSockets) == 0 {
-		t.Fatalf("No sockets provided to test parse")
-	}
-
-	if len(conf.covertBlocklistSubnets) == 0 {
-		t.Fatalf("failed to parse blocklist")
-	}
-}
-
 func TestConjureLibConfigResolveBlocklisted(t *testing.T) {
 
-	conf := &Config{
+	conf := &RegConfig{
 		CovertBlocklistSubnets: []string{
 			"192.0.0.1/16",
 			"127.0.0.1/32",
@@ -40,7 +22,7 @@ func TestConjureLibConfigResolveBlocklisted(t *testing.T) {
 		},
 	}
 
-	conf.parseBlocklists()
+	conf.ParseBlocklists()
 	goodTestCases := map[string][]string{
 		"128.0.2.1:25":     []string{"128.0.2.1:25"},
 		"[2001:db8::1]:80": []string{"[2001:db8::1]:80"},
@@ -86,14 +68,14 @@ func TestConjureLibConfigResolveBlocklisted(t *testing.T) {
 }
 
 func TestConjureLibConfigBlocklistPhantoms(t *testing.T) {
-	conf := &Config{
+	conf := &RegConfig{
 		PhantomBlocklist: []string{
 			"192.168.0.0/16",
 			"2001::0/64",
 		},
 	}
 
-	conf.parseBlocklists()
+	conf.ParseBlocklists()
 
 	// Addresses that pass Blocklisted check
 	goodIPs := []string{
@@ -130,14 +112,14 @@ func TestConjureLibConfigBlocklistPhantoms(t *testing.T) {
 
 func TestConjureLibConfigResolveAllowlisted(t *testing.T) {
 
-	conf := &Config{
+	conf := &RegConfig{
 		CovertAllowlistSubnets: []string{
 			"128.138.0.1/16",
 			"2001:db8::1/64",
 		},
 	}
 
-	conf.parseBlocklists()
+	conf.ParseBlocklists()
 	goodTestCases := map[string][]string{
 		"128.138.2.1:25":   []string{"128.138.2.1:25"},
 		"[2001:db8::1]:80": []string{"[2001:db8::1]:80"},
@@ -165,13 +147,13 @@ func TestConjureLibConfigResolveAllowlisted(t *testing.T) {
 }
 
 func TestConjureLibConfigBlocklistPublic(t *testing.T) {
-	conf := &Config{
+	conf := &RegConfig{
 		CovertBlocklistPublicAddrs: true,
 	}
 
-	conf.parseBlocklists()
+	conf.ParseBlocklists()
 
-	conf.parseBlocklists()
+	conf.ParseBlocklists()
 	goodTestCases := map[string][]string{
 		"128.138.2.1:25":   []string{"128.138.2.1:25"},
 		"[2001:db8::1]:80": []string{"[2001:db8::1]:80"},

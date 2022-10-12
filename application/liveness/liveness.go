@@ -112,10 +112,12 @@ type stats struct {
 	// newLivenessFail count of liveness tests that failed (live phantom) since reset()
 	newLivenessFail int64
 
-	// newLivenessCachedLive count of liveness tests that
+	// newLivenessCachedLive count of liveness tests that were resolved by consulting the
+	// cache resulting in a "LIVE" designation since reset()
 	newLivenessCachedLive int64
 
-	// newLivenessCachedNonLive count of liveness tests that
+	// newLivenessCachedNonLive count of liveness tests that were resolved by consulting the
+	// cache resulting in a "NOT LIVE" designation since reset()
 	newLivenessCachedNonLive int64
 
 	// start time of epoch to calculate per-second rates
@@ -139,7 +141,7 @@ func (s *stats) printStats(logger *log.Logger) {
 	nlf := atomic.LoadInt64(&s.newLivenessFail)
 	nlcl := atomic.LoadInt64(&s.newLivenessCachedLive)
 	nlcn := atomic.LoadInt64(&s.newLivenessCachedNonLive)
-	total := nlp + nlf + +nlcl + nlcn
+	total := math.Max(float64(nlp+nlf + +nlcl + nlcn), 1)
 
 	logger.Infof("liveness-stats: %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s",
 		nlp,

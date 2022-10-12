@@ -168,7 +168,7 @@ func (blt *LRULivenessTester) printStats(logger *log.Logger) {
 	nlf := atomic.LoadInt64(&s.newLivenessFail)
 	nlcl := atomic.LoadInt64(&s.newLivenessCachedLive)
 	nlcn := atomic.LoadInt64(&s.newLivenessCachedNonLive)
-	total := nlp + nlf + +nlcl + nlcn
+	total := math.Max(float64(nlp+nlf + +nlcl + nlcn), 1)
 
 	logger.Infof("liveness-stats: %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d/%d (%f%%)",
 		nlp,

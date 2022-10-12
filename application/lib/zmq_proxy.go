@@ -3,6 +3,7 @@ package lib
 //
 
 import (
+	"context"
 	"fmt"
 	golog "log"
 	"math"
@@ -60,7 +61,7 @@ func NewZMQIngest(connectAddr string, regchan chan<- interface{}, conf *ZMQConfi
 }
 
 // RunZMQ start the receive loop that writes into the provided message receive channel
-func (zi *ZMQIngester) RunZMQ() {
+func (zi *ZMQIngester) RunZMQ(ctx context.Context) {
 	go zi.proxyZMQ()
 
 	sub, err := zmq.NewSocket(zmq.SUB)
@@ -87,7 +88,12 @@ func (zi *ZMQIngester) RunZMQ() {
 		if err != nil {
 			zi.logger.Fatalf("error reading from ZMQ socket: %v\n", err)
 		}
+
+		zi.addZMQMessage()
+
 		select {
+		case <-ctx.Done():
+			return
 		case zi.regChan <- msg:
 			continue
 		default:
@@ -124,7 +130,7 @@ func (zi *ZMQIngester) PrintAndReset(logger *log.Logger) {
 	logger.Infof("zmq-stats: %d %d %.3f%% (%.3f/s) %d %d/%d %.3f%%",
 		atomic.LoadInt64(&zi.zmqMessages),
 		atomic.LoadInt64(&zi.droppedZMQMessages),
-		float64(atomic.LoadInt64(&zi.droppedZMQMessages))/math.Max(float64(atomic.LoadInt64(&zi.zmqMessages)), 1),
+		float64(atomic.LoadInt64(&zi.droppedZMQMessages))/math.Max(float64(atomic.LoadInt64(&zi.zmqMessages)), 1)*100,
 		1000*float64(atomic.LoadInt64(&zi.droppedZMQMessages))/epochDur, // x1000 convert /ms to /s
 		atomic.LoadInt64(&zi.totalDroppedZMQMessages),
 		l,
