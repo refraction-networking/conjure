@@ -111,6 +111,7 @@ func main() {
 
 	// Receive registration updates from ZMQ Proxy as subscriber
 	go zmqIngester.RunZMQ(ctx)
+	wg.Add(1)
 	go regManager.HandleRegUpdates(ctx, regChan, wg)
 	go acceptConnections(ctx, regManager, logger)
 

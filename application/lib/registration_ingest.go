@@ -41,7 +41,7 @@ func (rm *RegistrationManager) HandleRegUpdates(ctx context.Context, regChan <-c
 		workers = rm.IngestWorkerCount
 	}
 
-	var wg *sync.WaitGroup
+	wg := new(sync.WaitGroup)
 
 	// Add a shallow buffer for incoming registrations
 	shallowBuffer := make(chan interface{}, jobBufferMultiplier*workers)

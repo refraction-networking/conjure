@@ -107,6 +107,7 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 		return nil
 	}
 	return &RegistrationManager{
+		RegConfig:        conf,
 		Logger:           logger,
 		registeredDecoys: NewRegisteredDecoys(),
 		PhantomSelector:  p,
