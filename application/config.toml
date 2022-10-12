@@ -39,6 +39,9 @@ cache_expiration_nonlive = "10m"
 enable_v4 = true
 enable_v6 = false
 
+# Number of workers launched to handle received registrations.
+ingest_worker_count = 100
+
 # If a registration is received with a covert address in one of these subnets it will
 # be ignored and dropped. This is to prevent clients leveraging the outgoing
 # connections from the station to connect to sation infrastructure that would

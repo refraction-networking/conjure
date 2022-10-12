@@ -17,6 +17,11 @@ import (
 	"github.com/refraction-networking/conjure/application/log"
 )
 
+const (
+	defaultWorkerCount  = 100
+	jobBufferMultiplier = 5
+)
+
 // HandleRegUpdates is responsible for launching and managing registration
 // ingest from the perspective of the RegistrationManager. The keys to success
 // in this job are:
@@ -31,15 +36,19 @@ import (
 func (rm *RegistrationManager) HandleRegUpdates(ctx context.Context, regChan <-chan interface{}, parentWG *sync.WaitGroup) {
 	defer parentWG.Done()
 	logger := rm.Logger
+	workers := defaultWorkerCount
+	if rm.IngestWorkerCount != 0 {
+		workers = rm.IngestWorkerCount
+	}
 
 	var wg *sync.WaitGroup
 
 	// Add a shallow buffer for incoming registrations
-	shallowBuffer := make(chan interface{}, 5*rm.IngestWorkerCount)
+	shallowBuffer := make(chan interface{}, jobBufferMultiplier*workers)
 	defer close(shallowBuffer)
 
 	// launch workers
-	for i := 0; i < rm.IngestWorkerCount; i++ {
+	for i := 0; i < workers; i++ {
 		wg.Add(1)
 		go rm.startIngestThread(ctx, shallowBuffer, wg)
 	}
