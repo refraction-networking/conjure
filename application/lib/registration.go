@@ -242,6 +242,12 @@ func (regManager *RegistrationManager) PhantomIsLive(addr string, port uint16) (
 	return regManager.LivenessTester.PhantomIsLive(addr, port)
 }
 
+// MarkActive indicates that an incoming connection has successfully been make
+// with the registration provided in the argument.
+func (regManager *RegistrationManager) MarkActive(reg *DecoyRegistration) {
+	regManager.registeredDecoys.markActive(reg)
+}
+
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
 	DarkDecoy          net.IP
@@ -386,12 +392,21 @@ func (reg *DecoyRegistration) GetRegistrationAddress() string {
 	return reg.registrationAddr.String()
 }
 
+type regStatus int
+
+const (
+	regStatusUnused regStatus = iota // No connections using this registration have been received yet
+	regStatusUsed   regStatus = iota // At least one valid connection has been received for this registration
+	// regStatusInUse  regStatus = iota // future: maybe useful
+)
+
 // DecoyTimeout contains all fields required to track registration validity / expiration.
 type DecoyTimeout struct {
 	decoy            string
 	identifier       string
 	registrationTime time.Time
 	regID            string
+	status           regStatus
 }
 
 // RegisteredDecoys provides a container struct for tracking all registrations and their expiration.
@@ -407,11 +422,16 @@ type RegisteredDecoys struct {
 
 	decoysTimeouts map[string]*DecoyTimeout
 	m              sync.RWMutex
+
+	timeoutActive time.Duration
+	timeoutUnused time.Duration
 }
 
 // NewRegisteredDecoys returns a new struct with which to track registrations.
 func NewRegisteredDecoys() *RegisteredDecoys {
 	return &RegisteredDecoys{
+		timeoutActive:  6 * time.Hour,
+		timeoutUnused:  10 * time.Minute,
 		decoys:         make(map[string]map[string]*DecoyRegistration),
 		transports:     make(map[pb.TransportType]Transport),
 		decoysTimeouts: make(map[string]*DecoyTimeout),
@@ -457,13 +477,14 @@ func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 
 	r.decoys[phantomAddr][identifier] = d
 
-	newtimeout := &DecoyTimeout{
+	newTimeout := &DecoyTimeout{
 		decoy:            phantomAddr,
 		identifier:       identifier,
 		registrationTime: time.Now(),
 		regID:            d.IDString(),
+		status:           regStatusUnused,
 	}
-	r.decoysTimeouts[d.IDString()+phantomAddr] = newtimeout
+	r.decoysTimeouts[d.IDString()+phantomAddr] = newTimeout
 
 	return nil
 }
@@ -497,6 +518,17 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 	registerForDetector(reg)
 
 	return nil
+}
+
+func (r *RegisteredDecoys) markActive(d *DecoyRegistration) {
+
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	phantomAddr := d.DarkDecoy.String()
+	if regTimeout, ok := r.decoysTimeouts[d.IDString()+phantomAddr]; ok {
+		regTimeout.status = regStatusUsed
+	}
 }
 
 func (r *RegisteredDecoys) getRegistrations(darkDecoyAddr net.IP) map[string]*DecoyRegistration {
@@ -593,12 +625,16 @@ func (r *RegisteredDecoys) getExpiredRegistrations() []string {
 	r.m.RLock()
 	defer r.m.RUnlock()
 
-	const regTimeout = time.Hour * 6
-	var cutoff = time.Now().Add(-regTimeout)
 	var expiredRegTimeoutIndices = []string{}
 
-	for idx, decoyTimeout := range r.decoysTimeouts {
-		if decoyTimeout.registrationTime.Before(cutoff) {
+	for idx, regTimeout := range r.decoysTimeouts {
+		if regTimeout.status == regStatusUnused && time.Since(regTimeout.registrationTime) > r.timeoutUnused {
+			// if a registration has not seen a valid connection in within the
+			// timeout we remove it from tracking as we do not expect to see a
+			// valid connection and no longer need it. Clients should retry with
+			// a new registration if connection has failed for this duration.
+			expiredRegTimeoutIndices = append(expiredRegTimeoutIndices, idx)
+		} else if time.Since(regTimeout.registrationTime) > r.timeoutActive {
 			// if a registration was received before the cutoff time add it
 			// to the list of registrations to be removed.
 			expiredRegTimeoutIndices = append(expiredRegTimeoutIndices, idx)

@@ -215,6 +215,9 @@ readLoop:
 
 			logger.SetPrefix(fmt.Sprintf("[%s] %s ", t.LogPrefix(), reg.IDString()))
 			logger.Debugf("registration found {reg_id: %s, phantom: %s, transport: %s}\n", reg.IDString(), originalDstIP, t.Name())
+
+			regManager.MarkActive(reg)
+
 			break readLoop
 		}
 	}
