@@ -80,7 +80,7 @@ func SetupPhantomConnectionsSecret(manager *dd.RegistrationManager, transport pb
 }
 
 func SetupRegistrationManager(transports ...Transport) *dd.RegistrationManager {
-	manager := dd.NewRegistrationManager()
+	manager := dd.NewRegistrationManager(&dd.RegConfig{})
 	for _, t := range transports {
 		err := manager.AddTransport(t.Index, t.Transport)
 		if err != nil {

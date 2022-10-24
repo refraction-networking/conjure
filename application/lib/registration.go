@@ -84,14 +84,20 @@ type ConnectingTransport interface {
 
 // RegistrationManager manages registration tracking for the station.
 type RegistrationManager struct {
+	*RegConfig
+	*RegistrationStats
 	registeredDecoys *RegisteredDecoys
 	Logger           *log.Logger
 	PhantomSelector  *PhantomIPSelector
 	LivenessTester   liveness.Tester
+
+	// ingestChan is included here so that the capacity and use is available to
+	// stats
+	ingestChan <-chan interface{}
 }
 
 // NewRegistrationManager returns a newly initialized registration Manager
-func NewRegistrationManager() *RegistrationManager {
+func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 
 	logger := log.New(os.Stdout, "[REG] ", golog.Ldate|golog.Lmicroseconds)
 
@@ -106,10 +112,12 @@ func NewRegistrationManager() *RegistrationManager {
 		return nil
 	}
 	return &RegistrationManager{
-		Logger:           logger,
-		registeredDecoys: NewRegisteredDecoys(),
-		PhantomSelector:  p,
-		LivenessTester:   ult,
+		RegConfig:         conf,
+		RegistrationStats: newRegistrationStats(),
+		Logger:            logger,
+		registeredDecoys:  NewRegisteredDecoys(),
+		PhantomSelector:   p,
+		LivenessTester:    ult,
 	}
 }
 
@@ -117,7 +125,7 @@ func NewRegistrationManager() *RegistrationManager {
 // clients register.
 func (regManager *RegistrationManager) AddTransport(index pb.TransportType, t Transport) error {
 	if regManager == nil {
-		regManager = NewRegistrationManager()
+		regManager = NewRegistrationManager(regManager.RegConfig)
 	}
 	if regManager.registeredDecoys == nil {
 		regManager.registeredDecoys = NewRegisteredDecoys()
@@ -178,56 +186,6 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	return &reg, nil
 }
 
-// NewRegistrationC2SWrapper creates a new registration from details provided. Adds the registration
-// to tracking map, But marks it as not valid.
-func (regManager *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, includeV6 bool) (*DecoyRegistration, error) {
-	c2s := c2sw.GetRegistrationPayload()
-
-	// Generate keys from shared secret using HKDF
-	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret())
-	if err != nil {
-		return nil, fmt.Errorf("Failed to generate keys: %v", err)
-	}
-
-	gen := uint(c2s.GetDecoyListGeneration())
-	clientLibVer := uint(c2s.GetClientLibVersion())
-	phantomAddr, err := regManager.PhantomSelector.Select(
-		conjureKeys.DarkDecoySeed, gen, clientLibVer, includeV6)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed phantom select: gen %d libv %d v6 %t err: %v",
-			gen,
-			clientLibVer,
-			includeV6,
-			err)
-	}
-
-	clientAddr := net.IP(c2sw.GetRegistrationAddress())
-
-	if phantomAddr.To4() != nil && clientAddr.To4() == nil {
-		// This can happen if the client chooses from a set that contains no
-		// ipv6 options even if include ipv6 is enabled they will get ipv4.
-		return nil, fmt.Errorf("Failed because IPv6 client chose IPv4 phantom")
-	}
-
-	regSrc := c2sw.GetRegistrationSource()
-	reg := DecoyRegistration{
-		DarkDecoy:          phantomAddr,
-		registrationAddr:   net.IP(c2sw.GetRegistrationAddress()),
-		Keys:               &conjureKeys,
-		Covert:             c2s.GetCovertAddress(),
-		Mask:               c2s.GetMaskedDecoyServerName(),
-		Flags:              c2s.Flags,
-		Transport:          c2s.GetTransport(),
-		DecoyListVersion:   c2s.GetDecoyListGeneration(),
-		RegistrationTime:   time.Now(),
-		RegistrationSource: &regSrc,
-		regCount:           0,
-	}
-
-	return &reg, nil
-}
-
 // TrackRegistration adds the registration to the map WITHOUT marking it valid.
 func (regManager *RegistrationManager) TrackRegistration(d *DecoyRegistration) error {
 	err := regManager.registeredDecoys.Track(d)
@@ -267,7 +225,8 @@ func (regManager *RegistrationManager) CountRegistrations(phantomAddr net.IP) in
 
 // RemoveOldRegistrations garbage collects old registrations
 func (regManager *RegistrationManager) RemoveOldRegistrations() {
-	regManager.registeredDecoys.removeOldRegistrations(regManager.Logger)
+	expired, validExpired := regManager.registeredDecoys.removeOldRegistrations(regManager.Logger)
+	regManager.AddExpiredRegs(int64(expired), int64(validExpired))
 }
 
 // PhantomIsLive - Test whether the phantom is live using
@@ -281,6 +240,12 @@ func (regManager *RegistrationManager) RemoveOldRegistrations() {
 //	error	reason decision was made
 func (regManager *RegistrationManager) PhantomIsLive(addr string, port uint16) (bool, error) {
 	return regManager.LivenessTester.PhantomIsLive(addr, port)
+}
+
+// MarkActive indicates that an incoming connection has successfully been make
+// with the registration provided in the argument.
+func (regManager *RegistrationManager) MarkActive(reg *DecoyRegistration) {
+	regManager.registeredDecoys.markActive(reg)
 }
 
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
@@ -427,15 +392,24 @@ func (reg *DecoyRegistration) GetRegistrationAddress() string {
 	return reg.registrationAddr.String()
 }
 
+type regStatus int
+
+const (
+	regStatusUnused regStatus = iota // No connections using this registration have been received yet
+	regStatusUsed   regStatus = iota // At least one valid connection has been received for this registration
+	// regStatusInUse  regStatus = iota // future: maybe useful
+)
+
 // DecoyTimeout contains all fields required to track registration validity / expiration.
 type DecoyTimeout struct {
 	decoy            string
 	identifier       string
 	registrationTime time.Time
 	regID            string
+	status           regStatus
 }
 
-// RegisteredDecoys provides a container stuct for tracking all registrations and their expiration.
+// RegisteredDecoys provides a container struct for tracking all registrations and their expiration.
 type RegisteredDecoys struct {
 	// decoys will be a map from decoy_ip to a:
 	// map from "registration identifier" to registration.
@@ -448,11 +422,16 @@ type RegisteredDecoys struct {
 
 	decoysTimeouts map[string]*DecoyTimeout
 	m              sync.RWMutex
+
+	timeoutActive time.Duration
+	timeoutUnused time.Duration
 }
 
 // NewRegisteredDecoys returns a new struct with which to track registrations.
 func NewRegisteredDecoys() *RegisteredDecoys {
 	return &RegisteredDecoys{
+		timeoutActive:  6 * time.Hour,
+		timeoutUnused:  10 * time.Minute,
 		decoys:         make(map[string]map[string]*DecoyRegistration),
 		transports:     make(map[pb.TransportType]Transport),
 		decoysTimeouts: make(map[string]*DecoyTimeout),
@@ -498,13 +477,14 @@ func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 
 	r.decoys[phantomAddr][identifier] = d
 
-	newtimeout := &DecoyTimeout{
+	newTimeout := &DecoyTimeout{
 		decoy:            phantomAddr,
 		identifier:       identifier,
 		registrationTime: time.Now(),
 		regID:            d.IDString(),
+		status:           regStatusUnused,
 	}
-	r.decoysTimeouts[d.IDString()+phantomAddr] = newtimeout
+	r.decoysTimeouts[d.IDString()+phantomAddr] = newTimeout
 
 	return nil
 }
@@ -538,6 +518,17 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 	registerForDetector(reg)
 
 	return nil
+}
+
+func (r *RegisteredDecoys) markActive(d *DecoyRegistration) {
+
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	phantomAddr := d.DarkDecoy.String()
+	if regTimeout, ok := r.decoysTimeouts[d.IDString()+phantomAddr]; ok {
+		regTimeout.status = regStatusUsed
+	}
 }
 
 func (r *RegisteredDecoys) getRegistrations(darkDecoyAddr net.IP) map[string]*DecoyRegistration {
@@ -623,6 +614,7 @@ func (r *RegisteredDecoys) registrationExists(d *DecoyRegistration) *DecoyRegist
 }
 
 type regExpireLogMsg struct {
+	Valid      bool
 	DecoyAddr  string
 	Reg2expire int64
 	RegID      string
@@ -633,12 +625,16 @@ func (r *RegisteredDecoys) getExpiredRegistrations() []string {
 	r.m.RLock()
 	defer r.m.RUnlock()
 
-	const regTimeout = time.Hour * 6
-	var cutoff = time.Now().Add(-regTimeout)
 	var expiredRegTimeoutIndices = []string{}
 
-	for idx, decoyTimeout := range r.decoysTimeouts {
-		if decoyTimeout.registrationTime.Before(cutoff) {
+	for idx, regTimeout := range r.decoysTimeouts {
+		if regTimeout.status == regStatusUnused && time.Since(regTimeout.registrationTime) > r.timeoutUnused {
+			// if a registration has not seen a valid connection in within the
+			// timeout we remove it from tracking as we do not expect to see a
+			// valid connection and no longer need it. Clients should retry with
+			// a new registration if connection has failed for this duration.
+			expiredRegTimeoutIndices = append(expiredRegTimeoutIndices, idx)
+		} else if time.Since(regTimeout.registrationTime) > r.timeoutActive {
 			// if a registration was received before the cutoff time add it
 			// to the list of registrations to be removed.
 			expiredRegTimeoutIndices = append(expiredRegTimeoutIndices, idx)
@@ -659,6 +655,7 @@ func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
 	}
 
 	stats := &regExpireLogMsg{
+		Valid:      expiredRegObj.Valid,
 		DecoyAddr:  expiredReg.decoy,
 		Reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
 		RegID:      expiredReg.regID,
@@ -688,21 +685,30 @@ func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
 // makes less and less sense every time I come back to it.
 // Note: please try to limit duration that this process is capable of taking the
 // lock on the RegisteredDecoys mutex to prevent thread locking.
-func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) {
+//
+// returns the number of expired registrations total and the number marked valid
+func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) (int, int) {
 	var expiredRegTimeoutIndices = r.getExpiredRegistrations()
 
+	// TODO JMWAMPLE REMOVE
 	logger.Infof("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
 		r.TotalRegistrations(), len(r.decoysTimeouts), len(expiredRegTimeoutIndices))
 
+	expiredValid := 0
 	for _, idx := range expiredRegTimeoutIndices {
 
 		stats := r.removeRegistration(idx)
 		if stats != nil {
+			if stats.Valid {
+				expiredValid++
+			}
 			statsStr, _ := json.Marshal(stats)
 			logger.Printf("expired registration %s", statsStr)
 			// TODO JMWAMPLE LOG SESSIONS WITH NON-ZERO TRANSFER, COUNT OF ZERO
 		}
 	}
+
+	return len(expiredRegTimeoutIndices), expiredValid
 }
 
 // **NOTE**: If you mess with this function make sure the

@@ -3,8 +3,10 @@ package lib
 //
 
 import (
+	"context"
 	"fmt"
 	golog "log"
+	"math"
 	"os"
 	"sync/atomic"
 	"time"
@@ -30,6 +32,7 @@ type socketConfig struct {
 	SubscriptionPrefix string `toml:"subscription"`
 }
 
+// ZMQIngester manages registration ingest over ZMQ.
 type ZMQIngester struct {
 	*ZMQConfig
 	logger *log.Logger
@@ -41,8 +44,10 @@ type ZMQIngester struct {
 	epochStart              time.Time
 	droppedZMQMessages      int64 // if the ingest channel ends up blocking how many registrations were dropped this epoch
 	totalDroppedZMQMessages int64 // how many registrations have been dropped total due to full channel
+	zmqMessages             int64
 }
 
+// NewZMQIngest returns a struct that manages registration ingest over ZMQ.
 func NewZMQIngest(connectAddr string, regchan chan<- interface{}, conf *ZMQConfig) *ZMQIngester {
 	logger := log.New(os.Stdout, "[ZMQ_PROXY] ", golog.Ldate|golog.Lmicroseconds)
 
@@ -52,11 +57,11 @@ func NewZMQIngest(connectAddr string, regchan chan<- interface{}, conf *ZMQConfi
 		regchan,
 		connectAddr,
 		time.Now(),
-		0, 0}
+		0, 0, 0}
 }
 
 // RunZMQ start the receive loop that writes into the provided message receive channel
-func (zi *ZMQIngester) RunZMQ() {
+func (zi *ZMQIngester) RunZMQ(ctx context.Context) {
 	go zi.proxyZMQ()
 
 	sub, err := zmq.NewSocket(zmq.SUB)
@@ -83,7 +88,12 @@ func (zi *ZMQIngester) RunZMQ() {
 		if err != nil {
 			zi.logger.Fatalf("error reading from ZMQ socket: %v\n", err)
 		}
+
+		zi.addZMQMessage()
+
 		select {
+		case <-ctx.Done():
+			return
 		case zi.regChan <- msg:
 			continue
 		default:
@@ -94,9 +104,15 @@ func (zi *ZMQIngester) RunZMQ() {
 	}
 }
 
+// Reset implements the Stats interface
 func (zi *ZMQIngester) Reset() {
 	atomic.StoreInt64(&zi.droppedZMQMessages, 0)
+	atomic.StoreInt64(&zi.zmqMessages, 0)
 	zi.epochStart = time.Now()
+}
+
+func (zi *ZMQIngester) addZMQMessage() {
+	atomic.AddInt64(&zi.zmqMessages, 1)
 }
 
 func (zi *ZMQIngester) addDroppedZMQMessage() {
@@ -104,15 +120,19 @@ func (zi *ZMQIngester) addDroppedZMQMessage() {
 	atomic.AddInt64(&zi.totalDroppedZMQMessages, 1)
 }
 
+// PrintAndReset implements the Stats interface
 func (zi *ZMQIngester) PrintAndReset(logger *log.Logger) {
 	l := len(zi.regChan)
 	c := cap(zi.regChan)
-	epochDur := time.Since(zi.epochStart).Milliseconds()
+	// prevent div by 0 if thread starvation happens
+	var epochDur float64 = math.Max(float64(time.Since(zi.epochStart).Milliseconds()), 1)
 
-	logger.Infof("zmq-stats: %d %d (%.3f/s) dropped %d/%d %.3f%%",
-		atomic.LoadInt64(&zi.totalDroppedZMQMessages),
+	logger.Infof("zmq-stats: %d %d %.3f%% (%.3f/s) %d %d/%d %.3f%%",
+		atomic.LoadInt64(&zi.zmqMessages),
 		atomic.LoadInt64(&zi.droppedZMQMessages),
-		float64(atomic.LoadInt64(&zi.droppedZMQMessages))/float64(epochDur)*1000,
+		float64(atomic.LoadInt64(&zi.droppedZMQMessages))/math.Max(float64(atomic.LoadInt64(&zi.zmqMessages)), 1)*100,
+		1000*float64(atomic.LoadInt64(&zi.droppedZMQMessages))/epochDur, // x1000 convert /ms to /s
+		atomic.LoadInt64(&zi.totalDroppedZMQMessages),
 		l,
 		c,
 		float64(l)/float64(c)*100,
@@ -120,10 +140,9 @@ func (zi *ZMQIngester) PrintAndReset(logger *log.Logger) {
 	zi.Reset()
 }
 
-// ZMQProxy - centralizing proxy used to channel multiple registration sources into
-// one PUB socket for consumption by the application.
-// Specify the absolute location of the config file with
-// the CJ_PROXY_CONFIG environment variable.
+// ZMQProxy - centralizing proxy used to channel multiple registration sources
+// into one PUB socket for consumption by the application. Specify the absolute
+// location of the config file with the CJ_PROXY_CONFIG environment variable.
 func (zi *ZMQIngester) proxyZMQ() {
 
 	privkey, err := os.ReadFile(zi.PrivateKeyPath)
@@ -133,8 +152,8 @@ func (zi *ZMQIngester) proxyZMQ() {
 
 	// Only use first 32 bytes of key (some keys store
 	// public key after private key)
-	privkey_z85 := zmq.Z85encode(string(privkey[:32]))
-	pubkey_z85, err := zmq.AuthCurvePublic(privkey_z85)
+	privkeyZ85 := zmq.Z85encode(string(privkey[:32]))
+	pubkeyZ85, err := zmq.AuthCurvePublic(privkeyZ85)
 	if err != nil {
 		zi.logger.Fatalln("failed to generate client public key from private key:", err)
 	}
@@ -173,7 +192,7 @@ func (zi *ZMQIngester) proxyZMQ() {
 		}
 
 		if connectSocket.AuthenticationType == "CURVE" {
-			err = sock.ClientAuthCurve(connectSocket.PublicKey, pubkey_z85, privkey_z85)
+			err = sock.ClientAuthCurve(connectSocket.PublicKey, pubkeyZ85, privkeyZ85)
 			if err != nil {
 				zi.logger.Errorf("failed to set up CURVE authentication for %s: %v\n", connectSocket.Address, err)
 				continue

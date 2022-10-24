@@ -23,15 +23,24 @@ heartbeat_interval = 30000
 # a response before the connection is assumed to be dead.
 heartbeat_timeout = 1000
 
-# Time in hours to mark a cached live IP address as expired
-# in the liveness module.
+# Duration that a phantom IP identified as "LIVE" using a liveness test is
+# cached, preventing further lookups to the address. Empty string disables
+# caching for live phantom hosts.
 cache_expiration_time = "2.0h"
+# Duration that a phantom IP identified as "NOT LIVE" using a liveness test is
+# cached, preventing further lookups to the address. This should generally be
+# shorter to be responsive to remain responsive to hosts that become live. Empty
+# string disables caching for non-live phantom hosts.
+cache_expiration_nonlive = "10m"
 
 # Allow the station to opt out of either version of internet protocol to limit a
 # statio to handling one or the other. For example, v6 on small station deployment
 # with only v6 phantom subnet,  v4 only on station with no puvlic v6 address.
 enable_v4 = true
 enable_v6 = false
+
+# Number of workers launched to handle received registrations.
+ingest_worker_count = 100
 
 # If a registration is received with a covert address in one of these subnets it will
 # be ignored and dropped. This is to prevent clients leveraging the outgoing

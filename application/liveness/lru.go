@@ -1,14 +1,12 @@
 package liveness
 
 import (
-	"encoding/csv"
 	"fmt"
 	"math"
 	"net"
-	"os"
-	"os/exec"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -84,83 +82,6 @@ func (blt *LRULivenessTester) ClearExpiredCache() {
 	}
 }
 
-// PeriodicScan uses zmap to populate the cache of a LRULivenessTester.
-// Should be run as a goroutine as it may block for long periods of time while
-// scanning.
-func (blt *LRULivenessTester) PeriodicScan(t string) {
-	allowListAddr := os.Getenv("PHANTOM_SUBNET_LOCATION")
-	for {
-		select {
-		case <-blt.signal:
-			return
-		default:
-			_, err := exec.Command("zmap", "-p", "443", "-O", "csv", "-f", "saddr,classification", "-P", "4", "--output-filter= (classification = rst || classification = synack)", "-b", "block_list.txt", "-w", allowListAddr, "-o", "result.csv").Output()
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			f, err := os.Open("result.csv")
-			if err != nil {
-				fmt.Println("Unable to read input file", err)
-				f.Close()
-			}
-
-			csvReader := csv.NewReader(f)
-			records, err := csvReader.ReadAll()
-			if err != nil {
-				fmt.Println("Unable to parse file as CSV", err)
-			}
-
-			f.Close()
-			f, err = os.OpenFile("block_list.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-			if err != nil {
-				fmt.Println("Unable to read blocklist file", err)
-				f.Close()
-			}
-
-			for _, ip := range records {
-				if ip[0] != "saddr" {
-					func() {
-						// closure to ensure mutex unlocks in case of error.
-						blt.m.Lock()
-						defer blt.m.Unlock()
-
-						if _, ok := blt.ipCache[ip[0]]; !ok {
-							var val = &cacheElement{
-								isLive:     true,
-								cachedTime: time.Now(),
-							}
-							blt.ipCache[ip[0]] = val
-							_, err := f.WriteString(ip[0] + "/32" + "\n")
-							if err != nil {
-								fmt.Println("Unable to write blocklist file", err)
-								f.Close()
-							}
-						}
-					}()
-				}
-			}
-			f.Close()
-
-			err = os.Remove("result.csv")
-			if err != nil {
-				fmt.Println("Unable to delete result.csv", err)
-			}
-
-			fmt.Println("Scanned once")
-			if t == "Minute" {
-				time.Sleep(time.Minute * 2)
-			} else if t == "Hour" {
-				time.Sleep(time.Hour * 2)
-			} else {
-				fmt.Println("Invalid scanning interval")
-				return
-			}
-
-		}
-	}
-}
-
 // PhantomIsLive first checks the cached set of addresses for a fresh entry.
 // If one is available and the host was measured to be live this is returned
 // immediately and no network probes are sent. If the host was measured not
@@ -176,7 +97,7 @@ func (blt *LRULivenessTester) PhantomIsLive(addr string, port uint16) (bool, err
 		defer blt.m.Unlock()
 
 		// add to stats
-		blt.stats.incCached()
+		blt.stats.incCached(live)
 
 		// refresh this address in the LRU cache
 		blt.lru.Add(addr, struct{}{})
@@ -192,7 +113,6 @@ func (blt *LRULivenessTester) PhantomIsLive(addr string, port uint16) (bool, err
 		defer blt.m.Unlock()
 
 		var val = &cacheElement{
-			isLive:     isLive,
 			cachedTime: time.Now(),
 		}
 		blt.ipCache[addr] = val
@@ -217,9 +137,7 @@ func (blt *LRULivenessTester) phantomLookup(addr string, port uint16) (bool, err
 
 	if status, ok := blt.ipCache[addr]; ok {
 		if time.Since(status.cachedTime) < blt.cacheExpirationTime {
-			if status.isLive {
-				return true, fmt.Errorf(CachedPhantomMessage)
-			}
+			return true, ErrCachedPhantom
 		}
 	}
 	return false, nil
@@ -242,14 +160,29 @@ func (blt *LRULivenessTester) PrintAndReset(logger *log.Logger) {
 
 func (blt *LRULivenessTester) printStats(logger *log.Logger) {
 	s := blt.stats
-	epochDur := time.Since(s.epochStart).Milliseconds()
-	logger.Infof("liveness-stats: %d (%f/s) valid %d (%f/s) live %d (%f/s) cached, capacity:%d/%d (%f%%)",
-		s.newLivenessPass,
-		float64(s.newLivenessPass)/float64(epochDur)*1000,
-		s.newLivenessFail,
-		float64(s.newLivenessFail)/float64(epochDur)*1000,
-		s.newLivenessCached,
-		float64(s.newLivenessCached)/float64(epochDur)*1000,
+
+	// prevent div by 0 if thread starvation happens
+	var epochDur float64 = math.Max(float64(time.Since(s.epochStart).Milliseconds()), 1)
+
+	nlp := atomic.LoadInt64(&s.newLivenessPass)
+	nlf := atomic.LoadInt64(&s.newLivenessFail)
+	nlcl := atomic.LoadInt64(&s.newLivenessCachedLive)
+	nlcn := atomic.LoadInt64(&s.newLivenessCachedNonLive)
+	total := math.Max(float64(nlp+nlf + +nlcl + nlcn), 1)
+
+	logger.Infof("liveness-stats: %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d/%d (%f%%)",
+		nlp,
+		float64(nlp)/float64(total)*100,
+		float64(nlp)/float64(epochDur)*1000,
+		nlf,
+		float64(nlf)/float64(total)*100,
+		float64(nlf)/float64(epochDur)*1000,
+		nlcl,
+		float64(nlcl)/float64(total)*100,
+		float64(nlcl)/float64(epochDur)*1000,
+		nlcn,
+		float64(nlcn)/float64(total)*100,
+		float64(nlcn)/float64(epochDur)*1000,
 		len(blt.ipCache),
 		blt.lruSize,
 		float64(len(blt.ipCache))/float64(math.Max(float64(blt.lruSize), 1)),
