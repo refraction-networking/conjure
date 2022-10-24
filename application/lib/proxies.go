@@ -28,7 +28,7 @@ var errCONNRESET = errors.New("rst")
 
 // this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to pass around
 // TODO: refactor
-func halfPipe(src, dst net.Conn,
+func halfPipe(src io.ReadCloser, dst io.WriteCloser,
 	wg *sync.WaitGroup,
 	oncePrintErr *sync.Once,
 	logger *log.Logger,
@@ -132,9 +132,11 @@ func halfPipe(src, dst net.Conn,
 
 	getProxyStats().addCompleted(stats.Written, isUpload)
 
+	statsStr, _ := json.Marshal(stats)
 	if stats.Written != 0 {
-		statsStr, _ := json.Marshal(stats)
 		logger.Printf("stopping forwarding %s", statsStr)
+	} else {
+		logger.Debugf("stopping forwarding %s", statsStr)
 	}
 	wg.Done()
 }
@@ -186,7 +188,6 @@ func writePROXYHeader(conn net.Conn, originalIPPort string) error {
 
 // ProxyStats track metrics about byte transfer.
 type ProxyStats struct {
-	sync.RWMutex
 	time.Time // epoch start time
 
 	newBytesUp   int64 // Number of bytes transferred during epoch
@@ -202,8 +203,6 @@ type ProxyStats struct {
 
 // PrintAndReset implements the stats interface
 func (s *ProxyStats) PrintAndReset(logger *log.Logger) {
-	s.RLock()
-	defer s.RUnlock()
 	s.printStats(logger)
 	s.reset()
 }
@@ -228,8 +227,6 @@ func (s *ProxyStats) printStats(logger *log.Logger) {
 
 // Reset implements the stats interface
 func (s *ProxyStats) Reset() {
-	s.RLock()
-	defer s.RUnlock()
 	s.reset()
 }
 
