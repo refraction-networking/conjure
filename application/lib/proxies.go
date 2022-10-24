@@ -26,9 +26,11 @@ type sessionStats struct {
 // errCONNRESET replaces the reset error in the halfpipe to remove ips and extra bytes
 var errCONNRESET = errors.New("rst")
 
+const proxyStallTimeout = 60 * time.Second
+
 // this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to pass around
 // TODO: refactor
-func halfPipe(src io.ReadCloser, dst io.WriteCloser,
+func halfPipe(src net.Conn, dst net.Conn,
 	wg *sync.WaitGroup,
 	oncePrintErr *sync.Once,
 	logger *log.Logger,
@@ -36,6 +38,8 @@ func halfPipe(src io.ReadCloser, dst io.WriteCloser,
 
 	var proxyStartTime = time.Now()
 	isUpload := strings.HasPrefix(tag, "Up")
+	src.SetDeadline(time.Now().Add(proxyStallTimeout))
+	dst.SetDeadline(time.Now().Add(proxyStallTimeout))
 
 	// using io.CopyBuffer doesn't let us see
 	// bytes / second (until very end of connect, then only avg)
