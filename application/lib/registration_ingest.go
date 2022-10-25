@@ -169,7 +169,9 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 	// hostnames as coverts anyways.
 	reg.Covert = covert
 
-	if !reg.PreScanned() {
+	// Perform liveness test IFF not done by other station or v6 (v6 should
+	// never be live)
+	if !reg.PreScanned() && !(reg.DarkDecoy.To4() == nil) {
 		// New registration received over channel that requires liveness scan for the phantom
 		live, response := rm.PhantomIsLive(reg.DarkDecoy.String(), 443)
 
