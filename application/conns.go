@@ -135,11 +135,10 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 		if errors.Is(err, syscall.ECONNRESET) {
 			// log reset error without client ip
 			logger.Errorln("error occurred discarding data: rst")
-		} else if err, ok := err.(net.Error); ok && !err.Timeout() {
-			// log non-timeout net.Error
-			logger.Errorln("error occurred discarding data:", err)
+		} else if et, ok := err.(net.Error); ok && et.Timeout() {
+			logger.Errorln("error occurred discarding data: timeout")
 		} else if err != nil {
-			//Log any other (non-net.Error) error
+			//Log any other error
 			logger.Errorln("error occurred discarding data:", err)
 		}
 
@@ -162,11 +161,10 @@ readLoop:
 			if errors.Is(err, syscall.ECONNRESET) {
 				// log reset error without client ip
 				logger.Errorln("error occurred discarding data: rst")
-			} else if err, ok := err.(net.Error); ok && !err.Timeout() {
-				// log non-timeout net.Error
-				logger.Errorln("error occurred discarding data:", err)
+			} else if et, ok := err.(net.Error); ok && et.Timeout() {
+				logger.Errorln("error occurred discarding data: timeout")
 			} else if err != nil {
-				//Log any other (non-net.Error) error
+				//Log any other error
 				logger.Errorln("error occurred discarding data:", err)
 			}
 			return

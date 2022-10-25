@@ -26,7 +26,10 @@ type sessionStats struct {
 // errCONNRESET replaces the reset error in the halfpipe to remove ips and extra bytes
 var errCONNRESET = errors.New("rst")
 
-const proxyStallTimeout = 60 * time.Second
+// replaces the ip.timeout error in the halfpipe to remove ips and extra bytes
+var errConnTimeout = errors.New("timeout")
+
+const proxyStallTimeout = 30 * time.Second
 
 // this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to pass around
 // TODO: refactor
@@ -38,6 +41,8 @@ func halfPipe(src net.Conn, dst net.Conn,
 
 	var proxyStartTime = time.Now()
 	isUpload := strings.HasPrefix(tag, "Up")
+
+	// Set deadlines in case either side disappears.
 	src.SetDeadline(time.Now().Add(proxyStallTimeout))
 	dst.SetDeadline(time.Now().Add(proxyStallTimeout))
 
@@ -106,6 +111,8 @@ func halfPipe(src net.Conn, dst net.Conn,
 	} else if errors.Is(errDst, syscall.ECONNRESET) {
 		// get simple communication of reset into logs without IPs
 		err = errCONNRESET
+	} else if et, ok := err.(net.Error); ok && et.Timeout() {
+		err = errConnTimeout
 	} else if errDst != nil {
 		logger.Errorf("error closing writer: %s", err)
 		err = errDst
@@ -118,6 +125,8 @@ func halfPipe(src net.Conn, dst net.Conn,
 	} else if errors.Is(errSrc, syscall.ECONNRESET) {
 		// get simple communication of reset into logs without IPs
 		err = errCONNRESET
+	} else if et, ok := err.(net.Error); ok && et.Timeout() {
+		err = errConnTimeout
 	} else if errSrc != nil {
 		logger.Errorf("error closing reader: %s", errSrc)
 		err = errSrc
