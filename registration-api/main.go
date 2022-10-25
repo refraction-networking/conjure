@@ -205,7 +205,7 @@ func (s *server) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	clientLibVer := uint(payload.GetRegistrationPayload().GetClientLibVersion())
 
 	// Generate seed and phantom address
-	cjkeys, err := lib.GenSharedKeys(payload.SharedSecret)
+	cjkeys, err := lib.GenSharedKeys(payload.SharedSecret, payload.RegistrationPayload.GetTransport())
 	if err != nil {
 		s.logger.Println("Failed to generate the shared key using SharedSecret:", err)
 		w.WriteHeader(http.StatusInternalServerError)

@@ -44,7 +44,7 @@ func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 	clientToStation.Flags = &pb.RegistrationFlags{Use_TIL: &t}
 	clientToStation.ClientLibVersion = &v
 
-	conjureKeys, _ := GenSharedKeys(sharedSecret)
+	conjureKeys, _ := GenSharedKeys(sharedSecret, 0)
 
 	var testGeneration uint32 = 957
 	clientToStation.DecoyListGeneration = &testGeneration

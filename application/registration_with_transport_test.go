@@ -28,7 +28,7 @@ func mockReceiveFromDetector() (*pb.ClientToStation, cj.ConjureSharedKeys) {
 	clientToStation.Flags = &pb.RegistrationFlags{Use_TIL: &t}
 	clientToStation.ClientLibVersion = &v
 
-	conjureKeys, _ := cj.GenSharedKeys(sharedSecret)
+	conjureKeys, _ := cj.GenSharedKeys(sharedSecret, 0)
 
 	return clientToStation, conjureKeys
 }

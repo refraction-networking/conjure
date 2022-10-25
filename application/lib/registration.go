@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	golog "log"
 	"net"
@@ -184,6 +185,23 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	}
 
 	return &reg, nil
+}
+
+var errIncompleteReg = errors.New("incomplete registration")
+
+func (regManager *RegistrationManager) ValidateRegistration(reg *DecoyRegistration) (bool, error) {
+
+	if reg == nil {
+		return false, errIncompleteReg
+	} else if reg.Keys == nil {
+		return false, errIncompleteReg
+	} else if reg.DarkDecoy == nil {
+		return false, errIncompleteReg
+	} else if reg.RegistrationSource == nil {
+		return false, errIncompleteReg
+	}
+
+	return true, nil
 }
 
 // TrackRegistration adds the registration to the map WITHOUT marking it valid.
@@ -425,16 +443,19 @@ type RegisteredDecoys struct {
 
 	timeoutActive time.Duration
 	timeoutUnused time.Duration
+
+	registerForDetector func(*DecoyRegistration)
 }
 
 // NewRegisteredDecoys returns a new struct with which to track registrations.
 func NewRegisteredDecoys() *RegisteredDecoys {
 	return &RegisteredDecoys{
-		timeoutActive:  6 * time.Hour,
-		timeoutUnused:  10 * time.Minute,
-		decoys:         make(map[string]map[string]*DecoyRegistration),
-		transports:     make(map[pb.TransportType]Transport),
-		decoysTimeouts: make(map[string]*DecoyTimeout),
+		timeoutActive:       6 * time.Hour,
+		timeoutUnused:       10 * time.Minute,
+		decoys:              make(map[string]map[string]*DecoyRegistration),
+		transports:          make(map[pb.TransportType]Transport),
+		decoysTimeouts:      make(map[string]*DecoyTimeout),
+		registerForDetector: registerForDetector,
 	}
 }
 
@@ -515,7 +536,7 @@ func (r *RegisteredDecoys) register(darkDecoyAddr string, d *DecoyRegistration) 
 	}
 
 	reg.Valid = true
-	registerForDetector(reg)
+	r.registerForDetector(reg)
 
 	return nil
 }

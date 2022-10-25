@@ -114,6 +114,12 @@ func (rm *RegistrationManager) startIngestThread(ctx context.Context, regChan <-
 func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 	logger := rm.Logger
 
+	if ok, err := rm.ValidateRegistration(reg); !ok || err != nil {
+		logger.Errorln("error tracking registration: ", err)
+		Stat().AddErrReg()
+		return
+	}
+
 	if rm.RegistrationExists(reg) {
 		// log phantom IP, shared secret, ipv6 support
 		logger.Debugf("Duplicate registration: %v %s\n", reg.IDString(), reg.RegistrationSource)
@@ -302,7 +308,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	c2s := c2sw.GetRegistrationPayload()
 
 	// Generate keys from shared secret using HKDF
-	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret())
+	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret(), c2s.GetTransport())
 	if err != nil {
 		return nil, fmt.Errorf("Failed to generate keys: %v", err)
 	}

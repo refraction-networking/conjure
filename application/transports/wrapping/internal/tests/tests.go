@@ -50,7 +50,7 @@ func SetupPhantomConnectionsSecret(manager *dd.RegistrationManager, transport pb
 
 	wg.Wait()
 
-	keys, err := dd.GenSharedKeys(sharedSecret)
+	keys, err := dd.GenSharedKeys(sharedSecret, transport)
 	if err != nil {
 		log.Fatalln("failed to generate shared keys:", err)
 	}
