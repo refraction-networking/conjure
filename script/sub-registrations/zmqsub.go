@@ -84,5 +84,15 @@ func main() {
 			handleReg(logger, sourceAddr, reg)
 		}
 
+
+	    if parsed.GetRegistrationPayload().GetV6Support() {
+		    reg, err := regManager.NewRegistrationC2SWrapper(parsed, true)
+		    if err != nil {
+			    logger.Printf("Failed to create registration: %v", err)
+                return
+            }
+            handleReg(logger, sourceAddr, reg)
+		}
+
 	}
 }
