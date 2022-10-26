@@ -8,11 +8,17 @@ import (
 	"net"
 	"os"
 
-	//cj "github.com/refraction-networking/conjure/application/lib"
+	cj "github.com/refraction-networking/conjure/application/lib"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	//"github.com/refraction-networking/gotapdance/tapdance/phantoms"
 	"google.golang.org/protobuf/proto"
 )
+
+func handleReg(logger *log.Logger, source net.IP, reg *cj.DecoyRegistration) {
+
+	//logger.Printf("%v %v\n", sourceAddr, phantomAddr)
+	logger.Printf("%v %v\n", source, reg.DarkDecoy)
+}
 
 func main() {
 
@@ -38,6 +44,8 @@ func main() {
 		logger.Println("error subscribing to zmq:", err)
 	}
 
+	regManager := cj.NewRegistrationManager()
+
 	for {
 		msg, err := sub.RecvBytes(0)
 		if err != nil {
@@ -62,10 +70,19 @@ func main() {
 		}
 
 		// If client IP logging is disabled DO NOT parse source IP.
-		var sourceAddr, phantomAddr net.IP
+		var sourceAddr net.IP
 		sourceAddr = net.IP(parsed.GetRegistrationAddress())
-		phantomAddr = net.IP(parsed.GetDecoyAddress())
 
-		logger.Printf("%v %v\n", sourceAddr, phantomAddr)
+		//phantomAddr := net.IP(parsed.GetDecoyAddress())
+
+		if parsed.GetRegistrationPayload().GetV4Support() && sourceAddr.To4() != nil {
+			reg, err := regManager.NewRegistrationC2SWrapper(parsed, false)
+			if err != nil {
+				logger.Printf("Failed to create registration: %v", err)
+				return
+			}
+			handleReg(logger, sourceAddr, reg)
+		}
+
 	}
 }
