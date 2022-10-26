@@ -1,5 +1,6 @@
 import redis
 import signalling_pb2 as proto
+import datetime
 
 red = redis.StrictRedis('localhost', 6379, charset="utf-8", decode_responses=False)
 
@@ -14,5 +15,5 @@ for message in sub.listen():
         #print(data)
         s2d = proto.StationToDetector()
         s2d.ParseFromString(data)
-        print('%s registered %s for %.3f seconds' % \
-            (s2d.client_ip, s2d.phantom_ip, s2d.timeout_ns/1000000000.0))
+        print('%s %s %s %d' % \
+                (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"), s2d.client_ip, s2d.phantom_ip, int(s2d.timeout_ns/1000000000.0)))
