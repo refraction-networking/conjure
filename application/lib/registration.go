@@ -188,6 +188,8 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 }
 
 var errIncompleteReg = errors.New("incomplete registration")
+var errTransportNotEnabled = errors.New("transport not enabled, or unknown")
+var errBlocklistedPhantom = errors.New("blocklisted phantom - reg not serviceable")
 
 func (regManager *RegistrationManager) ValidateRegistration(reg *DecoyRegistration) (bool, error) {
 
@@ -199,6 +201,10 @@ func (regManager *RegistrationManager) ValidateRegistration(reg *DecoyRegistrati
 		return false, errIncompleteReg
 	} else if reg.RegistrationSource == nil {
 		return false, errIncompleteReg
+	} else if _, ok := regManager.registeredDecoys.transports[reg.Transport]; !ok {
+		return false, errTransportNotEnabled
+	} else if *reg.RegistrationSource != pb.RegistrationSource_Detector && regManager.IsBlocklistedPhantom(reg.DarkDecoy) {
+		return false, errBlocklistedPhantom
 	}
 
 	return true, nil

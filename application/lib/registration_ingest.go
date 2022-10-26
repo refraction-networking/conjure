@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	defaultWorkerCount  = 100
-	jobBufferMultiplier = 5
+	defaultWorkerCount  = 300
+	jobBufferMultiplier = 1
 )
 
 // HandleRegUpdates is responsible for launching and managing registration
@@ -58,12 +58,13 @@ func (rm *RegistrationManager) HandleRegUpdates(ctx context.Context, regChan <-c
 
 	// distribute messages to workers. When workers are unavailable messages are
 	// added into channel buffer until full, then dropped.
+distrLoop:
 	for msg := range regChan {
 		rm.addIngestMessage()
 		select {
 		case <-ctx.Done():
 			logger.Infof("closing all ingest threads")
-			break
+			break distrLoop
 		case shallowBuffer <- msg:
 		default:
 			logger.Tracef("dropping registration")
@@ -115,8 +116,10 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 	logger := rm.Logger
 
 	if ok, err := rm.ValidateRegistration(reg); !ok || err != nil {
-		logger.Errorln("error tracking registration: ", err)
-		Stat().AddErrReg()
+		if err != errBlocklistedPhantom {
+			logger.Errorln("error tracking registration: ", err)
+			Stat().AddErrReg()
+		}
 		return
 	}
 
@@ -171,7 +174,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 
 	// Perform liveness test IFF not done by other station or v6 (v6 should
 	// never be live)
-	if !reg.PreScanned() && !(reg.DarkDecoy.To4() == nil) {
+	if !reg.PreScanned() && reg.DarkDecoy.To4() != nil {
 		// New registration received over channel that requires liveness scan for the phantom
 		live, response := rm.PhantomIsLive(reg.DarkDecoy.String(), 443)
 
@@ -187,21 +190,23 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 		Stat().AddLivenessPass()
 	}
 
-	if rm.EnableShareOverAPI && *reg.RegistrationSource == pb.RegistrationSource_Detector {
-		// Registration received from decoy-registrar, share over API if enabled.
-		go tryShareRegistrationOverAPI(reg, rm.PreshareEndpoint, rm.Logger)
-	}
+	if *reg.RegistrationSource == pb.RegistrationSource_Detector {
+		if rm.EnableShareOverAPI {
+			// Registration received from decoy-registrar, share over API if enabled.
+			go tryShareRegistrationOverAPI(reg, rm.PreshareEndpoint, rm.Logger)
+		}
 
-	if rm.IsBlocklistedPhantom(reg.DarkDecoy) {
-		// Note: Phantom blocklist is applied at this stage because the phantom may only be blocked on this
-		// station. We may want other stations to be informed about the registration, but prevent this station
-		// specifically from handling / interfering in any subsequent connection. See PR #75
-		logger.Warnf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
-		Stat().AddErrReg()
-		rm.AddErrReg()
-		return
-	}
+		if rm.IsBlocklistedPhantom(reg.DarkDecoy) {
+			// Note: Phantom blocklist is applied at this stage because the phantom may only be blocked on this
+			// station. We may want other stations to be informed about the registration, but prevent this station
+			// specifically from handling / interfering in any subsequent connection. See PR #75
+			logger.Warnf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
+			Stat().AddErrReg()
+			rm.AddErrReg()
+			return
+		}
 
+	}
 	// validate the registration
 	rm.AddRegistration(reg)
 	logger.Debugf("Adding registration %v\n", reg.IDString())
@@ -312,7 +317,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	// Generate keys from shared secret using HKDF
 	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret(), c2s.GetTransport())
 	if err != nil {
-		return nil, fmt.Errorf("Failed to generate keys: %v", err)
+		return nil, fmt.Errorf("failed to generate keys: %v", err)
 	}
 
 	gen := uint(c2s.GetDecoyListGeneration())
@@ -333,7 +338,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	if phantomAddr.To4() != nil && clientAddr.To4() == nil {
 		// This can happen if the client chooses from a set that contains no
 		// ipv6 options even if include ipv6 is enabled they will get ipv4.
-		return nil, fmt.Errorf("Failed because IPv6 client chose IPv4 phantom")
+		return nil, fmt.Errorf("failed because IPv6 client chose IPv4 phantom")
 	}
 
 	regSrc := c2sw.GetRegistrationSource()
