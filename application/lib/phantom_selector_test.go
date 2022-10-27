@@ -334,6 +334,7 @@ func TestDuplicates(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to select adddress: %v -- %s -- %v", err, hex.EncodeToString(curSeed), i)
 		}
+		//fmt.Printf("%s %v\n", hex.EncodeToString(curSeed), addr)
 
 		if prev_i, ok := ipSet[addr.String()]; ok {
 			prevSeed := ExpandSeed(seed, salt, prev_i)
