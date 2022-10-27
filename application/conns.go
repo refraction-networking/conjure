@@ -212,15 +212,12 @@ readLoop:
 
 		n, err := clientConn.Read(buf[:])
 		if err != nil {
-			if err, ok := err.(net.Error); ok && err.Timeout() {
-				continue
-			} else if errors.Is(err, syscall.ECONNRESET) {
+			if errors.Is(err, syscall.ECONNRESET) {
 				logger.Errorf("got error while reading from connection, giving up after %d bytes: rst\n", received.Len())
 				cm.readToReset()
 			} else if et, ok := err.(net.Error); ok && et.Timeout() {
 				logger.Errorf("got error while reading from connection, giving up after %d bytes: timeout\n", received.Len())
 				cm.readToTimeout()
-
 			} else {
 				logger.Errorf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len(), err)
 				cm.readToError()
