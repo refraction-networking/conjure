@@ -24,10 +24,10 @@ func TestConjureLibConfigResolveBlocklisted(t *testing.T) {
 
 	conf.ParseBlocklists()
 	goodTestCases := map[string][]string{
-		"128.0.2.1:25":     []string{"128.0.2.1:25"},
-		"[2001:db8::1]:80": []string{"[2001:db8::1]:80"},
-		"example.com:1234": []string{"93.184.216.34:1234", "[2606:2800:220:1:248:1893:25c8:1946]:1234"},
-		"[::2]:443":        []string{"[::2]:443"},
+		"128.0.2.1:25":     {"128.0.2.1:25"},
+		"[2001:db8::1]:80": {"[2001:db8::1]:80"},
+		"example.com:1234": {"93.184.216.34:1234", "[2606:2800:220:1:248:1893:25c8:1946]:1234"},
+		"[::2]:443":        {"[::2]:443"},
 	}
 
 	for input, expected := range goodTestCases {
@@ -121,8 +121,8 @@ func TestConjureLibConfigResolveAllowlisted(t *testing.T) {
 
 	conf.ParseBlocklists()
 	goodTestCases := map[string][]string{
-		"128.138.2.1:25":   []string{"128.138.2.1:25"},
-		"[2001:db8::1]:80": []string{"[2001:db8::1]:80"},
+		"128.138.2.1:25":   {"128.138.2.1:25"},
+		"[2001:db8::1]:80": {"[2001:db8::1]:80"},
 	}
 
 	for input, expected := range goodTestCases {
@@ -155,8 +155,8 @@ func TestConjureLibConfigBlocklistPublic(t *testing.T) {
 
 	conf.ParseBlocklists()
 	goodTestCases := map[string][]string{
-		"128.138.2.1:25":   []string{"128.138.2.1:25"},
-		"[2001:db8::1]:80": []string{"[2001:db8::1]:80"},
+		"128.138.2.1:25":   {"128.138.2.1:25"},
+		"[2001:db8::1]:80": {"[2001:db8::1]:80"},
 	}
 
 	for input, expected := range goodTestCases {

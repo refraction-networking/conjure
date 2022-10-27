@@ -16,8 +16,9 @@ const (
 )
 
 // getSubnets - return EITHER all subnet strings as one composite array if we are
-//		selecting unweighted, or return the array associated with the (seed) selected
-//		array of subnet strings based on the associated weights
+//
+//	selecting unweighted, or return the array associated with the (seed) selected
+//	array of subnet strings based on the associated weights
 func (sc *SubnetConfig) getSubnets(seed []byte, weighted bool) []string {
 
 	var out []string = []string{}
@@ -53,7 +54,8 @@ func (sc *SubnetConfig) getSubnets(seed []byte, weighted bool) []string {
 }
 
 // SubnetFilter - Filter IP subnets based on whatever to prevent specific subnets from
-//		inclusion in choice. See v4Only and v6Only for reference.
+//
+//	inclusion in choice. See v4Only and v6Only for reference.
 type SubnetFilter func([]*net.IPNet) ([]*net.IPNet, error)
 
 // V4Only - a functor for transforming the subnet list to only include IPv4 subnets
@@ -108,7 +110,8 @@ func parseSubnets(phantomSubnets []string) ([]*net.IPNet, error) {
 }
 
 // NewPhantomIPSelector - create object currently populated with a static map of generation number
-//		to SubnetConfig, but this may be loaded dynamically in the future.
+//
+//	to SubnetConfig, but this may be loaded dynamically in the future.
 func NewPhantomIPSelector() (*PhantomIPSelector, error) {
 	return GetPhantomSubnetSelector()
 }
@@ -250,7 +253,7 @@ func selectPhantomImplV0(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 	}
 
 	if addressTotal.Cmp(big.NewInt(0)) <= 0 {
-		return nil, fmt.Errorf("No valid addresses specified")
+		return nil, fmt.Errorf("no valid addresses specified")
 	}
 
 	id := &big.Int{}
@@ -265,7 +268,7 @@ func selectPhantomImplV0(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 		if _idNet.max.Cmp(id) >= 0 && _idNet.min.Cmp(id) == -1 {
 			result, err = SelectAddrFromSubnet(seed, _idNet.net)
 			if err != nil {
-				return nil, fmt.Errorf("Failed to chose IP address: %v", err)
+				return nil, fmt.Errorf("failed to chose IP address: %v", err)
 			}
 		}
 	}
@@ -276,10 +279,11 @@ func selectPhantomImplV0(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 }
 
 // SelectAddrFromSubnet - given a seed and a CIDR block choose an address.
-// 		This is done by generating a seeded random bytes up to teh length of the
-//		full address then using the net mask to zero out any bytes that are
-//		already specified by the CIDR block. Tde masked random value is then
-//		added to the cidr block base giving the final randomly selected address.
+//
+//	This is done by generating a seeded random bytes up to teh length of the
+//	full address then using the net mask to zero out any bytes that are
+//	already specified by the CIDR block. Tde masked random value is then
+//	added to the cidr block base giving the final randomly selected address.
 func SelectAddrFromSubnet(seed []byte, net1 *net.IPNet) (net.IP, error) {
 	bits, addrLen := net1.Mask.Size()
 
@@ -319,7 +323,8 @@ func SelectAddrFromSubnet(seed []byte, net1 *net.IPNet) (net.IP, error) {
 }
 
 // GetSubnetsByGeneration - provide a generatio index. If the generation exists the associated
-//		subnetconfig is returned. If it is not defined the default subnets are returned.
+//
+//	subnetconfig is returned. If it is not defined the default subnets are returned.
 func (p *PhantomIPSelector) GetSubnetsByGeneration(generation uint) *SubnetConfig {
 	if subnets, ok := p.Networks[generation]; ok {
 		return subnets
@@ -330,7 +335,8 @@ func (p *PhantomIPSelector) GetSubnetsByGeneration(generation uint) *SubnetConfi
 }
 
 // AddGeneration - add a subnet config as a new new generation, if the requested
-//		generation index is taken then it uses (and returns) the next available number.
+//
+//	generation index is taken then it uses (and returns) the next available number.
 func (p *PhantomIPSelector) AddGeneration(gen int, subnets *SubnetConfig) uint {
 
 	ugen := uint(gen)
@@ -367,7 +373,7 @@ func (p *PhantomIPSelector) RemoveGeneration(generation uint) bool {
 	return true
 }
 
-//UpdateGeneration - Update the subnet list associated with a specific generation
+// UpdateGeneration - Update the subnet list associated with a specific generation
 func (p *PhantomIPSelector) UpdateGeneration(generation uint, subnets *SubnetConfig) bool {
 	p.Networks[generation] = subnets
 	return true

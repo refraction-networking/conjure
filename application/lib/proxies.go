@@ -23,8 +23,8 @@ type sessionStats struct {
 	Err      string
 }
 
-// errCONNRESET replaces the reset error in the halfpipe to remove ips and extra bytes
-var errCONNRESET = errors.New("rst")
+// errConnReset replaces the reset error in the halfpipe to remove ips and extra bytes
+var errConnReset = errors.New("rst")
 
 // replaces the ip.timeout error in the halfpipe to remove ips and extra bytes
 var errConnTimeout = errors.New("timeout")
@@ -43,8 +43,14 @@ func halfPipe(src net.Conn, dst net.Conn,
 	isUpload := strings.HasPrefix(tag, "Up")
 
 	// Set deadlines in case either side disappears.
-	src.SetDeadline(time.Now().Add(proxyStallTimeout))
-	dst.SetDeadline(time.Now().Add(proxyStallTimeout))
+	err := src.SetDeadline(time.Now().Add(proxyStallTimeout))
+	if err != nil {
+		logger.Errorln("error setting deadline for src conn: ", tag)
+	}
+	err = dst.SetDeadline(time.Now().Add(proxyStallTimeout))
+	if err != nil {
+		logger.Errorln("error setting deadline for dst conn: ", tag)
+	}
 
 	// using io.CopyBuffer doesn't let us see
 	// bytes / second (until very end of connect, then only avg)
@@ -110,7 +116,7 @@ func halfPipe(src net.Conn, dst net.Conn,
 		err = nil
 	} else if errors.Is(errDst, syscall.ECONNRESET) {
 		// get simple communication of reset into logs without IPs
-		err = errCONNRESET
+		err = errConnReset
 	} else if et, ok := err.(net.Error); ok && et.Timeout() {
 		err = errConnTimeout
 	} else if errDst != nil {
@@ -124,7 +130,7 @@ func halfPipe(src net.Conn, dst net.Conn,
 		err = nil
 	} else if errors.Is(errSrc, syscall.ECONNRESET) {
 		// get simple communication of reset into logs without IPs
-		err = errCONNRESET
+		err = errConnReset
 	} else if et, ok := err.(net.Error); ok && et.Timeout() {
 		err = errConnTimeout
 	} else if errSrc != nil {
