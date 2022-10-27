@@ -212,14 +212,26 @@ readLoop:
 		n, err := clientConn.Read(buf[:])
 		if err != nil {
 			if errors.Is(err, syscall.ECONNRESET) {
-				logger.Errorf("got error while reading from connection, giving up after %d bytes: rst\n", received.Len())
-				cm.readToReset()
+				logger.Errorf("got error while reading from connection, giving up after %d bytes: rst\n", received.Len()+n)
+				if received.Len() == 0 {
+					cm.createdToReset()
+				} else {
+					cm.readToReset()
+				}
 			} else if et, ok := err.(net.Error); ok && et.Timeout() {
-				logger.Errorf("got error while reading from connection, giving up after %d bytes: timeout\n", received.Len())
-				cm.readToTimeout()
+				logger.Errorf("got error while reading from connection, giving up after %d bytes: timeout\n", received.Len()+n)
+				if received.Len() == 0 {
+					cm.createdToTimeout()
+				} else {
+					cm.readToTimeout()
+				}
 			} else {
-				logger.Errorf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len(), err)
-				cm.readToError()
+				logger.Errorf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len()+n, err)
+				if received.Len() == 0 {
+					cm.createdToError()
+				} else {
+					cm.readToError()
+				}
 			}
 			cj.Stat().ConnErr()
 			return
@@ -351,6 +363,21 @@ func (c *connStats) createdToDiscard() {
 func (c *connStats) createdToCheck() {
 	atomic.AddInt64(&c.numCreated, -1)
 	atomic.AddInt64(&c.numChecking, 1)
+}
+
+func (c *connStats) createdToReset() {
+	atomic.AddInt64(&c.numCreated, -1)
+	atomic.AddInt64(&c.numReset, 1)
+}
+
+func (c *connStats) createdToTimeout() {
+	atomic.AddInt64(&c.numCreated, -1)
+	atomic.AddInt64(&c.numTimeout, 1)
+}
+
+func (c *connStats) createdToError() {
+	atomic.AddInt64(&c.numCreated, -1)
+	atomic.AddInt64(&c.numErr, 1)
 }
 
 func (c *connStats) readToCheck() {
