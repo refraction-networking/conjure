@@ -302,6 +302,18 @@ func ExpandSeed(seed, salt []byte, i int) []byte {
 	return hkdf.Extract(sha256.New, seed, append(salt, bi...))
 }
 
+// TestDuplicates demonstrates that selectPhantomImplVarint results in
+// collisions due to random bias introduced by math/rand and Varint -- if one
+// edits the ClientLibVersion to be 1 in phantomSelector.Select(...), it will
+// detect the problem. Notice the leading bit of both seeds are 0, and the byte
+// is the same (0x30) between the two tests that demonstrate generating the same
+// IPv6 address.
+//
+// --- FAIL: TestDuplicates (0.00s)
+//     phantom_selector_test.go:341: Generated duplicate IP; biased random. Both seeds 25 and 12 generated 2002::ee94:8e44:13ce:4e81
+//         25: 30af851e2b8e4dd57db8830d5fc6f759bdc2c7a5a396f6641cc23604fa61c851
+//         12: 301f4d8eba57f250e9fc3fa8205b3703fb4a6edbe4941f2a8ff2bc01e05051a9
+// FAIL
 func TestDuplicates(t *testing.T) {
 	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
 	phantomSelector, err := NewPhantomIPSelector()
@@ -330,16 +342,17 @@ func TestDuplicates(t *testing.T) {
 		curSeed := ExpandSeed(seed, salt, i)
 
 		// Get phantom address
+		// addr, err := phantomSelector.Select(curSeed, newGen, 1, true)
 		addr, err := phantomSelector.Select(curSeed, newGen, 2, true)
 		if err != nil {
 			t.Fatalf("Failed to select adddress: %v -- %s -- %v", err, hex.EncodeToString(curSeed), i)
 		}
 		//fmt.Printf("%s %v\n", hex.EncodeToString(curSeed), addr)
 
-		if prev_i, ok := ipSet[addr.String()]; ok {
-			prevSeed := ExpandSeed(seed, salt, prev_i)
+		if prevI, ok := ipSet[addr.String()]; ok {
+			prevSeed := ExpandSeed(seed, salt, prevI)
 			t.Fatalf("Generated duplicate IP; biased random. Both seeds %d and %d generated %v\n%d: %s\n%d: %s",
-				i, prev_i, addr, i, hex.EncodeToString(curSeed), prev_i, hex.EncodeToString(prevSeed))
+				i, prevI, addr, i, hex.EncodeToString(curSeed), prevI, hex.EncodeToString(prevSeed))
 		}
 		ipSet[addr.String()] = i
 	}

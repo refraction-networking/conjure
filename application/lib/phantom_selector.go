@@ -20,9 +20,10 @@ const (
 	phantomHkdfMinVersion         uint = 2
 )
 
-// getSubnetsVarint - return EITHER all subnet strings as one composite array if we are
-//		selecting unweighted, or return the array associated with the (seed) selected
-//		array of subnet strings based on the associated weights
+// getSubnetsVarint - return EITHER all subnet strings as one composite array if
+// we are selecting unweighted, or return the array associated with the (seed)
+// selected array of subnet strings based on the associated weights
+//
 // Used by Client version 0 and 1
 func (sc *SubnetConfig) getSubnetsVarint(seed []byte, weighted bool) []string {
 
@@ -58,6 +59,12 @@ func (sc *SubnetConfig) getSubnetsVarint(seed []byte, weighted bool) []string {
 	return out
 }
 
+// getSubnetsHkdf returns EITHER all subnet strings as one composite array if
+// we are selecting unweighted, or return the array associated with the (seed)
+// selected array of subnet strings based on the associated weights. Random
+// values are seeded using an hkdf function to prevent biases introduced by
+// math/rand and varint.
+//
 // Used by Client version 2+
 func (sc *SubnetConfig) getSubnetsHkdf(seed []byte, weighted bool) []string {
 
@@ -127,8 +134,8 @@ func (sc *SubnetConfig) getSubnetsHkdf(seed []byte, weighted bool) []string {
 	return out
 }
 
-// SubnetFilter - Filter IP subnets based on whatever to prevent specific subnets from
-//		inclusion in choice. See v4Only and v6Only for reference.
+// SubnetFilter - Filter IP subnets based on whatever to prevent specific
+// subnets from inclusion in choice. See v4Only and v6Only for reference.
 type SubnetFilter func([]*net.IPNet) ([]*net.IPNet, error)
 
 // V4Only - a functor for transforming the subnet list to only include IPv4 subnets
@@ -182,8 +189,9 @@ func parseSubnets(phantomSubnets []string) ([]*net.IPNet, error) {
 	// return nil, fmt.Errorf("parseSubnets not implemented yet")
 }
 
-// NewPhantomIPSelector - create object currently populated with a static map of generation number
-//		to SubnetConfig, but this may be loaded dynamically in the future.
+// NewPhantomIPSelector - create object currently populated with a static map of
+// generation number to SubnetConfig, but this may be loaded dynamically in the
+// future.
 func NewPhantomIPSelector() (*PhantomIPSelector, error) {
 	return GetPhantomSubnetSelector()
 }
@@ -230,10 +238,10 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, clientLibVer ui
 	return selectPhantomImplHkdf(seed, genSubnets)
 }
 
-// selectPhantomImpl - select an ip address from the list of subnets associated
-// with the specified generation by constructing a set of start and end values
-// for the high and low values in each allocation. The random number is then
-// bound between the global min and max of that set. This ensures that
+// selectPhantomImplVarint - select an ip address from the list of subnets
+// associated with the specified generation by constructing a set of start and
+// end values for the high and low values in each allocation. The random number
+// is then bound between the global min and max of that set. This ensures that
 // addresses are chosen based on the number of addresses in the subnet.
 func selectPhantomImplVarint(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 	type idNet struct {
@@ -301,8 +309,8 @@ func selectPhantomImplVarint(seed []byte, subnets []*net.IPNet) (net.IP, error) 
 	return result, nil
 }
 
-// selectV0 implements support for the legacy (buggy) client phantom address
-// selection algorithm.
+// selectPhantomImplV0 implements support for the legacy (buggy) client phantom
+// address selection algorithm.
 func selectPhantomImplV0(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 
 	addressTotal := big.NewInt(0)
@@ -363,10 +371,11 @@ func selectPhantomImplV0(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 }
 
 // SelectAddrFromSubnet - given a seed and a CIDR block choose an address.
-// 		This is done by generating a seeded random bytes up to teh length of the
-//		full address then using the net mask to zero out any bytes that are
-//		already specified by the CIDR block. Tde masked random value is then
-//		added to the cidr block base giving the final randomly selected address.
+//
+// This is done by generating a seeded random bytes up to teh length of the full
+// address then using the net mask to zero out any bytes that are already
+// specified by the CIDR block. Tde masked random value is then added to the
+// cidr block base giving the final randomly selected address.
 func SelectAddrFromSubnet(seed []byte, net1 *net.IPNet) (net.IP, error) {
 	bits, addrLen := net1.Mask.Size()
 
@@ -405,8 +414,9 @@ func SelectAddrFromSubnet(seed []byte, net1 *net.IPNet) (net.IP, error) {
 	return net.IP(ipBigInt.Bytes()), nil
 }
 
-// Version 2: HKDF-based
 // SelectAddrFromSubnetOffset given a CIDR block and offset, return the net.IP
+//
+// Version 2: HKDF-based
 func SelectAddrFromSubnetOffset(net1 *net.IPNet, offset *big.Int) (net.IP, error) {
 	bits, addrLen := net1.Mask.Size()
 
@@ -431,10 +441,10 @@ func SelectAddrFromSubnetOffset(net1 *net.IPNet, offset *big.Int) (net.IP, error
 	return net.IP(ipBigInt.Bytes()), nil
 }
 
-// selectIPAddr selects an ip address from the list of subnets associated
-// with the specified generation by constructing a set of start and end values
-// for the high and low values in each allocation. The random number is then
-// bound between the global min and max of that set. This ensures that
+// selectPhantomImplHkdf selects an ip address from the list of subnets
+// associated with the specified generation by constructing a set of start and
+// end values for the high and low values in each allocation. The random number
+// is then bound between the global min and max of that set. This ensures that
 // addresses are chosen based on the number of addresses in the subnet.
 func selectPhantomImplHkdf(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 	type idNet struct {
@@ -504,8 +514,9 @@ func selectPhantomImplHkdf(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 	return result, nil
 }
 
-// GetSubnetsByGeneration - provide a generatio index. If the generation exists the associated
-//		subnetconfig is returned. If it is not defined the default subnets are returned.
+// GetSubnetsByGeneration - provide a generation index. If the generation exists
+// the associated SubnetConfig is returned. If it is not defined the default
+// subnets are returned.
 func (p *PhantomIPSelector) GetSubnetsByGeneration(generation uint) *SubnetConfig {
 	if subnets, ok := p.Networks[generation]; ok {
 		return subnets
@@ -516,7 +527,8 @@ func (p *PhantomIPSelector) GetSubnetsByGeneration(generation uint) *SubnetConfi
 }
 
 // AddGeneration - add a subnet config as a new new generation, if the requested
-//		generation index is taken then it uses (and returns) the next available number.
+// generation index is taken then it uses (and returns) the next available
+// number.
 func (p *PhantomIPSelector) AddGeneration(gen int, subnets *SubnetConfig) uint {
 
 	ugen := uint(gen)
@@ -553,7 +565,7 @@ func (p *PhantomIPSelector) RemoveGeneration(generation uint) bool {
 	return true
 }
 
-//UpdateGeneration - Update the subnet list associated with a specific generation
+// UpdateGeneration - Update the subnet list associated with a specific generation
 func (p *PhantomIPSelector) UpdateGeneration(generation uint, subnets *SubnetConfig) bool {
 	p.Networks[generation] = subnets
 	return true
