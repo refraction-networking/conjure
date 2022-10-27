@@ -81,26 +81,29 @@ func TestCachedLiveness(t *testing.T) {
 
 func TestCachedLivenessLiveOnly(t *testing.T) {
 
-	_, err := New(&Config{"1h", ""})
+	clt, err := New(&Config{"1h", ""})
 	require.Nil(t, err)
 
-	// liveness, response := clt.PhantomIsLive("1.1.1.1.", 80)
-	// if liveness != true {
-	// 	t.Fatalf("Host is live, detected as NOT live: %v\n", response)
-	// }
-	// if status, ok := clt.ipCacheLive["1.1.1.1."]; !ok || status == nil || status.isLive != true {
-	// 	// Entry should be in live cache
-	// 	t.Fatalf("Host is live, but not cached as live")
-	// }
+	liveness, response := clt.PhantomIsLive("1.1.1.1.", 80)
+	if liveness != true {
+		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
+	}
+	if status, ok := clt.(*CachedLivenessTester).ipCacheLive["1.1.1.1."]; !ok || status == nil {
+		// Entry should be in live cache
+		t.Fatalf("Host is live, but not cached as live")
+	}
 
-	// liveness, response = clt.PhantomIsLive("192.0.0.2", 443)
-	// if liveness != false {
-	// 	t.Fatalf("Host is NOT live, detected as live: %v\n", response)
-	// }
-	// if status, ok := clt.ipCacheLive["192.0.0.2"]; ok || status != nil {
-	// 	// Entry should NOT be in live cache
-	// 	t.Fatalf("Non-live host present in live cache")
-	// }
+	liveness, response = clt.PhantomIsLive("192.0.0.2", 443)
+	require.Equal(t, false, liveness, "Host is NOT live, detected as live: %v\n", response)
+	if status, ok := clt.(*CachedLivenessTester).ipCacheLive["192.0.0.2"]; ok || status != nil {
+		// Entry should NOT be in live cache
+		t.Fatalf("Non-live host present in live cache")
+	}
+
+	// Ensure that a lookup for the same address does not return cached.
+	liveness, response = clt.PhantomIsLive("192.0.0.2", 443)
+	require.Equal(t, false, liveness, "Host is NOT live, detected as live: %v\n", response)
+	require.NotEqual(t, ErrCachedPhantom, response)
 }
 
 func TestCachedLivenessThreaded(t *testing.T) {

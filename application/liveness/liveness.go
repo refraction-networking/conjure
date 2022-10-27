@@ -55,17 +55,13 @@ func New(c *Config) (Tester, error) {
 		return &UncachedLivenessTester{
 			stats: &stats{},
 		}, nil
-	} else if c.CacheDuration != "" && c.CacheDurationNonLive == "" {
-		return nil, ErrNotImplemented
-	} else if c.CacheDuration == "" && c.CacheDurationNonLive != "" {
-		return nil, ErrNotImplemented
 	}
 
 	clt := &CachedLivenessTester{
 		stats: &stats{},
 	}
-	err := clt.Init(c.CacheDuration, c.CacheDurationNonLive)
-	return clt, err
+
+	return clt, clt.Init(c.CacheDuration, c.CacheDurationNonLive)
 }
 
 func phantomIsLive(address string) (bool, error) {

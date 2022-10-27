@@ -34,21 +34,27 @@ func (blt *CachedLivenessTester) Init(expirationLive, expirationNonLive string) 
 	blt.m.Lock()
 	defer blt.m.Unlock()
 
-	blt.ipCacheLive = make(map[string]*cacheElement)
-	blt.ipCacheNonLive = make(map[string]*cacheElement)
+	if expirationLive != "" {
+		blt.ipCacheLive = make(map[string]*cacheElement)
+
+		convertedTime, err := time.ParseDuration(expirationLive)
+		if err != nil {
+			return fmt.Errorf("unable to parse cacheExpirationLive: %s", err)
+		}
+		blt.cacheExpirationLive = convertedTime
+	}
+
+	if expirationNonLive != "" {
+		blt.ipCacheNonLive = make(map[string]*cacheElement)
+		convertedTime, err := time.ParseDuration(expirationNonLive)
+		if err != nil {
+			return fmt.Errorf("unable to parse cacheExpirationNonLive: %s", err)
+		}
+		blt.cacheExpirationNonLive = convertedTime
+
+	}
+
 	blt.signal = make(chan bool)
-
-	convertedTime, err := time.ParseDuration(expirationLive)
-	if err != nil {
-		return fmt.Errorf("unable to parse cacheExpirationLive: %s", err)
-	}
-	blt.cacheExpirationLive = convertedTime
-
-	convertedTime, err = time.ParseDuration(expirationNonLive)
-	if err != nil {
-		return fmt.Errorf("unable to parse cacheExpirationNonLive: %s", err)
-	}
-	blt.cacheExpirationNonLive = convertedTime
 
 	return nil
 }
@@ -64,15 +70,19 @@ func (blt *CachedLivenessTester) ClearExpiredCache() {
 	blt.m.Lock()
 	defer blt.m.Unlock()
 
-	for ipAddr, status := range blt.ipCacheLive {
-		if time.Since(status.cachedTime) > blt.cacheExpirationLive {
-			delete(blt.ipCacheLive, ipAddr)
+	if blt.ipCacheLive != nil {
+		for ipAddr, status := range blt.ipCacheLive {
+			if time.Since(status.cachedTime) > blt.cacheExpirationLive {
+				delete(blt.ipCacheLive, ipAddr)
+			}
 		}
 	}
 
-	for ipAddr, status := range blt.ipCacheNonLive {
-		if time.Since(status.cachedTime) > blt.cacheExpirationNonLive {
-			delete(blt.ipCacheNonLive, ipAddr)
+	if blt.ipCacheNonLive != nil {
+		for ipAddr, status := range blt.ipCacheNonLive {
+			if time.Since(status.cachedTime) > blt.cacheExpirationNonLive {
+				delete(blt.ipCacheNonLive, ipAddr)
+			}
 		}
 	}
 }
@@ -107,11 +117,19 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 	if isLive {
 		// add to stats
 		blt.stats.incFail()
-		blt.ipCacheLive[addr] = val
+
+		if blt.ipCacheLive != nil {
+			// Add to cache if enabled
+			blt.ipCacheLive[addr] = val
+		}
 	} else {
 		// add to stats
 		blt.stats.incPass()
-		blt.ipCacheNonLive[addr] = val
+
+		if blt.ipCacheNonLive != nil {
+			// Add to cache if enabled
+			blt.ipCacheNonLive[addr] = val
+		}
 	}
 
 	return isLive, err
@@ -121,14 +139,19 @@ func (blt *CachedLivenessTester) phantomLookup(addr string, port uint16) (bool, 
 	blt.m.RLock()
 	defer blt.m.RUnlock()
 
-	if status, ok := blt.ipCacheLive[addr]; ok {
-		if time.Since(status.cachedTime) < blt.cacheExpirationLive {
-			return true, ErrCachedPhantom
+	if blt.ipCacheLive != nil {
+		if status, ok := blt.ipCacheLive[addr]; ok {
+			if time.Since(status.cachedTime) < blt.cacheExpirationLive {
+				return true, ErrCachedPhantom
+			}
 		}
 	}
-	if status, ok := blt.ipCacheNonLive[addr]; ok {
-		if time.Since(status.cachedTime) < blt.cacheExpirationNonLive {
-			return false, ErrCachedPhantom
+
+	if blt.ipCacheNonLive != nil {
+		if status, ok := blt.ipCacheNonLive[addr]; ok {
+			if time.Since(status.cachedTime) < blt.cacheExpirationNonLive {
+				return false, ErrCachedPhantom
+			}
 		}
 	}
 	return false, nil
@@ -158,6 +181,16 @@ func (blt *CachedLivenessTester) printStats(logger *log.Logger) {
 	nlcn := atomic.LoadInt64(&s.newLivenessCachedNonLive)
 	total := math.Max(float64(nlp+nlf + +nlcl + nlcn), 1)
 
+	liveCacheCap := 0
+	if blt.ipCacheLive != nil {
+		liveCacheCap = len(blt.ipCacheLive)
+	}
+
+	nonLiveCacheCap := 0
+	if blt.ipCacheLive != nil {
+		nonLiveCacheCap = len(blt.ipCacheNonLive)
+	}
+
 	logger.Infof("liveness-stats: %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %d",
 		nlp,
 		float64(nlp)/float64(total)*100,
@@ -171,8 +204,8 @@ func (blt *CachedLivenessTester) printStats(logger *log.Logger) {
 		nlcn,
 		float64(nlcn)/float64(total)*100,
 		float64(nlcn)/float64(epochDur)*1000,
-		len(blt.ipCacheLive),
-		len(blt.ipCacheNonLive),
+		liveCacheCap,
+		nonLiveCacheCap,
 	)
 }
 
