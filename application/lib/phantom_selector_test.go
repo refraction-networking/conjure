@@ -1,6 +1,8 @@
 package lib
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"math/rand"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/hkdf"
 )
 
 func TestPhantomsIPSelectionAlt(t *testing.T) {
@@ -116,7 +119,8 @@ func TestPhantomsSeededSelectionV4(t *testing.T) {
 
 }
 
-func TestPhantomsSeededSelectionV6(t *testing.T) {
+// Client V1
+func TestPhantomsSeededSelectionV6Varint(t *testing.T) {
 	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
 	phantomSelector, err := NewPhantomIPSelector()
 	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
@@ -160,7 +164,7 @@ func TestPhantomsSeededSelectionV4Min(t *testing.T) {
 	seed, err := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
 	require.Nil(t, err)
 
-	phantomAddr, err := selectPhantomImpl(seed, subnets)
+	phantomAddr, err := selectPhantomImplVarint(seed, subnets)
 	require.Nil(t, err)
 
 	possibleAddrs := []string{"192.122.190.0", "2001:48a8:687f:1::"}
@@ -192,13 +196,14 @@ func TestPhantomSeededSelectionFuzz(t *testing.T) {
 			require.Equal(t, n, 32)
 
 			// phantomAddr, err := phantomSelector.Select(seed, newGen, false)
-			phantomAddr, err := selectPhantomImpl(seed, subnets)
+			phantomAddr, err := selectPhantomImplVarint(seed, subnets)
 			require.Nil(t, err, "i=%d, j=%d, seed='%s'", i, j, hex.EncodeToString(seed))
 			require.NotNil(t, phantomAddr)
 		}
 	}
 }
 
+// This tests Client V0
 func TestPhantomsSeededSelectionLegacy(t *testing.T) {
 	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
 	phantomSelector, err := NewPhantomIPSelector()
@@ -219,5 +224,137 @@ func TestPhantomsSeededSelectionLegacy(t *testing.T) {
 	phantomAddr, err := phantomSelector.Select(seed, newGen, 0, false)
 	require.Nil(t, err)
 	assert.Equal(t, expectedAddr, phantomAddr.String())
+
+}
+
+// This tests Client V1
+func TestPhantomsSeededSelectionVarint(t *testing.T) {
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
+	phantomSelector, err := NewPhantomIPSelector()
+	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
+
+	var newConf = &SubnetConfig{
+		WeightedSubnets: []ConjurePhantomSubnet{
+			{Weight: 9, Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
+			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
+		},
+	}
+
+	newGen := phantomSelector.AddGeneration(-1, newConf)
+
+	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
+	expectedAddr := "192.122.190.130"
+
+	phantomAddr, err := phantomSelector.Select(seed, newGen, 1, false)
+	require.Nil(t, err)
+	assert.Equal(t, expectedAddr, phantomAddr.String())
+}
+
+// This tests Client V2
+func TestPhantomsSeededSelectionHkdf(t *testing.T) {
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
+	phantomSelector, err := NewPhantomIPSelector()
+	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
+
+	var newConf = &SubnetConfig{
+		WeightedSubnets: []ConjurePhantomSubnet{
+			{Weight: 9, Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
+			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
+		},
+	}
+
+	newGen := phantomSelector.AddGeneration(-1, newConf)
+
+	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
+	expectedAddr := "192.122.190.164"
+
+	phantomAddr, err := phantomSelector.Select(seed, newGen, 2, false)
+	require.Nil(t, err)
+	assert.Equal(t, expectedAddr, phantomAddr.String())
+}
+
+func TestPhantomsV6Hkdf(t *testing.T) {
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
+	phantomSelector, err := NewPhantomIPSelector()
+	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
+
+	var newConf = &SubnetConfig{
+		WeightedSubnets: []ConjurePhantomSubnet{
+			{Weight: 9, Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
+			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
+		},
+	}
+
+	newGen := phantomSelector.AddGeneration(-1, newConf)
+
+	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
+	//expectedAddr := "2001:48a8:687f:1:5fa4:c34c:434e:ddd"
+	expectedAddr := "2001:48a8:687f:1:d8f4:45cd:3ae:fcd4"
+
+	phantomAddr, err := phantomSelector.Select(seed, newGen, 2, true)
+	require.Nil(t, err)
+	assert.Equal(t, expectedAddr, phantomAddr.String())
+}
+
+func ExpandSeed(seed, salt []byte, i int) []byte {
+	bi := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bi, uint64(i))
+	return hkdf.Extract(sha256.New, seed, append(salt, bi...))
+}
+
+// TestDuplicates demonstrates that selectPhantomImplVarint results in
+// collisions due to random bias introduced by math/rand and Varint -- if one
+// edits the ClientLibVersion to be 1 in phantomSelector.Select(...), it will
+// detect the problem. Notice the leading bit of both seeds are 0, and the byte
+// is the same (0x30) between the two tests that demonstrate generating the same
+// IPv6 address.
+//
+// --- FAIL: TestDuplicates (0.00s)
+//     phantom_selector_test.go:341: Generated duplicate IP; biased random. Both seeds 25 and 12 generated 2002::ee94:8e44:13ce:4e81
+//         25: 30af851e2b8e4dd57db8830d5fc6f759bdc2c7a5a396f6641cc23604fa61c851
+//         12: 301f4d8eba57f250e9fc3fa8205b3703fb4a6edbe4941f2a8ff2bc01e05051a9
+// FAIL
+func TestDuplicates(t *testing.T) {
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
+	phantomSelector, err := NewPhantomIPSelector()
+	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
+
+	var newConf = &SubnetConfig{
+		WeightedSubnets: []ConjurePhantomSubnet{
+			{Weight: 1, Subnets: []string{"2001:48a8:687f:1::/64"}},
+			{Weight: 9, Subnets: []string{"2002::/64"}},
+		},
+	}
+
+	newGen := phantomSelector.AddGeneration(-1, newConf)
+
+	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
+	salt := []byte("phantom-duplicate-test")
+
+	// Set of IPs we have seen
+	ipSet := map[string]int{}
+
+	// The odds of this test generating a duplicate by chance is around 10^-10
+	// (based on approximation of birthday bound n^2 / 2*m)
+	for i := 0; i < 100000; i++ {
+
+		// Get new random seed
+		curSeed := ExpandSeed(seed, salt, i)
+
+		// Get phantom address
+		// addr, err := phantomSelector.Select(curSeed, newGen, 1, true)
+		addr, err := phantomSelector.Select(curSeed, newGen, 2, true)
+		if err != nil {
+			t.Fatalf("Failed to select adddress: %v -- %s -- %v", err, hex.EncodeToString(curSeed), i)
+		}
+		//fmt.Printf("%s %v\n", hex.EncodeToString(curSeed), addr)
+
+		if prevI, ok := ipSet[addr.String()]; ok {
+			prevSeed := ExpandSeed(seed, salt, prevI)
+			t.Fatalf("Generated duplicate IP; biased random. Both seeds %d and %d generated %v\n%d: %s\n%d: %s",
+				i, prevI, addr, i, hex.EncodeToString(curSeed), prevI, hex.EncodeToString(prevSeed))
+		}
+		ipSet[addr.String()] = i
+	}
 
 }
