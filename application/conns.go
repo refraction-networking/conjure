@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	golog "log"
+	"math"
 	"math/rand"
 	"net"
 	"os"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -18,7 +20,30 @@ import (
 	"github.com/refraction-networking/conjure/application/transports"
 )
 
-func acceptConnections(ctx context.Context, rm *cj.RegistrationManager, logger *log.Logger) {
+// connManagerConfig
+type connManagerConfig struct {
+	NewConnDeadline string
+	newConnDeadline time.Duration
+	TraceDebugRate  int // rate at which to print Debug logging for connections. Rate is computed as 1/n - 0 indicates off.
+}
+
+type connManager struct {
+	*connStats
+	*connManagerConfig
+}
+
+func newConnManager(conf *connManagerConfig) *connManager {
+	if conf == nil {
+		conf = &connManagerConfig{
+			NewConnDeadline: "10s",
+			newConnDeadline: 10 * time.Second,
+			TraceDebugRate:  0,
+		}
+	}
+	return &connManager{&connStats{}, conf}
+}
+
+func (cm *connManager) acceptConnections(ctx context.Context, rm *cj.RegistrationManager, logger *log.Logger) {
 	// listen for and handle incoming proxy traffic
 	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
 	ln, err := net.ListenTCP("tcp", listenAddr)
@@ -38,7 +63,7 @@ func acceptConnections(ctx context.Context, rm *cj.RegistrationManager, logger *
 				logger.Errorf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
 				continue
 			}
-			go handleNewConn(rm, newConn)
+			go cm.handleNewConn(rm, newConn)
 		}
 	}
 }
@@ -58,7 +83,7 @@ func getOriginalDst(fd uintptr) (net.IP, error) {
 
 // Handle connection from client
 // NOTE: this is called as a goroutine
-func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) {
+func (cm *connManager) handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) {
 	defer clientConn.Close()
 	logger := sharedLogger
 
@@ -98,9 +123,10 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 	count := regManager.CountRegistrations(originalDstIP)
 	logger.Debugf("new connection (%d potential registrations)\n", count)
 	cj.Stat().AddConn()
+	cm.addCreated()
 
-	// Pick random timeout between 10 and 60 seconds, down to millisecond precision
-	ms := rand.Int63n(50000) + 10000
+	// Pick random timeout between 5 and 10 seconds, down to millisecond precision
+	ms := rand.Int63n(5000) + 5000
 	timeout := time.Duration(ms) * time.Millisecond
 
 	// Give the client a deadline to send enough data to identify a transport.
@@ -126,6 +152,7 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 		logger.Debugf("no possible registrations, reading for %v then dropping connection\n", timeout)
 		cj.Stat().AddMissedReg()
 		cj.Stat().CloseConn()
+		cm.createdToDiscard()
 
 		// Copy into io.Discard to keep ACKing until the deadline.
 		// This should help prevent fingerprinting; if we let the read
@@ -134,12 +161,17 @@ func handleNewConn(regManager *cj.RegistrationManager, clientConn *net.TCPConn) 
 		_, err = io.Copy(io.Discard, clientConn)
 		if errors.Is(err, syscall.ECONNRESET) {
 			// log reset error without client ip
-			logger.Errorln("error occurred discarding data: rst")
+			logger.Errorln("error occurred discarding data (read 0 B): rst")
+			cm.discardToReset()
 		} else if et, ok := err.(net.Error); ok && et.Timeout() {
-			logger.Errorln("error occurred discarding data: timeout")
+			logger.Errorln("error occurred discarding data (read 0 B): timeout")
+			cm.discardToTimeout()
 		} else if err != nil {
 			//Log any other error
-			logger.Errorln("error occurred discarding data:", err)
+			logger.Errorln("error occurred discarding data (read 0 B):", err)
+			cm.discardToError()
+		} else {
+			cm.discardToClose()
 		}
 
 		return
@@ -157,16 +189,24 @@ readLoop:
 		if len(possibleTransports) < 1 {
 			logger.Warnf("ran out of possible transports, reading for %v then giving up\n", time.Until(deadline))
 			cj.Stat().ConnErr()
+			cm.checkToDiscard()
+
 			_, err = io.Copy(io.Discard, clientConn)
 			if errors.Is(err, syscall.ECONNRESET) {
 				// log reset error without client ip
-				logger.Errorln("error occurred discarding data: rst")
+				logger.Errorln("error occurred discarding data (read %d B): rst", received.Len())
+				cm.discardToReset()
 			} else if et, ok := err.(net.Error); ok && et.Timeout() {
-				logger.Errorln("error occurred discarding data: timeout")
+				logger.Errorln("error occurred discarding data (read %d B): timeout", received.Len())
+				cm.discardToTimeout()
 			} else if err != nil {
 				//Log any other error
-				logger.Errorln("error occurred discarding data:", err)
+				logger.Errorln("error occurred discarding data (read %d B):", received.Len(), err)
+				cm.discardToError()
+			} else {
+				cm.discardToClose()
 			}
+
 			return
 		}
 
@@ -176,15 +216,27 @@ readLoop:
 				continue
 			} else if errors.Is(err, syscall.ECONNRESET) {
 				logger.Errorf("got error while reading from connection, giving up after %d bytes: rst\n", received.Len())
-			} else if err != nil {
+				cm.readToReset()
+			} else if et, ok := err.(net.Error); ok && et.Timeout() {
+				logger.Errorf("got error while reading from connection, giving up after %d bytes: timeout\n", received.Len())
+				cm.readToTimeout()
+
+			} else {
 				logger.Errorf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len(), err)
+				cm.readToError()
 			}
 			cj.Stat().ConnErr()
 			return
 		}
+
+		if received.Len() == 0 && n != 0 {
+			cm.createdToRead()
+		}
+
 		received.Write(buf[:n])
 		logger.Tracef("read %d bytes so far", received.Len())
 
+		cm.readToCheck()
 	transports:
 		for i, t := range possibleTransports {
 			reg, wrapped, err = t.WrapConnection(&received, clientConn, originalDstIP, regManager)
@@ -201,6 +253,7 @@ readLoop:
 				d := time.Until(deadline)
 				logger.Warnf("got unexpected error from transport %s, sleeping %v then giving up: %v\n", t.Name(), d, err)
 				cj.Stat().ConnErr()
+				cm.checkToError()
 				time.Sleep(d)
 				return
 			}
@@ -216,10 +269,137 @@ readLoop:
 
 			regManager.MarkActive(reg)
 
+			cm.checkToFound()
 			break readLoop
 		}
+		cm.checkToRead()
 	}
 
 	cj.Proxy(reg, wrapped, logger)
 	cj.Stat().CloseConn()
+}
+
+type connStats struct {
+	epochStart time.Time
+
+	// States
+	numCreated      int64 // Number of connections that have read 0 bytes so far
+	numReading      int64 // Number of connections in the read / read more state trying to find reg
+	numIODiscarding int64 // Number of connections in the io discard state
+	numChecking     int64 // Number of connections that have taken a break from reading to check wrap
+
+	// Outcomes
+	numFound   int64 // Number of connections that found their registration using wrapConnection
+	numReset   int64 // Number of connections that received a reset while attempting to find registration
+	numTimeout int64 // Number of connections that timed out while attempting to find registration
+	numClosed  int64 // Number of connections that closed before finding the associated registration
+	numErr     int64 // Number of connections that received an unexpected error
+}
+
+func (c *connStats) PrintAndReset(logger *log.Logger) {
+	// prevent div by 0 if thread starvation happens
+	var epochDur float64 = math.Max(float64(time.Since(c.epochStart).Milliseconds()), 1)
+
+	logger.Infof("conn-stats: %d %d %d %d %d %.3f %d %.3f %d %.3f %d %.3f %d %.3f",
+		atomic.LoadInt64(&c.numCreated),
+		atomic.LoadInt64(&c.numReading),
+		atomic.LoadInt64(&c.numChecking),
+		atomic.LoadInt64(&c.numIODiscarding),
+		atomic.LoadInt64(&c.numFound),
+		1000*float64(atomic.LoadInt64(&c.numFound))/epochDur,
+		atomic.LoadInt64(&c.numReset),
+		1000*float64(atomic.LoadInt64(&c.numReset))/epochDur,
+		atomic.LoadInt64(&c.numTimeout),
+		1000*float64(atomic.LoadInt64(&c.numTimeout))/epochDur,
+		atomic.LoadInt64(&c.numErr),
+		1000*float64(atomic.LoadInt64(&c.numErr))/epochDur,
+		atomic.LoadInt64(&c.numClosed),
+		1000*float64(atomic.LoadInt64(&c.numClosed))/epochDur,
+	)
+
+	c.Reset()
+}
+
+func (c *connStats) Reset() {
+	atomic.StoreInt64(&c.numFound, 0)
+	atomic.StoreInt64(&c.numErr, 0)
+	atomic.StoreInt64(&c.numTimeout, 0)
+	atomic.StoreInt64(&c.numReset, 0)
+	atomic.StoreInt64(&c.numClosed, 0)
+
+	c.epochStart = time.Now()
+}
+
+func (c *connStats) addCreated() {
+	atomic.AddInt64(&c.numCreated, 1)
+}
+
+func (c *connStats) createdToRead() {
+	atomic.AddInt64(&c.numCreated, -1)
+	atomic.AddInt64(&c.numReading, 1)
+}
+
+func (c *connStats) createdToDiscard() {
+	atomic.AddInt64(&c.numCreated, -1)
+	atomic.AddInt64(&c.numIODiscarding, 1)
+}
+
+func (c *connStats) readToCheck() {
+	atomic.AddInt64(&c.numReading, -1)
+	atomic.AddInt64(&c.numChecking, 1)
+}
+
+func (c *connStats) readToTimeout() {
+	atomic.AddInt64(&c.numReading, -1)
+	atomic.AddInt64(&c.numTimeout, 1)
+}
+
+func (c *connStats) readToReset() {
+	atomic.AddInt64(&c.numReading, -1)
+	atomic.AddInt64(&c.numReset, 1)
+}
+
+func (c *connStats) readToError() {
+	atomic.AddInt64(&c.numReading, -1)
+	atomic.AddInt64(&c.numErr, 1)
+}
+
+func (c *connStats) checkToRead() {
+	atomic.AddInt64(&c.numChecking, -1)
+	atomic.AddInt64(&c.numReading, 1)
+}
+
+func (c *connStats) checkToFound() {
+	atomic.AddInt64(&c.numChecking, -1)
+	atomic.AddInt64(&c.numFound, 1)
+}
+
+func (c *connStats) checkToError() {
+	atomic.AddInt64(&c.numChecking, -1)
+	atomic.AddInt64(&c.numErr, 1)
+}
+
+func (c *connStats) checkToDiscard() {
+	atomic.AddInt64(&c.numChecking, -1)
+	atomic.AddInt64(&c.numIODiscarding, 1)
+}
+
+func (c *connStats) discardToReset() {
+	atomic.AddInt64(&c.numIODiscarding, -1)
+	atomic.AddInt64(&c.numReset, 1)
+}
+
+func (c *connStats) discardToTimeout() {
+	atomic.AddInt64(&c.numIODiscarding, -1)
+	atomic.AddInt64(&c.numTimeout, 1)
+}
+
+func (c *connStats) discardToError() {
+	atomic.AddInt64(&c.numIODiscarding, -1)
+	atomic.AddInt64(&c.numErr, 1)
+}
+
+func (c *connStats) discardToClose() {
+	atomic.AddInt64(&c.numIODiscarding, -1)
+	atomic.AddInt64(&c.numClosed, 1)
 }

@@ -197,9 +197,12 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 		}
 
 		if rm.IsBlocklistedPhantom(reg.DarkDecoy) {
-			// Note: Phantom blocklist is applied at this stage because the phantom may only be blocked on this
-			// station. We may want other stations to be informed about the registration, but prevent this station
-			// specifically from handling / interfering in any subsequent connection. See PR #75
+			// Note: Phantom blocklist is applied for registrations using the
+			// decoy registrar at this stage because the phantom may only be
+			// blocked on this station. We may want other stations to be
+			// informed about the registration, but prevent this station
+			// specifically from handling / interfering in any subsequent
+			// connection. See PR #75
 			logger.Warnf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
 			Stat().AddErrReg()
 			rm.AddErrReg()

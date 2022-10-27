@@ -90,11 +90,13 @@ func main() {
 	regChan := make(chan interface{}, 10000)
 	zmqIngester := cj.NewZMQIngest(zmqAddress, regChan, conf.ZMQConfig)
 
+	connManager := newConnManager(nil)
+
 	cj.Stat().AddStatsModule(zmqIngester)
 	cj.Stat().AddStatsModule(regManager.LivenessTester)
 	cj.Stat().AddStatsModule(cj.GetProxyStats())
 	cj.Stat().AddStatsModule(regManager)
-	// cj.Stat().AddStatsModule(connStats)
+	cj.Stat().AddStatsModule(connManager)
 
 	// Periodically clean old registrations
 	go func(ctx context.Context) {
@@ -113,7 +115,7 @@ func main() {
 	go zmqIngester.RunZMQ(ctx)
 	wg.Add(1)
 	go regManager.HandleRegUpdates(ctx, regChan, wg)
-	go acceptConnections(ctx, regManager, logger)
+	go connManager.acceptConnections(ctx, regManager, logger)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)

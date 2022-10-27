@@ -189,9 +189,12 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
+	getProxyStats().addSession()
+
 	go halfPipe(clientConn, covertConn, &wg, &oncePrintErr, logger, "Up "+reg.IDString())
 	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down "+reg.IDString())
 	wg.Wait()
+	getProxyStats().removeSession()
 }
 
 func writePROXYHeader(conn net.Conn, originalIPPort string) error {
@@ -216,6 +219,8 @@ func writePROXYHeader(conn net.Conn, originalIPPort string) error {
 type ProxyStats struct {
 	time.Time // epoch start time
 
+	sessionsProxying int64 // Number of open Proxy connections (count - not reset)
+
 	newBytesUp   int64 // Number of bytes transferred during epoch
 	newBytesDown int64 // Number of bytes transferred during epoch
 
@@ -238,18 +243,23 @@ func (s *ProxyStats) printStats(logger *log.Logger) {
 	var epochDur float64 = math.Max(float64(time.Since(s.Time).Milliseconds()), 1)
 
 	// fmtStr := "proxy-stats: %d (%f/s) up %d (%f/s) down %d completed %d 0up %d 0down  %f avg-non-0-up, %f avg-non-0-down"
-	fmtStr := "proxy-stats: %d %f %d %f %d %d %d %f %f"
+	fmtStr := "proxy-stats:%d %d %f %d %f %d %d %d %f %f"
+
+	completedSessions := atomic.LoadInt64(&s.completedSessions)
+	zbtu := atomic.LoadInt64(&s.zeroByteTunnelsUp)
+	zbtd := atomic.LoadInt64(&s.zeroByteTunnelsDown)
 
 	logger.Infof(fmtStr,
-		s.newBytesUp,
-		float64(s.newBytesUp)/float64(epochDur)*1000,
-		s.newBytesDown,
-		float64(s.newBytesDown)/float64(epochDur)*1000,
-		s.completedSessions,
-		s.zeroByteTunnelsUp,
-		s.zeroByteTunnelsDown,
-		float64(s.completeBytesUp)/math.Max(float64(s.completedSessions-s.zeroByteTunnelsUp), 1),
-		float64(s.completeBytesDown)/math.Max(float64(s.completedSessions-s.zeroByteTunnelsDown), 1),
+		atomic.LoadInt64(&s.sessionsProxying),
+		atomic.LoadInt64(&s.newBytesUp),
+		float64(atomic.LoadInt64(&s.newBytesUp))/epochDur*1000,
+		atomic.LoadInt64(&s.newBytesDown),
+		float64(atomic.LoadInt64(&s.newBytesDown))/epochDur*1000,
+		completedSessions,
+		zbtu,
+		zbtd,
+		float64(atomic.LoadInt64(&s.completeBytesUp))/math.Max(float64(completedSessions-zbtu), 1),
+		float64(atomic.LoadInt64(&s.completeBytesDown))/math.Max(float64(completedSessions-zbtd), 1),
 	)
 }
 
@@ -266,6 +276,14 @@ func (s *ProxyStats) reset() {
 	atomic.StoreInt64(&s.zeroByteTunnelsUp, 0)
 	atomic.StoreInt64(&s.zeroByteTunnelsDown, 0)
 	atomic.StoreInt64(&s.completedSessions, 0)
+}
+
+func (s *ProxyStats) addSession() {
+	atomic.AddInt64(&s.sessionsProxying, 1)
+}
+
+func (s *ProxyStats) removeSession() {
+	atomic.AddInt64(&s.sessionsProxying, -1)
 }
 
 func (s *ProxyStats) addCompleted(nb int64, isUpload bool) {
