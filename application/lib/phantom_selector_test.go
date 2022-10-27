@@ -160,7 +160,7 @@ func TestPhantomsSeededSelectionV4Min(t *testing.T) {
 	seed, err := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
 	require.Nil(t, err)
 
-	phantomAddr, err := selectPhantomImpl(seed, subnets)
+	phantomAddr, err := selectPhantomImplVarint(seed, subnets)
 	require.Nil(t, err)
 
 	possibleAddrs := []string{"192.122.190.0", "2001:48a8:687f:1::"}
@@ -192,7 +192,7 @@ func TestPhantomSeededSelectionFuzz(t *testing.T) {
 			require.Equal(t, n, 32)
 
 			// phantomAddr, err := phantomSelector.Select(seed, newGen, false)
-			phantomAddr, err := selectPhantomImpl(seed, subnets)
+			phantomAddr, err := selectPhantomImplVarint(seed, subnets)
 			require.Nil(t, err, "i=%d, j=%d, seed='%s'", i, j, hex.EncodeToString(seed))
 			require.NotNil(t, phantomAddr)
 		}
