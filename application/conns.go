@@ -189,19 +189,18 @@ readLoop:
 		if len(possibleTransports) < 1 {
 			logger.Warnf("ran out of possible transports, reading for %v then giving up\n", time.Until(deadline))
 			cj.Stat().ConnErr()
-			cm.checkToDiscard()
 
 			_, err = io.Copy(io.Discard, clientConn)
 			if errors.Is(err, syscall.ECONNRESET) {
 				// log reset error without client ip
-				logger.Errorln("error occurred discarding data (read %d B): rst", received.Len())
+				logger.Errorf("error occurred discarding data (read %d B): rst\n", received.Len())
 				cm.discardToReset()
 			} else if et, ok := err.(net.Error); ok && et.Timeout() {
-				logger.Errorln("error occurred discarding data (read %d B): timeout", received.Len())
+				logger.Errorf("error occurred discarding data (read %d B): timeout\n", received.Len())
 				cm.discardToTimeout()
 			} else if err != nil {
 				//Log any other error
-				logger.Errorln("error occurred discarding data (read %d B):", received.Len(), err)
+				logger.Errorf("error occurred discarding data (read %d B): %v\n", received.Len(), err)
 				cm.discardToError()
 			} else {
 				cm.discardToClose()
@@ -226,14 +225,15 @@ readLoop:
 			return
 		}
 
-		if received.Len() == 0 && n != 0 {
-			cm.createdToRead()
+		if received.Len() == 0 {
+			cm.createdToCheck()
+		} else {
+			cm.readToCheck()
 		}
 
 		received.Write(buf[:n])
 		logger.Tracef("read %d bytes so far", received.Len())
 
-		cm.readToCheck()
 	transports:
 		for i, t := range possibleTransports {
 			reg, wrapped, err = t.WrapConnection(&received, clientConn, originalDstIP, regManager)
@@ -269,7 +269,14 @@ readLoop:
 			cm.checkToFound()
 			break readLoop
 		}
-		cm.checkToRead()
+
+		if len(possibleTransports) < 1 {
+			cm.checkToDiscard()
+		} else if received.Len() == 0 {
+			cm.checkToCreated()
+		} else {
+			cm.checkToRead()
+		}
 	}
 
 	cj.Proxy(reg, wrapped, logger)
@@ -341,6 +348,11 @@ func (c *connStats) createdToDiscard() {
 	atomic.AddInt64(&c.numIODiscarding, 1)
 }
 
+func (c *connStats) createdToCheck() {
+	atomic.AddInt64(&c.numCreated, -1)
+	atomic.AddInt64(&c.numChecking, 1)
+}
+
 func (c *connStats) readToCheck() {
 	atomic.AddInt64(&c.numReading, -1)
 	atomic.AddInt64(&c.numChecking, 1)
@@ -359,6 +371,11 @@ func (c *connStats) readToReset() {
 func (c *connStats) readToError() {
 	atomic.AddInt64(&c.numReading, -1)
 	atomic.AddInt64(&c.numErr, 1)
+}
+
+func (c *connStats) checkToCreated() {
+	atomic.AddInt64(&c.numChecking, -1)
+	atomic.AddInt64(&c.numCreated, 1)
 }
 
 func (c *connStats) checkToRead() {
