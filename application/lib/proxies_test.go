@@ -1,4 +1,6 @@
 //lint:file-ignore U1000 Ignore unused function temporarily for debugging
+//go:build !race
+// +build !race
 
 package lib
 
@@ -17,6 +19,7 @@ import (
 
 var errNotExist = errors.New("not implemented")
 
+// under construction - not finalized or definitive
 func TestProxyMockCovertReset(t *testing.T) {
 
 	wg := new(sync.WaitGroup)
