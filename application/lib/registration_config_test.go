@@ -31,7 +31,7 @@ func TestConjureLibConfigResolveBlocklisted(t *testing.T) {
 	}
 
 	for input, expected := range goodTestCases {
-		output := conf.ParseOrResolveBlocklisted(input)
+		output, _ := conf.ParseOrResolveBlocklisted(input)
 		require.Contains(t, expected, output)
 	}
 
@@ -47,7 +47,7 @@ func TestConjureLibConfigResolveBlocklisted(t *testing.T) {
 	}
 
 	for _, input := range malformedTestCases {
-		output := conf.ParseOrResolveBlocklisted(input)
+		output, _ := conf.ParseOrResolveBlocklisted(input)
 		require.Equal(t, "", output)
 	}
 
@@ -62,7 +62,7 @@ func TestConjureLibConfigResolveBlocklisted(t *testing.T) {
 	}
 
 	for _, input := range blocklistedTestCases {
-		output := conf.ParseOrResolveBlocklisted(input)
+		output, _ := conf.ParseOrResolveBlocklisted(input)
 		require.Equal(t, "", output, "should be blocklisted")
 	}
 }
@@ -126,7 +126,7 @@ func TestConjureLibConfigResolveAllowlisted(t *testing.T) {
 	}
 
 	for input, expected := range goodTestCases {
-		output := conf.ParseOrResolveBlocklisted(input)
+		output, _ := conf.ParseOrResolveBlocklisted(input)
 		require.Contains(t, expected, output)
 	}
 
@@ -141,7 +141,7 @@ func TestConjureLibConfigResolveAllowlisted(t *testing.T) {
 	}
 
 	for _, input := range blocklistedTestCases {
-		output := conf.ParseOrResolveBlocklisted(input)
+		output, _ := conf.ParseOrResolveBlocklisted(input)
 		require.Equal(t, "", output, "should be blocklisted")
 	}
 }
@@ -160,7 +160,7 @@ func TestConjureLibConfigBlocklistPublic(t *testing.T) {
 	}
 
 	for input, expected := range goodTestCases {
-		output := conf.ParseOrResolveBlocklisted(input)
+		output, _ := conf.ParseOrResolveBlocklisted(input)
 		require.Contains(t, expected, output)
 	}
 
@@ -170,7 +170,40 @@ func TestConjureLibConfigBlocklistPublic(t *testing.T) {
 	}
 
 	for _, input := range blocklistedTestCases {
-		output := conf.ParseOrResolveBlocklisted(input)
+		output, _ := conf.ParseOrResolveBlocklisted(input)
 		require.Equal(t, "", output, "should be blocklisted")
+	}
+}
+
+func TestConjureLibConfigResolveDidLookup(t *testing.T) {
+
+	conf := &RegConfig{
+		CovertBlocklistSubnets: []string{
+			"192.0.0.1/16",
+			"127.0.0.1/32",
+			"::1/128",
+		},
+		CovertBlocklistDomains: []string{
+			".*blocked\\.com$",
+			"blocked1\\.com",
+		},
+	}
+
+	conf.ParseBlocklists()
+
+	testCases := map[string]bool{
+		"[::1]:443":           false,
+		"blocked.com:443":     false, // blocklist matches don't hit network
+		"abc.blocked.com:443": false,
+		"blocked1.com:443":    false,
+		"blocked2.com:443":    true, // domains not explicitly blocklisted do resolve
+		"192.0.2.1:http":      false,
+		"127.0.0.1:443":       false,
+		"localhost:443":       true, // this includes localhost (if not blocklisted)
+	}
+
+	for input, expected := range testCases {
+		_, output := conf.ParseOrResolveBlocklisted(input)
+		require.Equal(t, expected, output, input)
 	}
 }

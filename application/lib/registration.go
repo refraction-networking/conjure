@@ -182,6 +182,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 		RegistrationTime:   time.Now(),
 		RegistrationSource: registrationSource,
 		regCount:           0,
+		clientLibVer:       c2s.GetClientLibVersion(),
 	}
 
 	return &reg, nil
@@ -191,6 +192,8 @@ var errIncompleteReg = errors.New("incomplete registration")
 var errTransportNotEnabled = errors.New("transport not enabled, or unknown")
 var errBlocklistedPhantom = errors.New("blocklisted phantom - reg not serviceable")
 
+// ValidateRegistration checks expected fields and combinations for common
+// errors to prevent wasted time on registration ingest.
 func (regManager *RegistrationManager) ValidateRegistration(reg *DecoyRegistration) (bool, error) {
 
 	if reg == nil {
@@ -284,6 +287,7 @@ type DecoyRegistration struct {
 	RegistrationSource *pb.RegistrationSource
 	DecoyListVersion   uint32
 	regCount           int32
+	clientLibVer       uint32
 
 	// validity marks whether the registration has been validated through liveness and other checks.
 	// This also denotes whether the registration has been shared with the detector.

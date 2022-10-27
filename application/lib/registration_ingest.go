@@ -116,7 +116,9 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 	logger := rm.Logger
 
 	if ok, err := rm.ValidateRegistration(reg); !ok || err != nil {
-		if err != errBlocklistedPhantom {
+		if err == errBlocklistedPhantom {
+			rm.AddBlocklistedPhantomReg()
+		} else {
 			logger.Errorln("error tracking registration: ", err)
 			Stat().AddErrReg()
 		}
@@ -154,7 +156,10 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 
 	// If registration is trying to connect to a covert address that
 	// is blocklisted consider registration INVALID and continue
-	covert := rm.ParseOrResolveBlocklisted(reg.Covert)
+	covert, lookup := rm.ParseOrResolveBlocklisted(reg.Covert)
+	if lookup {
+		rm.addDNSResolution()
+	}
 	if covert == "" {
 		// We log client IPs for clients attempting to connect to
 		// blocklisted covert addresses.
@@ -205,7 +210,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 			// connection. See PR #75
 			logger.Warnf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
 			Stat().AddErrReg()
-			rm.AddErrReg()
+			rm.AddBlocklistedPhantomReg()
 			return
 		}
 
@@ -214,7 +219,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 	rm.AddRegistration(reg)
 	logger.Debugf("Adding registration %v\n", reg.IDString())
 	Stat().AddReg(reg.DecoyListVersion, reg.RegistrationSource)
-	rm.AddReg(reg.DecoyListVersion, reg.RegistrationSource)
+	rm.AddRegStats(reg)
 }
 
 func tryShareRegistrationOverAPI(reg *DecoyRegistration, apiEndpoint string, logger *log.Logger) {

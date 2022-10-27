@@ -116,35 +116,41 @@ func (c *RegConfig) ParseBlocklists() {
 // net.Dial and checking blocklists in the same step.
 //
 // If a bad address / domain is given and empty string will be returned
-func (c *RegConfig) ParseOrResolveBlocklisted(provided string) string {
+// The bool return indicates whether the station resolved the domain name or not
+func (c *RegConfig) ParseOrResolveBlocklisted(provided string) (string, bool) {
 
 	a := net.ParseIP(provided)
 	if a != nil {
 		// IP address with no port provided
-		return ""
+		return "", false
 	}
 
 	host, port, err := net.SplitHostPort(provided)
 	if err != nil {
-		return ""
+		return "", false
 	}
 	if c.isBlocklistedCovertDomain(host) {
-		return ""
+		return "", false
 	}
 
 	_, err = strconv.ParseUint(port, 10, 16)
 	if err != nil {
-		return ""
+		return "", false
+	}
+
+	lookup := false
+	if out := net.ParseIP(host); out == nil {
+		lookup = true
 	}
 
 	addr, err := net.ResolveIPAddr("ip", host)
 	if err != nil {
-		return ""
+		return "", lookup
 	}
 	if addr == nil || c.isBlocklistedCovertAddr(addr.IP) {
-		return ""
+		return "", lookup
 	}
-	return net.JoinHostPort(addr.String(), port)
+	return net.JoinHostPort(addr.String(), port), lookup
 }
 
 // isBlocklistedCovertAddr checks if the provided host string should be

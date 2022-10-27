@@ -31,6 +31,7 @@ type Stats struct {
 
 	moduleStats []stats
 
+	// TODO JMWAMPLE REMOVE
 	activeConns            int64 // incremented on add, decremented on remove, not reset
 	newConns               int64 // new connections since last stats.reset()
 	newErrConns            int64 // new connections that had some sort of error since last reset()

@@ -300,9 +300,9 @@ type connStats struct {
 
 	// States
 	numCreated      int64 // Number of connections that have read 0 bytes so far
-	numReading      int64 // Number of connections in the read / read more state trying to find reg
+	numReading      int64 // Number of connections in the read / read more state trying to find reg that have read at least 1 byte
 	numIODiscarding int64 // Number of connections in the io discard state
-	numChecking     int64 // Number of connections that have taken a break from reading to check wrap
+	numChecking     int64 // Number of connections that have taken a break from reading to check for the wrapping transport
 
 	// Outcomes
 	numFound   int64 // Number of connections that found their registration using wrapConnection
@@ -348,11 +348,6 @@ func (c *connStats) Reset() {
 
 func (c *connStats) addCreated() {
 	atomic.AddInt64(&c.numCreated, 1)
-}
-
-func (c *connStats) createdToRead() {
-	atomic.AddInt64(&c.numCreated, -1)
-	atomic.AddInt64(&c.numReading, 1)
 }
 
 func (c *connStats) createdToDiscard() {
