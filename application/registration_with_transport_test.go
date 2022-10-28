@@ -8,6 +8,7 @@ import (
 
 	cj "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
+
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"

@@ -34,17 +34,17 @@ func TestCachedLiveness(t *testing.T) {
 	clt := CachedLivenessTester{
 		stats: &stats{},
 	}
-	err := clt.Init("1h", "5m")
+	err := clt.Init(&Config{"1h", 0, "5m", 0})
 	require.Nil(t, err)
 
 	liveness, response := clt.PhantomIsLive("1.1.1.1.", 80)
 	if liveness != true {
 		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
-	if status, ok := clt.ipCacheLive["1.1.1.1."]; !ok || status == nil {
+	if status, ok := clt.ipCacheLive.(*mapCache).ipCache["1.1.1.1."]; !ok || status == nil {
 		// Entry should be in live cache
 		t.Fatalf("Host is live, but not cached as live")
-	} else if status, ok := clt.ipCacheNonLive["1.1.1.1."]; ok || status != nil {
+	} else if status, ok := clt.ipCacheNonLive.(*mapCache).ipCache["1.1.1.1."]; ok || status != nil {
 		// Entry should NOT be in non-live cache
 		t.Fatalf("Host is live but cached as non-live")
 	}
@@ -53,10 +53,10 @@ func TestCachedLiveness(t *testing.T) {
 	if liveness != false {
 		t.Fatalf("Host is NOT live, detected as live: %v\n", response)
 	}
-	if status, ok := clt.ipCacheLive["192.0.0.2"]; ok || status != nil {
+	if status, ok := clt.ipCacheLive.(*mapCache).ipCache["192.0.0.2"]; ok || status != nil {
 		// Entry should NOT be in live cache
 		t.Fatalf("Non-live host present in live cache")
-	} else if status, ok := clt.ipCacheNonLive["192.0.0.2"]; !ok || status == nil {
+	} else if status, ok := clt.ipCacheNonLive.(*mapCache).ipCache["192.0.0.2"]; !ok || status == nil {
 		// Entry should be in non-live cache
 		t.Fatalf("Non-live host NOT present in non-live cache")
 	}
@@ -65,7 +65,7 @@ func TestCachedLiveness(t *testing.T) {
 	if liveness != true {
 		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
-	if status, ok := clt.ipCacheLive["2606:4700:4700::64"]; !ok || status == nil {
+	if status, ok := clt.ipCacheLive.(*mapCache).ipCache["2606:4700:4700::64"]; !ok || status == nil {
 		t.Fatalf("Host is not live, but cached as live")
 	}
 
@@ -81,21 +81,21 @@ func TestCachedLiveness(t *testing.T) {
 
 func TestCachedLivenessLiveOnly(t *testing.T) {
 
-	clt, err := New(&Config{"1h", ""})
+	clt, err := New(&Config{"1h", 0, "", 0})
 	require.Nil(t, err)
 
 	liveness, response := clt.PhantomIsLive("1.1.1.1.", 80)
 	if liveness != true {
 		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
-	if status, ok := clt.(*CachedLivenessTester).ipCacheLive["1.1.1.1."]; !ok || status == nil {
+	if status, ok := clt.(*CachedLivenessTester).ipCacheLive.(*mapCache).ipCache["1.1.1.1."]; !ok || status == nil {
 		// Entry should be in live cache
 		t.Fatalf("Host is live, but not cached as live")
 	}
 
 	liveness, response = clt.PhantomIsLive("192.0.0.2", 443)
 	require.Equal(t, false, liveness, "Host is NOT live, detected as live: %v\n", response)
-	if status, ok := clt.(*CachedLivenessTester).ipCacheLive["192.0.0.2"]; ok || status != nil {
+	if status, ok := clt.(*CachedLivenessTester).ipCacheLive.(*mapCache).ipCache["192.0.0.2"]; ok || status != nil {
 		// Entry should NOT be in live cache
 		t.Fatalf("Non-live host present in live cache")
 	}

@@ -34,23 +34,75 @@ type Stats interface {
 	Reset()
 }
 
+type cache interface {
+	Lookup(string) bool
+	ClearExpired()
+	Add(string, *cacheElement)
+
+	// Len returns the number of elements in the cache
+	Len() int
+
+	// Cap returns a float percentage filled (0 if infinite capacity)
+	Cap() float64
+}
+
+type cacheElement struct {
+	cachedTime time.Time
+}
+
 // Config provides all params relating to liveness testing construction
 type Config struct {
 	// CacheDuration specifies the duration that a phantom IP identified as
 	// "LIVE" using a liveness test is cached, preventing further lookups to the
 	// address. Empty string disables caching for live phantom hosts.
-	CacheDuration string
+	CacheDuration string `toml:"cache_expiration_time"`
 
-	// CacheDurationNonLive specified the duration that a phantom IP identified
+	// CacheCapacity specifies the cache capacity to use for phantom IPs
+	// identified as "LIVE". CacheDuration must be set otherwise no caching
+	// occurs for live hosts.
+	//
+	// If unset or 0 no capacity is set and a map is used for the cache
+	// otherwise cache will have finite capacity and implement LRU eviction.
+	CacheCapacity int `toml:"cache_capacity"`
+
+	// CacheDurationNonLive specifies the duration that a phantom IP identified
 	// as "NOT LIVE" using a liveness test is cached, preventing further lookups
 	// to the address. This should generally be shorter to be responsive to
 	// remain responsive to hosts that become live. Empty string disables
 	// caching for non-live phantom hosts.
-	CacheDurationNonLive string
+	CacheDurationNonLive string `toml:"cache_expiration_nonlive"`
+
+	// CacheCapacityNonLive specifies the cache capacity to use for phantom IPs
+	// identified as "NOT LIVE". CacheDurationNonLive must be set otherwise no
+	// caching occurs for non-live hosts.
+	//
+	// If unset or 0 no capacity is set and a map is used for the cache
+	// otherwise cache will have finite capacity and implement LRU eviction.
+	CacheCapacityNonLive int `toml:"cache_capacity_nonlive"`
+}
+
+var defaultConfig = &Config{
+	CacheDuration:        "",
+	CacheCapacity:        0,
+	CacheDurationNonLive: "",
+	CacheCapacityNonLive: 0,
+}
+
+// LivenessConfig identity function for reflection in composed Config type
+func (c *Config) LivenessConfig() *Config {
+	if c == nil {
+		return defaultConfig
+	}
+
+	return c
 }
 
 // New provides a builder for the proper tester based on config.
 func New(c *Config) (Tester, error) {
+	if c == nil {
+		c = defaultConfig
+	}
+
 	if c.CacheDuration == "" && c.CacheDurationNonLive == "" {
 		return &UncachedLivenessTester{
 			stats: &stats{},
@@ -61,7 +113,7 @@ func New(c *Config) (Tester, error) {
 		stats: &stats{},
 	}
 
-	return clt, clt.Init(c.CacheDuration, c.CacheDurationNonLive)
+	return clt, clt.Init(c)
 }
 
 func phantomIsLive(address string) (bool, error) {

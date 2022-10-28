@@ -5,53 +5,54 @@ import (
 	"math"
 	"net"
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/refraction-networking/conjure/application/log"
 )
 
-type cacheElement struct {
-	cachedTime time.Time
-}
-
 // CachedLivenessTester implements LivenessTester interface with caching,
 // PhantomIsLive will check historical results first before using the network to
 // determine phantom liveness.
 type CachedLivenessTester struct {
-	ipCacheLive            map[string]*cacheElement
-	ipCacheNonLive         map[string]*cacheElement
-	signal                 chan bool
-	cacheExpirationLive    time.Duration
-	cacheExpirationNonLive time.Duration
-	m                      sync.RWMutex
+	ipCacheLive    cache
+	ipCacheNonLive cache
+	signal         chan bool
 	*stats
 }
 
 // Init parses cache expiry duration and initializes the Cache.
-func (blt *CachedLivenessTester) Init(expirationLive, expirationNonLive string) error {
-	blt.m.Lock()
-	defer blt.m.Unlock()
+func (blt *CachedLivenessTester) Init(conf *Config) error {
+	expirationLive := conf.CacheDuration
+	expirationNonLive := conf.CacheDurationNonLive
 
 	if expirationLive != "" {
-		blt.ipCacheLive = make(map[string]*cacheElement)
 
 		convertedTime, err := time.ParseDuration(expirationLive)
 		if err != nil {
 			return fmt.Errorf("unable to parse cacheExpirationLive: %s", err)
 		}
-		blt.cacheExpirationLive = convertedTime
+
+		if conf.CacheCapacity != 0 {
+			blt.ipCacheLive = newLRUCache(convertedTime, conf.CacheCapacity)
+
+		} else {
+			blt.ipCacheLive = newMapCache(convertedTime)
+		}
 	}
 
 	if expirationNonLive != "" {
-		blt.ipCacheNonLive = make(map[string]*cacheElement)
 		convertedTime, err := time.ParseDuration(expirationNonLive)
 		if err != nil {
 			return fmt.Errorf("unable to parse cacheExpirationNonLive: %s", err)
 		}
-		blt.cacheExpirationNonLive = convertedTime
 
+		if conf.CacheCapacity != 0 {
+			blt.ipCacheNonLive = newLRUCache(convertedTime, conf.CacheCapacityNonLive)
+
+		} else {
+			blt.ipCacheNonLive = newMapCache(convertedTime)
+		}
 	}
 
 	blt.signal = make(chan bool)
@@ -67,23 +68,12 @@ func (blt *CachedLivenessTester) Stop() {
 
 // ClearExpiredCache cleans out stale entries in the cache.
 func (blt *CachedLivenessTester) ClearExpiredCache() {
-	blt.m.Lock()
-	defer blt.m.Unlock()
-
 	if blt.ipCacheLive != nil {
-		for ipAddr, status := range blt.ipCacheLive {
-			if time.Since(status.cachedTime) > blt.cacheExpirationLive {
-				delete(blt.ipCacheLive, ipAddr)
-			}
-		}
+		blt.ipCacheLive.ClearExpired()
 	}
 
 	if blt.ipCacheNonLive != nil {
-		for ipAddr, status := range blt.ipCacheNonLive {
-			if time.Since(status.cachedTime) > blt.cacheExpirationNonLive {
-				delete(blt.ipCacheNonLive, ipAddr)
-			}
-		}
+		blt.ipCacheNonLive.ClearExpired()
 	}
 }
 
@@ -106,10 +96,6 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 	// existing phantomIsLive() implementation
 	isLive, err := phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
 
-	// add to cache
-	blt.m.Lock()
-	defer blt.m.Unlock()
-
 	var val = &cacheElement{
 		cachedTime: time.Now(),
 	}
@@ -118,17 +104,18 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 		// add to stats
 		blt.stats.incFail()
 
+		// Add to cache if enabled
 		if blt.ipCacheLive != nil {
-			// Add to cache if enabled
-			blt.ipCacheLive[addr] = val
+			blt.ipCacheLive.Add(addr, val)
 		}
 	} else {
 		// add to stats
 		blt.stats.incPass()
 
+		// Add to cache if enabled
 		if blt.ipCacheNonLive != nil {
-			// Add to cache if enabled
-			blt.ipCacheNonLive[addr] = val
+			blt.ipCacheNonLive.Add(addr, val)
+
 		}
 	}
 
@@ -136,22 +123,15 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 }
 
 func (blt *CachedLivenessTester) phantomLookup(addr string, port uint16) (bool, error) {
-	blt.m.RLock()
-	defer blt.m.RUnlock()
-
 	if blt.ipCacheLive != nil {
-		if status, ok := blt.ipCacheLive[addr]; ok {
-			if time.Since(status.cachedTime) < blt.cacheExpirationLive {
-				return true, ErrCachedPhantom
-			}
+		if ok := blt.ipCacheLive.Lookup(addr); ok {
+			return true, ErrCachedPhantom
 		}
 	}
 
 	if blt.ipCacheNonLive != nil {
-		if status, ok := blt.ipCacheNonLive[addr]; ok {
-			if time.Since(status.cachedTime) < blt.cacheExpirationNonLive {
-				return false, ErrCachedPhantom
-			}
+		if ok := blt.ipCacheNonLive.Lookup(addr); ok {
+			return false, ErrCachedPhantom
 		}
 	}
 	return false, nil
@@ -181,17 +161,22 @@ func (blt *CachedLivenessTester) printStats(logger *log.Logger) {
 	nlcn := atomic.LoadInt64(&s.newLivenessCachedNonLive)
 	total := math.Max(float64(nlp+nlf + +nlcl + nlcn), 1)
 
-	liveCacheCap := 0
+	liveCacheLen := 0
+	var liveCacheCap float64 = 0
 	if blt.ipCacheLive != nil {
-		liveCacheCap = len(blt.ipCacheLive)
+		liveCacheLen = blt.ipCacheLive.Len()
+		liveCacheCap = blt.ipCacheLive.Cap()
 	}
 
-	nonLiveCacheCap := 0
+	nonLiveCacheLen := 0
+	var nonLiveCacheCap float64 = 0
 	if blt.ipCacheLive != nil {
-		nonLiveCacheCap = len(blt.ipCacheNonLive)
+		nonLiveCacheLen = blt.ipCacheNonLive.Len()
+		nonLiveCacheCap = blt.ipCacheNonLive.Cap()
+
 	}
 
-	logger.Infof("liveness-stats: %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %d",
+	logger.Infof("liveness-stats: %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %d %.3f%%",
 		nlp,
 		float64(nlp)/float64(total)*100,
 		float64(nlp)/float64(epochDur)*1000,
@@ -204,7 +189,9 @@ func (blt *CachedLivenessTester) printStats(logger *log.Logger) {
 		nlcn,
 		float64(nlcn)/float64(total)*100,
 		float64(nlcn)/float64(epochDur)*1000,
+		liveCacheLen,
 		liveCacheCap,
+		nonLiveCacheLen,
 		nonLiveCacheCap,
 	)
 }

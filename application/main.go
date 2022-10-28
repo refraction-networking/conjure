@@ -12,7 +12,6 @@ import (
 	"time"
 
 	cj "github.com/refraction-networking/conjure/application/lib"
-	"github.com/refraction-networking/conjure/application/liveness"
 	"github.com/refraction-networking/conjure/application/log"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
@@ -63,18 +62,6 @@ func main() {
 	if err != nil {
 		logger.Errorf("failed parse client ip logging setting: %v\n", err)
 		logClientIP = false
-	}
-
-	// If CacheExpirationTime is set enable the Cached liveness tester.
-	if conf.CacheExpirationTime != "" || conf.CacheExpirationNonLive != "" {
-		clt, err := liveness.New(&liveness.Config{
-			CacheDuration:        conf.CacheExpirationTime,
-			CacheDurationNonLive: conf.CacheExpirationNonLive,
-		})
-		if err != nil {
-			logger.Fatal(err)
-		}
-		regManager.LivenessTester = clt
 	}
 
 	// Add supported transport options for registration validation

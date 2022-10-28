@@ -87,6 +87,7 @@ type ConnectingTransport interface {
 type RegistrationManager struct {
 	*RegConfig
 	*RegistrationStats
+
 	registeredDecoys *RegisteredDecoys
 	Logger           *log.Logger
 	PhantomSelector  *PhantomIPSelector
@@ -102,9 +103,9 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 
 	logger := log.New(os.Stdout, "[REG] ", golog.Ldate|golog.Lmicroseconds)
 
-	ult, err := liveness.New(&liveness.Config{})
+	lt, err := liveness.New(conf.LivenessConfig())
 	if err != nil {
-		return nil
+		logger.Fatal(err)
 	}
 
 	p, err := NewPhantomIPSelector()
@@ -118,7 +119,7 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 		Logger:            logger,
 		registeredDecoys:  NewRegisteredDecoys(),
 		PhantomSelector:   p,
-		LivenessTester:    ult,
+		LivenessTester:    lt,
 	}
 }
 

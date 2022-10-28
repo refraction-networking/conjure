@@ -4,11 +4,15 @@ import (
 	"net"
 	"regexp"
 	"strconv"
+
+	"github.com/refraction-networking/conjure/application/liveness"
 )
 
 // RegConfig contains all configuration options directly related to processing
 // registrations lifecycle (ingest, validity, and eviction).
 type RegConfig struct {
+	*liveness.Config
+
 	// number of worker threads for ingesting incoming registrations.
 	IngestWorkerCount int `toml:"ingest_worker_count"`
 

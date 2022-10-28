@@ -23,15 +23,31 @@ heartbeat_interval = 30000
 # a response before the connection is assumed to be dead.
 heartbeat_timeout = 1000
 
+
 # Duration that a phantom IP identified as "LIVE" using a liveness test is
 # cached, preventing further lookups to the address. Empty string disables
 # caching for live phantom hosts.
 cache_expiration_time = "2.0h"
+# cache_capacity specifies the cache capacity to use for phantom IPs identified
+# as "LIVE". cache_expiration_time must be set otherwise no caching occurs for
+# live hosts.
+#
+# If unset or 0 no capacity is set and a map is used for the cache otherwise
+# cache will have finite capacity and implement LRU eviction.
+cache_capacity = 0
 # Duration that a phantom IP identified as "NOT LIVE" using a liveness test is
 # cached, preventing further lookups to the address. This should generally be
 # shorter to be responsive to remain responsive to hosts that become live. Empty
 # string disables caching for non-live phantom hosts.
-cache_expiration_nonlive = "10m"
+cache_expiration_nonlive = "5m"
+# cache_capacity_nonlive specifies the cache capacity to use for phantom IPs
+# identified as "NOT LIVE". cache_expiration_nonlive must be set otherwise no
+# caching occurs for non-live hosts.
+#
+# If unset or 0 no capacity is set and a map is used for the cache otherwise
+# cache will have finite capacity and implement LRU eviction.
+cache_capacity_nonlive = 0
+
 
 # Allow the station to opt out of either version of internet protocol to limit a
 # statio to handling one or the other. For example, v6 on small station deployment
