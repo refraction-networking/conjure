@@ -86,17 +86,20 @@ func main() {
 	cj.Stat().AddStatsModule(connManager)
 
 	// Periodically clean old registrations
-	go func(ctx context.Context) {
+	wg.Add(1)
+	go func(ctx context.Context, wg *sync.WaitGroup) {
+		defer wg.Done()
+
 		ticker := time.NewTicker(3 * time.Minute)
 		for {
 			select {
-			case <-ctx.Done():
-				break
 			case <-ticker.C:
 				regManager.RemoveOldRegistrations()
+			case <-ctx.Done():
+				return
 			}
 		}
-	}(ctx)
+	}(ctx, wg)
 
 	// Receive registration updates from ZMQ Proxy as subscriber
 	go zmqIngester.RunZMQ(ctx)
