@@ -123,6 +123,38 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 	}
 }
 
+// OnReload is meant to be used when Reloading Configuration while things are
+// already running. Only reloads phantom selector and blocklists. Does not
+// (yet) modify ingest worker pipeline or liveness testing configuration.
+func (regManager *RegistrationManager) OnReload(conf *RegConfig) {
+
+	// try to re-initialize the phantom selector, if error occurs log err and
+	// do not update the existing PhantomSelector
+	p, err := NewPhantomIPSelector()
+	if err != nil {
+		regManager.Logger.Errorf("failed to reload phantom subnets: %v", err)
+	} else {
+		regManager.PhantomSelector = p
+	}
+
+	// if we made it here via sigHUP then the RegConfig.ParseBlocklists should
+	// already have been called and not erred.
+	regManager.RegConfig.CovertBlocklistSubnets = conf.CovertBlocklistSubnets
+	regManager.RegConfig.covertBlocklistSubnets = conf.covertBlocklistSubnets
+
+	regManager.RegConfig.CovertBlocklistPublicAddrs = conf.CovertBlocklistPublicAddrs
+
+	regManager.RegConfig.CovertAllowlistSubnets = conf.CovertAllowlistSubnets
+	regManager.RegConfig.enableCovertAllowlist = conf.enableCovertAllowlist
+	regManager.RegConfig.covertAllowlistSubnets = conf.covertAllowlistSubnets
+
+	regManager.RegConfig.CovertBlocklistDomains = conf.CovertBlocklistDomains
+	regManager.RegConfig.covertBlocklistDomains = conf.covertBlocklistDomains
+
+	regManager.RegConfig.PhantomBlocklist = conf.PhantomBlocklist
+	regManager.RegConfig.phantomBlocklist = conf.phantomBlocklist
+}
+
 // AddTransport initializes a transport so that it can be tracked by the manager when
 // clients register.
 func (regManager *RegistrationManager) AddTransport(index pb.TransportType, t Transport) error {
