@@ -66,7 +66,10 @@ func TestConcurrentProxy(t *testing.T) {
 		require.Nil(t, err)
 	}
 
-	go ZMQProxy(config)
+	zi := &ZMQIngester{
+		ZMQConfig: &config,
+	}
+	go zi.proxyZMQ()
 
 	sub, err := zmq.NewSocket(zmq.SUB)
 	require.Nil(t, err)

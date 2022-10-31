@@ -1,64 +1,61 @@
 package liveness
 
 import (
-	"encoding/csv"
 	"fmt"
+	"math"
 	"net"
-	"os"
-	"os/exec"
 	"strconv"
-	"sync"
+	"sync/atomic"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/refraction-networking/conjure/application/log"
 )
-
-const defaultSizeLRU = 100000
-
-type cacheElement struct {
-	isLive     bool
-	cachedTime time.Time
-}
 
 // CachedLivenessTester implements LivenessTester interface with caching,
 // PhantomIsLive will check historical results first before using the network to
 // determine phantom liveness.
 type CachedLivenessTester struct {
-	ipCache             map[string]*cacheElement
-	lru                 *lru.Cache
-	lruSize             int
-	signal              chan bool
-	cacheExpirationTime time.Duration
-	m                   sync.RWMutex
+	ipCacheLive    cache
+	ipCacheNonLive cache
+	signal         chan bool
+	*stats
 }
 
 // Init parses cache expiry duration and initializes the Cache.
-func (blt *CachedLivenessTester) Init(expirationTime string) error {
-	blt.m.Lock()
-	defer blt.m.Unlock()
+func (blt *CachedLivenessTester) Init(conf *Config) error {
+	expirationLive := conf.CacheDuration
+	expirationNonLive := conf.CacheDurationNonLive
 
-	// If an address is evicted from the LRU Cache remove it from the liveness map
-	onEvict := func(k, v interface{}) {
-		ipAddr := k.(string)
-		delete(blt.ipCache, ipAddr)
-	}
-	if blt.lruSize <= 0 {
-		blt.lruSize = defaultSizeLRU
-	}
-	lruCache, err := lru.NewWithEvict(blt.lruSize, onEvict)
-	if err != nil {
-		return err
+	if expirationLive != "" {
+
+		convertedTime, err := time.ParseDuration(expirationLive)
+		if err != nil {
+			return fmt.Errorf("unable to parse cacheExpirationLive: %s", err)
+		}
+
+		if conf.CacheCapacity != 0 {
+			blt.ipCacheLive = newLRUCache(convertedTime, conf.CacheCapacity)
+
+		} else {
+			blt.ipCacheLive = newMapCache(convertedTime)
+		}
 	}
 
-	blt.ipCache = make(map[string]*cacheElement)
+	if expirationNonLive != "" {
+		convertedTime, err := time.ParseDuration(expirationNonLive)
+		if err != nil {
+			return fmt.Errorf("unable to parse cacheExpirationNonLive: %s", err)
+		}
+
+		if conf.CacheCapacity != 0 {
+			blt.ipCacheNonLive = newLRUCache(convertedTime, conf.CacheCapacityNonLive)
+
+		} else {
+			blt.ipCacheNonLive = newMapCache(convertedTime)
+		}
+	}
+
 	blt.signal = make(chan bool)
-	blt.lru = lruCache
-
-	convertedTime, err := time.ParseDuration(expirationTime)
-	if err != nil {
-		return fmt.Errorf("unable to parse cacheExpirationTime: %s", err)
-	}
-	blt.cacheExpirationTime = convertedTime
 
 	return nil
 }
@@ -71,144 +68,208 @@ func (blt *CachedLivenessTester) Stop() {
 
 // ClearExpiredCache cleans out stale entries in the cache.
 func (blt *CachedLivenessTester) ClearExpiredCache() {
-	blt.m.Lock()
-	defer blt.m.Unlock()
+	if blt.ipCacheLive != nil {
+		blt.ipCacheLive.ClearExpired()
+	}
 
-	for ipAddr, status := range blt.ipCache {
-		if time.Since(status.cachedTime) > blt.cacheExpirationTime {
-			delete(blt.ipCache, ipAddr)
-			blt.lru.Remove(ipAddr)
-		}
+	if blt.ipCacheNonLive != nil {
+		blt.ipCacheNonLive.ClearExpired()
 	}
 }
 
-// PeriodicScan uses zmap to populate the cache of a CachedLivenessTester.
-// Should be run as a goroutine as it may block for long periods of time while
-// scanning.
-func (blt *CachedLivenessTester) PeriodicScan(t string) {
-	allowListAddr := os.Getenv("PHANTOM_SUBNET_LOCATION")
-	for {
-		select {
-		case <-blt.signal:
-			return
-		default:
-			_, err := exec.Command("zmap", "-p", "443", "-O", "csv", "-f", "saddr,classification", "-P", "4", "--output-filter= (classification = rst || classification = synack)", "-b", "block_list.txt", "-w", allowListAddr, "-o", "result.csv").Output()
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			f, err := os.Open("result.csv")
-			if err != nil {
-				fmt.Println("Unable to read input file", err)
-				f.Close()
-			}
-
-			csvReader := csv.NewReader(f)
-			records, err := csvReader.ReadAll()
-			if err != nil {
-				fmt.Println("Unable to parse file as CSV", err)
-			}
-
-			f.Close()
-			f, err = os.OpenFile("block_list.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-			if err != nil {
-				fmt.Println("Unable to read blocklist file", err)
-				f.Close()
-			}
-
-			for _, ip := range records {
-				if ip[0] != "saddr" {
-					func() {
-						// closure to ensure mutex unlocks in case of error.
-						blt.m.Lock()
-						defer blt.m.Unlock()
-
-						if _, ok := blt.ipCache[ip[0]]; !ok {
-							var val = &cacheElement{
-								isLive:     true,
-								cachedTime: time.Now(),
-							}
-							blt.ipCache[ip[0]] = val
-							_, err := f.WriteString(ip[0] + "/32" + "\n")
-							if err != nil {
-								fmt.Println("Unable to write blocklist file", err)
-								f.Close()
-							}
-						}
-					}()
-				}
-			}
-			f.Close()
-
-			err = os.Remove("result.csv")
-			if err != nil {
-				fmt.Println("Unable to delete result.csv", err)
-			}
-
-			fmt.Println("Scanned once")
-			if t == "Minute" {
-				time.Sleep(time.Minute * 2)
-			} else if t == "Hour" {
-				time.Sleep(time.Hour * 2)
-			} else {
-				fmt.Println("Invalid scanning interval")
-				return
-			}
-
-		}
-	}
-}
-
-// PhantomIsLive first checks the cached set of addressses for a fresh entry.
-// If one is available and the host was measured to be live this is returned
-// immediately and no network probes are sent. If the host was measured not
-// live, the entry is stale, or there is no entry then network probes are sent
-// and the result is then added to the cache.
+// PhantomIsLive first checks the cached set of addresses for a fresh entry. If
+// one is available and this is returned immediately and no network probes are
+// sent. If the host was not recently measured, the entry is stale, or there is
+// no entry then network probes are sent and the result is then added to the
+// cache.
 //
 // Lock on mutex is taken for lookup, then for cache update. Do NOT hold mutex
 // while scanning for liveness as this will make cache extremely slow.
 func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, error) {
 	// cache lookup internal function to use RLock
 	if live, err := blt.phantomLookup(addr, port); live || err != nil {
-		blt.m.Lock()
-		defer blt.m.Unlock()
-
-		// refresh this address in the LRU cache
-		blt.lru.Add(addr, struct{}{})
+		// add to stats
+		blt.stats.incCached(live)
 		return live, err
 	}
 
 	// existing phantomIsLive() implementation
 	isLive, err := phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
 
-	// Only write live things to cache since we always re-scan for non-live
+	var val = &cacheElement{
+		cachedTime: time.Now(),
+	}
+
 	if isLive {
-		blt.m.Lock()
-		defer blt.m.Unlock()
+		// add to stats
+		blt.stats.incFail()
 
-		var val = &cacheElement{
-			isLive:     isLive,
-			cachedTime: time.Now(),
+		// Add to cache if enabled
+		if blt.ipCacheLive != nil {
+			blt.ipCacheLive.Add(addr, val)
 		}
-		blt.ipCache[addr] = val
+	} else {
+		// add to stats
+		blt.stats.incPass()
 
-		// add the address to the LRU cache - potentially evicting an entry
-		blt.lru.Add(addr, struct{}{})
+		// Add to cache if enabled
+		if blt.ipCacheNonLive != nil {
+			blt.ipCacheNonLive.Add(addr, val)
+
+		}
 	}
 
 	return isLive, err
 }
 
 func (blt *CachedLivenessTester) phantomLookup(addr string, port uint16) (bool, error) {
-	blt.m.RLock()
-	defer blt.m.RUnlock()
+	if blt.ipCacheLive != nil {
+		if ok := blt.ipCacheLive.Lookup(addr); ok {
+			return true, ErrCachedPhantom
+		}
+	}
 
-	if status, ok := blt.ipCache[addr]; ok {
-		if time.Since(status.cachedTime) < blt.cacheExpirationTime {
-			if status.isLive {
-				return true, fmt.Errorf(CACHED_PHANTOM_MSG)
-			}
+	if blt.ipCacheNonLive != nil {
+		if ok := blt.ipCacheNonLive.Lookup(addr); ok {
+			return false, ErrCachedPhantom
 		}
 	}
 	return false, nil
 }
+
+// PrintStats implements the Stats interface extending from the stats struct
+// to add logging for the cache capacity
+func (blt *CachedLivenessTester) PrintStats(logger *log.Logger) {
+	blt.printStats(logger)
+}
+
+// PrintAndReset implements the Stats interface extending from the stats struct
+// to add logging for the cache capacity
+func (blt *CachedLivenessTester) PrintAndReset(logger *log.Logger) {
+	blt.printStats(logger)
+	blt.stats.Reset()
+}
+
+func (blt *CachedLivenessTester) printStats(logger *log.Logger) {
+	s := blt.stats
+
+	// prevent div by 0 if thread starvation happens
+	var epochDur float64 = math.Max(float64(time.Since(s.epochStart).Milliseconds()), 1)
+	nlp := atomic.LoadInt64(&s.newLivenessPass)
+	nlf := atomic.LoadInt64(&s.newLivenessFail)
+	nlcl := atomic.LoadInt64(&s.newLivenessCachedLive)
+	nlcn := atomic.LoadInt64(&s.newLivenessCachedNonLive)
+	total := math.Max(float64(nlp+nlf + +nlcl + nlcn), 1)
+
+	liveCacheLen := 0
+	var liveCacheCap float64 = 0
+	if blt.ipCacheLive != nil {
+		liveCacheLen = blt.ipCacheLive.Len()
+		liveCacheCap = blt.ipCacheLive.Cap()
+	}
+
+	nonLiveCacheLen := 0
+	var nonLiveCacheCap float64 = 0
+	if blt.ipCacheLive != nil {
+		nonLiveCacheLen = blt.ipCacheNonLive.Len()
+		nonLiveCacheCap = blt.ipCacheNonLive.Cap()
+
+	}
+
+	logger.Infof("liveness-stats: %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %d %.3f%%",
+		nlp,
+		float64(nlp)/float64(total)*100,
+		float64(nlp)/float64(epochDur)*1000,
+		nlf,
+		float64(nlf)/float64(total)*100,
+		float64(nlf)/float64(epochDur)*1000,
+		nlcl,
+		float64(nlcl)/float64(total)*100,
+		float64(nlcl)/float64(epochDur)*1000,
+		nlcn,
+		float64(nlcn)/float64(total)*100,
+		float64(nlcn)/float64(epochDur)*1000,
+		liveCacheLen,
+		liveCacheCap,
+		nonLiveCacheLen,
+		nonLiveCacheCap,
+	)
+}
+
+/*
+// // Disabled because we don't have a good reason to pre-populate the cache
+// // currently and this dead code has a call to exec.
+
+// PeriodicScan uses zmap to populate the cache of a CachedLivenessTester. //
+Should be run as a goroutine as it may block for long periods of time while //
+scanning. func (blt *CachedLivenessTester) PeriodicScan(t string) {
+allowListAddr := os.Getenv("PHANTOM_SUBNET_LOCATION") for { select { case
+<-blt.signal: return default: _, err := exec.Command("zmap", "-p", "443", "-O",
+"csv", "-f", "saddr,classification", "-P", "4", "--output-filter=
+(classification = rst || classification = synack)", "-b", "block_list.txt",
+"-w", allowListAddr, "-o", "result.csv").Output() if err != nil {
+fmt.Println(err)
+            }
+
+            f, err := os.Open("result.csv")
+            if err != nil {
+                fmt.Println("Unable to read input file", err)
+                f.Close()
+            }
+
+            csvReader := csv.NewReader(f)
+            records, err := csvReader.ReadAll()
+            if err != nil {
+                fmt.Println("Unable to parse file as CSV", err)
+            }
+
+            f.Close()
+            f, err = os.OpenFile("block_list.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+            if err != nil {
+                fmt.Println("Unable to read blocklist file", err)
+                f.Close()
+            }
+
+            for _, ip := range records {
+                if ip[0] != "saddr" {
+                    func() {
+                        // closure to ensure mutex unlocks in case of error.
+                        blt.m.Lock()
+                        defer blt.m.Unlock()
+
+                        if _, ok := blt.ipCache[ip[0]]; !ok {
+                            var val = &cacheElement{
+                                isLive:     true,
+                                cachedTime: time.Now(),
+                            }
+                            blt.ipCache[ip[0]] = val
+                            _, err := f.WriteString(ip[0] + "/32" + "\n")
+                            if err != nil {
+                                fmt.Println("Unable to write blocklist file", err)
+                                f.Close()
+                            }
+                        }
+                    }()
+                }
+            }
+            f.Close()
+
+            err = os.Remove("result.csv")
+            if err != nil {
+                fmt.Println("Unable to delete result.csv", err)
+            }
+
+            fmt.Println("Scanned once")
+            if t == "Minute" {
+                time.Sleep(time.Minute * 2)
+            } else if t == "Hour" {
+                time.Sleep(time.Hour * 2)
+            } else {
+                fmt.Println("Invalid scanning interval")
+                return
+            }
+
+        }
+    }
+}
+*/

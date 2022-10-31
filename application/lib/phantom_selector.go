@@ -345,7 +345,7 @@ func selectPhantomImplV0(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 	}
 
 	if addressTotal.Cmp(big.NewInt(0)) <= 0 {
-		return nil, fmt.Errorf("No valid addresses specified")
+		return nil, fmt.Errorf("no valid addresses specified")
 	}
 
 	id := &big.Int{}
@@ -360,7 +360,7 @@ func selectPhantomImplV0(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 		if _idNet.max.Cmp(id) >= 0 && _idNet.min.Cmp(id) == -1 {
 			result, err = SelectAddrFromSubnet(seed, _idNet.net)
 			if err != nil {
-				return nil, fmt.Errorf("Failed to chose IP address: %v", err)
+				return nil, fmt.Errorf("failed to chose IP address: %v", err)
 			}
 		}
 	}

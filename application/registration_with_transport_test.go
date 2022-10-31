@@ -6,14 +6,15 @@ import (
 	"os"
 	"testing"
 
-	dd "github.com/refraction-networking/conjure/application/lib"
+	cj "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
+
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
 
-func mockReceiveFromDetector() (*pb.ClientToStation, dd.ConjureSharedKeys) {
+func mockReceiveFromDetector() (*pb.ClientToStation, cj.ConjureSharedKeys) {
 	clientToStationBytes, _ := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
 	sharedSecret, _ := hex.DecodeString("5414c734ad5dc53e6b56a7bb47ce695a14a3ef076a3d5ace9cbf3b4d12706b73")
 
@@ -28,7 +29,7 @@ func mockReceiveFromDetector() (*pb.ClientToStation, dd.ConjureSharedKeys) {
 	clientToStation.Flags = &pb.RegistrationFlags{Use_TIL: &t}
 	clientToStation.ClientLibVersion = &v
 
-	conjureKeys, _ := dd.GenSharedKeys(sharedSecret)
+	conjureKeys, _ := cj.GenSharedKeys(sharedSecret, 0)
 
 	return clientToStation, conjureKeys
 }
@@ -37,7 +38,7 @@ func TestManagerFunctionality(t *testing.T) {
 	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
-	rm := dd.NewRegistrationManager()
+	rm := cj.NewRegistrationManager(&cj.RegConfig{})
 
 	c2s, keys := mockReceiveFromDetector()
 

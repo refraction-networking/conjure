@@ -2,11 +2,13 @@ package lib
 
 import (
 	"context"
-	"log"
+	golog "log"
 	"os"
 	"sync"
 
 	"github.com/go-redis/redis/v8"
+
+	"github.com/refraction-networking/conjure/application/log"
 )
 
 var client *redis.Client
@@ -32,7 +34,7 @@ func initRedisClient() {
 	// Ping to test redis connection
 	_, err := client.Ping(ctx).Result()
 	if err != nil {
-		logger := log.New(os.Stderr, "[REDIS] ", log.Ldate|log.Lmicroseconds)
-		logger.Printf("redis connection ping failed.")
+		logger := log.New(os.Stderr, "[REDIS] ", golog.Ldate|golog.Lmicroseconds)
+		logger.Errorf("redis connection ping failed.")
 	}
 }

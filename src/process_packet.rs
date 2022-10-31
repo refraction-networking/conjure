@@ -214,7 +214,7 @@ impl PerCoreGlobal {
                 // Non station traffic, forward to application to handle
                 Some(_) => {
                     if (tcp_flags & TcpFlags::SYN) != 0 && (tcp_flags & TcpFlags::ACK) == 0 {
-                        debug!("Connection for registered Phantom {}", flow);
+                        // debug!("Connection for registered Phantom {}", flow);
                     }
                     // Update expire time if necessary
                     self.flow_tracker.update_phantom_flow(&dd_flow);
