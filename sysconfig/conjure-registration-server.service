@@ -1,15 +1,15 @@
 [Unit]
-Description=Conjure Registration API
+Description=Conjure Registration Server
 
 [Service]
 Type=simple
 
-WorkingDirectory=/opt/conjure/
+WorkingDirectory=/opt/conjure/cmd/registration-server/
 
 SyslogIdentifier=conjure
 EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
 
-ExecStart=/opt/conjure/registration-api/registration-api
+ExecStart=/opt/conjure/cmd/registration-server/registration-server --config /opt/conjure/cmd/registration-server/config.toml
 
 # on stop processes will get SIGTERM, and after 10 secs - SIGKILL (default 90)
 TimeoutStopSec=10

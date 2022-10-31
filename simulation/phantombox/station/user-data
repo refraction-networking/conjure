@@ -112,8 +112,7 @@ write_files:
       mkdir -p /opt/conjure/backup/
       cp -r /opt/conjure/simulation/phantombox/config/sysconfig /opt/conjure
       cp -r /opt/conjure/simulation/phantombox/config/application/config.toml /opt/conjure/application/
-      cp -r /opt/conjure/simulation/phantombox/config/registration-api/config.toml /opt/conjure/registration-api/
-      cp -r /opt/conjure/simulation/phantombox/config/registration-dns/config.toml /opt/conjure/cmd/registration-dns/
+      cp -r /opt/conjure/simulation/phantombox/config/registration-server/config.toml /opt/conjure/cmd/registration-server/
     path: /var/lib/cloud/scripts/per-instance/02-copy-configs
     permissions: '0755'
   # Install conjure station
@@ -135,8 +134,7 @@ write_files:
       systemctl disable systemd-resolved
       systemctl enable conjure-det
       systemctl enable conjure-app
-      systemctl enable conjure-registration-api
-      systemctl enable conjure-registration-dns
+      systemctl enable conjure-registration-server
       systemctl enable coturn
       echo "200 custom" >> /etc/iproute2/rt_tables
       export CJ_PATH=/opt/conjure
@@ -144,8 +142,7 @@ write_files:
       systemctl stop systemd-resolved
       systemctl start conjure-det
       systemctl start conjure-app
-      systemctl start conjure-registration-api
-      systemctl start conjure-registration-dns
+      systemctl start conjure-registration-server
       systemctl start coturn
     path: /var/lib/cloud/scripts/per-instance/04-enable-services
     permissions: '0755'
@@ -167,8 +164,7 @@ write_files:
       chattr +i /etc/resolv.conf
       systemctl start conjure-det || exit 0 # Note: this will fail the first boot
       systemctl start conjure-app
-      systemctl start conjure-registration-api
-      systemctl start conjure-registration-dns
+      systemctl start conjure-registration-server
       systemctl start coturn
     path: /var/lib/cloud/scripts/per-boot/01-detector-network
     permissions: '0755'
@@ -181,10 +177,6 @@ write_files:
   - content: |
       # Conjure environment variables
     path: /etc/conjure/application.toml
-    permissions: '0644'
-  - content: |
-      # Conjure environment variables
-    path: /etc/conjure/registration-api.toml
     permissions: '0644'
   - content: |
       # Conjure detector service file
@@ -224,37 +216,25 @@ write_files:
     path: /etc/systemd/system/conjure-app.service
     permissions: '0644'
   - content: |
-      # Conjure registration api service file
+      # Conjure registration service file
       [Unit]
-      Description=Conjure Registration API
+      Description=Conjure Registration Server
 
       [Service]
       Type=simple
-      WorkingDirectory=/opt/conjure/
+
+      WorkingDirectory=/opt/conjure/cmd/registration-server/
+
       SyslogIdentifier=conjure
       EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
-      ExecStart=/opt/conjure/registration-api/registration-api
-      TimeoutStopSec=10
 
-      [Install]
-      WantedBy=multi-user.target
-    path: /etc/systemd/system/conjure-registration-api.service
-    permissions: '0644'
-  - content: |
-      # Conjure DNS registrar service file
-      [Unit]
-      Description=Conjure DNS Registrar
+      ExecStart=/opt/conjure/cmd/registration-server/registration-server --config /opt/conjure/cmd/registration-server/config.toml
 
-      [Service]
-      Type=simple
-      WorkingDirectory=/opt/conjure/cmd/registration-dns/
-      SyslogIdentifier=conjure
-      EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
-      ExecStart=/opt/conjure/cmd/registration-dns/registration-dns --config /opt/conjure/cmd/registration-dns/config.toml
       # on stop processes will get SIGTERM, and after 10 secs - SIGKILL (default 90)
       TimeoutStopSec=10
 
       [Install]
       WantedBy=multi-user.target
-    path: /etc/systemd/system/conjure-registration-dns.service
+
+    path: /etc/systemd/system/conjure-registration-server.service
     permissions: '0644'

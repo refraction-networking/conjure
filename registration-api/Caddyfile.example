@@ -1,9 +1,0 @@
-# This establishes our domain as registration.refraction.network, which lets Caddy take care of all of the TLS completely automatically (it fetches the certificate on first run and keeps it renewed with no intervention)
-registration.refraction.network
-
-# All requests of the form https://domain/api/a/b/c will be routed to http://localhost:8080/a/b/c
-route /api/* {
-	# Strip the /api portion of the URL when proxying
-	uri strip_prefix /api
-	reverse_proxy localhost:8080
-}

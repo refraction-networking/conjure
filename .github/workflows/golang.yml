@@ -44,10 +44,10 @@ jobs:
           cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
           make app
 
-      - name: Build registration-api
+      - name: Build registration-server
         run: |
           cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
-          make registration-api
+          make registration-server
 
   golangci-lint:
     name: Format and Lint with golangci-lint

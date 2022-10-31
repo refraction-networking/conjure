@@ -64,16 +64,16 @@ jobs:
           cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
           make app
 
-      - name: Build registration-api
+      - name: Build registration-server
         run: |
           cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
-          make registration-api
+          make registration-server
 
       - name: Store build artifacts
         run: |
           mkdir -p  $GITHUB_WORKSPACE/bin
           cd $GITHUB_WORKSPACE/go/src/github.com/refraction-networking/conjure
-          cp conjure application/application registration-api/registration-api $GITHUB_WORKSPACE/bin
+          cp conjure application/application cmd/registration-server/registration-server $GITHUB_WORKSPACE/bin
           cd $GITHUB_WORKSPACE && tar -czf conjure-station.tar.gz bin
 
       - name: Save build artifacts

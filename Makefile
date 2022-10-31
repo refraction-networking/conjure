@@ -10,9 +10,9 @@ CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_R
 PROTO_RS_PATH=src/signalling.rs
 
 
-all: rust libtd conjure app registration-api registration-dns ${PROTO_RS_PATH}
+all: rust libtd conjure app registration-server ${PROTO_RS_PATH}
 
-sim: rust libtd conjure-sim app registration-api registration-dns ${PROTO_RS_PATH}
+sim: rust libtd conjure-sim app registration-server ${PROTO_RS_PATH}
 
 rust: ./src/*.rs
 	cargo build --${DEBUG_OR_RELEASE}
@@ -33,11 +33,8 @@ conjure: detect.c loadkey.c rust_util.c rust libtapdance
 conjure-sim: detect.c loadkey.c rust_util.c rust libtapdance
 	${CC} -Wall -O2 -o conjure detect.c loadkey.c rust_util.c ${LIBS}
 
-registration-api:
-	cd ./registration-api/ && make
-
-registration-dns:
-	cd ./cmd/registration-dns/ && make
+registration-server:
+	cd ./cmd/registration-server/ && make
 
 # Note this copies in the whole current directory as context and results in
 # overly large context. should not be used to build release/production images.
@@ -49,7 +46,7 @@ backup-config:
 	mkdir -p backup
 	cp -rf sysconfig backup/
 	cp application/config.toml backup/application.config.toml
-	cp registration-api/config.toml backup/registration-api.config.toml
+	cp cmd/registration-server/config.toml backup/registration-server.config.toml
 
 restore-config:
 ifneq (,$(wildcard backup/sysconfig))
@@ -59,8 +56,8 @@ endif
 ifneq (,$(wildcard backup/application.config.toml))
 	mv backup/application.config.toml application/config.toml
 endif
-ifneq (,$(wildcard backup/registration-api.config.toml))
-	mv backup/registration-api.config.toml registration-api/config.toml
+ifneq (,$(wildcard backup/registration-server.config.toml))
+	mv backup/registration-server.config.toml cmd/registration-server/config.toml
 endif
 	$(RM) -rf backup
 
@@ -71,4 +68,4 @@ clean:
 ${PROTO_RS_PATH}:
 	cd ./proto/ && make
 
-.PHONY: registration-api zmq-proxy
+.PHONY: registration-server zmq-proxy

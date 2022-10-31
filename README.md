@@ -148,8 +148,8 @@ sudo systemctl enable zbalance
 sudo systemctl enable conjure-app
 sudo systemctl enable conjure-det
 
-# if enabling and supporting registration api or multi-station registration sharing
-sudo systemctl enable conjure-registration-api
+# if enabling and supporting registration server or multi-station registration sharing
+sudo systemctl enable conjure-registration-server
 ```
 
 Start the station.
@@ -162,8 +162,8 @@ systemctl start zbalance
 systemctl start conjure-det
 systemctl start conjure-app
 
-# if enabling and supporting registration api or multi-station registration sharing
-systemctl start conjure-registration-api
+# if enabling and supporting registration server or multi-station registration sharing
+systemctl start conjure-registration-server
 ```
 
 ## [FAQ](https://github.com/refraction-networking/conjure/wiki/FAQ) | [WIKI](https://github.com/refraction-networking/conjure/wiki) 
