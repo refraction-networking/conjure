@@ -86,17 +86,20 @@ func main() {
 	cj.Stat().AddStatsModule(connManager)
 
 	// Periodically clean old registrations
-	go func(ctx context.Context) {
+	wg.Add(1)
+	go func(ctx context.Context, wg *sync.WaitGroup) {
+		defer wg.Done()
+
 		ticker := time.NewTicker(3 * time.Minute)
 		for {
 			select {
-			case <-ctx.Done():
-				break
 			case <-ticker.C:
 				regManager.RemoveOldRegistrations()
+			case <-ctx.Done():
+				return
 			}
 		}
-	}(ctx)
+	}(ctx, wg)
 
 	// Receive registration updates from ZMQ Proxy as subscriber
 	go zmqIngester.RunZMQ(ctx)
@@ -107,14 +110,26 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	for sig := range sigCh {
-		// Wait for SIGINT.
+		// Wait for close signal.
 		if sig != syscall.SIGHUP {
+			logger.Infof("received %s ... exiting\n", sig.String())
 			break
 		}
 
-		// regManager.ReloadConfig()
+		// Use SigHUP to indicate config reload
+		logger.Infoln("received SIGHUP ... reloading configs")
+
+		// parse toml station configuration. If parse fails, log and abort
+		// reload.
+		newConf, err := cj.ParseConfig()
+		if err != nil {
+			log.Errorf("failed to parse app config: %v", err)
+		} else {
+			regManager.OnReload(newConf.RegConfig)
+		}
 	}
 
 	cancel()
 	wg.Wait()
+	logger.Infof("shutdown complete")
 }

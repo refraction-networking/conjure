@@ -2,6 +2,7 @@ package lib
 
 import (
 	"net"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -206,4 +207,48 @@ func TestConjureLibConfigResolveDidLookup(t *testing.T) {
 		_, output := conf.ParseOrResolveBlocklisted(input)
 		require.Equal(t, expected, output, input)
 	}
+}
+
+func TestConjureLibConfigReload(t *testing.T) {
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
+
+	conf1 := &RegConfig{
+		CovertBlocklistSubnets: []string{
+			"192.0.0.1/16",
+			"127.0.0.1/32",
+			"::1/128",
+		},
+		CovertBlocklistDomains: []string{
+			".*blocked\\.com$",
+			"blocked1\\.com",
+		},
+	}
+	conf1.ParseBlocklists()
+
+	conf2 := &RegConfig{
+		CovertBlocklistDomains: []string{
+			".*blocked\\.com$",
+			"blocked1\\.com",
+			"facebook\\.com",
+		},
+		enableCovertAllowlist: true,
+		CovertAllowlistSubnets: []string{
+			"127.0.0.1/32",
+			"::1/128",
+		},
+	}
+	conf2.ParseBlocklists()
+
+	rm := NewRegistrationManager(conf1)
+	require.NotNil(t, rm)
+	require.Equal(t, 3, len(rm.covertBlocklistSubnets))
+	require.False(t, rm.enableCovertAllowlist)
+	require.Equal(t, 3, len(rm.PhantomSelector.Networks))
+
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets_update.toml")
+
+	rm.OnReload(conf2)
+	require.True(t, rm.enableCovertAllowlist)
+	require.Equal(t, 2, len(rm.covertAllowlistSubnets))
+	require.Equal(t, 4, len(rm.PhantomSelector.Networks))
 }
