@@ -1,205 +1,119 @@
 package liveness
 
 import (
-	"encoding/csv"
+	"errors"
 	"fmt"
+	"math"
 	"net"
-	"os"
-	"os/exec"
-	"strconv"
-	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/refraction-networking/conjure/application/log"
 )
 
-const (
-	CACHED_PHANTOM_MSG = "cached live host"
-)
+// ErrCachedPhantom provides a constant expected error returned for cached
+// liveness hits
+var ErrCachedPhantom = errors.New("cached live host")
 
-// LivenessTester provides a generic interface for testing hosts in phantom
+// ErrNotImplemented indicates that a feature will be implemented at some point
+// but is not yet completed.
+var ErrNotImplemented = errors.New("not supported yet")
+
+// Tester provides a generic interface for testing hosts in phantom
 // subnets for liveness. This prevents potential interference in connection
 // creation.
-type LivenessTester interface {
+type Tester interface {
+	Stats
 	PhantomIsLive(addr string, port uint16) (bool, error)
 }
 
+// Stats provides an interface to write out the collected metrics about liveness tester usage
+type Stats interface {
+	PrintAndReset(logger *log.Logger)
+	PrintStats(logger *log.Logger)
+	Reset()
+}
+
+type cache interface {
+	Lookup(string) bool
+	ClearExpired()
+	Add(string, *cacheElement)
+
+	// Len returns the number of elements in the cache
+	Len() int
+
+	// Cap returns a float percentage filled (0 if infinite capacity)
+	Cap() float64
+}
+
 type cacheElement struct {
-	isLive     bool
 	cachedTime time.Time
 }
 
-// CachedLivenessTester implements LivenessTester interface with caching,
-// PhantomIsLive will check historical results first before using the network to
-// determine phantom liveness.
-type CachedLivenessTester struct {
-	ipCache             map[string]cacheElement
-	signal              chan bool
-	cacheExpirationTime time.Duration
-	m                   sync.RWMutex
+// Config provides all params relating to liveness testing construction
+type Config struct {
+	// CacheDuration specifies the duration that a phantom IP identified as
+	// "LIVE" using a liveness test is cached, preventing further lookups to the
+	// address. Empty string disables caching for live phantom hosts.
+	CacheDuration string `toml:"cache_expiration_time"`
+
+	// CacheCapacity specifies the cache capacity to use for phantom IPs
+	// identified as "LIVE". CacheDuration must be set otherwise no caching
+	// occurs for live hosts.
+	//
+	// If unset or 0 no capacity is set and a map is used for the cache
+	// otherwise cache will have finite capacity and implement LRU eviction.
+	CacheCapacity int `toml:"cache_capacity"`
+
+	// CacheDurationNonLive specifies the duration that a phantom IP identified
+	// as "NOT LIVE" using a liveness test is cached, preventing further lookups
+	// to the address. This should generally be shorter to be responsive to
+	// remain responsive to hosts that become live. Empty string disables
+	// caching for non-live phantom hosts.
+	CacheDurationNonLive string `toml:"cache_expiration_nonlive"`
+
+	// CacheCapacityNonLive specifies the cache capacity to use for phantom IPs
+	// identified as "NOT LIVE". CacheDurationNonLive must be set otherwise no
+	// caching occurs for non-live hosts.
+	//
+	// If unset or 0 no capacity is set and a map is used for the cache
+	// otherwise cache will have finite capacity and implement LRU eviction.
+	CacheCapacityNonLive int `toml:"cache_capacity_nonlive"`
 }
 
-// UncachedLivenessTester implements LivenessTester interface without caching,
-// PhantomIsLive will always use the network to determine phantom liveness.
-type UncachedLivenessTester struct {
+var defaultConfig = &Config{
+	CacheDuration:        "",
+	CacheCapacity:        0,
+	CacheDurationNonLive: "",
+	CacheCapacityNonLive: 0,
 }
 
-// Init parses cache expiry duration and initializes the Cache.
-func (blt *CachedLivenessTester) Init(expirationTime string) error {
-	blt.m.Lock()
-	defer blt.m.Unlock()
-
-	blt.ipCache = make(map[string]cacheElement)
-	blt.signal = make(chan bool)
-
-	convertedTime, err := time.ParseDuration(expirationTime)
-	if err != nil {
-		return fmt.Errorf("unable to parse cacheExpirationTime: %s", err)
-	}
-	blt.cacheExpirationTime = convertedTime
-
-	return nil
-}
-
-// Stop end periodic scanning using running in separate goroutine. If periodic
-// scanning is not running this will do nothing.
-func (blt *CachedLivenessTester) Stop() {
-	blt.signal <- true
-}
-
-// ClearExpiredCache cleans out stale entries in the cache.
-func (blt *CachedLivenessTester) ClearExpiredCache() {
-	blt.m.Lock()
-	defer blt.m.Unlock()
-
-	for ipAddr, status := range blt.ipCache {
-		if time.Since(status.cachedTime) > blt.cacheExpirationTime {
-			delete(blt.ipCache, ipAddr)
-		}
-	}
-}
-
-// PeriodicScan uses zmap to populate the cache of a CachedLivenessTester.
-// Should be run as a goroutine as it may block for long periods of time while
-// scanning.
-func (blt *CachedLivenessTester) PeriodicScan(t string) {
-	allowListAddr := os.Getenv("PHANTOM_SUBNET_LOCATION")
-	for {
-		select {
-		case <-blt.signal:
-			return
-		default:
-			_, err := exec.Command("zmap", "-p", "443", "-O", "csv", "-f", "saddr,classification", "-P", "4", "--output-filter= (classification = rst || classification = synack)", "-b", "block_list.txt", "-w", allowListAddr, "-o", "result.csv").Output()
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			f, err := os.Open("result.csv")
-			if err != nil {
-				fmt.Println("Unable to read input file", err)
-				f.Close()
-			}
-
-			csvReader := csv.NewReader(f)
-			records, err := csvReader.ReadAll()
-			if err != nil {
-				fmt.Println("Unable to parse file as CSV", err)
-			}
-
-			f.Close()
-			f, err = os.OpenFile("block_list.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-			if err != nil {
-				fmt.Println("Unable to read blocklist file", err)
-				f.Close()
-			}
-
-			for _, ip := range records {
-				if ip[0] != "saddr" {
-					func() {
-						// closure to ensure mutex unlocks in case of error.
-						blt.m.Lock()
-						defer blt.m.Unlock()
-
-						if _, ok := blt.ipCache[ip[0]]; !ok {
-							var val cacheElement
-							val.isLive = true
-							val.cachedTime = time.Now()
-							blt.ipCache[ip[0]] = val
-							_, err := f.WriteString(ip[0] + "/32" + "\n")
-							if err != nil {
-								fmt.Println("Unable to write blocklist file", err)
-								f.Close()
-							}
-						}
-					}()
-				}
-			}
-			f.Close()
-
-			err = os.Remove("result.csv")
-			if err != nil {
-				fmt.Println("Unable to delete result.csv", err)
-			}
-
-			fmt.Println("Scanned once")
-			if t == "Minute" {
-				time.Sleep(time.Minute * 2)
-			} else if t == "Hour" {
-				time.Sleep(time.Hour * 2)
-			} else {
-				fmt.Println("Invalid scanning interval")
-				return
-			}
-
-		}
-	}
-}
-
-// PhantomIsLive first checks the cached set of addressses for a fresh entry.
-// If one is available and the host was measured to be live this is returned
-// immediately and no network probes are sent. If the host was measured not
-// live, the entry is stale, or there is not entry then network probes are sent
-// and the result is then added to the cache.
-//
-// Lock on mutex is taken for lookup, then for cache update. Do NOT hold mutex
-// while scanning for liveness as this will make cache extremely slow.
-func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, error) {
-	// cache lookup internal function to use RLock
-	if live, err := blt.phantomLookup(addr, port); live || err != nil {
-		return live, err
+// LivenessConfig identity function for reflection in composed Config type
+func (c *Config) LivenessConfig() *Config {
+	if c == nil {
+		return defaultConfig
 	}
 
-	// existing phantomIsLive() implementation
-	isLive, err := phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
-	var val cacheElement
-	val.isLive = isLive
-	val.cachedTime = time.Now()
-
-	blt.m.Lock()
-	defer blt.m.Unlock()
-
-	blt.ipCache[addr] = val
-	return isLive, err
+	return c
 }
 
-func (blt *CachedLivenessTester) phantomLookup(addr string, port uint16) (bool, error) {
-	blt.m.RLock()
-	defer blt.m.RUnlock()
-
-	if status, ok := blt.ipCache[addr]; ok {
-		if time.Since(status.cachedTime) < blt.cacheExpirationTime {
-			if status.isLive {
-				return true, fmt.Errorf(CACHED_PHANTOM_MSG)
-			}
-		}
+// New provides a builder for the proper tester based on config.
+func New(c *Config) (Tester, error) {
+	if c == nil {
+		c = defaultConfig
 	}
-	return false, nil
-}
 
-// PhantomIsLive sends 4 TCP syn packets to determine if the host will respond
-// to traffic and potentially interfere with a connection if used as a phantom
-// address. Measurement results are uncached, meaning endpoints are re-scanned
-// every time.
-func (blt *UncachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, error) {
-	return phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
+	if c.CacheDuration == "" && c.CacheDurationNonLive == "" {
+		return &UncachedLivenessTester{
+			stats: &stats{},
+		}, nil
+	}
+
+	clt := &CachedLivenessTester{
+		stats: &stats{},
+	}
+
+	return clt, clt.Init(c)
 }
 
 func phantomIsLive(address string) (bool, error) {
@@ -236,5 +150,84 @@ func phantomIsLive(address string) (bool, error) {
 		return true, fmt.Errorf("phantom picked up the connection")
 	default:
 		return false, fmt.Errorf("reached statistical timeout %v", timeout)
+	}
+}
+
+type stats struct {
+	// newLivenessPass count of liveness tests that passed (non-live phantom) since reset()
+	newLivenessPass int64
+
+	// newLivenessFail count of liveness tests that failed (live phantom) since reset()
+	newLivenessFail int64
+
+	// newLivenessCachedLive count of liveness tests that were resolved by consulting the
+	// cache resulting in a "LIVE" designation since reset()
+	newLivenessCachedLive int64
+
+	// newLivenessCachedNonLive count of liveness tests that were resolved by consulting the
+	// cache resulting in a "NOT LIVE" designation since reset()
+	newLivenessCachedNonLive int64
+
+	// start time of epoch to calculate per-second rates
+	epochStart time.Time
+}
+
+func (s *stats) PrintAndReset(logger *log.Logger) {
+	s.printStats(logger)
+	s.Reset()
+}
+
+func (s *stats) PrintStats(logger *log.Logger) {
+	s.printStats(logger)
+}
+
+func (s *stats) printStats(logger *log.Logger) {
+	// prevent div by 0 if thread starvation happens
+	var epochDur float64 = math.Max(float64(time.Since(s.epochStart).Milliseconds()), 1)
+
+	nlp := atomic.LoadInt64(&s.newLivenessPass)
+	nlf := atomic.LoadInt64(&s.newLivenessFail)
+	nlcl := atomic.LoadInt64(&s.newLivenessCachedLive)
+	nlcn := atomic.LoadInt64(&s.newLivenessCachedNonLive)
+	total := math.Max(float64(nlp+nlf + +nlcl + nlcn), 1)
+
+	logger.Infof("liveness-stats: %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s",
+		nlp,
+		float64(nlp)/float64(total)*100,
+		float64(nlp)/float64(epochDur)*1000,
+		nlf,
+		float64(nlf)/float64(total)*100,
+		float64(nlf)/float64(epochDur)*1000,
+		nlcl,
+		float64(nlcl)/float64(total)*100,
+		float64(nlcl)/float64(epochDur)*1000,
+		nlcn,
+		float64(nlcn)/float64(total)*100,
+		float64(nlcn)/float64(epochDur)*1000,
+	)
+}
+
+func (s *stats) Reset() {
+	atomic.StoreInt64(&s.newLivenessPass, 0)
+	atomic.StoreInt64(&s.newLivenessFail, 0)
+	atomic.StoreInt64(&s.newLivenessCachedLive, 0)
+	atomic.StoreInt64(&s.newLivenessCachedNonLive, 0)
+
+	s.epochStart = time.Now()
+}
+
+func (s *stats) incPass() {
+	atomic.AddInt64(&s.newLivenessPass, 1)
+}
+
+func (s *stats) incFail() {
+	atomic.AddInt64(&s.newLivenessFail, 1)
+}
+
+func (s *stats) incCached(live bool) {
+	if live {
+		atomic.AddInt64(&s.newLivenessCachedLive, 1)
+	} else {
+		atomic.AddInt64(&s.newLivenessCachedNonLive, 1)
 	}
 }

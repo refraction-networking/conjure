@@ -3,12 +3,17 @@ package lib
 //
 
 import (
+	"context"
 	"fmt"
-	"log"
+	golog "log"
+	"math"
 	"os"
+	"sync/atomic"
 	"time"
 
 	zmq "github.com/pebbe/zmq4"
+
+	"github.com/refraction-networking/conjure/application/log"
 )
 
 // ZMQConfig - Configuration options relevant to the ZMQ Proxy utility
@@ -27,39 +32,140 @@ type socketConfig struct {
 	SubscriptionPrefix string `toml:"subscription"`
 }
 
-type proxy struct {
+// ZMQIngester manages registration ingest over ZMQ.
+type ZMQIngester struct {
+	*ZMQConfig
 	logger *log.Logger
+
+	regChan     chan<- interface{}
+	connectAddr string
+
+	// stats
+	epochStart              time.Time
+	droppedZMQMessages      int64 // if the ingest channel ends up blocking how many registrations were dropped this epoch
+	totalDroppedZMQMessages int64 // how many registrations have been dropped total due to full channel
+	zmqMessages             int64
 }
 
-// ZMQProxy - centralizing proxy used to channel multiple registration sources into
-// one PUB socket for consumption by the application.
-// Specify the absolute location of the config file with
-// the CJ_PROXY_CONFIG environment variable.
-func ZMQProxy(c ZMQConfig) {
-	var p proxy
-	p.logger = log.New(os.Stdout, "[ZMQ_PROXY] ", log.Ldate|log.Lmicroseconds)
+// NewZMQIngest returns a struct that manages registration ingest over ZMQ.
+func NewZMQIngest(connectAddr string, regchan chan<- interface{}, conf *ZMQConfig) *ZMQIngester {
+	logger := log.New(os.Stdout, "[ZMQ_PROXY] ", golog.Ldate|golog.Lmicroseconds)
 
-	privkey, err := os.ReadFile(c.PrivateKeyPath)
+	return &ZMQIngester{
+		conf,
+		logger,
+		regchan,
+		connectAddr,
+		time.Now(),
+		0, 0, 0}
+}
+
+// RunZMQ start the receive loop that writes into the provided message receive channel
+func (zi *ZMQIngester) RunZMQ(ctx context.Context) {
+	go zi.proxyZMQ()
+
+	sub, err := zmq.NewSocket(zmq.SUB)
 	if err != nil {
-		p.logger.Fatalln("failed to load private key:", err)
+		zi.logger.Errorf("could not create new ZMQ socket: %v\n", err)
+		return
+	}
+	defer sub.Close()
+
+	err = sub.Connect(zi.connectAddr)
+	if err != nil {
+		zi.logger.Errorln("error connecting to zmq publisher:", err)
+	}
+	err = sub.SetSubscribe("")
+	if err != nil {
+		zi.logger.Errorln("error subscribing to zmq:", err)
+	}
+
+	zi.logger.Infof("ZMQ connected to %v\n", zi.connectAddr)
+
+	for {
+
+		msg, err := sub.RecvBytes(0)
+		if err != nil {
+			zi.logger.Fatalf("error reading from ZMQ socket: %v\n", err)
+		}
+
+		zi.addZMQMessage()
+
+		select {
+		case <-ctx.Done():
+			return
+		case zi.regChan <- msg:
+			continue
+		default:
+			// drop reg, ingest is too busy to handle it.
+			zi.logger.Warnln("ingest full, dropping zmq message")
+			zi.addDroppedZMQMessage()
+		}
+	}
+}
+
+// Reset implements the Stats interface
+func (zi *ZMQIngester) Reset() {
+	atomic.StoreInt64(&zi.droppedZMQMessages, 0)
+	atomic.StoreInt64(&zi.zmqMessages, 0)
+	zi.epochStart = time.Now()
+}
+
+func (zi *ZMQIngester) addZMQMessage() {
+	atomic.AddInt64(&zi.zmqMessages, 1)
+}
+
+func (zi *ZMQIngester) addDroppedZMQMessage() {
+	atomic.AddInt64(&zi.droppedZMQMessages, 1)
+	atomic.AddInt64(&zi.totalDroppedZMQMessages, 1)
+}
+
+// PrintAndReset implements the Stats interface
+func (zi *ZMQIngester) PrintAndReset(logger *log.Logger) {
+	l := len(zi.regChan)
+	c := cap(zi.regChan)
+	// prevent div by 0 if thread starvation happens
+	var epochDur float64 = math.Max(float64(time.Since(zi.epochStart).Milliseconds()), 1)
+
+	logger.Infof("zmq-stats: %d %d %.3f%% (%.3f/s) %d %d/%d %.3f%%",
+		atomic.LoadInt64(&zi.zmqMessages),
+		atomic.LoadInt64(&zi.droppedZMQMessages),
+		float64(atomic.LoadInt64(&zi.droppedZMQMessages))/math.Max(float64(atomic.LoadInt64(&zi.zmqMessages)), 1)*100,
+		1000*float64(atomic.LoadInt64(&zi.droppedZMQMessages))/epochDur, // x1000 convert /ms to /s
+		atomic.LoadInt64(&zi.totalDroppedZMQMessages),
+		l,
+		c,
+		float64(l)/float64(c)*100,
+	)
+	zi.Reset()
+}
+
+// ZMQProxy - centralizing proxy used to channel multiple registration sources
+// into one PUB socket for consumption by the application. Specify the absolute
+// location of the config file with the CJ_PROXY_CONFIG environment variable.
+func (zi *ZMQIngester) proxyZMQ() {
+
+	privkey, err := os.ReadFile(zi.PrivateKeyPath)
+	if err != nil {
+		zi.logger.Fatalln("failed to load private key:", err)
 	}
 
 	// Only use first 32 bytes of key (some keys store
 	// public key after private key)
-	privkey_z85 := zmq.Z85encode(string(privkey[:32]))
-	pubkey_z85, err := zmq.AuthCurvePublic(privkey_z85)
+	privkeyZ85 := zmq.Z85encode(string(privkey[:32]))
+	pubkeyZ85, err := zmq.AuthCurvePublic(privkeyZ85)
 	if err != nil {
-		p.logger.Fatalln("failed to generate client public key from private key:", err)
+		zi.logger.Fatalln("failed to generate client public key from private key:", err)
 	}
 
 	pubSock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
-		p.logger.Fatalln("failed to create binding zmq socket:", err)
+		zi.logger.Fatalln("failed to create binding zmq socket:", err)
 	}
 
-	err = pubSock.Bind(fmt.Sprintf("ipc://@%s", c.SocketName))
+	err = pubSock.Bind(fmt.Sprintf("ipc://@%s", zi.SocketName))
 	if err != nil {
-		p.logger.Fatalln("failed to bind zmq socket:", err)
+		zi.logger.Fatalln("failed to bind zmq socket:", err)
 	}
 	defer pubSock.Close()
 
@@ -69,39 +175,39 @@ func ZMQProxy(c ZMQConfig) {
 	// does support connecting to multiple sockets from a single socket,
 	// but it appears that it doesn't support setting different auth
 	// parameters for each connection.
-	for _, connectSocket := range c.ConnectSockets {
+	for _, connectSocket := range zi.ConnectSockets {
 		sock, err := zmq.NewSocket(zmq.SUB)
 		if err != nil {
-			p.logger.Printf("failed to create subscriber zmq socket for %s: %v\n", connectSocket.Address, err)
+			zi.logger.Errorf("failed to create subscriber zmq socket for %s: %v\n", connectSocket.Address, err)
 		}
 
-		err = sock.SetHeartbeatIvl(time.Duration(c.HeartbeatInterval) * time.Millisecond)
+		err = sock.SetHeartbeatIvl(time.Duration(zi.HeartbeatInterval) * time.Millisecond)
 		if err != nil {
-			p.logger.Printf("failed to set heartbeat interval of %v for %s: %v\n", c.HeartbeatInterval, connectSocket.Address, err)
+			zi.logger.Errorf("failed to set heartbeat interval of %v for %s: %v\n", zi.HeartbeatInterval, connectSocket.Address, err)
 		}
 
-		err = sock.SetHeartbeatTimeout(time.Duration(c.HeartbeatTimeout) * time.Millisecond)
+		err = sock.SetHeartbeatTimeout(time.Duration(zi.HeartbeatTimeout) * time.Millisecond)
 		if err != nil {
-			p.logger.Printf("failed to set heartbeat timeout of %v for %s: %v\n", c.HeartbeatTimeout, connectSocket.Address, err)
+			zi.logger.Errorf("failed to set heartbeat timeout of %v for %s: %v\n", zi.HeartbeatTimeout, connectSocket.Address, err)
 		}
 
 		if connectSocket.AuthenticationType == "CURVE" {
-			err = sock.ClientAuthCurve(connectSocket.PublicKey, pubkey_z85, privkey_z85)
+			err = sock.ClientAuthCurve(connectSocket.PublicKey, pubkeyZ85, privkeyZ85)
 			if err != nil {
-				p.logger.Printf("failed to set up CURVE authentication for %s: %v\n", connectSocket.Address, err)
+				zi.logger.Errorf("failed to set up CURVE authentication for %s: %v\n", connectSocket.Address, err)
 				continue
 			}
 		}
 
 		err = sock.SetSubscribe(connectSocket.SubscriptionPrefix)
 		if err != nil {
-			p.logger.Printf("failed to set subscription prefix for %s: %v\n", connectSocket.Address, err)
+			zi.logger.Errorf("failed to set subscription prefix for %s: %v\n", connectSocket.Address, err)
 			continue
 		}
 
 		err = sock.Connect(connectSocket.Address)
 		if err != nil {
-			p.logger.Printf("failed to connect to %s: %v\n", connectSocket.Address, err)
+			zi.logger.Errorf("failed to connect to %s: %v\n", connectSocket.Address, err)
 			continue
 		}
 		defer sock.Close()
@@ -110,7 +216,7 @@ func ZMQProxy(c ZMQConfig) {
 			for {
 				msg, err := sub.RecvBytes(0)
 				if err != nil {
-					p.logger.Printf("read from %s failed: %v\n", config.Address, err)
+					zi.logger.Errorf("read from %s failed: %v\n", config.Address, err)
 					continue
 				}
 				messages <- msg
@@ -121,7 +227,7 @@ func ZMQProxy(c ZMQConfig) {
 	for msg := range messages {
 		_, err := pubSock.SendBytes(msg, 0)
 		if err != nil {
-			p.logger.Printf("write to pubSock failed: %v\n", err)
+			zi.logger.Errorf("write to pubSock failed: %v\n", err)
 		}
 	}
 }

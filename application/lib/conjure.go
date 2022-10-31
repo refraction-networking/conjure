@@ -8,6 +8,8 @@ import (
 	"gitlab.com/yawning/obfs4.git/common/ntor"
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
+
+	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
 type Obfs4Keys struct {
@@ -48,7 +50,7 @@ type ConjureSharedKeys struct {
 	Obfs4Keys                                                 Obfs4Keys
 }
 
-func GenSharedKeys(sharedSecret []byte) (ConjureSharedKeys, error) {
+func GenSharedKeys(sharedSecret []byte, tt pb.TransportType) (ConjureSharedKeys, error) {
 	tdHkdf := hkdf.New(sha256.New, sharedSecret, []byte("conjureconjureconjureconjure"), nil)
 	keys := ConjureSharedKeys{
 		SharedSecret:  sharedSecret,
@@ -78,8 +80,11 @@ func GenSharedKeys(sharedSecret []byte) (ConjureSharedKeys, error) {
 	if _, err := tdHkdf.Read(keys.DarkDecoySeed); err != nil {
 		return keys, err
 	}
+
 	var err error
-	keys.Obfs4Keys, err = generateObfs4Keys(tdHkdf)
+	if tt == pb.TransportType_Obfs4 {
+		keys.Obfs4Keys, err = generateObfs4Keys(tdHkdf)
+	}
 	return keys, err
 }
 

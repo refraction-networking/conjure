@@ -44,7 +44,7 @@ func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 	clientToStation.Flags = &pb.RegistrationFlags{Use_TIL: &t}
 	clientToStation.ClientLibVersion = &v
 
-	conjureKeys, _ := GenSharedKeys(sharedSecret)
+	conjureKeys, _ := GenSharedKeys(sharedSecret, 0)
 
 	var testGeneration uint32 = 957
 	clientToStation.DecoyListGeneration = &testGeneration
@@ -58,7 +58,7 @@ func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 
 // // This is not actually working yet
 // func TestCreateDecoyRegistration(t *testing.T) {
-// 	rm := NewRegistrationManager()
+// 	rm := NewRegistrationManager(&RegConfig{})
 
 // 	c2s, keys := mockReceiveFromDetector()
 
@@ -77,7 +77,7 @@ func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 // }
 
 func TestRegistrationLookup(t *testing.T) {
-	rm := NewRegistrationManager()
+	rm := NewRegistrationManager(&RegConfig{})
 
 	// The mock registration has transport id 0, so we hard code that here too
 	err := rm.AddTransport(0, mockTransport{})
@@ -283,7 +283,7 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 }
 
 func TestRegString(t *testing.T) {
-	rm := NewRegistrationManager()
+	rm := NewRegistrationManager(&RegConfig{})
 
 	c2s, keys := mockReceiveFromDetector()
 

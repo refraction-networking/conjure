@@ -1,8 +1,6 @@
 package liveness
 
 import (
-	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -10,42 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// To run the measuremest commands set the environment variable when running go test
-//     $ MEASUREMENTS=1 go test -v
-func TestBasic(t *testing.T) {
-	if os.Getenv("MEASUREMENTS") != "1" {
-		t.Skip("skiping long running measurement based tests")
-	}
-	os.Setenv("PHANTOM_SUBNET_LOCATION", "../lib/test/phantom_subnets.toml")
-	fmt.Println("Test Basic")
-	var blt CachedLivenessTester
-	err := blt.Init("2.0h")
-	require.Nil(t, err)
-
-	go blt.PeriodicScan("Minute")
-	time.Sleep(time.Minute * 8)
-	blt.Stop()
-}
-
-// To run the measuremest commands set the environment variable when running go test
-//     $ MEASUREMENTS=1 go test -v
-func TestStop(t *testing.T) {
-	if os.Getenv("MEASUREMENTS") != "1" {
-		t.Skip("skiping long running measurement based tests")
-	}
-	os.Setenv("PHANTOM_SUBNET_LOCATION", "../lib/test/phantom_subnets.toml")
-	fmt.Println("Test Stop")
-	var blt CachedLivenessTester
-	err := blt.Init("2.0h")
-	require.Nil(t, err)
-
-	go blt.PeriodicScan("Minutes")
-	blt.Stop()
-}
-
 func TestUncachedLiveness(t *testing.T) {
 
-	ult := UncachedLivenessTester{}
+	ult, err := New(&Config{})
+	require.Nil(t, err)
 
 	liveness, response := ult.PhantomIsLive("1.1.1.1.", 80)
 
@@ -65,34 +31,41 @@ func TestUncachedLiveness(t *testing.T) {
 }
 
 func TestCachedLiveness(t *testing.T) {
-
-	clt := CachedLivenessTester{}
-	err := clt.Init("1h")
-	if err != nil {
-		t.Fatalf("failed to init cached liveness tester: %s", err)
+	clt := CachedLivenessTester{
+		stats: &stats{},
 	}
+	err := clt.Init(&Config{"1h", 0, "5m", 0})
+	require.Nil(t, err)
 
 	liveness, response := clt.PhantomIsLive("1.1.1.1.", 80)
 	if liveness != true {
 		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
-	if status, ok := clt.ipCache["1.1.1.1."]; !ok || status.isLive != true {
+	if status, ok := clt.ipCacheLive.(*mapCache).ipCache["1.1.1.1."]; !ok || status == nil {
+		// Entry should be in live cache
 		t.Fatalf("Host is live, but not cached as live")
+	} else if status, ok := clt.ipCacheNonLive.(*mapCache).ipCache["1.1.1.1."]; ok || status != nil {
+		// Entry should NOT be in non-live cache
+		t.Fatalf("Host is live but cached as non-live")
 	}
 
 	liveness, response = clt.PhantomIsLive("192.0.0.2", 443)
 	if liveness != false {
 		t.Fatalf("Host is NOT live, detected as live: %v\n", response)
 	}
-	if status, ok := clt.ipCache["192.0.0.2"]; !ok || status.isLive != false {
-		t.Fatalf("Host is NOT live, but cached as live")
+	if status, ok := clt.ipCacheLive.(*mapCache).ipCache["192.0.0.2"]; ok || status != nil {
+		// Entry should NOT be in live cache
+		t.Fatalf("Non-live host present in live cache")
+	} else if status, ok := clt.ipCacheNonLive.(*mapCache).ipCache["192.0.0.2"]; !ok || status == nil {
+		// Entry should be in non-live cache
+		t.Fatalf("Non-live host NOT present in non-live cache")
 	}
 
 	liveness, response = clt.PhantomIsLive("2606:4700:4700::64", 443)
 	if liveness != true {
 		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
-	if status, ok := clt.ipCache["2606:4700:4700::64"]; !ok || status.isLive != true {
+	if status, ok := clt.ipCacheLive.(*mapCache).ipCache["2606:4700:4700::64"]; !ok || status == nil {
 		t.Fatalf("Host is not live, but cached as live")
 	}
 
@@ -106,9 +79,36 @@ func TestCachedLiveness(t *testing.T) {
 
 }
 
+func TestCachedLivenessLiveOnly(t *testing.T) {
+
+	clt, err := New(&Config{"1h", 0, "", 0})
+	require.Nil(t, err)
+
+	liveness, response := clt.PhantomIsLive("1.1.1.1.", 80)
+	if liveness != true {
+		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
+	}
+	if status, ok := clt.(*CachedLivenessTester).ipCacheLive.(*mapCache).ipCache["1.1.1.1."]; !ok || status == nil {
+		// Entry should be in live cache
+		t.Fatalf("Host is live, but not cached as live")
+	}
+
+	liveness, response = clt.PhantomIsLive("192.0.0.2", 443)
+	require.Equal(t, false, liveness, "Host is NOT live, detected as live: %v\n", response)
+	if status, ok := clt.(*CachedLivenessTester).ipCacheLive.(*mapCache).ipCache["192.0.0.2"]; ok || status != nil {
+		// Entry should NOT be in live cache
+		t.Fatalf("Non-live host present in live cache")
+	}
+
+	// Ensure that a lookup for the same address does not return cached.
+	liveness, response = clt.PhantomIsLive("192.0.0.2", 443)
+	require.Equal(t, false, liveness, "Host is NOT live, detected as live: %v\n", response)
+	require.NotEqual(t, ErrCachedPhantom, response)
+}
+
 func TestCachedLivenessThreaded(t *testing.T) {
 
-	test_cases := [...]struct {
+	testCases := [...]struct {
 		address  string
 		port     uint16
 		expected bool
@@ -122,17 +122,17 @@ func TestCachedLivenessThreaded(t *testing.T) {
 	failed := false
 	var wg sync.WaitGroup
 
-	clt := CachedLivenessTester{}
-	err := clt.Init("1h")
-	if err != nil {
-		t.Fatalf("failed to init cached liveness tester: %s", err)
-	}
+	clt, err := New(&Config{
+		CacheDuration:        "1h",
+		CacheDurationNonLive: "1m",
+	})
+	require.Nil(t, err)
 
 	for i := 0; i < iterations; i++ {
 		wg.Add(1)
 
 		go func(j int) {
-			test := test_cases[j%len(test_cases)]
+			test := testCases[j%len(testCases)]
 			liveness, response := clt.PhantomIsLive(test.address, test.port)
 			if liveness != test.expected {
 				t.Logf("%s:%d -> %v (expected %v)\n", test.address, test.port, response, test.expected)
@@ -147,3 +147,38 @@ func TestCachedLivenessThreaded(t *testing.T) {
 		t.Fatalf("failed")
 	}
 }
+
+// // To run the measurements commands set the environment variable when running go test
+// //
+// //	$ MEASUREMENTS=1 go test -v
+// func TestBasic(t *testing.T) {
+// 	if os.Getenv("MEASUREMENTS") != "1" {
+// 		t.Skip("skiping long running measurement based tests")
+// 	}
+// 	os.Setenv("PHANTOM_SUBNET_LOCATION", "../lib/test/phantom_subnets.toml")
+// 	fmt.Println("Test Basic")
+// 	var blt CachedLivenessTester
+// 	err := blt.Init("2.0h")
+// 	require.Nil(t, err)
+
+// 	go blt.PeriodicScan("Minute")
+// 	time.Sleep(time.Minute * 8)
+// 	blt.Stop()
+// }
+
+// // To run the measurements commands set the environment variable when running go test
+// //
+// //	$ MEASUREMENTS=1 go test -v
+// func TestStop(t *testing.T) {
+// 	if os.Getenv("MEASUREMENTS") != "1" {
+// 		t.Skip("skiping long running measurement based tests")
+// 	}
+// 	os.Setenv("PHANTOM_SUBNET_LOCATION", "../lib/test/phantom_subnets.toml")
+// 	fmt.Println("Test Stop")
+// 	var blt CachedLivenessTester
+// 	err := blt.Init("2.0h")
+// 	require.Nil(t, err)
+
+// 	go blt.PeriodicScan("Minutes")
+// 	blt.Stop()
+// }
