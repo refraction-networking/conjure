@@ -18,8 +18,10 @@ import (
 )
 
 const (
-	defaultWorkerCount  = 300
-	jobBufferMultiplier = 1
+	defaultWorkerCount = 300
+	// Job buffer 1/10th the number of workers to make sure it doesn't back up,
+	// invalidating registrations.
+	jobBufferDivisor = 10
 )
 
 // HandleRegUpdates is responsible for launching and managing registration
@@ -44,7 +46,7 @@ func (rm *RegistrationManager) HandleRegUpdates(ctx context.Context, regChan <-c
 	wg := new(sync.WaitGroup)
 
 	// Add a shallow buffer for incoming registrations
-	shallowBuffer := make(chan interface{}, jobBufferMultiplier*workers)
+	shallowBuffer := make(chan interface{}, workers/jobBufferDivisor)
 	defer close(shallowBuffer)
 
 	// Add to registration manager so that we cann access it for stats printing.
