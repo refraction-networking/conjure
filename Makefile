@@ -36,11 +36,8 @@ conjure-sim: detect.c loadkey.c rust_util.c rust libtapdance
 registration-server:
 	cd ./cmd/registration-server/ && make
 
-# Note this copies in the whole current directory as context and results in
-# overly large context. should not be used to build release/production images.
-custom-build:
-	docker build --build-arg CUSTOM_BUILD=1 -f docker/Dockerfile .
-
+container:
+	DOCKER_BUILDKIT=1 docker build -t conjure -f  docker/Dockerfile.go .
 
 backup-config:
 	mkdir -p backup

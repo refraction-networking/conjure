@@ -1,104 +1,87 @@
-#FROM ubuntu:20.04 as build_base
-FROM ubuntu:20.04 as build_base_go
-#    PATH="/opt/PF_RING/userland/examples_zc:$PATH"
-ARG GO_VERSION=1.15.2
-ARG CUSTOM_BUILD
-ARG BRANCH=master
-ENV PATH="/usr/local/go/bin:/root/.cargo/bin:${PATH}" \
-    GOPATH="/root/go" \
-    GOROOT="/usr/local/go"
+# syntax=docker/dockerfile:1.3-labs
 
-# Install dependencies: including rust and go
-RUN apt-get update && \
-    DEBIAN_FRONTEND="noninteractive" apt-get -y -q install wget git make gcc bison flex protobuf-compiler curl libssl-dev pkg-config libgmp3-dev libzmq3-dev && \
-    apt-get clean all && \
-    wget -q https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz && \
-    tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
-    curl https://sh.rustup.rs -sSf -o install_rust.sh; sh install_rust.sh -y && \
-    cargo install protobuf-codegen
+# ------------------------------------------------------------------------------
+# Development image
+#
+# Builds a common image that has all dependencies required to build and run
+# any piece of the station. Ideally we want to redo this as little as possible.
+# ------------------------------------------------------------------------------
+FROM ubuntu:20.04 AS dev_img
 
-# Install PFRING to get libraries
-RUN apt-get install -y -q software-properties-common wget && \
-    add-apt-repository universe && \
-    wget https://packages.ntop.org/apt-stable/20.04/all/apt-ntop-stable.deb && \
-    apt install ./apt-ntop-stable.deb && \
-    apt-get clean all && \
-    apt-get update && \
-    apt-get install -y -q pfring && \
-    apt-get clean all
+ARG UNAME=conjure
+ARG UID=1000
+ARG GID=1000
+RUN groupadd -g $GID -o $UNAME
+RUN useradd -m -u $UID -g $GID -o -s /bin/bash $UNAME
 
+RUN apt-get update && apt-get install -yq sudo apt-utils software-properties-common
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tzdata
 
-# Copy docker context dir. This is used as a source if CUSTOM_BUILD is enabled
-COPY . /tmp/conjure
+# install pf_ring deps
+RUN apt-get update && apt-get install -yq wget lsb-release gnupg \
+  && wget https://packages.ntop.org/apt-stable/20.04/all/apt-ntop-stable.deb \
+  && apt-get install -yq ./apt-ntop-stable.deb
 
-# Get Conjure or copy a directory Dockerfile is in. Switched by CUSTOM_BUILD var
-RUN go get -d github.com/refraction-networking/conjure/...  ; \
-    bash -c 'if [[ ! -z "$CUSTOM_BUILD" ]] ; then \
-    rm -rf ${GOPATH}/src/github.com/refraction-networking/conjure; cp -r /tmp/conjure ${GOPATH}/src/github.com/refraction-networking/conjure ; \
-    fi'
+RUN apt-get update && sudo apt-get install -yq pfring pfring-dkms
 
-# Checkout needed branch if not builing using CUSTOM_BUILD
-RUN bash -c 'if [[ -z "CUSTOM_BUILD" ]] ; then \
-    cd /root/go/src/github.com/refraction-networking/conjure && \
-    git checkout ${BRANCH}; \
-    fi'
+COPY prereqs_once.sh /opt/conjure/
 
-# Compile
-RUN cd /root/go/src/github.com/refraction-networking/conjure && \
-    go get ./... || true && \
-    make
+WORKDIR /opt/conjure
+RUN /usr/bin/sudo ./prereqs_once.sh
 
-# Copy results
-RUN cp -r /root/go/src/github.com/refraction-networking/conjure /opt/conjure
+WORKDIR /opt/conjure
 
+COPY Makefile *.c *.h  /opt/conjure/
+COPY libtapdance/ /opt/conjure/libtapdance
+RUN make libtd
 
+# run cargo build to allow for dependencies to cached
+RUN PATH="$HOME/.cargo/bin:$PATH" cargo init --lib .
+COPY Cargo.lock Cargo.toml build.rs /opt/conjure/
+RUN --mount=type=cache,target=/usr/local/cargo/registry PATH="$HOME/.cargo/bin:$PATH" cargo build --release
 
-FROM ubuntu:20.04 as zbalance
-ENV CJ_IFACE=lo \
-    CJ_CLUSTER_ID=98 \
-    CJ_CORECOUNT=1 \
-    CJ_COREBASE=0 \
-    ZBALANCE_HASH_MODE=1
-#COPY --from=build_base /opt/PF_RING /opt/PF_RING
+COPY src/ /opt/conjure/src
 
-RUN apt-get update && DEBIAN_FRONTEND="noninteractive" apt-get -y -q install libelf1
+# A bit of magic here!
+# * We're mounting that cache again to use during the build, otherwise it's not present and we'll have to download those again - bad!
+# * EOF syntax is neat but not without its drawbacks. We need to `set -e`, otherwise a failing command is going to continue on
+# * Rust here is a bit fiddly, so we'll touch the files (even though we copied over them) to force a new build
+RUN --mount=type=cache,target=/usr/local/cargo/registry <<EOF
+set -e
+# update timestamps to force a new build
+touch /opt/conjure/src/lib.rs
+PATH="$HOME/.cargo/bin:$PATH" make rust
+EOF
 
-COPY --from=build_base_go /usr/bin/zbalance_ipc /usr/bin/zbalance_ipc
-COPY ./docker/zbalance-entrypoint.sh /entrypoint.sh
-ENTRYPOINT ["bash", "/entrypoint.sh"]
+RUN PATH="$HOME/.cargo/bin:$PATH" make conjure
 
+COPY go.* /opt/conjure/
+COPY cmd/ /opt/conjure/cmd
+COPY application/ /opt/conjure/application
+COPY pkg/ /opt/conjure/pkg
+
+RUN PATH="/usr/local/go/bin/:$PATH" make app
+RUN PATH="/usr/local/go/bin/:$PATH" make registration-server
+
+# add application as default entrypoint for dev reasons.
+ENTRYPOINT /opt/conjure/application/application
 
 
+# ------------------------------------------------------------------------------
+# Production image
+# ------------------------------------------------------------------------------
+FROM ubuntu:20.04 as conjure
 
-FROM ubuntu:20.04 as detector
-ENV CJ_CLUSTER_ID=98 \
-    CJ_CORECOUNT=1 \
-    CJ_COREBASE=0 \
-    CJ_SKIP_CORE=-1 \
-    CJ_QUEUE_OFFSET=0 \
-    CJ_LOG_INTERVAL=5 \
-    CJ_PRIVKEY=/opt/conjure/keys/privkey \
-    CJ_STATION_CONFIG=/opt/conjure/application/config.toml \
-    CJ_IP4_ADDR=127.0.0.1 \
-    CJ_IP6_ADDR=[::1]
-#COPY --from=build_base_go /opt/conjure/dark-decoy /opt/conjure/dark-decoy
-COPY --from=build_base_go /opt/conjure/conjure /opt/conjure/conjure
-COPY --from=build_base_go /opt/conjure/application/config.toml /opt/conjure/application/config.toml
-COPY ./docker/detector-entrypoint.sh /entrypoint.sh
-COPY --from=build_base_go /usr/local/lib/libpcap.so /usr/local/lib/libpcap.so
+# install pf_ring deps
+RUN apt-get update && apt-get install -yq sudo wget lsb-release gnupg \
+  && wget https://packages.ntop.org/apt-stable/20.04/all/apt-ntop-stable.deb \
+  && apt-get install -yq ./apt-ntop-stable.deb
 
-RUN apt-get update && apt-get -y -q install libzmq3-dev iproute2 iptables && apt-get clean all
-ENTRYPOINT [ "/entrypoint.sh"]
+RUN apt-get update && sudo apt-get install -yq pfring pfring-dkms
 
+RUN apt update && apt install -yq libzmq3-dev
+COPY --from=dev_img /opt/conjure/application/application /opt/conjure/bin/
+COPY --from=dev_img /opt/conjure/cmd/registration-server/registration-server /opt/conjure/bin/
+COPY --from=dev_img /opt/conjure/conjure /opt/conjure/bin/
 
-
-
-FROM ubuntu:20.04 as application
-ENV CJ_STATION_CONFIG=/opt/conjure/application/config.toml \
-    PHANTOM_SUBNET_LOCATION=/opt/conjure/sysconfig/phantom_subnets.toml
-COPY --from=build_base_go /opt/conjure/application/application /opt/conjure/application/application
-RUN apt-get update && apt-get -y -q install libzmq3-dev && apt-get clean all
-COPY --from=build_base_go /opt/conjure/application/config.toml ${CJ_STATION_CONFIG}
-COPY --from=build_base_go /opt/conjure/application/lib/test/phantom_subnets.toml ${PHANTOM_SUBNET_LOCATION}
-#COPY ./docker/application-entrypoint.sh /entrypoint.sh
-ENTRYPOINT [ "/opt/conjure/application/application"]
+ENTRYPOINT /bin/bash
