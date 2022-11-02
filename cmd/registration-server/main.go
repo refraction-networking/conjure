@@ -118,7 +118,7 @@ func readKeyAndEncode(path string) (string, error) {
 // should allow us to dynamically reload when there is an update to the latest
 // client configuration or the phantom subnets that we select from.
 func loadConfig(configPath string) (*config, error) {
-	var conf *config
+	conf := &config{}
 	_, err := toml.DecodeFile(configPath, conf)
 	if err != nil {
 		return nil, err
