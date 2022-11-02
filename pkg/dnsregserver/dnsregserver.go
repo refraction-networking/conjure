@@ -3,6 +3,7 @@ package dnsregserver
 import (
 	"encoding/hex"
 	"errors"
+	"sync/atomic"
 
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regprocessor"
@@ -70,7 +71,7 @@ func (s *DNSRegServer) processRequest(reqIn []byte) ([]byte, error) {
 	reqLogger.Tracef("Request received: [%+v]", c2sPayload)
 
 	clientconfOutdated := false
-	if c2sPayload.RegistrationPayload.GetDecoyListGeneration() < s.latestCCGen {
+	if c2sPayload.RegistrationPayload.GetDecoyListGeneration() < atomic.LoadUint32(&s.latestCCGen) {
 		clientconfOutdated = true
 	}
 
@@ -120,5 +121,5 @@ func (f *DNSRegServer) Close() error {
 
 // Close closes the underlying dns responder.
 func (f *DNSRegServer) UpdateLatestCCGen(gen uint32) {
-	f.latestCCGen = gen
+	atomic.StoreUint32(&f.latestCCGen, gen)
 }

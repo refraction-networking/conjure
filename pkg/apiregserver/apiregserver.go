@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/gorilla/mux"
 	"github.com/refraction-networking/conjure/pkg/metrics"
@@ -25,6 +26,7 @@ type registrar interface {
 type APIRegServer struct {
 	apiPort          uint16
 	latestClientConf *pb.ClientConf // Latest clientConf for sharing over RegistrationResponse channel.
+	ccMutex          sync.RWMutex
 	processor        registrar
 	logger           log.FieldLogger
 	logClientIP      bool
@@ -190,6 +192,9 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 // Use this function in registerBidirectional, if the returned ClientConfig is
 // not nil add it to the RegistrationResponse.
 func (s *APIRegServer) compareClientConfGen(genNum uint32) *pb.ClientConf {
+	s.ccMutex.RLock()
+	defer s.ccMutex.RUnlock()
+
 	// Check that server has a currnet (latest) client config
 	if s.latestClientConf == nil {
 		s.logger.Debugf("Server latest ClientConf is nil")
@@ -230,6 +235,8 @@ func parseIP(addrPort string) *net.IP {
 
 func (s *APIRegServer) NewClientConf(c *pb.ClientConf) {
 	if c != nil {
+		s.ccMutex.Lock()
+		defer s.ccMutex.Unlock()
 		s.latestClientConf = c
 	}
 }
@@ -253,6 +260,7 @@ func NewAPIRegServer(apiPort uint16, regprocessor *regprocessor.RegProcessor, la
 		apiPort:          apiPort,
 		processor:        regprocessor,
 		latestClientConf: latestCC,
+		ccMutex:          sync.RWMutex{},
 		logger:           logger,
 		logClientIP:      logClientIP,
 		metrics:          metrics,

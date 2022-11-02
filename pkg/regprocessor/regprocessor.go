@@ -44,10 +44,11 @@ type ipSelector interface {
 
 // RegProcessor provides an interface to publish registrations and helper functions to process registration requests
 type RegProcessor struct {
-	zmqMutex   sync.Mutex
-	ipSelector ipSelector
-	sock       zmqSender
-	metrics    *metrics.Metrics
+	zmqMutex      sync.Mutex
+	selectorMutex sync.RWMutex
+	ipSelector    ipSelector
+	sock          zmqSender
+	metrics       *metrics.Metrics
 }
 
 // NewRegProcessor initialize a new RegProcessor
@@ -76,10 +77,11 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 	}
 
 	return &RegProcessor{
-		zmqMutex:   sync.Mutex{},
-		ipSelector: phantomSelector,
-		sock:       sock,
-		metrics:    metrics,
+		zmqMutex:      sync.Mutex{},
+		selectorMutex: sync.RWMutex{},
+		ipSelector:    phantomSelector,
+		sock:          sock,
+		metrics:       metrics,
 	}, nil
 }
 
@@ -101,10 +103,11 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 	}
 
 	return &RegProcessor{
-		zmqMutex:   sync.Mutex{},
-		ipSelector: phantomSelector,
-		sock:       sock,
-		metrics:    metrics,
+		zmqMutex:      sync.Mutex{},
+		selectorMutex: sync.RWMutex{},
+		ipSelector:    phantomSelector,
+		sock:          sock,
+		metrics:       metrics,
 	}, nil
 }
 
@@ -173,6 +176,8 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	}
 
 	if *c2sPayload.RegistrationPayload.V4Support {
+		p.selectorMutex.RLock()
+		defer p.selectorMutex.RUnlock()
 		phantom4, err := p.ipSelector.Select(
 			cjkeys.DarkDecoySeed,
 			uint(c2sPayload.GetRegistrationPayload().GetDecoyListGeneration()), //generation type uint
@@ -190,6 +195,8 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	}
 
 	if *c2sPayload.RegistrationPayload.V6Support {
+		p.selectorMutex.RLock()
+		defer p.selectorMutex.RUnlock()
 		phantom6, err := p.ipSelector.Select(
 			cjkeys.DarkDecoySeed,
 			uint(c2sPayload.GetRegistrationPayload().GetDecoyListGeneration()),
@@ -260,6 +267,9 @@ func (p *RegProcessor) ReloadSubnets() error {
 	if err != nil {
 		return err
 	}
+
+	p.selectorMutex.Lock()
+	defer p.selectorMutex.Unlock()
 	p.ipSelector = phantomSelector
 
 	return nil
