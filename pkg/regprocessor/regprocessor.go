@@ -254,3 +254,13 @@ func (p *RegProcessor) processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr [
 
 	return proto.Marshal(payload)
 }
+
+func (p *RegProcessor) ReloadSubnets() error {
+	phantomSelector, err := lib.GetPhantomSubnetSelector()
+	if err != nil {
+		return err
+	}
+	p.ipSelector = phantomSelector
+
+	return nil
+}

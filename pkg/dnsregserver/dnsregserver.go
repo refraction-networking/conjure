@@ -117,3 +117,8 @@ func (s *DNSRegServer) processRequest(reqIn []byte) ([]byte, error) {
 func (f *DNSRegServer) Close() error {
 	return f.dnsResponder.Close()
 }
+
+// Close closes the underlying dns responder.
+func (f *DNSRegServer) UpdateLatestCCGen(gen uint32) {
+	f.latestCCGen = gen
+}

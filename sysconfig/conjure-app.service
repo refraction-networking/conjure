@@ -18,6 +18,9 @@ EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
 ExecStartPre=/bin/sleep 10
 ExecStart=/opt/conjure/application/application
 
+# send SIGHUP to the station process
+ExecReload=/bin/kill -HUP $MAINPID
+
 # on stop processes will get SIGTERM, and after 10 secs - SIGKILL (default 90)
 TimeoutStopSec=10
 

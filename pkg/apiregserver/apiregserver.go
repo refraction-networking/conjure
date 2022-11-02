@@ -228,6 +228,12 @@ func parseIP(addrPort string) *net.IP {
 
 }
 
+func (s *APIRegServer) NewClientConf(c *pb.ClientConf) {
+	if c != nil {
+		s.latestClientConf = c
+	}
+}
+
 func (s *APIRegServer) ListenAndServe() error {
 	r := mux.NewRouter()
 	r.HandleFunc("/register", s.register)
