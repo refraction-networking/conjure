@@ -1,13 +1,6 @@
 # syntax=docker/dockerfile:1.3-labs
 
-# ------------------------------------------------------------------------------
-# Development image
-#
-# Builds a common image that has all dependencies required to build and run
-# any piece of the station. Ideally we want to redo this as little as possible.
-# ------------------------------------------------------------------------------
-FROM ubuntu:20.04 AS dev_img
-
+FROM ubuntu:20.04 AS base_pfring
 ARG UNAME=conjure
 ARG UID=1000
 ARG GID=1000
@@ -15,7 +8,6 @@ RUN groupadd -g $GID -o $UNAME
 RUN useradd -m -u $UID -g $GID -o -s /bin/bash $UNAME
 
 RUN apt-get update && apt-get install -yq sudo apt-utils software-properties-common
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tzdata
 
 # install pf_ring deps
 RUN apt-get update && apt-get install -yq wget lsb-release gnupg \
@@ -24,6 +16,15 @@ RUN apt-get update && apt-get install -yq wget lsb-release gnupg \
 
 RUN apt-get update && sudo apt-get install -yq pfring pfring-dkms
 
+# ------------------------------------------------------------------------------
+# Development image
+#
+# Builds a common image that has all dependencies required to build and run
+# any piece of the station. Ideally we want to redo this as little as possible.
+# ------------------------------------------------------------------------------
+FROM base_pfring AS dev_img
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tzdata
 COPY prereqs_once.sh /opt/conjure/
 
 WORKDIR /opt/conjure
@@ -53,6 +54,7 @@ touch /opt/conjure/src/lib.rs
 PATH="$HOME/.cargo/bin:$PATH" make rust
 EOF
 
+RUN PATH="$HOME/.cargo/bin:$PATH" make conjure-sim && mv conjure conjure-sim
 RUN PATH="$HOME/.cargo/bin:$PATH" make conjure
 
 COPY go.* /opt/conjure/
@@ -68,16 +70,55 @@ ENTRYPOINT /opt/conjure/application/application
 
 
 # ------------------------------------------------------------------------------
-# Production image
+# Production image zbalance only
 # ------------------------------------------------------------------------------
-FROM ubuntu:20.04 as conjure
+FROM base_pfring as conjure_zbalance
+COPY sysconfig/start_zbalance_ipc.sh /opt/conjure
+ENTRYPOINT /opt/conjure/start_zbalance_ipc.sh
 
-# install pf_ring deps
-RUN apt-get update && apt-get install -yq sudo wget lsb-release gnupg \
-  && wget https://packages.ntop.org/apt-stable/20.04/all/apt-ntop-stable.deb \
-  && apt-get install -yq ./apt-ntop-stable.deb
 
-RUN apt-get update && sudo apt-get install -yq pfring pfring-dkms
+# ------------------------------------------------------------------------------
+# Production image detector only (kind of, requires pfring)
+# ------------------------------------------------------------------------------
+FROM base_pfring as conjure_det
+
+RUN apt update && apt install -yq libzmq3-dev
+COPY --from=dev_img /opt/conjure/conjure /opt/conjure/bin/
+
+
+# ------------------------------------------------------------------------------
+# Production image application only
+# ------------------------------------------------------------------------------
+FROM ubuntu:20.04 as conjure_app
+
+RUN apt update && apt install -yq libzmq3-dev
+COPY --from=dev_img /opt/conjure/application/application /opt/conjure/bin/
+
+
+# ------------------------------------------------------------------------------
+# Production image registration server only
+# ------------------------------------------------------------------------------
+FROM ubuntu:20.04 as conjure_reg
+
+RUN apt update && apt install -yq libzmq3-dev
+COPY --from=dev_img /opt/conjure/cmd/registration-server/registration-server /opt/conjure/bin/
+
+
+# ------------------------------------------------------------------------------
+# Simulation image
+# ------------------------------------------------------------------------------
+FROM base_pfring as conjure_sim
+
+RUN apt update && apt install -yq libzmq3-dev
+COPY --from=dev_img /opt/conjure/conjure-sim /opt/conjure/bin/conjure
+COPY --from=dev_img /opt/conjure/cmd/registration-server/registration-server /opt/conjure/bin/
+COPY --from=dev_img /opt/conjure/conjure /opt/conjure/bin/
+
+
+# ------------------------------------------------------------------------------
+# Production image all (default)
+# ------------------------------------------------------------------------------
+FROM base_pfring as conjure
 
 RUN apt update && apt install -yq libzmq3-dev
 COPY --from=dev_img /opt/conjure/application/application /opt/conjure/bin/

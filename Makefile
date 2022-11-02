@@ -36,8 +36,19 @@ conjure-sim: detect.c loadkey.c rust_util.c rust libtapdance
 registration-server:
 	cd ./cmd/registration-server/ && make
 
+PARAMS := det app reg zbalance sim
+target := unk
 container:
+ifeq (unk,$(target))
 	DOCKER_BUILDKIT=1 docker build -t conjure -f  docker/Dockerfile .
+#	@printf "DOCKER_BUILDKIT=1 docker build -t conjure -f  docker/Dockerfile .\n"
+else ifneq  (,$(findstring $(target), $(PARAMS)))
+	DOCKER_BUILDKIT=1 docker build --target conjure_$(target) -t conjure_$(target) -f docker/Dockerfile .
+#	@printf "DOCKER_BUILDKIT=1 docker build --target conjure_$(target) -t conjure_$(target) -f docker/Dockerfile .\n"
+else
+	@printf "unrecognized container target $(target) - please use one of [ $(PARAMS) ]\n"
+endif
+
 
 backup-config:
 	mkdir -p backup
