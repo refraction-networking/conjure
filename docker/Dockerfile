@@ -84,4 +84,4 @@ COPY --from=dev_img /opt/conjure/application/application /opt/conjure/bin/
 COPY --from=dev_img /opt/conjure/cmd/registration-server/registration-server /opt/conjure/bin/
 COPY --from=dev_img /opt/conjure/conjure /opt/conjure/bin/
 
-ENTRYPOINT /bin/bash
+# ENTRYPOINT /bin/bash

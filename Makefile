@@ -37,7 +37,7 @@ registration-server:
 	cd ./cmd/registration-server/ && make
 
 container:
-	DOCKER_BUILDKIT=1 docker build -t conjure -f  docker/Dockerfile.go .
+	DOCKER_BUILDKIT=1 docker build -t conjure -f  docker/Dockerfile .
 
 backup-config:
 	mkdir -p backup
