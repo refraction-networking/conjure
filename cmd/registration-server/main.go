@@ -111,13 +111,17 @@ func readKeyAndEncode(path string) (string, error) {
 func main() {
 	var configPath string
 
-	flag.StringVar(&configPath, "config", "", "configuration file path")
+	flag.StringVar(&configPath, "config", "", "configuration file path, alternative to CJ_REGISTRAR_CONFIG env var")
 	flag.Parse()
 
 	if configPath == "" {
-		fmt.Fprintf(os.Stderr, "-config is a required flag")
-		flag.Usage()
-		os.Exit(2)
+		configPath = os.Getenv("CJ_REGISTRAR_CONFIG")
+
+		if configPath == "" {
+			fmt.Fprintf(os.Stderr, "configuration path is a required flag")
+			flag.Usage()
+			os.Exit(2)
+		}
 	}
 
 	logFormatter := &log.TextFormatter{
