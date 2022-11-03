@@ -105,9 +105,9 @@ COPY --from=dev_img /opt/conjure/cmd/registration-server/registration-server /op
 
 
 # ------------------------------------------------------------------------------
-# Simulation image
+# Simulation image (no pfring required)
 # ------------------------------------------------------------------------------
-FROM base_pfring as conjure_sim
+FROM ubuntu:20.04 as conjure_sim
 
 RUN apt update && apt install -yq libzmq3-dev
 COPY --from=dev_img /opt/conjure/conjure-sim /opt/conjure/bin/conjure
