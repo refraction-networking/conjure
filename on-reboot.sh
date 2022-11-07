@@ -1,6 +1,9 @@
 #!/bin/bash
-
-
+#
+# Use this script once after reboot, and on configuration changes
+# that affect variables in the config file.
+# See README.md
+# Run as sud
 
 
 source $CJ_PATH/sysconfig/conjure.conf
@@ -16,6 +19,21 @@ exit_msg() {
     cd ${LAST_DIR}
     exit 1
 }
+
+# TODO: something like "/i40e/*/src/" to support future driver versions easily.
+# Otherwise, this section will require constant updating.
+if [ "x$TD_DRIVER" = "xe1000e" ]; then
+    pf_ringcfg --configure-driver e1000e --rss-queues 1
+    pf_ringcfg --list-interfaces
+elif [ "x$TD_DRIVER" = "xi40e" ]; then
+    pf_ringcfg --configure-driver i40e --rss-queues 1
+    pf_ringcfg --list-interfaces
+elif [ "x$TD_DRIVER" = "xixgbe" ]; then
+    pf_ringcfg --configure-driver ixgbe --rss-queues 1
+    pf_ringcfg --list-interfaces
+else
+    exit_msg "Unknown driver $TD_DRIVER"
+fi
 
 # Create a tunnel for each core.
 # The tunnel numbers do not match the core index per the OS,
