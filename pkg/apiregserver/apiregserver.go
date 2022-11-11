@@ -74,15 +74,26 @@ func getRemoteAddr(r *http.Request) net.IP {
 			// Some headers, such as X-Forwarded-For, are a comma-separated
 			// list of IPs (each proxy in a chain). Select the last IP.
 			IPs := strings.Split(value, ",")
-			IP := IPs[len(IPs)-1]
+			for i := len(IPs) - 1; i >= 0; i-- {
+				IP := IPs[i]
 
-			// Remove optional whitespace surrounding the commas.
-			IP = strings.TrimSpace(IP)
+				// Remove optional whitespace surrounding the commas.
+				IP = strings.TrimSpace(IP)
 
-			headerIP := net.ParseIP(IP)
-			if headerIP != nil {
-				ip = headerIP
-				break
+				headerIP := net.ParseIP(IP)
+				if headerIP != nil {
+					// Caddy appends an X-Forward-For from the client (potentially CDN)
+					// We configure Caddy to trust the domain-fronted proxies,
+					// which will give us a list of real_client_ip, cdn_ip.
+					// In that case, cdn_ip == r.RemoteAddr, and we want to walk backward
+					// one more IP.
+					// So here, we ignore if this is just Caddy telling is what we already know:
+					if ip.Equal(headerIP) {
+						continue
+					}
+					ip = headerIP
+					break
+				}
 			}
 		}
 	}
