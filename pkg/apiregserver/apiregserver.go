@@ -39,13 +39,17 @@ var clientIPHeaderNames = []string{
 	// "True-Client-IP",
 }
 
-// Get the first element of the X-Forwarded-For header if it is available, this
-// will be the clients address if intermediate proxies follow X-Forwarded-For
-// specification (as seen here: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For).
+// getRemoteAddr get the last entry of the last instance of the X-Forwarded-For header if it
+// is available, this is our best guess at the clients address if intermediate
+// proxies follow X-Forwarded-For specification (as seen here:
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For).
 // Otherwise return the remote address specified in the request.
 //
-// In the future this may need to handle True-Client-IP headers. But in general
-// none of these are to be trusted - https://adam-p.ca/blog/2022/03/x-forwarded-for/
+// In the future this may need to handle True-Client-IP headers, but in general
+// none of these are to be trusted -
+// https://adam-p.ca/blog/2022/03/x-forwarded-for/. If those are enabled in
+// clientIPHeaderNames ensure that the ordering checks them in order of most to
+// least trusted.
 func getRemoteAddr(r *http.Request) net.IP {
 
 	// Default to the clients remote address if no identifying header is provided
