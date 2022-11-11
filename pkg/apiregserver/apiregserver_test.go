@@ -257,8 +257,7 @@ func TestAPIGetClientAddr(t *testing.T) {
 	// 	t.Log(xff, v)
 	// }
 	ip = getRemoteAddr(req)
-	require.Equal(t, net.ParseIP("8.8.8.8"), ip, "expected %s got %s", "192.168.1.1", ip)
-
+	require.Equal(t, net.ParseIP("8.8.8.8"), ip, "expected %s got %s", "8.8.8.8", ip)
 }
 
 func TestCorrectUnidirectionalAPI(t *testing.T) {

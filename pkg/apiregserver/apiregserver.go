@@ -39,9 +39,9 @@ var clientIPHeaderNames = []string{
 	// "True-Client-IP",
 }
 
-// getRemoteAddr get the last entry of the last instance of the X-Forwarded-For header if it
-// is available, this is our best guess at the clients address if intermediate
-// proxies follow X-Forwarded-For specification (as seen here:
+// getRemoteAddr gets the last entry of the last instance of the X-Forwarded-For
+// header if it is available, this is our best guess at the clients address if
+// intermediate proxies follow X-Forwarded-For specification (as seen here:
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For).
 // Otherwise return the remote address specified in the request.
 //
