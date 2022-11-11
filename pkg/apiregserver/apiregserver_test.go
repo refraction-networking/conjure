@@ -225,14 +225,23 @@ func TestAPIGetClientAddr(t *testing.T) {
 	req, err := http.NewRequest("GET", "http://example.com", nil)
 	require.Nil(t, err)
 
+	// If only the RemoteAddress is available we should use that.
 	req.RemoteAddr = "10.0.0.0:80"
 	ip := getRemoteAddr(req)
 	require.Equal(t, net.ParseIP("10.0.0.0"), ip, "expected %s got %s", "10.0.0.0", ip)
 
+	// if an XFF address is available we should use that if it parses properly as an IP
 	req.Header.Add(xff, "192.168.1.1")
 	ip = getRemoteAddr(req)
 	require.Equal(t, net.ParseIP("192.168.1.1"), ip, "expected %s got %s", "192.168.1.1", ip)
 
+	// if an XFF address is available, but does not parse as a valid IP we should return the
+	// remote address.
+	req.Header.Set(xff, "127.example.com")
+	ip = getRemoteAddr(req)
+	require.Equal(t, net.ParseIP("10.0.0.0"), ip, "expected %s got %s", "10.0.0.0", ip)
+
+	// If more than one IP is provided (i.e. multiple proxy hops) take the last one
 	req.Header.Set(xff, "127.0.0.1, 192.168.0.0")
 	ip = getRemoteAddr(req)
 	require.Equal(t, net.ParseIP("192.168.0.0"), ip, "expected %s got %s", "192.168.0.0", ip)
