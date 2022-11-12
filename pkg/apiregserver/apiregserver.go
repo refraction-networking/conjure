@@ -89,8 +89,9 @@ func getRemoteAddr(r *http.Request) net.IP {
 					// one more IP.
 					// So here, we ignore if this is just Caddy telling is what we already know:
 					if ip.Equal(headerIP) ||
-						ip.Equal(net.ParseIP("127.0.0.1")) ||
-						ip.Equal(net.ParseIP("::1")) {
+						((i == len(IPs)-1) &&
+							(ip.Equal(net.ParseIP("127.0.0.1")) ||
+								ip.Equal(net.ParseIP("::1")))) {
 						continue
 					}
 					ip = headerIP
