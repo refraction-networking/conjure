@@ -88,7 +88,7 @@ func getRemoteAddr(r *http.Request) net.IP {
 					// In that case, cdn_ip == r.RemoteAddr, and we want to walk backward
 					// one more IP.
 					// So here, we ignore if this is just Caddy telling is what we already know:
-					if ip.Equal(headerIP) {
+					if ip.Equal(headerIP) || (i == (len(IPs)-1) && ip.Equal(net.ParseIP("127.0.0.1"))) {
 						continue
 					}
 					ip = headerIP
