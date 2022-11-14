@@ -192,27 +192,30 @@ func main() {
 		log.Fatal(err)
 	}
 
-	dnsPrivKey, err := readKey(conf.DNSPrivkeyPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	regServers := []regServer{}
-	dnsRegServer, err := dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey, processor, conf.latestClientConf.GetGeneration(), log.WithField("registrar", "DNS"), metrics)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	apiRegServer, err := apiregserver.NewAPIRegServer(conf.APIPort, processor, conf.latestClientConf, log.WithField("registrar", "API"), logClientIP, metrics)
-	if err != nil {
-		log.Fatal(err)
-	}
+	var dnsRegServer *dnsregserver.DNSRegServer
+	var apiRegServer *apiregserver.APIRegServer
 
 	if !apiOnly {
+		dnsPrivKey, err := readKey(conf.DNSPrivkeyPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		dnsRegServer, err = dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey, processor, conf.latestClientConf.GetGeneration(), log.WithField("registrar", "DNS"), metrics)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		regServers = append(regServers, dnsRegServer)
 	}
 
 	if !dnsOnly {
+		apiRegServer, err = apiregserver.NewAPIRegServer(conf.APIPort, processor, conf.latestClientConf, log.WithField("registrar", "API"), logClientIP, metrics)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		regServers = append(regServers, apiRegServer)
 	}
 
@@ -237,11 +240,11 @@ func main() {
 					if err != nil {
 						log.Errorf("failed to reload phantom subnets - aborting reload: %v", err)
 					}
-					if !dnsOnly {
+					if !dnsOnly && apiRegServer != nil {
 						apiRegServer.NewClientConf(conf.latestClientConf)
 					}
 
-					if !apiOnly {
+					if !apiOnly && dnsRegServer != nil {
 						dnsRegServer.UpdateLatestCCGen(conf.latestClientConf.GetGeneration())
 					}
 				}
