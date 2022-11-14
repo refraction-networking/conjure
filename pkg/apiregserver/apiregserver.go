@@ -33,18 +33,72 @@ type APIRegServer struct {
 	metrics          *metrics.Metrics
 }
 
-// Get the first element of the X-Forwarded-For header if it is available, this
-// will be the clients address if intermediate proxies follow X-Forwarded-For
-// specification (as seen here: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For).
+var clientIPHeaderNames = []string{
+	"X-Forwarded-For",
+	// "X-Client-IP",
+	// "True-Client-IP",
+}
+
+// getRemoteAddr gets the last entry of the last instance of the X-Forwarded-For
+// header if it is available, this is our best guess at the clients address if
+// intermediate proxies follow X-Forwarded-For specification (as seen here:
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For).
 // Otherwise return the remote address specified in the request.
 //
-// In the future this may need to handle True-Client-IP headers.
-func getRemoteAddr(r *http.Request) string {
-	if r.Header.Get("X-Forwarded-For") != "" {
-		addrList := r.Header.Get("X-Forwarded-For")
-		return strings.Trim(strings.Split(addrList, ",")[0], " \t")
+// In the future this may need to handle True-Client-IP headers, but in general
+// none of these are to be trusted -
+// https://adam-p.ca/blog/2022/03/x-forwarded-for/. If those are enabled in
+// clientIPHeaderNames ensure that the ordering checks them in order of most to
+// least trusted.
+func getRemoteAddr(r *http.Request) net.IP {
+
+	// Default to the clients remote address if no identifying header is provided
+	ip := parseIP(r.RemoteAddr)
+
+	// When there are multiple header names in clientIPHeaderNames,
+	// the first valid match is preferred. clientIPHeaderNames should be
+	// configured to use header names that are always provided by the CDN(s) and
+	// not header names that may be passed through from clients.
+	for _, header := range clientIPHeaderNames {
+
+		// In the case where there are multiple headers,
+		// request.Header.Get returns the first header, but we want the
+		// last header; so use request.Header.Values and select the last
+		// value. As per RFC 2616 section 4.2, a proxy must not change
+		// the order of field values, which implies that it should append
+		// values to the last header.
+		values := r.Header.Values(header)
+		if len(values) > 0 {
+			value := values[len(values)-1]
+
+			// Some headers, such as X-Forwarded-For, are a comma-separated
+			// list of IPs (each proxy in a chain). Select the last IP.
+			IPs := strings.Split(value, ",")
+			IP := IPs[len(IPs)-1]
+
+			// Caddy appends an X-Forward-For from the client (potentially CDN)
+			// We configure Caddy to trust the domain-fronted proxies,
+			// which will give us a list of real_client_ip, cdn_ip.
+			// In that case, r.RemoteAddr will be localhost, and we want
+			// to skip the CDN IP in the list
+			if len(IPs) > 1 &&
+				(ip.Equal(net.ParseIP("127.0.0.1")) ||
+					ip.Equal(net.ParseIP("::1"))) {
+				IP = IPs[len(IPs)-2]
+			}
+
+			// Remove optional whitespace surrounding the commas.
+			IP = strings.TrimSpace(IP)
+
+			headerIP := net.ParseIP(IP)
+			if headerIP != nil {
+				ip = headerIP
+				break
+			}
+		}
 	}
-	return r.RemoteAddr
+
+	return ip
 }
 
 func (s *APIRegServer) getC2SFromReq(w http.ResponseWriter, r *http.Request) (*pb.C2SWrapper, error) {
@@ -81,11 +135,15 @@ func (s *APIRegServer) getC2SFromReq(w http.ResponseWriter, r *http.Request) (*p
 func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 	s.metrics.Add("api_requests_total", 1)
 
-	requestIP := getRemoteAddr(r)
+	clientAddr := getRemoteAddr(r)
+	if clientAddr == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	logFields := log.Fields{"http_method": r.Method, "content_length": r.ContentLength, "registration_type": "unidirectional"}
 	if s.logClientIP {
-		logFields["ip_address"] = requestIP
+		logFields["ip_address"] = clientAddr.String()
 	}
 	reqLogger := s.logger.WithFields(logFields)
 
@@ -99,7 +157,6 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 
 	reqLogger = reqLogger.WithField("reg_id", hex.EncodeToString(payload.GetSharedSecret()))
 
-	clientAddr := parseIP(requestIP)
 	var clientAddrBytes = make([]byte, 16)
 	if clientAddr != nil {
 		clientAddrBytes = []byte(clientAddr.To16())
@@ -122,11 +179,16 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 
 func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Request) {
 	s.metrics.Add("bdapi_requests_total", 1)
-	requestIP := getRemoteAddr(r)
+
+	clientAddr := getRemoteAddr(r)
+	if clientAddr == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	logFields := log.Fields{"http_method": r.Method, "content_length": r.ContentLength, "registration_type": "bidirectional"}
 	if s.logClientIP {
-		logFields["ip_address"] = requestIP
+		logFields["ip_address"] = clientAddr.String()
 	}
 	reqLogger := s.logger.WithFields(logFields)
 
@@ -139,7 +201,6 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 
 	reqLogger = reqLogger.WithField("reg_id", hex.EncodeToString(payload.GetSharedSecret()))
 
-	clientAddr := parseIP(requestIP)
 	var clientAddrBytes = make([]byte, 16)
 	if clientAddr != nil {
 		clientAddrBytes = []byte(clientAddr.To16())
@@ -214,7 +275,7 @@ func (s *APIRegServer) compareClientConfGen(genNum uint32) *pb.ClientConf {
 
 // parseIP attempts to parse the IP address of a request from string format wether
 // it has a port attached to it or not. Returns nil if parse fails.
-func parseIP(addrPort string) *net.IP {
+func parseIP(addrPort string) net.IP {
 
 	// by default format from r.RemoteAddr is host:port
 	host, _, err := net.SplitHostPort(addrPort)
@@ -224,13 +285,12 @@ func parseIP(addrPort string) *net.IP {
 		if addr == nil {
 			return nil
 		}
-		return &addr
+		return addr
 	}
 
 	addr := net.ParseIP(host)
 
-	return &addr
-
+	return addr
 }
 
 func (s *APIRegServer) NewClientConf(c *pb.ClientConf) {
