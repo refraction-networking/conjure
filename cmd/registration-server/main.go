@@ -134,8 +134,11 @@ func loadConfig(configPath string) (*config, error) {
 
 func main() {
 	var configPath string
+	var apiOnly, dnsOnly bool
 
 	flag.StringVar(&configPath, "config", "", "configuration file path")
+	flag.BoolVar(&apiOnly, "api-only", false, "run only the API registrar")
+	flag.BoolVar(&dnsOnly, "dns-only", false, "run only the DNS registrar")
 	flag.Parse()
 
 	if configPath == "" {
@@ -189,22 +192,32 @@ func main() {
 		log.Fatal(err)
 	}
 
-	dnsPrivKey, err := readKey(conf.DNSPrivkeyPath)
-	if err != nil {
-		log.Fatal(err)
+	regServers := []regServer{}
+	var dnsRegServer *dnsregserver.DNSRegServer
+	var apiRegServer *apiregserver.APIRegServer
+
+	if !apiOnly {
+		dnsPrivKey, err := readKey(conf.DNSPrivkeyPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		dnsRegServer, err = dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey, processor, conf.latestClientConf.GetGeneration(), log.WithField("registrar", "DNS"), metrics)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		regServers = append(regServers, dnsRegServer)
 	}
 
-	dnsRegServer, err := dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey, processor, conf.latestClientConf.GetGeneration(), log.WithField("registrar", "DNS"), metrics)
-	if err != nil {
-		log.Fatal(err)
-	}
+	if !dnsOnly {
+		apiRegServer, err = apiregserver.NewAPIRegServer(conf.APIPort, processor, conf.latestClientConf, log.WithField("registrar", "API"), logClientIP, metrics)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	apiRegServer, err := apiregserver.NewAPIRegServer(conf.APIPort, processor, conf.latestClientConf, log.WithField("registrar", "API"), logClientIP, metrics)
-	if err != nil {
-		log.Fatal(err)
+		regServers = append(regServers, apiRegServer)
 	}
-
-	regServers := []regServer{dnsRegServer, apiRegServer}
 
 	signalChan := make(chan os.Signal, 1)
 
@@ -227,8 +240,13 @@ func main() {
 					if err != nil {
 						log.Errorf("failed to reload phantom subnets - aborting reload: %v", err)
 					}
-					apiRegServer.NewClientConf(conf.latestClientConf)
-					dnsRegServer.UpdateLatestCCGen(conf.latestClientConf.GetGeneration())
+					if !dnsOnly && apiRegServer != nil {
+						apiRegServer.NewClientConf(conf.latestClientConf)
+					}
+
+					if !apiOnly && dnsRegServer != nil {
+						dnsRegServer.UpdateLatestCCGen(conf.latestClientConf.GetGeneration())
+					}
 				}
 			}
 		}
