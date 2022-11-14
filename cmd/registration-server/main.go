@@ -134,8 +134,11 @@ func loadConfig(configPath string) (*config, error) {
 
 func main() {
 	var configPath string
+	var apiOnly, dnsOnly bool
 
 	flag.StringVar(&configPath, "config", "", "configuration file path")
+	flag.BoolVar(&apiOnly, "api-only", false, "run only the API registrar")
+	flag.BoolVar(&dnsOnly, "dns-only", false, "run only the DNS registrar")
 	flag.Parse()
 
 	if configPath == "" {
@@ -194,6 +197,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	regServers := []regServer{}
 	dnsRegServer, err := dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey, processor, conf.latestClientConf.GetGeneration(), log.WithField("registrar", "DNS"), metrics)
 	if err != nil {
 		log.Fatal(err)
@@ -204,7 +208,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	regServers := []regServer{dnsRegServer, apiRegServer}
+	if !apiOnly {
+		regServers = append(regServers, dnsRegServer)
+	}
+
+	if !dnsOnly {
+		regServers = append(regServers, apiRegServer)
+	}
 
 	signalChan := make(chan os.Signal, 1)
 
@@ -227,8 +237,13 @@ func main() {
 					if err != nil {
 						log.Errorf("failed to reload phantom subnets - aborting reload: %v", err)
 					}
-					apiRegServer.NewClientConf(conf.latestClientConf)
-					dnsRegServer.UpdateLatestCCGen(conf.latestClientConf.GetGeneration())
+					if !dnsOnly {
+						apiRegServer.NewClientConf(conf.latestClientConf)
+					}
+
+					if !apiOnly {
+						dnsRegServer.UpdateLatestCCGen(conf.latestClientConf.GetGeneration())
+					}
 				}
 			}
 		}

@@ -3,6 +3,7 @@ package dnsregserver
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/refraction-networking/conjure/pkg/metrics"
@@ -37,7 +38,7 @@ func NewDNSRegServer(domain string, udpAddr string, privkey []byte, regprocessor
 
 	respder, err := responder.NewDnsResponder(domain, udpAddr, privkey)
 	if err != nil {
-		return nil, errors.New("failed to create DNS responder")
+		return nil, fmt.Errorf("failed to create DNS responder: %v", err)
 	}
 
 	return &DNSRegServer{
