@@ -95,8 +95,8 @@ func (s *RegistrationStats) Reset() {
 	}()
 
 	func() {
-		s.genMutex.Lock()
-		defer s.genMutex.Unlock()
+		s.lvMutex.Lock()
+		defer s.lvMutex.Unlock()
 		s.lvStats = map[uint32]*libverStats{}
 	}()
 
