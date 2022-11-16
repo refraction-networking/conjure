@@ -105,6 +105,19 @@ func halfPipe(src net.Conn, dst net.Conn,
 				}
 				break
 			}
+
+			// refresh stall timeout - set both because it only happens on write
+			// so if connection is sending traffic unidirectionally we prevent
+			// the receiving side from timing out.
+			err := src.SetDeadline(time.Now().Add(proxyStallTimeout))
+			if err != nil {
+				logger.Errorln("error setting deadline for src conn: ", tag)
+			}
+			err = dst.SetDeadline(time.Now().Add(proxyStallTimeout))
+			if err != nil {
+				logger.Errorln("error setting deadline for dst conn: ", tag)
+			}
+
 		}
 		return totWritten, err
 
