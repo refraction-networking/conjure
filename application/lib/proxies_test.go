@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"sync"
@@ -139,7 +138,7 @@ func TestHalfpipeDeadlineEcho(t *testing.T) {
 
 	go func() {
 		defer covertCovert.Close()
-		io.Copy(covertCovert, covertCovert)
+		_, _ = io.Copy(covertCovert, covertCovert)
 	}()
 
 	start := time.Now()
@@ -188,7 +187,7 @@ func TestHalfpipeDeadlineUpload(t *testing.T) {
 
 	go func() {
 		defer covertCovert.Close()
-		io.Copy(ioutil.Discard, covertCovert)
+		_, _ = io.Copy(io.Discard, covertCovert)
 	}()
 
 	start := time.Now()
