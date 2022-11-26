@@ -113,6 +113,12 @@ impl PerCoreGlobal {
             let ip = IpPacket::V4(ip_pkt);
             match ip.udp() {
                 Some(pkt) => {
+
+                    // Stats debug for potential traffic reduction stratedgy
+                    if pkt.get_source() == 443 {
+                        self.stats.src_443_bytes_this_period += frame_len as u64;
+                    }
+
                     // Special payloads are only sent as DNS on port 53
                     if pkt.get_destination() != 53 {
                         return;
@@ -135,6 +141,11 @@ impl PerCoreGlobal {
             };
             self.stats.tcp_packets_this_period += 1;
 
+
+            if tcp_pkt.get_source() == 443 {
+                self.stats.src_443_bytes_this_period += frame_len as u64;
+            }
+
             // Ignore packets that aren't -> 443.
             // libpnet getters all return host order. Ignore the "u16be" in their
             // docs; interactions with pnet are purely host order.
@@ -155,6 +166,11 @@ impl PerCoreGlobal {
             let ip = IpPacket::V6(ip_pkt);
             match ip.udp() {
                 Some(pkt) => {
+
+                    if pkt.get_source() == 443 {
+                        self.stats.src_443_bytes_this_period += frame_len as u64;
+                    }
+
                     // Special payloads are only sent as DNS on port 53
                     if pkt.get_destination() != 53 {
                         return;
@@ -175,6 +191,10 @@ impl PerCoreGlobal {
                 None => return,
             };
             self.stats.tcp_packets_this_period += 1;
+
+            if tcp_pkt.get_source() == 443 {
+                self.stats.src_443_bytes_this_period += frame_len as u64;
+            }
 
             if tcp_pkt.get_destination() != 443 {
                 return;

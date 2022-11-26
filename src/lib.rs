@@ -86,6 +86,7 @@ pub struct PerCoreStats {
     pub tls_bytes_this_period: u64,
     pub port_443_syns_this_period: u64,
     //pub cli2cov_raw_etherbytes_this_period: u64,
+    pub src_443_bytes_this_period: u64,
 
     // CPU time counters (cumulative)
     tot_usr_us: i64,
@@ -176,6 +177,7 @@ impl PerCoreStats {
             tls_bytes_this_period: 0,
             port_443_syns_this_period: 0,
             //cli2cov_raw_etherbytes_this_period: 0,
+            src_443_bytes_this_period: 0,
             tot_usr_us: 0,
             tot_sys_us: 0,
             last_measure_time: precise_time_ns(),
@@ -189,6 +191,7 @@ impl PerCoreStats {
         let (user_secs, user_usecs, sys_secs, sys_usecs) = c_api::c_get_cpu_time();
         let user_microsecs: i64 = user_usecs + 1000000 * user_secs;
         let sys_microsecs: i64 = sys_usecs + 1000000 * sys_secs;
+        let epoch_secs: u64 = (cur_measure_time - self.last_measure_time)/1_000_000_000;
 
         /*
         let measured_dur_ns = cur_measure_time - self.last_measure_time;
@@ -223,6 +226,16 @@ impl PerCoreStats {
             self.elligator_this_period
         );
 
+        report!(
+            "bytes-stats {} {} {:.3} {} {:.3} {:.3}",
+            epoch_secs,
+            self.bytes_this_period,
+            self.bytes_this_period as f64/epoch_secs as f64,
+            self.src_443_bytes_this_period,
+            self.src_443_bytes_this_period as f64/epoch_secs as f64,
+            self.bytes_this_period as f64 / self.src_443_bytes_this_period as f64,
+        );
+
         self.elligator_this_period = 0;
         self.packets_this_period = 0;
         self.ipv4_packets_this_period = 0;
@@ -233,6 +246,7 @@ impl PerCoreStats {
         //self.reconns_this_period = 0;
         self.tls_bytes_this_period = 0;
         self.port_443_syns_this_period = 0;
+        self.src_443_bytes_this_period = 0;
 
         self.tot_usr_us = user_microsecs;
         self.tot_sys_us = sys_microsecs;
