@@ -191,7 +191,7 @@ impl PerCoreStats {
         let (user_secs, user_usecs, sys_secs, sys_usecs) = c_api::c_get_cpu_time();
         let user_microsecs: i64 = user_usecs + 1000000 * user_secs;
         let sys_microsecs: i64 = sys_usecs + 1000000 * sys_secs;
-        let epoch_secs: u64 = (cur_measure_time - self.last_measure_time)/1_000_000_000;
+        let epoch_secs: f64 = (cur_measure_time - self.last_measure_time) as f64/1_000_000_000 as f64;
 
         /*
         let measured_dur_ns = cur_measure_time - self.last_measure_time;
@@ -227,13 +227,16 @@ impl PerCoreStats {
         );
 
         report!(
-            "bytes-stats {} {} {:.3} {} {:.3} {:.3}",
+            "bytes-stats {:.3} {} {:.3} {} {:.3} {:.3} {} {:.3} {:.3}",
             epoch_secs,
             self.bytes_this_period,
-            self.bytes_this_period as f64/epoch_secs as f64,
+            self.bytes_this_period as f64/epoch_secs,
             self.src_443_bytes_this_period,
-            self.src_443_bytes_this_period as f64/epoch_secs as f64,
+            self.src_443_bytes_this_period as f64/epoch_secs,
             self.bytes_this_period as f64 / self.src_443_bytes_this_period as f64,
+            self.tls_bytes_this_period,
+            self.tls_bytes_this_period as f64/epoch_secs,
+            self.bytes_this_period as f64 / self.tls_bytes_this_period as f64,
         );
 
         self.elligator_this_period = 0;
