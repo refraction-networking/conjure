@@ -257,6 +257,8 @@ impl PerCoreStats {
         self.tls_bytes_this_period = 0;
         self.port_443_syns_this_period = 0;
         self.src_443_bytes_this_period = 0;
+        self.dst_443_bytes_this_period = 0;
+        self.src_gt1024_bytes_this_period = 0;
 
         self.tot_usr_us = user_microsecs;
         self.tot_sys_us = sys_microsecs;
