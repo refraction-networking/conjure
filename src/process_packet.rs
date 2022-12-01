@@ -121,7 +121,7 @@ impl PerCoreGlobal {
                     if pkt.get_destination() == 443 {
                         self.stats.dst_443_bytes_this_period += frame_len as u64;
                     }
-                    if pkt.get_source() <= 1024 {
+                    if pkt.get_source() > 1024 {
                         self.stats.src_gt1024_bytes_this_period += frame_len as u64;
                     }
                     // Special payloads are only sent as DNS on port 53
@@ -152,7 +152,7 @@ impl PerCoreGlobal {
             if tcp_pkt.get_destination() == 443 {
                 self.stats.dst_443_bytes_this_period += frame_len as u64;
             }
-            if tcp_pkt.get_source() <= 1024 {
+            if tcp_pkt.get_source() > 1024 {
                 self.stats.src_gt1024_bytes_this_period += frame_len as u64;
             }
 
@@ -183,7 +183,7 @@ impl PerCoreGlobal {
                     if pkt.get_destination() == 443 {
                         self.stats.dst_443_bytes_this_period += frame_len as u64;
                     }
-                    if pkt.get_source() <= 1024 {
+                    if pkt.get_source() > 1024 {
                         self.stats.src_gt1024_bytes_this_period += frame_len as u64;
                     }
 
@@ -214,7 +214,7 @@ impl PerCoreGlobal {
             if tcp_pkt.get_destination() == 443 {
                 self.stats.dst_443_bytes_this_period += frame_len as u64;
             }
-            if tcp_pkt.get_source() <= 1024 {
+            if tcp_pkt.get_source() > 1024 {
                 self.stats.src_gt1024_bytes_this_period += frame_len as u64;
             }
 
