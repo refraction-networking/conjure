@@ -118,7 +118,12 @@ impl PerCoreGlobal {
                     if pkt.get_source() == 443 {
                         self.stats.src_443_bytes_this_period += frame_len as u64;
                     }
-
+                    if pkt.get_destination() == 443 {
+                        self.stats.dst_443_bytes_this_period += frame_len as u64;
+                    }
+                    if pkt.get_source() <= 1024 {
+                        self.stats.src_gt1024_bytes_this_period += frame_len as u64;
+                    }
                     // Special payloads are only sent as DNS on port 53
                     if pkt.get_destination() != 53 {
                         return;
@@ -141,9 +146,14 @@ impl PerCoreGlobal {
             };
             self.stats.tcp_packets_this_period += 1;
 
-
             if tcp_pkt.get_source() == 443 {
                 self.stats.src_443_bytes_this_period += frame_len as u64;
+            }
+            if tcp_pkt.get_destination() == 443 {
+                self.stats.dst_443_bytes_this_period += frame_len as u64;
+            }
+            if tcp_pkt.get_source() <= 1024 {
+                self.stats.src_gt1024_bytes_this_period += frame_len as u64;
             }
 
             // Ignore packets that aren't -> 443.
@@ -170,6 +180,12 @@ impl PerCoreGlobal {
                     if pkt.get_source() == 443 {
                         self.stats.src_443_bytes_this_period += frame_len as u64;
                     }
+                    if pkt.get_destination() == 443 {
+                        self.stats.dst_443_bytes_this_period += frame_len as u64;
+                    }
+                    if pkt.get_source() <= 1024 {
+                        self.stats.src_gt1024_bytes_this_period += frame_len as u64;
+                    }
 
                     // Special payloads are only sent as DNS on port 53
                     if pkt.get_destination() != 53 {
@@ -194,6 +210,12 @@ impl PerCoreGlobal {
 
             if tcp_pkt.get_source() == 443 {
                 self.stats.src_443_bytes_this_period += frame_len as u64;
+            }
+            if tcp_pkt.get_destination() == 443 {
+                self.stats.dst_443_bytes_this_period += frame_len as u64;
+            }
+            if tcp_pkt.get_source() <= 1024 {
+                self.stats.src_gt1024_bytes_this_period += frame_len as u64;
             }
 
             if tcp_pkt.get_destination() != 443 {

@@ -87,6 +87,8 @@ pub struct PerCoreStats {
     pub port_443_syns_this_period: u64,
     //pub cli2cov_raw_etherbytes_this_period: u64,
     pub src_443_bytes_this_period: u64,
+    pub dst_443_bytes_this_period: u64,
+    pub src_gt1024_bytes_this_period: u64,
 
     // CPU time counters (cumulative)
     tot_usr_us: i64,
@@ -178,6 +180,8 @@ impl PerCoreStats {
             port_443_syns_this_period: 0,
             //cli2cov_raw_etherbytes_this_period: 0,
             src_443_bytes_this_period: 0,
+            src_gt1024_bytes_this_period: 0,
+            dst_443_bytes_this_period: 0,
             tot_usr_us: 0,
             tot_sys_us: 0,
             last_measure_time: precise_time_ns(),
@@ -227,16 +231,19 @@ impl PerCoreStats {
         );
 
         report!(
-            "bytes-stats {:.3} {} {:.3} {} {:.3} {:.3} {} {:.3} {:.3}",
+            "bytes-stats {:.3} {} {:.3} {} {:.3} {:.3} {} {:.3} {:.3} {} {:.3} {:.3}",
             epoch_secs,
             self.bytes_this_period,
             self.bytes_this_period as f64/epoch_secs,
             self.src_443_bytes_this_period,
             self.src_443_bytes_this_period as f64/epoch_secs,
-            self.bytes_this_period as f64 / self.src_443_bytes_this_period as f64,
-            self.tls_bytes_this_period,
-            self.tls_bytes_this_period as f64/epoch_secs,
-            self.bytes_this_period as f64 / self.tls_bytes_this_period as f64,
+            100 as f64 * (self.bytes_this_period - self.src_443_bytes_this_period) as f64 / self.bytes_this_period as f64,
+            self.dst_443_bytes_this_period,
+            self.dst_443_bytes_this_period as f64/epoch_secs,
+            100 as f64 * self.dst_443_bytes_this_period as f64 / self.bytes_this_period as f64,
+            self.src_gt1024_bytes_this_period,
+            self.src_gt1024_bytes_this_period as f64/epoch_secs,
+            100 as f64 * self.src_gt1024_bytes_this_period as f64 / self.bytes_this_period as f64,
         );
 
         self.elligator_this_period = 0;
