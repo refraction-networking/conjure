@@ -22,17 +22,17 @@ exit_msg() {
 
 # TODO: something like "/i40e/*/src/" to support future driver versions easily.
 # Otherwise, this section will require constant updating.
-if [ "x$TD_DRIVER" = "xe1000e" ]; then
+if [ "x$PF_DRIVER" = "xe1000e" ]; then
     pf_ringcfg --configure-driver e1000e --rss-queues 1
     pf_ringcfg --list-interfaces
-elif [ "x$TD_DRIVER" = "xi40e" ]; then
+elif [ "x$PF_DRIVER" = "xi40e" ]; then
     pf_ringcfg --configure-driver i40e --rss-queues 1
     pf_ringcfg --list-interfaces
-elif [ "x$TD_DRIVER" = "xixgbe" ]; then
+elif [ "x$PF_DRIVER" = "xixgbe" ]; then
     pf_ringcfg --configure-driver ixgbe --rss-queues 1
     pf_ringcfg --list-interfaces
 else
-    exit_msg "Unknown driver $TD_DRIVER"
+    exit_msg "Unknown driver $PF_DRIVER"
 fi
 
 # Create a tunnel for each core.
