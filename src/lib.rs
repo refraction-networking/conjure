@@ -9,8 +9,8 @@ extern crate errno;
 extern crate hex;
 extern crate pnet;
 extern crate rand;
-extern crate time;
-extern crate time_fmt;
+extern crate chrono;
+
 
 extern crate protobuf;
 extern crate redis;
@@ -94,7 +94,7 @@ pub struct PerCoreStats {
     // For computing measurement duration (because period won't be exactly 1
     // sec). Value is nanoseconds since an unspecified epoch. (It's a time,
     // not a duration).
-    last_measure_time: i128,
+    last_measure_time: u128,
 
     pub not_in_tree_this_period: u64,
     pub in_tree_this_period: u64,
@@ -321,3 +321,4 @@ pub unsafe extern "C" fn rust_periodic_cleanup(ptr: *mut PerCoreGlobal) {
     global.cli_psv_driver.check_streams_progress(&global.id2sess);
     */
 }
+

@@ -171,7 +171,7 @@ impl FlowNoSrcPort {
 
 pub struct SchedEvent {
     // Nanoseconds since an unspecified epoch (precise_time_ns()).
-    drop_time: i128,
+    drop_time: u128,
     flow: Flow,
 }
 
@@ -191,7 +191,7 @@ pub struct FlowTracker {
 }
 
 // Amount of time that we timeout all flows
-const TIMEOUT_TRACKED_NS: i128 = 30 * 1000 * 1000 * 1000;
+const TIMEOUT_TRACKED_NS: u128 = 30 * 1000 * 1000 * 1000;
 //const FIN_TIMEOUT_NS: u64 = 2*1000*1000*1000;
 
 impl Default for FlowTracker {

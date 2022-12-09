@@ -8,6 +8,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::time::SystemTime;
 
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
@@ -251,10 +252,10 @@ impl FSP {
 }
 
 
-pub fn precise_time_ns() -> i128 {
-    let dur =time::OffsetDateTime::now_utc().unix_timestamp_nanos();
+pub fn precise_time_ns() -> u128 {
 
-    return dur
+    let duration_since_epoch = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+    return  duration_since_epoch.as_nanos()
 }
 
 #[cfg(test)]
@@ -265,4 +266,5 @@ mod tests {
     fn mem_used_kb_parses_something() {
         assert!(mem_used_kb() > 0);
     }
+
 }

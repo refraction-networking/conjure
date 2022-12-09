@@ -1,8 +1,7 @@
 extern crate log;
-extern crate time;
-extern crate time_fmt;
+extern crate chrono;
 
-use time_fmt::{format::format_offset_date_time};
+use chrono::Local;
 use log::{LogLevel, LogMetadata, LogRecord};
 
 pub struct SimpleLogger {
@@ -24,9 +23,10 @@ impl log::Log for SimpleLogger {
                     && !s.starts_with("tick_to")
                     && !s.starts_with("ticking"))
             {
-                let t = time::OffsetDateTime::now_local().unwrap();
+                let t = Local::now();
+                // let t = time::OffsetDateTime::now_local().unwrap();
                 // unwrap relies on "%b %d, %Y %T" being a valid format string.
-                let t_s = format_offset_date_time("%Y-%m-%d %H:%M:%S", t).unwrap();
+                let t_s = t.format("%Y-%m-%d %H:%M:%S.%f %z").to_string();
                 println!("{} (Core {}) {}: {}", t_s, self.lcore_id, record.level(), s);
             }
         }
