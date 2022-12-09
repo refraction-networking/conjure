@@ -250,6 +250,13 @@ impl FSP {
     }
 }
 
+
+pub fn precise_time_ns() -> i128 {
+    let dur =time::OffsetDateTime::now_utc().unix_timestamp_nanos();
+
+    return dur
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
