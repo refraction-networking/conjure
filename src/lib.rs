@@ -5,11 +5,11 @@ extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate aes_gcm;
+extern crate chrono;
 extern crate errno;
 extern crate hex;
 extern crate pnet;
 extern crate rand;
-extern crate time;
 
 extern crate protobuf;
 extern crate redis;
@@ -20,7 +20,7 @@ extern crate tuntap; // https://github.com/ewust/tuntap.rs
 extern crate zmq;
 
 use std::mem::transmute;
-use time::precise_time_ns;
+use util::precise_time_ns;
 
 use serde_derive::Deserialize;
 use std::env;
@@ -93,7 +93,7 @@ pub struct PerCoreStats {
     // For computing measurement duration (because period won't be exactly 1
     // sec). Value is nanoseconds since an unspecified epoch. (It's a time,
     // not a duration).
-    last_measure_time: u64,
+    last_measure_time: u128,
 
     pub not_in_tree_this_period: u64,
     pub in_tree_this_period: u64,
