@@ -5,12 +5,11 @@ extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate aes_gcm;
+extern crate chrono;
 extern crate errno;
 extern crate hex;
 extern crate pnet;
 extern crate rand;
-extern crate chrono;
-
 
 extern crate protobuf;
 extern crate redis;
@@ -321,4 +320,3 @@ pub unsafe extern "C" fn rust_periodic_cleanup(ptr: *mut PerCoreGlobal) {
     global.cli_psv_driver.check_streams_progress(&global.id2sess);
     */
 }
-

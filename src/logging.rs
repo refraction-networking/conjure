@@ -1,5 +1,5 @@
-extern crate log;
 extern crate chrono;
+extern crate log;
 
 use chrono::Local;
 use log::{LogLevel, LogMetadata, LogRecord};

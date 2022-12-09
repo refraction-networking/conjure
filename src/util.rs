@@ -251,11 +251,11 @@ impl FSP {
     }
 }
 
-
 pub fn precise_time_ns() -> u128 {
-
-    let duration_since_epoch = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
-    return  duration_since_epoch.as_nanos()
+    let duration_since_epoch = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap();
+    duration_since_epoch.as_nanos()
 }
 
 #[cfg(test)]
@@ -266,5 +266,4 @@ mod tests {
     fn mem_used_kb_parses_something() {
         assert!(mem_used_kb() > 0);
     }
-
 }

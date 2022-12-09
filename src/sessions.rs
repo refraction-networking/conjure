@@ -358,7 +358,7 @@ fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u128>>>) {
 
         if exists {
             // Set timeout
-            let expire_time = precise_time_ns() + u128::from(sd.timeout);
+            let expire_time = precise_time_ns() + sd.timeout;
 
             if let Some(v) = mmap.get_mut(&key) {
                 // compare and keep the longer
@@ -374,7 +374,7 @@ fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u128>>>) {
         }
 
         // Set timeout
-        let expire_time = precise_time_ns() + u128::from(sd.timeout);
+        let expire_time = precise_time_ns() + sd.timeout;
 
         // Insert
         *mmap.entry(key).or_insert(expire_time) = expire_time;
