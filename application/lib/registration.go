@@ -470,6 +470,9 @@ type DecoyTimeout struct {
 	status           regStatus
 }
 
+var defaultUnusedTimeout = 10 * time.Minute
+var defaultActiveTimeout = 6 * time.Hour
+
 // RegisteredDecoys provides a container struct for tracking all registrations and their expiration.
 type RegisteredDecoys struct {
 	// decoys will be a map from decoy_ip to a:
@@ -488,17 +491,23 @@ type RegisteredDecoys struct {
 	timeoutUnused time.Duration
 
 	registerForDetector func(*DecoyRegistration)
+	updateInDetector    func(*DecoyRegistration)
 }
 
 // NewRegisteredDecoys returns a new struct with which to track registrations.
 func NewRegisteredDecoys() *RegisteredDecoys {
 	return &RegisteredDecoys{
-		timeoutActive:       6 * time.Hour,
-		timeoutUnused:       10 * time.Minute,
-		decoys:              make(map[string]map[string]*DecoyRegistration),
-		transports:          make(map[pb.TransportType]Transport),
-		decoysTimeouts:      make(map[string]*DecoyTimeout),
-		registerForDetector: registerForDetector,
+		timeoutActive:  defaultActiveTimeout,
+		timeoutUnused:  defaultUnusedTimeout,
+		decoys:         make(map[string]map[string]*DecoyRegistration),
+		transports:     make(map[pb.TransportType]Transport),
+		decoysTimeouts: make(map[string]*DecoyTimeout),
+		registerForDetector: func(d *DecoyRegistration) {
+			registerForDetector(d, uint64(defaultUnusedTimeout.Nanoseconds()))
+		},
+		updateInDetector: func(d *DecoyRegistration) {
+			registerForDetector(d, uint64(defaultActiveTimeout.Nanoseconds()))
+		},
 	}
 }
 
@@ -592,6 +601,10 @@ func (r *RegisteredDecoys) markActive(d *DecoyRegistration) {
 	phantomAddr := d.DarkDecoy.String()
 	if regTimeout, ok := r.decoysTimeouts[d.IDString()+phantomAddr]; ok {
 		regTimeout.status = regStatusUsed
+
+		// Since we update the applicable timeout here, we should update that
+		// timeout in the detector side.
+		r.updateInDetector(d)
 	}
 }
 
@@ -693,7 +706,7 @@ func (r *RegisteredDecoys) getExpiredRegistrations() []string {
 
 	for idx, regTimeout := range r.decoysTimeouts {
 		if regTimeout.status == regStatusUnused && time.Since(regTimeout.registrationTime) > r.timeoutUnused {
-			// if a registration has not seen a valid connection in within the
+			// if a registration has not senewTimeouten a valid connection in within the
 			// timeout we remove it from tracking as we do not expect to see a
 			// valid connection and no longer need it. Clients should retry with
 			// a new registration if connection has failed for this duration.
@@ -778,20 +791,73 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) (int, int)
 // **NOTE**: If you mess with this function make sure the
 // session tracking tests on the detector side do what you expect
 // them to do. (conjure/src/session.rs)
-func registerForDetector(reg *DecoyRegistration) {
+func registerForDetector(reg *DecoyRegistration, duration uint64) {
 	client := getRedisClient()
 	if client == nil {
 		fmt.Printf("couldn't connect to redis")
 		return
 	}
 
-	duration := uint64(6 * time.Hour.Nanoseconds())
 	src := reg.registrationAddr.String()
 	phantom := reg.DarkDecoy.String()
+	op := pb.StationOperations_New
 	msg := &pb.StationToDetector{
 		PhantomIp: &phantom,
 		ClientIp:  &src,
 		TimeoutNs: &duration,
+		Operation: &op,
+	}
+
+	s2d, err := proto.Marshal(msg)
+	if err != nil {
+		// throw(fit)
+		return
+	}
+
+	ctx := context.Background()
+	client.Publish(ctx, DETECTOR_REG_CHANNEL, string(s2d))
+}
+
+func clearDetector() {
+	client := getRedisClient()
+	if client == nil {
+		fmt.Printf("couldn't connect to redis")
+		return
+	}
+
+	op := pb.StationOperations_Clear
+	msg := &pb.StationToDetector{
+		Operation: &op,
+	}
+
+	s2d, err := proto.Marshal(msg)
+	if err != nil {
+		// throw(fit)
+		return
+	}
+
+	ctx := context.Background()
+	client.Publish(ctx, DETECTOR_REG_CHANNEL, string(s2d))
+}
+
+// **NOTE**: If you mess with this function make sure the
+// session tracking tests on the detector side do what you expect
+// them to do. (conjure/src/session.rs)
+func updateInDetector(reg *DecoyRegistration, duration uint64) {
+	client := getRedisClient()
+	if client == nil {
+		fmt.Printf("couldn't connect to redis")
+		return
+	}
+
+	src := reg.registrationAddr.String()
+	phantom := reg.DarkDecoy.String()
+	op := pb.StationOperations_Update
+	msg := &pb.StationToDetector{
+		PhantomIp: &phantom,
+		ClientIp:  &src,
+		TimeoutNs: &duration,
+		Operation: &op,
 	}
 
 	s2d, err := proto.Marshal(msg)

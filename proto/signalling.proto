@@ -87,6 +87,24 @@ message ClientConf {
     optional PubKey conjure_pubkey = 5;
 }
 
+// Configuration for DNS registrar
+message DnsRegConf {
+    required DnsRegMethod dns_reg_method = 1;
+    optional string udp_addr = 2;
+    optional string dot_addr = 3;
+    optional string doh_url = 4;
+    required string domain = 5;
+    optional bytes pubkey = 6;
+    optional string utls_distribution = 7;
+    optional string stun_server = 8;
+}
+
+enum DnsRegMethod {
+    UDP = 0;
+    DOT = 1;
+    DOH = 2;
+}
+
 message DecoyList {
     repeated TLSDecoySpec tls_decoys = 1;
 }
@@ -141,20 +159,28 @@ enum TransportType {
     Null = 0;
     Min = 1;   // Send a 32-byte HMAC id to let the station distinguish registrations to same host
     Obfs4 = 2; // Not implemented yet?
-    Webrtc = 3; // UDP transport: WebRTC DataChannel
+    Webrtc = 99; // UDP transport: WebRTC DataChannel
 }
 
-message WebrtcSDP {
-    optional uint32 sdp_type = 1; // TODO: Single byte (uint8)
-    // the IP is represented as a 16-byte datatype.
-    optional uint64 ip_upper = 2; // ip := upper << 64 | lower
-    optional uint64 ip_lower = 3;
-    optional uint32 composed_info = 4;
+// Deflated ICE Candidate by seed2sdp package
+message WebRTCICECandidate {
+    // IP is represented in its 16-byte form
+    required uint64 ip_upper = 1;
+    required uint64 ip_lower = 2;
+    // Composed info includes port, tcptype (unset if not tcp), candidate type (host, srflx, prflx), protocol (TCP/UDP), and component (RTP/RTCP)
+    required uint32 composed_info = 3;
 }
 
-message WebrtcSignalling {
-    repeated WebrtcSDP webrtc_sdps = 1;
-    optional string webrtc_seed = 2;
+// Deflated SDP for WebRTC by seed2sdp package
+message WebRTCSDP {
+    required uint32 type = 1; 
+    repeated WebRTCICECandidate candidates = 2; // there could be multiple candidates
+}
+
+// WebRTCSignal includes a deflated SDP and a seed
+message WebRTCSignal {
+    required string seed = 1;
+    required WebRTCSDP sdp = 2;
 }
 
 message StationToClient {
@@ -204,6 +230,9 @@ message ClientToStation {
     // YIELD=>ACQUIRE switchover is happening.
     optional uint64 upload_sync = 4;
 
+    // High level client library version used for indicating feature support, or
+    // lack therof.
+    optional uint32 client_lib_version = 5;
 
     // List of decoys that client have unsuccessfully tried in current session.
     // Could be sent in chunks
@@ -229,34 +258,39 @@ message ClientToStation {
     optional bool v6_support = 22;
     optional bool v4_support = 23;
 
-	// A collection of optional flags for the registration.
-	optional RegistrationFlags flags = 24;
+    // A collection of optional flags for the registration.
+    optional RegistrationFlags flags = 24;
 
     // Transport Extensions
-    optional WebrtcSignalling webrtc_signalling = 31;
-    
+    optional WebRTCSignal webrtc_signal = 31;
+
     // Random-sized junk to defeat packet size fingerprinting.
     optional bytes padding = 100;
 }
 
 
 enum RegistrationSource {
-    Unspecified = 0;
+  Unspecified = 0;
 	Detector = 1;
 	API = 2;
-    DetectorPrescan = 3;
+  DetectorPrescan = 3;
+  BidirectionalAPI = 4;
+  DNS = 5;
+  BidirectionalDNS = 6;
 }
 
 message C2SWrapper {
-	optional bytes shared_secret = 1;
+  optional bytes shared_secret = 1;
 	optional ClientToStation registration_payload = 3;
-    optional RegistrationSource registration_source = 4;
-    
-    // client source address when receiving a registration
-    optional bytes registration_address = 6;
+  optional RegistrationSource registration_source = 4;
 
-    // Decoy address used when registering over Decoy registrar
-    optional bytes decoy_address = 7;
+  // client source address when receiving a registration
+  optional bytes registration_address = 6;
+
+  // Decoy address used when registering over Decoy registrar
+  optional bytes decoy_address = 7;
+
+  optional RegistrationResponse registration_response = 8;
 }
 
 message SessionStats {
@@ -273,9 +307,48 @@ message SessionStats {
     optional uint32 tcp_to_decoy = 39; // measured when establishing tcp connection to decot
 }
 
+enum StationOperations {
+    Unknown = 0;
+    New = 1;
+    Update = 2;
+    Clear = 3;
+}
+
 message StationToDetector {
     optional string phantom_ip = 1;
     optional string client_ip = 2;
 
     optional uint64 timeout_ns = 3;
+
+    optional StationOperations operation = 4;
+
+    optional int32 dst_port = 10;
+    optional int32 src_port = 11;
+}
+
+// Adding message response from Station to Client for bidirectional API
+message RegistrationResponse {
+  optional fixed32 ipv4addr = 1;
+  // The 128-bit ipv6 address, in network byte order
+  optional bytes ipv6addr = 2;
+
+  // Respond with randomized port
+  optional uint32 port = 3;
+
+  // Future: station provides client with secret, want chanel present
+  // Leave null for now
+  optional bytes serverRandom = 4;
+
+  // If registration wrong, populate this error string
+  optional string error = 5;
+
+  // ClientConf field (optional)
+  optional ClientConf clientConf = 6;
+}
+
+// response from dns
+message DnsResponse {
+    optional bool success = 1;
+    optional bool clientconf_outdated = 2;
+    optional RegistrationResponse bidirectional_response = 3;
 }

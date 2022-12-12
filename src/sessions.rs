@@ -50,7 +50,7 @@ use time::precise_time_ns;
 
 use flow_tracker::{FlowNoSrcPort, FLOW_CLIENT_LOG};
 use protobuf::Message;
-use signalling::StationToDetector;
+use signalling::{StationToDetector, StationOperations};
 
 const S2NS: u64 = 1000 * 1000 * 1000;
 // time to add beyond original timeout if a session is still receiving packets
@@ -342,50 +342,78 @@ fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u64>>>) {
                 continue;
             }
         };
-        let sd = match SessionResult::from(&station_to_det) {
-            Ok(m) => m,
-            Err(e) => {
-                debug!("Error converting S2D to SD: {}", e);
-                continue;
-            }
-        };
 
-        // is this already in the map?
-        let key = sd.get_key();
-        // Get writable map
-        let mut mmap = map.write().expect("RwLock broken");
-        let exists = mmap.contains_key(&key);
-
-        if exists {
-            // Set timeout
-            let expire_time = precise_time_ns() + sd.timeout;
-
-            if let Some(v) = mmap.get_mut(&key) {
-                // compare and keep the longer
-                if *v < expire_time {
-                    *v = expire_time;
-                }
-            };
-
-            // Explicitly drop map write lock here (locks are automatically dropped
-            // when they fall out of scope but this is more clear.)
-            drop(mmap);
+        if station_to_det.get_operation() != StationOperations::Unknown {
+            debug!("unknown operation requested by application");
             continue;
         }
 
+        pubsub_handle_s2d(&map, &station_to_det)
+    }
+}
+
+fn pubsub_handle_s2d(map: &Arc<RwLock<HashMap<String, u64>>>, s2d: &StationToDetector) {
+    let sd = match SessionResult::from(s2d) {
+        Ok(m) => m,
+        Err(e) => {
+            debug!("Error converting S2D to SD: {}", e);
+            return;
+        }
+    };
+
+    match s2d.get_operation() {
+        StationOperations::New => pubsub_add_or_update_session(&map, sd),
+        StationOperations::Update => pubsub_add_or_update_session(&map, sd),
+        StationOperations::Clear => pubsub_clear(&map),
+        StationOperations::Unknown => {
+            debug!("unknown operation requested by application")
+        }
+    }
+}
+
+fn pubsub_add_or_update_session(map: &Arc<RwLock<HashMap<String, u64>>>, sd: SessionDetails) {
+    // is this already in the map?
+    let key = sd.get_key();
+    // Get writable map
+    let mut mmap = map.write().expect("RwLock broken");
+    let exists = mmap.contains_key(&key);
+
+    if exists {
         // Set timeout
         let expire_time = precise_time_ns() + sd.timeout;
 
-        // Insert
-        *mmap.entry(key).or_insert(expire_time) = expire_time;
+        if let Some(v) = mmap.get_mut(&key) {
+            // compare and keep the longer
+            if *v < expire_time {
+                *v = expire_time;
+            }
+        };
 
-        // Get rid of writable reference to map. (locks are automatically dropped
+        // Explicitly drop map write lock here (locks are automatically dropped
         // when they fall out of scope but this is more clear.)
         drop(mmap);
-
-        // debug!("Added registered ip {} from redis", sd);
+        return
     }
+
+    // Set timeout
+    let expire_time = precise_time_ns() + sd.timeout;
+
+    // Insert
+    *mmap.entry(key).or_insert(expire_time) = expire_time;
+
+    // Get rid of writable reference to map. (locks are automatically dropped
+    // when they fall out of scope but this is more clear.)
+    drop(mmap);
+
+    // debug!("Added registered ip {} from redis", sd);
 }
+
+fn pubsub_clear(map: &Arc<RwLock<HashMap<String, u64>>>) {
+    // Get writable map
+    let mut mmap = map.write().expect("RwLock broken");
+    mmap.clear()
+}
+
 
 fn get_redis_conn() -> redis::Connection {
     let client = redis::Client::open("redis://127.0.0.1/").expect("Can't open Redis");
@@ -448,6 +476,72 @@ mod tests {
         thread::sleep(dur);
 
         assert_eq!(st.len(), 6, "Failed to ingest from pubsub: {}", st.len());
+    }
+
+    #[test]
+    fn test_pubsub_ingest() {
+
+        let map = Arc::new(RwLock::new(HashMap::new()));
+
+        // Test inserts
+        let test_tuples = [
+            // (client_ip, phantom_ip, timeout)
+            ("172.128.0.2", "8.0.0.1", 1), // timeout immediately
+            ("192.168.0.1", "10.10.0.1", 5 * S2NS),
+            ("192.168.0.1", "192.0.0.127", 5 * S2NS),
+            ("", "2345::6789", 5 * S2NS),
+            // duplicate with shorter timeout should not drop
+            ("2601::123:abcd", "2001::1234", 5 * S2NS),
+            ("::1", "2001::1234", S2NS),
+            // duplicate with long timeout should prevent drop
+            ("7.0.0.2", "8.8.8.8", 1),
+            ("7.0.0.2", "8.8.8.8", 5 * S2NS),
+        ];
+
+        for entry in &test_tuples {
+            let mut s2d = StationToDetector::new();
+            s2d.set_client_ip(entry.0.to_string());
+            s2d.set_phantom_ip(entry.1.to_string());
+            s2d.set_timeout_ns(entry.2);
+            s2d.set_operation(StationOperations::New);
+
+            pubsub_handle_s2d(&map, &s2d)
+        }
+
+        let mm = map.read().expect("RwLock Broken");
+        let len = mm.len();
+        drop(mm);
+        assert_eq!(len, 6, "Incorrect len for map after ingest: {}", len);
+
+        // Test updates
+        let test_tuples = [
+            // (client_ip, phantom_ip, timeout)
+            ("1.1.1.1", "8.0.0.1",  100*S2NS),
+            ("::1", "2001::4567", 100*S2NS),
+            ("2.2.2.2", "8.8.8.8",  100*S2NS),
+        ];
+
+        for entry in &test_tuples {
+            let mut s2d = StationToDetector::new();
+            s2d.set_client_ip(entry.0.to_string());
+            s2d.set_phantom_ip(entry.1.to_string());
+            s2d.set_timeout_ns(entry.2);
+            s2d.set_operation(StationOperations::Update);
+
+            pubsub_handle_s2d(&map, &s2d)
+        }
+
+        let mm = map.read().expect("RwLock Broken");
+        let len = mm.len();
+        drop(mm);
+        assert_eq!(len, 9, "Incorrect len for map after ingest: {}", len);
+
+        pubsub_clear(&map);
+
+        let mm = map.read().expect("RwLock Broken");
+        let len = mm.len();
+        drop(mm);
+        assert_eq!(len, 0, "Incorrect len for map after ingest: {}", len);
     }
 
     #[test]
