@@ -352,7 +352,7 @@ fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u128>>>) {
     }
 }
 
-fn pubsub_handle_s2d(map: &Arc<RwLock<HashMap<String, u64>>>, s2d: &StationToDetector) {
+fn pubsub_handle_s2d(map: &Arc<RwLock<HashMap<String, u128>>>, s2d: &StationToDetector) {
     let sd = match SessionResult::from(s2d) {
         Ok(m) => m,
         Err(e) => {
@@ -371,7 +371,7 @@ fn pubsub_handle_s2d(map: &Arc<RwLock<HashMap<String, u64>>>, s2d: &StationToDet
     }
 }
 
-fn pubsub_add_or_update_session(map: &Arc<RwLock<HashMap<String, u64>>>, sd: SessionDetails) {
+fn pubsub_add_or_update_session(map: &Arc<RwLock<HashMap<String, u128>>>, sd: SessionDetails) {
     // is this already in the map?
     let key = sd.get_key();
     // Get writable map
@@ -408,7 +408,7 @@ fn pubsub_add_or_update_session(map: &Arc<RwLock<HashMap<String, u64>>>, sd: Ses
     // debug!("Added registered ip {} from redis", sd);
 }
 
-fn pubsub_clear(map: &Arc<RwLock<HashMap<String, u64>>>) {
+fn pubsub_clear(map: &Arc<RwLock<HashMap<String, u128>>>) {
     // Get writable map
     let mut mmap = map.write().expect("RwLock broken");
     mmap.clear()
@@ -489,15 +489,15 @@ mod tests {
         let test_tuples = [
             // (client_ip, phantom_ip, timeout)
             ("172.128.0.2", "8.0.0.1", 1), // timeout immediately
-            ("192.168.0.1", "10.10.0.1", 5 * S2NS),
-            ("192.168.0.1", "192.0.0.127", 5 * S2NS),
-            ("", "2345::6789", 5 * S2NS),
+            ("192.168.0.1", "10.10.0.1", 5 * S2NS_U64),
+            ("192.168.0.1", "192.0.0.127", 5 * S2NS_U64),
+            ("", "2345::6789", 5 * S2NS_U64),
             // duplicate with shorter timeout should not drop
-            ("2601::123:abcd", "2001::1234", 5 * S2NS),
-            ("::1", "2001::1234", S2NS),
+            ("2601::123:abcd", "2001::1234", 5 * S2NS_U64),
+            ("::1", "2001::1234", S2NS_U64),
             // duplicate with long timeout should prevent drop
             ("7.0.0.2", "8.8.8.8", 1),
-            ("7.0.0.2", "8.8.8.8", 5 * S2NS),
+            ("7.0.0.2", "8.8.8.8", 5 * S2NS_U64),
         ];
 
         for entry in &test_tuples {
@@ -518,9 +518,9 @@ mod tests {
         // Test updates
         let test_tuples = [
             // (client_ip, phantom_ip, timeout)
-            ("1.1.1.1", "8.0.0.1",  100*S2NS),
-            ("::1", "2001::4567", 100*S2NS),
-            ("2.2.2.2", "8.8.8.8",  100*S2NS),
+            ("1.1.1.1", "8.0.0.1",  100*S2NS_U64),
+            ("::1", "2001::4567", 100*S2NS_U64),
+            ("2.2.2.2", "8.8.8.8",  100*S2NS_U64),
         ];
 
         for entry in &test_tuples {
