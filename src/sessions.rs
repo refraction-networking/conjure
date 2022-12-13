@@ -50,7 +50,7 @@ use util::precise_time_ns;
 
 use flow_tracker::{FlowNoSrcPort, FLOW_CLIENT_LOG};
 use protobuf::Message;
-use signalling::{StationToDetector, StationOperations};
+use signalling::{StationOperations, StationToDetector};
 
 const S2NS: u128 = 1000 * 1000 * 1000;
 // time to add beyond original timeout if a session is still receiving packets
@@ -392,7 +392,7 @@ fn pubsub_add_or_update_session(map: &Arc<RwLock<HashMap<String, u128>>>, sd: Se
         // Explicitly drop map write lock here (locks are automatically dropped
         // when they fall out of scope but this is more clear.)
         drop(mmap);
-        return
+        return;
     }
 
     // Set timeout
@@ -414,7 +414,6 @@ fn pubsub_clear(map: &Arc<RwLock<HashMap<String, u128>>>) {
     mmap.clear()
 }
 
-
 fn get_redis_conn() -> redis::Connection {
     let client = redis::Client::open("redis://127.0.0.1/").expect("Can't open Redis");
     client.get_connection().expect("Can't get Redis connection")
@@ -427,8 +426,52 @@ mod tests {
     use sessions::*;
     use signalling::StationToDetector;
     use std::{thread, time};
+    use test::{self, Bencher};
+    use rand::distributions::Alphanumeric;
+    use rand::{thread_rng, Rng};
+    use std::convert::TryFrom;
+
+    use std::collections::HashMap;
 
     const S2NS_U64: u64 = 1000 * 1000 * 1000;
+
+    pub fn test_map(x: &HashMap<String, u128>, module: &str) -> Option<u128> {
+        x.get(module).cloned()
+    }
+
+    // fn create_data<T: std::iter::FromIterator<(Cow<'static, str>, i32)>>(number_of_items: usize) -> T {
+    fn create_data<T: std::iter::FromIterator<(String, u128)>>(number_of_items: usize) -> T {
+        let base = 100;
+        (0..number_of_items)
+            .map(|x:usize| {
+                (thread_rng()
+                    .sample_iter(&Alphanumeric)
+                    .take(30)
+                    .map(char::from)
+                    .collect::<String>(), u128::try_from(base+x).unwrap())
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    #[bench]
+    fn bench_10_000_item_hash_map(b: &mut Bencher) {
+        let mut tests:HashMap<String, u128> = test::black_box(create_data(10_000));
+        tests.insert(String::from("q3428f9"), 1);
+
+        b.iter(|| test_map(&tests, test::black_box("q3428f9")))
+    }
+
+    #[bench]
+    #[ignore] // slow test generating 10m string
+    fn bench_10_000_000_item_hash_map(b: &mut Bencher) {
+        let mut tests:HashMap<String, u128> = test::black_box(create_data(10_000_000));
+        tests.insert(String::from("q3428f9"), 1);
+
+        b.iter(|| test_map(&tests, test::black_box("q3428f9")))
+    }
 
     #[test]
     #[ignore] // Requires redis to run properly.
@@ -482,7 +525,6 @@ mod tests {
 
     #[test]
     fn test_pubsub_ingest() {
-
         let map = Arc::new(RwLock::new(HashMap::new()));
 
         // Test inserts
@@ -518,9 +560,9 @@ mod tests {
         // Test updates
         let test_tuples = [
             // (client_ip, phantom_ip, timeout)
-            ("1.1.1.1", "8.0.0.1",  100*S2NS_U64),
-            ("::1", "2001::4567", 100*S2NS_U64),
-            ("2.2.2.2", "8.8.8.8",  100*S2NS_U64),
+            ("1.1.1.1", "8.0.0.1", 100 * S2NS_U64),
+            ("::1", "2001::4567", 100 * S2NS_U64),
+            ("2.2.2.2", "8.8.8.8", 100 * S2NS_U64),
         ];
 
         for entry in &test_tuples {
