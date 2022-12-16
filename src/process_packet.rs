@@ -91,8 +91,8 @@ pub unsafe extern "C" fn rust_process_packet(
     };
 
     match get_ip_packet(&eth_pkt) {
-        Some(IpPacket::V4(pkt)) => global.process_ipv4_packet(pkt, rust_view_len),
-        Some(IpPacket::V6(pkt)) => global.process_ipv6_packet(pkt, rust_view_len),
+        Some(IpPacket::V4(pkt)) => global.process_ip_packet(pkt, rust_view_len),
+        Some(IpPacket::V6(pkt)) => global.process_ip_packet(pkt, rust_view_len),
         None => {}
     }
 }
@@ -108,90 +108,119 @@ impl PerCoreGlobal {
     fn process_ipv4_packet(&mut self, ip_pkt: Ipv4Packet, frame_len: usize) {
         self.stats.ipv4_packets_this_period += 1;
 
-        // If the packet isn't TCP, first check for a UDP special payload, then return
-        if ip_pkt.get_next_level_protocol() != IpNextHeaderProtocols::Tcp {
-            let ip = IpPacket::V4(ip_pkt);
-            match ip.udp() {
-                Some(pkt) => {
-                    // Special payloads are only sent as DNS on port 53
-                    if pkt.get_destination() != 53 {
-                        return;
-                    }
-
-                    let flow = Flow::new_udp(&ip, &pkt);
-                    self.check_udp_test_str(&flow, &pkt);
-                }
-                None => return,
-            }
-            return;
+        match ip_pkt.get_next_level_protocol() {
+            IpNextHeaderProtocols::Tcp => {
+                let ip = IpPacket::V4(ip_pkt);
+                let tcp_pkt = match  ip.tcp() {
+                    Some(pkt) => pkt,
+                    None => return,
+                };
+                self.handle_tcp_pkt(tcp_pkt, &ip, frame_len);
+            },
+            IpNextHeaderProtocols::Udp => {
+                let ip = IpPacket::V4(ip_pkt);
+                let udp_pkt = match  ip.udp() {
+                    Some(pkt) => pkt,
+                    None => return,
+                };
+                self.handle_udp_pkt(udp_pkt, &ip, frame_len);
+            },
+            _ => {} // ignore any protocols other than UDP and TCP
         }
-        let ip = IpPacket::V4(ip_pkt);
-
-        {
-            // Check TCP/443
-            let tcp_pkt = match ip.tcp() {
-                Some(pkt) => pkt,
-                None => return,
-            };
-            self.stats.tcp_packets_this_period += 1;
-
-            // Ignore packets that aren't -> 443.
-            // libpnet getters all return host order. Ignore the "u16be" in their
-            // docs; interactions with pnet are purely host order.
-            if tcp_pkt.get_destination() != 443 {
-                return;
-            }
-        }
-        self.stats.tls_packets_this_period += 1; // (HTTPS, really)
-        self.stats.tls_bytes_this_period += frame_len as u64;
-        self.process_tls_pkt(ip);
     }
 
     fn process_ipv6_packet(&mut self, ip_pkt: Ipv6Packet, frame_len: usize) {
         self.stats.ipv6_packets_this_period += 1;
 
-        // If the packet isn't TCP, first check for a UDP special payload, then return
-        if ip_pkt.get_next_header() != IpNextHeaderProtocols::Tcp {
-            let ip = IpPacket::V6(ip_pkt);
-            match ip.udp() {
-                Some(pkt) => {
-                    // Special payloads are only sent as DNS on port 53
-                    if pkt.get_destination() != 53 {
-                        return;
-                    }
-
-                    let flow = Flow::new_udp(&ip, &pkt);
-                    self.check_udp_test_str(&flow, &pkt);
-                }
-                None => return,
-            }
-            return;
+        match ip_pkt.get_next_header() {
+            IpNextHeaderProtocols::Tcp => {
+                let ip = IpPacket::V6(ip_pkt);
+                let tcp_pkt = match  ip.tcp() {
+                    Some(pkt) => pkt,
+                    None => return,
+                };
+                self.handle_tcp_pkt(tcp_pkt, &ip, frame_len);
+            },
+            IpNextHeaderProtocols::Udp => {
+                let ip = IpPacket::V6(ip_pkt);
+                let udp_pkt = match  ip.udp() {
+                    Some(pkt) => pkt,
+                    None => return,
+                };
+                self.handle_udp_pkt(udp_pkt, &ip, frame_len);
+            },
+            _ => {} // ignore any protocols other than UDP and TCP
         }
-        let ip = IpPacket::V6(ip_pkt);
+    }
 
-        {
-            let tcp_pkt = match ip.tcp() {
-                Some(pkt) => pkt,
-                None => return,
-            };
-            self.stats.tcp_packets_this_period += 1;
 
-            if tcp_pkt.get_destination() != 443 {
-                return;
-            }
+    fn handle_tcp_pkt(&mut self, tcp_pkt: TcpPacket, ip_pkt: &IpPacket , frame_len: usize) {
+        self.stats.tcp_packets_this_period += 1;
+
+        if tcp_pkt.get_destination() != 443 {
+            return;
         }
         self.stats.tls_packets_this_period += 1;
         self.stats.tls_bytes_this_period += frame_len as u64;
 
         //debug!("v6 -> {} {} bytes", ip_pkt.get_destination(), ip_pkt.get_payload_length());
-        self.process_tls_pkt(ip);
+        self.process_tls_pkt(ip_pkt);
     }
 
-    // Takes an IPv4 packet
-    // Assumes (for now) that TLS records are in a single TCP packet
-    // (no fragmentation).
-    // Fragments could be stored in the flow_tracker if needed.
-    pub fn process_tls_pkt(&mut self, ip_pkt: IpPacket) {
+
+    fn handle_udp_pkt(&mut self, udp_pkt: UdpPacket, ip_pkt: &IpPacket , frame_len: usize) {
+        if udp_pkt.get_destination() != 53 {
+            return;
+        }
+
+        let flow = Flow::new_udp(ip_pkt, &udp_pkt);
+        self.check_udp_test_str(&flow, &udp_pkt);
+    }
+
+        // Takes an IPv4 packet Assumes (for now) that TLS records are in a single
+    // TCP packet (no fragmentation). Fragments could be stored in the
+    // flow_tracker if needed.
+    pub fn process_pkt(&mut self, ip_pkt: &IpPacket) {
+
+        let tcp_pkt = match ip_pkt.tcp() {
+            Some(pkt) => pkt,
+            None => return,
+        };
+
+        let flow = Flow::new(&ip_pkt, &tcp_pkt);
+        let tcp_flags = tcp_pkt.get_flags();
+
+        if panic::catch_unwind(|| tcp_pkt.payload()).is_err() {
+            return;
+        }
+
+        let dd_flow = FlowNoSrcPort::from_flow(&flow);
+        if self.flow_tracker.is_phantom_session(&dd_flow) {
+            // Handle packet destined for registered IP
+            match self.filter_station_traffic(flow.src_ip.to_string()) {
+                // traffic was sent by another station, likely liveness testing.
+                None => {}
+
+                // Non station traffic, forward to application to handle
+                Some(_) => {
+                    if (tcp_flags & TcpFlags::SYN) != 0 && (tcp_flags & TcpFlags::ACK) == 0 {
+                        // debug!("Connection for registered Phantom {}", flow);
+                    }
+                    // Update expire time if necessary
+                    self.flow_tracker.update_phantom_flow(&dd_flow);
+                    // Forward packet...
+                    self.forward_pkt(&ip_pkt);
+                    // TODO: if it was RST or FIN, close things
+                    return;
+                }
+            }
+        }
+    }
+
+    // Takes an IPv4 packet Assumes (for now) that TLS records are in a single
+    // TCP packet (no fragmentation). Fragments could be stored in the
+    // flow_tracker if needed.
+    pub fn process_tls_pkt(&mut self, ip_pkt: &IpPacket) {
         let tcp_pkt = match ip_pkt.tcp() {
             Some(pkt) => pkt,
             None => return,

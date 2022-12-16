@@ -60,7 +60,8 @@ const TIMEOUT_PHANTOMS_NS: u128 = 300 * S2NS;
 // We _can_ filter by phantom port if we so choose, and randomize the port that
 // the clients connect to. However we are currently using exclusively port 443.
 // adding this here as a placeholder for now.
-const DEFAULT_PHANTOM_PORT: u16 = 443;
+const PHANTOM_PORT_DEFAULT: i32 = 443;
+const PORT_NO_MATCH: i32 = 0;
 
 // "errors" we want to catch
 #[derive(Debug)]
@@ -92,14 +93,21 @@ impl fmt::Display for SessionError {
 pub struct SessionDetails {
     pub client_ip: IpAddr,
     pub phantom_ip: IpAddr,
-    pub phantom_port: u16,
+
+    // Ports are int32 to allow for non-port values to be used as indicators
+    // (i.e. indicating "don't match on port"). If the port is 0 the no matching
+    // is applied. Otherwise, if the port is in the valid range it should be
+    // matched exactly.
+    pub dst_port: i32,
+    pub src_port: i32,
+
     timeout: u128,
 }
 
 impl SessionDetails {
     // This function parses acceptable Session Details and returns an error if
     // the details provided do not fit current requirements for parsing
-    pub fn new(client_ip: &str, phantom_ip: &str, timeout: u128) -> SessionResult {
+    pub fn new(client_ip: &str, phantom_ip: &str, timeout: u128, src_port: i32, dst_port: i32) -> SessionResult {
         let phantom: IpAddr = match phantom_ip.parse() {
             Ok(ip) => ip,
             Err(_) => return Err(SessionError::InvalidPhantom),
@@ -123,16 +131,24 @@ impl SessionDetails {
         let s = SessionDetails {
             client_ip: src,
             phantom_ip: phantom,
-            phantom_port: DEFAULT_PHANTOM_PORT,
+            dst_port,
+            src_port,
             timeout,
         };
         Ok(s)
     }
 
     pub fn get_key(&self) -> String {
-        match self.phantom_ip.is_ipv6() {
+        let base = match self.phantom_ip.is_ipv6() {
             true => format!("{}", self.phantom_ip),
             false => format!("{}-{}", self.client_ip, self.phantom_ip),
+        };
+
+        match self.dst_port {
+            PORT_NO_MATCH => {
+                format!("{}-:{}", base, PHANTOM_PORT_DEFAULT)
+            }
+            port => format!("{}-:{}", base, port),
         }
     }
 }
@@ -141,7 +157,15 @@ impl From<&StationToDetector> for SessionResult {
     fn from(s2d: &StationToDetector) -> Self {
         let source = s2d.get_client_ip();
         let phantom = s2d.get_phantom_ip();
-        SessionDetails::new(source, phantom, u128::from(s2d.get_timeout_ns()))
+        let src_port = s2d.get_src_port();
+        let dst_port = s2d.get_dst_port();
+        SessionDetails::new(
+            source,
+            phantom,
+             u128::from(s2d.get_timeout_ns()),
+            src_port,
+            dst_port,
+            )
     }
 }
 
@@ -200,8 +224,8 @@ impl SessionTracker {
 
     pub fn is_tracked_session(&self, flow: &FlowNoSrcPort) -> bool {
         let key = match flow.dst_ip.is_ipv6() {
-            true => format!("{}", flow.dst_ip),
-            false => format!("{}-{}", flow.src_ip, flow.dst_ip),
+            true => format!("{}-:{}", flow.dst_ip, flow.dst_port),
+            false => format!("{}-{}-:{}", flow.src_ip, flow.dst_ip, flow.dst_port),
         };
         self.session_exists(&key)
     }
@@ -362,9 +386,9 @@ fn pubsub_handle_s2d(map: &Arc<RwLock<HashMap<String, u128>>>, s2d: &StationToDe
     };
 
     match s2d.get_operation() {
-        StationOperations::New => pubsub_add_or_update_session(&map, sd),
-        StationOperations::Update => pubsub_add_or_update_session(&map, sd),
-        StationOperations::Clear => pubsub_clear(&map),
+        StationOperations::New => pubsub_add_or_update_session(map, sd),
+        StationOperations::Update => pubsub_add_or_update_session(map, sd),
+        StationOperations::Clear => pubsub_clear(map),
         StationOperations::Unknown => {
             debug!("unknown operation requested by application")
         }
@@ -421,20 +445,21 @@ fn get_redis_conn() -> redis::Connection {
 
 #[cfg(test)]
 mod tests {
-    // use std::fmt::Write;
+    use std::collections::HashMap;
+    use std::convert::TryFrom;
+    use std::{thread, time};
+
     use flow_tracker::FlowNoSrcPort;
     use sessions::*;
     use signalling::StationToDetector;
-    use std::{thread, time};
-    use test::{self, Bencher};
-    use rand::distributions::Alphanumeric;
-    use rand::{thread_rng, Rng};
-    use std::convert::TryFrom;
-
-    use std::collections::HashMap;
+    // use test::{self, Bencher};
+    // use rand::distributions::Alphanumeric;
+    // use rand::{thread_rng, Rng};
 
     const S2NS_U64: u64 = 1000 * 1000 * 1000;
 
+    /*
+    // Disabled because the #bench interface is unstable in test::
     pub fn test_map(x: &HashMap<String, u128>, module: &str) -> Option<u128> {
         x.get(module).cloned()
     }
@@ -456,6 +481,7 @@ mod tests {
             .collect()
     }
 
+
     #[bench]
     fn bench_10_000_item_hash_map(b: &mut Bencher) {
         let mut tests:HashMap<String, u128> = test::black_box(create_data(10_000));
@@ -472,6 +498,7 @@ mod tests {
 
         b.iter(|| test_map(&tests, test::black_box("q3428f9")))
     }
+    */
 
     #[test]
     #[ignore] // Requires redis to run properly.
@@ -673,7 +700,7 @@ mod tests {
         ];
 
         for entry in &test_tuples {
-            let s1 = SessionDetails::new(entry.0, entry.1, entry.2).unwrap();
+            let s1 = SessionDetails::new(entry.0, entry.1, entry.2, PORT_NO_MATCH, PORT_NO_MATCH).unwrap();
             st.insert_session(s1);
         }
 
@@ -689,15 +716,13 @@ mod tests {
             let f = &FlowNoSrcPort {
                 src_ip: src,
                 dst_ip: entry.1.parse().unwrap(),
-                dst_port: DEFAULT_PHANTOM_PORT,
+                dst_port: u16::try_from(PHANTOM_PORT_DEFAULT).unwrap(),
             };
-            if !st.is_tracked_session(f) {
-                panic!("Session should be tracked")
-            }
+            assert!(st.is_tracked_session(f), "Session should be tracked- {}", f);
         }
 
         let tt = test_tuples[0];
-        let sd = SessionDetails::new(tt.0, tt.1, tt.2).unwrap();
+        let sd = SessionDetails::new(tt.0, tt.1, tt.2, PORT_NO_MATCH, PORT_NO_MATCH).unwrap();
         st._delete_session(sd);
 
         if st.len() != 4 {
@@ -724,7 +749,7 @@ mod tests {
             ("7.0.0.2", "8.8.8.8", 5 * S2NS_U64, true),
         ];
         for entry in &test_tuples {
-            let s1 = SessionDetails::new(entry.0, entry.1, u128::from(entry.2)).unwrap();
+            let s1 = SessionDetails::new(entry.0, entry.1,  u128::from(entry.2),PORT_NO_MATCH, PORT_NO_MATCH).unwrap();
             st.insert_session(s1);
         }
 
@@ -737,7 +762,7 @@ mod tests {
             let f = &FlowNoSrcPort {
                 src_ip: entry.0.parse().unwrap(),
                 dst_ip: entry.1.parse().unwrap(),
-                dst_port: DEFAULT_PHANTOM_PORT,
+                dst_port: u16::try_from(PHANTOM_PORT_DEFAULT).unwrap(),
             };
             assert_eq!(st.is_tracked_session(f), entry.3)
         }

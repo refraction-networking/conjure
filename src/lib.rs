@@ -1,9 +1,5 @@
-#![feature(test)]
-extern crate test;
-
 #[macro_use]
 extern crate arrayref;
-//extern crate lazycell;
 extern crate libc;
 #[macro_use]
 extern crate log;
