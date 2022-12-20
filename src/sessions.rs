@@ -45,6 +45,7 @@ use std::net::IpAddr;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
+use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
 use redis;
 use util::precise_time_ns;
 
@@ -101,13 +102,15 @@ pub struct SessionDetails {
     pub dst_port: i32,
     pub src_port: i32,
 
+    proto: IpNextHeaderProtocol,
+
     timeout: u128,
 }
 
 impl SessionDetails {
     // This function parses acceptable Session Details and returns an error if
     // the details provided do not fit current requirements for parsing
-    pub fn new(client_ip: &str, phantom_ip: &str, timeout: u128, src_port: i32, dst_port: i32) -> SessionResult {
+    pub fn new(client_ip: &str, phantom_ip: &str, timeout: u128, src_port: i32, dst_port: i32, proto: IpNextHeaderProtocol) -> SessionResult {
         let phantom: IpAddr = match phantom_ip.parse() {
             Ok(ip) => ip,
             Err(_) => return Err(SessionError::InvalidPhantom),
@@ -133,22 +136,30 @@ impl SessionDetails {
             phantom_ip: phantom,
             dst_port,
             src_port,
+            proto,
             timeout,
         };
         Ok(s)
     }
 
     pub fn get_key(&self) -> String {
+
+        let proto_prefix = match self.proto {
+            IpNextHeaderProtocols::Tcp => "t-",
+            IpNextHeaderProtocols::Udp => "u-",
+            _ => "",
+        };
+
         let base = match self.phantom_ip.is_ipv6() {
-            true => format!("{}", self.phantom_ip),
-            false => format!("{}-{}", self.client_ip, self.phantom_ip),
+            true => format!("{}{}", proto_prefix, self.phantom_ip),
+            false => format!("{}{}-{}", proto_prefix, self.client_ip, self.phantom_ip),
         };
 
         match self.dst_port {
             PORT_NO_MATCH => {
-                format!("{}-:{}", base, PHANTOM_PORT_DEFAULT)
+                format!("{}{}-:{}", proto_prefix, base, PHANTOM_PORT_DEFAULT)
             }
-            port => format!("{}-:{}", base, port),
+            port => format!("{}{}-:{}", proto_prefix, base, port),
         }
     }
 }
@@ -165,6 +176,7 @@ impl From<&StationToDetector> for SessionResult {
              u128::from(s2d.get_timeout_ns()),
             src_port,
             dst_port,
+            IpNextHeaderProtocols::Tcp,
             )
     }
 }
@@ -223,9 +235,14 @@ impl SessionTracker {
     }
 
     pub fn is_tracked_session(&self, flow: &FlowNoSrcPort) -> bool {
+        let proto_prefix = match flow.proto {
+            IpNextHeaderProtocols::Tcp => "t-",
+            IpNextHeaderProtocols::Udp => "u-",
+            _ => "",
+        };
         let key = match flow.dst_ip.is_ipv6() {
-            true => format!("{}-:{}", flow.dst_ip, flow.dst_port),
-            false => format!("{}-{}-:{}", flow.src_ip, flow.dst_ip, flow.dst_port),
+            true => format!("{}{}-:{}", proto_prefix, flow.dst_ip, flow.dst_port),
+            false => format!("{}{}-{}-:{}", proto_prefix, flow.src_ip, flow.dst_ip, flow.dst_port),
         };
         self.session_exists(&key)
     }
@@ -265,9 +282,15 @@ impl SessionTracker {
     /// valid for tracking purposes. Called when packets from a session are
     /// seen so that forwarding continues past the original registration timeout.
     pub fn update_session(&mut self, flow: &FlowNoSrcPort) {
+        let proto_prefix = match flow.proto {
+            IpNextHeaderProtocols::Tcp => "t-",
+            IpNextHeaderProtocols::Udp => "u-",
+            _ => "",
+        };
+
         let key = match flow.dst_ip.is_ipv6() {
-            true => format!("{}", flow.dst_ip),
-            false => format!("{}-{}", flow.src_ip, flow.dst_ip),
+            true => format!("{}{}", proto_prefix, flow.dst_ip),
+            false => format!("{}{}-{}", proto_prefix, flow.src_ip, flow.dst_ip),
         };
 
         if !self.session_exists(&key) {
@@ -452,6 +475,8 @@ mod tests {
     use flow_tracker::FlowNoSrcPort;
     use sessions::*;
     use signalling::StationToDetector;
+    use pnet::packet::ip::IpNextHeaderProtocols;
+
     // use test::{self, Bencher};
     // use rand::distributions::Alphanumeric;
     // use rand::{thread_rng, Rng};
@@ -700,7 +725,7 @@ mod tests {
         ];
 
         for entry in &test_tuples {
-            let s1 = SessionDetails::new(entry.0, entry.1, entry.2, PORT_NO_MATCH, PORT_NO_MATCH).unwrap();
+            let s1 = SessionDetails::new(entry.0, entry.1, entry.2, PORT_NO_MATCH, PORT_NO_MATCH, IpNextHeaderProtocols::Tcp).unwrap();
             st.insert_session(s1);
         }
 
@@ -717,12 +742,13 @@ mod tests {
                 src_ip: src,
                 dst_ip: entry.1.parse().unwrap(),
                 dst_port: u16::try_from(PHANTOM_PORT_DEFAULT).unwrap(),
+                proto: IpNextHeaderProtocols::Tcp,
             };
             assert!(st.is_tracked_session(f), "Session should be tracked- {}", f);
         }
 
         let tt = test_tuples[0];
-        let sd = SessionDetails::new(tt.0, tt.1, tt.2, PORT_NO_MATCH, PORT_NO_MATCH).unwrap();
+        let sd = SessionDetails::new(tt.0, tt.1, tt.2, PORT_NO_MATCH, PORT_NO_MATCH, IpNextHeaderProtocols::Tcp).unwrap();
         st._delete_session(sd);
 
         if st.len() != 4 {
@@ -749,7 +775,7 @@ mod tests {
             ("7.0.0.2", "8.8.8.8", 5 * S2NS_U64, true),
         ];
         for entry in &test_tuples {
-            let s1 = SessionDetails::new(entry.0, entry.1,  u128::from(entry.2),PORT_NO_MATCH, PORT_NO_MATCH).unwrap();
+            let s1 = SessionDetails::new(entry.0, entry.1,  u128::from(entry.2),PORT_NO_MATCH, PORT_NO_MATCH, IpNextHeaderProtocols::Tcp).unwrap();
             st.insert_session(s1);
         }
 
@@ -763,6 +789,7 @@ mod tests {
                 src_ip: entry.0.parse().unwrap(),
                 dst_ip: entry.1.parse().unwrap(),
                 dst_port: u16::try_from(PHANTOM_PORT_DEFAULT).unwrap(),
+                proto: IpNextHeaderProtocols::Tcp,
             };
             assert_eq!(st.is_tracked_session(f), entry.3)
         }

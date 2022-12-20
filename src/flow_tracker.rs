@@ -1,6 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 use util::precise_time_ns;
 
+use pnet::packet::ip::{IpNextHeaderProtocol,IpNextHeaderProtocols};
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
 use std::net::{IpAddr, SocketAddr};
@@ -17,6 +18,7 @@ pub struct Flow {
     pub dst_ip: IpAddr,
     pub src_port: u16,
     pub dst_port: u16,
+    pub proto: IpNextHeaderProtocol,
 }
 
 // flow log client should only ever be set at initialization so this should
@@ -45,12 +47,14 @@ impl Flow {
                 dst_ip: IpAddr::V4(pkt.get_destination()),
                 src_port: tcp_pkt.get_source(),
                 dst_port: tcp_pkt.get_destination(),
+                proto: IpNextHeaderProtocols::Tcp,
             },
             IpPacket::V6(pkt) => Flow {
                 src_ip: IpAddr::V6(pkt.get_source()),
                 dst_ip: IpAddr::V6(pkt.get_destination()),
                 src_port: tcp_pkt.get_source(),
                 dst_port: tcp_pkt.get_destination(),
+                proto: IpNextHeaderProtocols::Tcp,
             },
         }
     }
@@ -62,22 +66,25 @@ impl Flow {
                 dst_ip: IpAddr::V4(pkt.get_destination()),
                 src_port: udp_pkt.get_source(),
                 dst_port: udp_pkt.get_destination(),
+                proto: IpNextHeaderProtocols::Udp,
             },
             IpPacket::V6(pkt) => Flow {
                 src_ip: IpAddr::V6(pkt.get_source()),
                 dst_ip: IpAddr::V6(pkt.get_destination()),
                 src_port: udp_pkt.get_source(),
                 dst_port: udp_pkt.get_destination(),
+                proto: IpNextHeaderProtocols::Udp,
             },
         }
     }
 
-    pub fn from_parts(sip: IpAddr, dip: IpAddr, sport: u16, dport: u16) -> Flow {
+    pub fn from_parts(sip: IpAddr, dip: IpAddr, sport: u16, dport: u16, proto: IpNextHeaderProtocol) -> Flow {
         Flow {
             src_ip: sip,
             dst_ip: dip,
             src_port: sport,
             dst_port: dport,
+            proto,
         }
     }
 
@@ -108,6 +115,7 @@ pub struct FlowNoSrcPort {
     pub src_ip: IpAddr,
     pub dst_ip: IpAddr,
     pub dst_port: u16,
+    pub proto: IpNextHeaderProtocol,
 }
 
 impl fmt::Display for FlowNoSrcPort {
@@ -131,26 +139,32 @@ impl FlowNoSrcPort {
                 src_ip: IpAddr::V4(pkt.get_source()),
                 dst_ip: IpAddr::V4(pkt.get_destination()),
                 dst_port: tcp_pkt.get_destination(),
+                proto: ip_pkt.next_layer(),
             },
             IpPacket::V6(pkt) => FlowNoSrcPort {
                 src_ip: IpAddr::V6(pkt.get_source()),
                 dst_ip: IpAddr::V6(pkt.get_destination()),
                 dst_port: tcp_pkt.get_destination(),
+                proto: ip_pkt.next_layer(),
             },
         }
     }
-    pub fn from_parts(sip: IpAddr, dip: IpAddr, dport: u16) -> FlowNoSrcPort {
+
+    pub fn from_parts(src_ip: IpAddr, dst_ip: IpAddr, dst_port: u16, proto:IpNextHeaderProtocol) -> FlowNoSrcPort {
         FlowNoSrcPort {
-            src_ip: sip,
-            dst_ip: dip,
-            dst_port: dport,
+            src_ip,
+            dst_ip,
+            dst_port,
+            proto,
         }
     }
+
     pub fn from_flow(f: &Flow) -> FlowNoSrcPort {
         FlowNoSrcPort {
             src_ip: f.src_ip,
             dst_ip: f.dst_ip,
             dst_port: f.dst_port,
+            proto: f.proto,
         }
     }
 
@@ -296,6 +310,7 @@ impl FlowTracker {
 mod tests {
     use flow_tracker::{Flow, FlowNoSrcPort};
     use std::fmt::Write;
+    use pnet::packet::ip::IpNextHeaderProtocols;
 
     #[test]
     fn test_flow_display_format() {
@@ -306,6 +321,7 @@ mod tests {
             dst_ip: "26ff::1".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
@@ -317,6 +333,7 @@ mod tests {
             dst_ip: "128.138.97.6".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
@@ -327,6 +344,7 @@ mod tests {
             src_ip: "2601::abcd:ef00".parse().unwrap(),
             dst_ip: "26ff::1".parse().unwrap(),
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
@@ -337,6 +355,7 @@ mod tests {
             src_ip: "10.22.0.1".parse().unwrap(),
             dst_ip: "128.138.97.6".parse().unwrap(),
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
@@ -350,6 +369,8 @@ mod tests {
             dst_ip: "26ff::1".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
+
         };
 
         let mut output = String::new();
@@ -361,6 +382,7 @@ mod tests {
             dst_ip: "128.138.97.6".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
@@ -371,6 +393,7 @@ mod tests {
             src_ip: "2601::abcd:ef00".parse().unwrap(),
             dst_ip: "26ff::1".parse().unwrap(),
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
@@ -381,6 +404,7 @@ mod tests {
             src_ip: "10.22.0.1".parse().unwrap(),
             dst_ip: "128.138.97.6".parse().unwrap(),
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
@@ -395,6 +419,7 @@ mod tests {
             dst_ip: "128.138.97.6".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let (src, dst) = flow.export_addrs();
@@ -407,6 +432,7 @@ mod tests {
             dst_ip: "26ff::1".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let (src, dst) = flow6.export_addrs();

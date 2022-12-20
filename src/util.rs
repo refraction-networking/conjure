@@ -10,6 +10,7 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::time::SystemTime;
 
+use pnet::packet:: ethernet::{EtherType,EtherTypes};
 use pnet::packet::ip::IpNextHeaderProtocol;
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
@@ -43,6 +44,13 @@ impl<'p> IpPacket<'p> {
         match self {
             IpPacket::V4(v4) => v4.get_next_level_protocol(),
             IpPacket::V6(v6) => v6.get_next_header(),
+        }
+    }
+
+    pub fn ethertype(&'p self) -> EtherType {
+        match self {
+            IpPacket::V4(_) => EtherTypes::Ipv4,
+            IpPacket::V6(_) => EtherTypes::Ipv6,
         }
     }
 
