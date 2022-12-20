@@ -108,7 +108,6 @@ pub struct SessionDetails {
 }
 impl Taggable for SessionDetails {
     fn tag(&self) -> String {
-
         let proto_prefix = match self.proto {
             IpNextHeaderProtocols::Tcp => "t-",
             IpNextHeaderProtocols::Udp => "u-",
@@ -130,7 +129,14 @@ impl Taggable for SessionDetails {
 impl SessionDetails {
     // This function parses acceptable Session Details and returns an error if
     // the details provided do not fit current requirements for parsing
-    pub fn new(client_ip: &str, phantom_ip: &str, timeout: u128, src_port: i32, dst_port: i32, proto: IpNextHeaderProtocol) -> SessionResult {
+    pub fn new(
+        client_ip: &str,
+        phantom_ip: &str,
+        timeout: u128,
+        src_port: i32,
+        dst_port: i32,
+        proto: IpNextHeaderProtocol,
+    ) -> SessionResult {
         let phantom: IpAddr = match phantom_ip.parse() {
             Ok(ip) => ip,
             Err(_) => return Err(SessionError::InvalidPhantom),
@@ -172,11 +178,11 @@ impl From<&StationToDetector> for SessionResult {
         SessionDetails::new(
             source,
             phantom,
-             u128::from(s2d.get_timeout_ns()),
+            u128::from(s2d.get_timeout_ns()),
             src_port,
             dst_port,
             IpNextHeaderProtocols::Tcp,
-            )
+        )
     }
 }
 
@@ -212,7 +218,7 @@ pub struct SessionTracker {
 }
 
 impl Default for SessionTracker {
-    fn default() -> Self{
+    fn default() -> Self {
         Self::new()
     }
 }
@@ -460,10 +466,10 @@ mod tests {
     use std::str::FromStr;
     use std::{thread, time};
 
-    use flow_tracker::{Flow,FlowNoSrcPort};
+    use flow_tracker::{Flow, FlowNoSrcPort};
+    use pnet::packet::ip::IpNextHeaderProtocols;
     use sessions::*;
     use signalling::StationToDetector;
-    use pnet::packet::ip::IpNextHeaderProtocols;
 
     // use test::{self, Bencher};
     // use rand::distributions::Alphanumeric;
@@ -699,31 +705,106 @@ mod tests {
 
     #[test]
     fn test_session_tracker_tagging() {
-    let test_tuples = [
-        // (client_ip, phantom_ip, timeout)
-        ("192.168.0.1", "10.10.0.1", 100000),
-        ("192.168.0.1", "192.0.0.127", 100000), // duplicate client_addr
-        ("2601::123:abcd", "2001::1234", 100000),
-        ("::1", "2001::1234", 100000),    // duplicate phantom Addr
-        ("172.128.0.2", "8.0.0.1", 1), // timeout immediately
-        // client registering with v4 will also create registrations for v6 just in-case
-        ("192.168.0.1", "2801::1234", 100000),
-    ];
+        let test_tuples = [
+            // (client_ip, phantom_ip, timeout, dst_port, proto)
+            (
+                "192.168.0.1",
+                "10.10.0.1",
+                100000,
+                443,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            (
+                "192.168.0.1",
+                "192.0.0.127",
+                100000,
+                443,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            (
+                "2601::123:abcd",
+                "2001::1234",
+                100000,
+                443,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            ("::1", "2001::1234", 100000, 443, IpNextHeaderProtocols::Tcp),
+            // client registering with v4 will also create registrations for v6 just in-case
+            (
+                "192.168.0.1",
+                "2801::1234",
+                100000,
+                443,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            // Random ports
+            (
+                "192.168.0.1",
+                "192.0.0.127",
+                100000,
+                1024,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            (
+                "2601::123:abcd",
+                "2001::1234",
+                100000,
+                5555,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            (
+                "::1",
+                "2001::1234",
+                100000,
+                55535,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            // Random ports and udp
+            (
+                "192.168.0.1",
+                "192.0.0.127",
+                100000,
+                1024,
+                IpNextHeaderProtocols::Udp,
+            ),
+            (
+                "2601::123:abcd",
+                "2001::1234",
+                100000,
+                5555,
+                IpNextHeaderProtocols::Udp,
+            ),
+            (
+                "::1",
+                "2001::1234",
+                100000,
+                55535,
+                IpNextHeaderProtocols::Udp,
+            ),
+        ];
 
-    for entry in &test_tuples {
-        let s1 = SessionDetails::new(entry.0, entry.1, entry.2, PORT_NO_MATCH, PORT_NO_MATCH, IpNextHeaderProtocols::Tcp).unwrap();
-        let f1 = Flow::from_parts(
-            IpAddr::from_str(entry.0).unwrap(),
-            IpAddr::from_str(entry.1).unwrap(),
-            0,
-            443,
-            IpNextHeaderProtocols::Tcp,
-        );
+        for entry in &test_tuples {
+            let s1 = SessionDetails::new(
+                entry.0,
+                entry.1,
+                entry.2,
+                PORT_NO_MATCH,
+                PORT_NO_MATCH,
+                IpNextHeaderProtocols::Tcp,
+            )
+            .unwrap();
 
-        assert_eq!(f1.tag(), s1.tag());
+            let f1 = Flow::from_parts(
+                IpAddr::from_str(entry.0).unwrap(),
+                IpAddr::from_str(entry.1).unwrap(),
+                0,
+                443,
+                IpNextHeaderProtocols::Tcp,
+            );
+
+            assert_eq!(f1.tag(), s1.tag());
+        }
     }
-}
-
 
     #[test]
     fn test_session_tracker_basics() {
@@ -741,7 +822,15 @@ mod tests {
         ];
 
         for entry in &test_tuples {
-            let s1 = SessionDetails::new(entry.0, entry.1, entry.2, PORT_NO_MATCH, PORT_NO_MATCH, IpNextHeaderProtocols::Tcp).unwrap();
+            let s1 = SessionDetails::new(
+                entry.0,
+                entry.1,
+                entry.2,
+                PORT_NO_MATCH,
+                PORT_NO_MATCH,
+                IpNextHeaderProtocols::Tcp,
+            )
+            .unwrap();
             st.insert_session(s1);
         }
 
@@ -760,11 +849,24 @@ mod tests {
                 dst_port: u16::try_from(PHANTOM_PORT_DEFAULT).unwrap(),
                 proto: IpNextHeaderProtocols::Tcp,
             };
-            assert!(st.is_tracked_session(f), "Session should be tracked- {:?}, {}", entry, f.tag());
+            assert!(
+                st.is_tracked_session(f),
+                "Session should be tracked- {:?}, {}",
+                entry,
+                f.tag()
+            );
         }
 
         let tt = test_tuples[0];
-        let sd = SessionDetails::new(tt.0, tt.1, tt.2, PORT_NO_MATCH, PORT_NO_MATCH, IpNextHeaderProtocols::Tcp).unwrap();
+        let sd = SessionDetails::new(
+            tt.0,
+            tt.1,
+            tt.2,
+            PORT_NO_MATCH,
+            PORT_NO_MATCH,
+            IpNextHeaderProtocols::Tcp,
+        )
+        .unwrap();
         st._delete_session(sd);
 
         if st.len() != 4 {
@@ -791,7 +893,15 @@ mod tests {
             ("7.0.0.2", "8.8.8.8", 5 * S2NS_U64, true),
         ];
         for entry in &test_tuples {
-            let s1 = SessionDetails::new(entry.0, entry.1,  u128::from(entry.2),PORT_NO_MATCH, PORT_NO_MATCH, IpNextHeaderProtocols::Tcp).unwrap();
+            let s1 = SessionDetails::new(
+                entry.0,
+                entry.1,
+                u128::from(entry.2),
+                PORT_NO_MATCH,
+                PORT_NO_MATCH,
+                IpNextHeaderProtocols::Tcp,
+            )
+            .unwrap();
             st.insert_session(s1);
         }
 
@@ -807,7 +917,13 @@ mod tests {
                 dst_port: u16::try_from(PHANTOM_PORT_DEFAULT).unwrap(),
                 proto: IpNextHeaderProtocols::Tcp,
             };
-            assert_eq!(st.is_tracked_session(f), entry.3, "{:?}, {}", entry, f.tag())
+            assert_eq!(
+                st.is_tracked_session(f),
+                entry.3,
+                "{:?}, {}",
+                entry,
+                f.tag()
+            )
         }
 
         thread::sleep(dur);

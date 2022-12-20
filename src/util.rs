@@ -10,7 +10,7 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::time::SystemTime;
 
-use pnet::packet:: ethernet::{EtherType,EtherTypes};
+use pnet::packet::ethernet::{EtherType, EtherTypes};
 use pnet::packet::ip::IpNextHeaderProtocol;
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
@@ -53,7 +53,6 @@ impl<'p> IpPacket<'p> {
             IpPacket::V6(_) => EtherTypes::Ipv6,
         }
     }
-
 }
 
 // Pass in a host-order IPv4 addr, get a String.

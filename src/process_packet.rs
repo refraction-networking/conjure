@@ -103,19 +103,19 @@ pub unsafe extern "C" fn rust_process_packet(
 
     match ip_pkt.next_layer() {
         IpNextHeaderProtocols::Tcp => {
-            let tcp_pkt = match  ip_pkt.tcp() {
+            let tcp_pkt = match ip_pkt.tcp() {
                 Some(pkt) => pkt,
                 None => return,
             };
             global.handle_tcp_pkt(tcp_pkt, &ip_pkt, frame_len);
-        },
+        }
         IpNextHeaderProtocols::Udp => {
-            let udp_pkt = match  ip_pkt.udp() {
+            let udp_pkt = match ip_pkt.udp() {
                 Some(pkt) => pkt,
                 None => return,
             };
             global.handle_udp_pkt(udp_pkt, &ip_pkt, frame_len);
-        },
+        }
         _ => {} // ignore any protocols other than UDP and TCP
     }
 }
@@ -128,7 +128,7 @@ fn is_tls_app_pkt(tcp_pkt: &TcpPacket) -> bool {
 impl PerCoreGlobal {
     // // frame_len is supposed to be the length of the whole Ethernet frame. We're
     // // only passing it here for plumbing reasons, and just for stat reporting.
-    fn handle_tcp_pkt(&mut self, tcp_pkt: TcpPacket, ip_pkt: &IpPacket , frame_len: usize) {
+    fn handle_tcp_pkt(&mut self, tcp_pkt: TcpPacket, ip_pkt: &IpPacket, frame_len: usize) {
         self.stats.tcp_packets_this_period += 1;
 
         let flow = Flow::new(&ip_pkt, &tcp_pkt);
@@ -146,8 +146,7 @@ impl PerCoreGlobal {
         }
     }
 
-    fn handle_udp_pkt(&mut self, udp_pkt: UdpPacket, ip_pkt: &IpPacket , frame_len: usize) {
-
+    fn handle_udp_pkt(&mut self, udp_pkt: UdpPacket, ip_pkt: &IpPacket, frame_len: usize) {
         // TODO - this is not necessarily what we want to track.
         // We might add more verbose logging from `debug/not-src-443`
         if udp_pkt.get_destination() == 443 {
@@ -167,7 +166,7 @@ impl PerCoreGlobal {
         }
     }
 
-    fn check_for_tagged_flow(&mut self, flow: &Flow , ip_pkt: &IpPacket) -> Option<()>{
+    fn check_for_tagged_flow(&mut self, flow: &Flow, ip_pkt: &IpPacket) -> Option<()> {
         let cj_flow = FlowNoSrcPort::from_flow(&flow);
         if self.flow_tracker.is_phantom_session(&cj_flow) {
             // Handle packet destined for registered IP
@@ -186,7 +185,7 @@ impl PerCoreGlobal {
                 }
             }
         }
-        return None
+        return None;
     }
 
     // Takes an IPv4 packet Assumes (for now) that TLS records are in a single

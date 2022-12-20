@@ -1,13 +1,13 @@
 use std::collections::{HashSet, VecDeque};
-use std::net::{IpAddr, SocketAddr};
 use std::fmt;
+use std::net::{IpAddr, SocketAddr};
 
-use pnet::packet::ip::{IpNextHeaderProtocol,IpNextHeaderProtocols};
+use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
 
-use util::{IpPacket,precise_time_ns};
 use sessions::{SessionTracker, Taggable};
+use util::{precise_time_ns, IpPacket};
 
 // All members are stored in host-order, even src_ip and dst_ip.
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
@@ -37,9 +37,8 @@ impl fmt::Display for Flow {
     }
 }
 
-
 impl Taggable for Flow {
-    fn tag(&self) -> String{
+    fn tag(&self) -> String {
         let proto_prefix = match self.proto {
             IpNextHeaderProtocols::Tcp => "t-",
             IpNextHeaderProtocols::Udp => "u-",
@@ -47,7 +46,10 @@ impl Taggable for Flow {
         };
         match self.dst_ip.is_ipv6() {
             true => format!("{}_-{}-:{}", proto_prefix, self.dst_ip, self.dst_port),
-            false => format!("{}{}-{}-:{}", proto_prefix, self.src_ip, self.dst_ip, self.dst_port),
+            false => format!(
+                "{}{}-{}-:{}",
+                proto_prefix, self.src_ip, self.dst_ip, self.dst_port
+            ),
         }
     }
 }
@@ -91,7 +93,13 @@ impl Flow {
         }
     }
 
-    pub fn from_parts(sip: IpAddr, dip: IpAddr, sport: u16, dport: u16, proto: IpNextHeaderProtocol) -> Flow {
+    pub fn from_parts(
+        sip: IpAddr,
+        dip: IpAddr,
+        sport: u16,
+        dport: u16,
+        proto: IpNextHeaderProtocol,
+    ) -> Flow {
         Flow {
             src_ip: sip,
             dst_ip: dip,
@@ -154,7 +162,10 @@ impl Taggable for FlowNoSrcPort {
         };
         match self.dst_ip.is_ipv6() {
             true => format!("{}_-{}-:{}", proto_prefix, self.dst_ip, self.dst_port),
-            false => format!("{}{}-{}-:{}", proto_prefix, self.src_ip, self.dst_ip, self.dst_port),
+            false => format!(
+                "{}{}-{}-:{}",
+                proto_prefix, self.src_ip, self.dst_ip, self.dst_port
+            ),
         }
     }
 }
@@ -177,7 +188,12 @@ impl FlowNoSrcPort {
         }
     }
 
-    pub fn from_parts(src_ip: IpAddr, dst_ip: IpAddr, dst_port: u16, proto:IpNextHeaderProtocol) -> FlowNoSrcPort {
+    pub fn from_parts(
+        src_ip: IpAddr,
+        dst_ip: IpAddr,
+        dst_port: u16,
+        proto: IpNextHeaderProtocol,
+    ) -> FlowNoSrcPort {
         FlowNoSrcPort {
             src_ip,
             dst_ip,
@@ -336,8 +352,8 @@ impl FlowTracker {
 #[cfg(test)]
 mod tests {
     use flow_tracker::{Flow, FlowNoSrcPort};
-    use std::fmt::Write;
     use pnet::packet::ip::IpNextHeaderProtocols;
+    use std::fmt::Write;
 
     #[test]
     fn test_flow_display_format() {
@@ -397,7 +413,6 @@ mod tests {
             src_port: 5672,
             dst_port: 443,
             proto: IpNextHeaderProtocols::Tcp,
-
         };
 
         let mut output = String::new();
