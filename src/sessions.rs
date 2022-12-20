@@ -49,7 +49,7 @@ use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
 use redis;
 use util::precise_time_ns;
 
-use flow_tracker::{FlowNoSrcPort, FLOW_CLIENT_LOG};
+use flow_tracker::FLOW_CLIENT_LOG;
 use protobuf::Message;
 use signalling::{StationOperations, StationToDetector};
 
@@ -106,6 +106,26 @@ pub struct SessionDetails {
 
     timeout: u128,
 }
+impl Taggable for SessionDetails {
+    fn tag(&self) -> String {
+
+        let proto_prefix = match self.proto {
+            IpNextHeaderProtocols::Tcp => "t-",
+            IpNextHeaderProtocols::Udp => "u-",
+            _ => "",
+        };
+
+        let base = match self.phantom_ip.is_ipv6() {
+            true => format!("{}_-{}", proto_prefix, self.phantom_ip),
+            false => format!("{}{}-{}", proto_prefix, self.client_ip, self.phantom_ip),
+        };
+
+        match self.dst_port {
+            PORT_NO_MATCH => format!("{}-:{}", base, PHANTOM_PORT_DEFAULT),
+            port => format!("{}-:{}", base, port),
+        }
+    }
+}
 
 impl SessionDetails {
     // This function parses acceptable Session Details and returns an error if
@@ -140,27 +160,6 @@ impl SessionDetails {
             timeout,
         };
         Ok(s)
-    }
-
-    pub fn get_key(&self) -> String {
-
-        let proto_prefix = match self.proto {
-            IpNextHeaderProtocols::Tcp => "t-",
-            IpNextHeaderProtocols::Udp => "u-",
-            _ => "",
-        };
-
-        let base = match self.phantom_ip.is_ipv6() {
-            true => format!("{}{}", proto_prefix, self.phantom_ip),
-            false => format!("{}{}-{}", proto_prefix, self.client_ip, self.phantom_ip),
-        };
-
-        match self.dst_port {
-            PORT_NO_MATCH => {
-                format!("{}{}-:{}", proto_prefix, base, PHANTOM_PORT_DEFAULT)
-            }
-            port => format!("{}{}-:{}", proto_prefix, base, port),
-        }
     }
 }
 
@@ -213,9 +212,15 @@ pub struct SessionTracker {
 }
 
 impl Default for SessionTracker {
-    fn default() -> Self {
+    fn default() -> Self{
         Self::new()
     }
+}
+
+/// trait for types that define their own function for creating a tag relevant
+/// to storing and looking up session types.
+pub trait Taggable {
+    fn tag(&self) -> String;
 }
 
 impl SessionTracker {
@@ -234,16 +239,8 @@ impl SessionTracker {
         thread::spawn(move || ingest_from_pubsub(write_map));
     }
 
-    pub fn is_tracked_session(&self, flow: &FlowNoSrcPort) -> bool {
-        let proto_prefix = match flow.proto {
-            IpNextHeaderProtocols::Tcp => "t-",
-            IpNextHeaderProtocols::Udp => "u-",
-            _ => "",
-        };
-        let key = match flow.dst_ip.is_ipv6() {
-            true => format!("{}{}-:{}", proto_prefix, flow.dst_ip, flow.dst_port),
-            false => format!("{}{}-{}-:{}", proto_prefix, flow.src_ip, flow.dst_ip, flow.dst_port),
-        };
+    pub fn is_tracked_session<T: Taggable>(&self, flow: &T) -> bool {
+        let key = flow.tag();
         self.session_exists(&key)
     }
 
@@ -281,26 +278,16 @@ impl SessionTracker {
     /// Used to update (increase) the time that we  consider a session
     /// valid for tracking purposes. Called when packets from a session are
     /// seen so that forwarding continues past the original registration timeout.
-    pub fn update_session(&mut self, flow: &FlowNoSrcPort) {
-        let proto_prefix = match flow.proto {
-            IpNextHeaderProtocols::Tcp => "t-",
-            IpNextHeaderProtocols::Udp => "u-",
-            _ => "",
-        };
-
-        let key = match flow.dst_ip.is_ipv6() {
-            true => format!("{}{}", proto_prefix, flow.dst_ip),
-            false => format!("{}{}-{}", proto_prefix, flow.src_ip, flow.dst_ip),
-        };
-
+    pub fn update_session<T: Taggable>(&mut self, flow: &T) {
+        let key = flow.tag();
         if !self.session_exists(&key) {
             return;
         }
 
-        self.try_update_session_timeout(key, TIMEOUT_PHANTOMS_NS);
+        self.try_update_session_timeout(&key, TIMEOUT_PHANTOMS_NS);
     }
 
-    fn try_update_session_timeout(&mut self, key: String, extra_time: u128) {
+    fn try_update_session_timeout(&mut self, key: &str, extra_time: u128) {
         // Get writable map
         let mut mmap = self.tracked_sessions.write().expect("RwLock broken");
 
@@ -308,7 +295,7 @@ impl SessionTracker {
         let expire_time = precise_time_ns() + extra_time;
 
         // compare and keep the longer
-        if let Some(v) = mmap.get_mut(&key) {
+        if let Some(v) = mmap.get_mut(key) {
             // compare and keep the longer
             if *v < expire_time {
                 *v = expire_time;
@@ -318,9 +305,9 @@ impl SessionTracker {
 
     fn insert_session(&mut self, session: SessionDetails) {
         // is this already in the map?
-        let key = session.get_key();
+        let key = session.tag();
         if self.session_exists(&key) {
-            self.try_update_session_timeout(key, session.timeout);
+            self.try_update_session_timeout(&key, session.timeout);
             return;
         }
 
@@ -341,7 +328,7 @@ impl SessionTracker {
 
     // explicitly used for testing
     fn _delete_session(&mut self, session: SessionDetails) {
-        let key = &session.get_key();
+        let key = &session.tag();
         if !self.session_exists(key) {
             return;
         }
@@ -420,7 +407,7 @@ fn pubsub_handle_s2d(map: &Arc<RwLock<HashMap<String, u128>>>, s2d: &StationToDe
 
 fn pubsub_add_or_update_session(map: &Arc<RwLock<HashMap<String, u128>>>, sd: SessionDetails) {
     // is this already in the map?
-    let key = sd.get_key();
+    let key = sd.tag();
     // Get writable map
     let mut mmap = map.write().expect("RwLock broken");
     let exists = mmap.contains_key(&key);
@@ -470,9 +457,10 @@ fn get_redis_conn() -> redis::Connection {
 mod tests {
     use std::collections::HashMap;
     use std::convert::TryFrom;
+    use std::str::FromStr;
     use std::{thread, time};
 
-    use flow_tracker::FlowNoSrcPort;
+    use flow_tracker::{Flow,FlowNoSrcPort};
     use sessions::*;
     use signalling::StationToDetector;
     use pnet::packet::ip::IpNextHeaderProtocols;
@@ -710,6 +698,34 @@ mod tests {
     }
 
     #[test]
+    fn test_session_tracker_tagging() {
+    let test_tuples = [
+        // (client_ip, phantom_ip, timeout)
+        ("192.168.0.1", "10.10.0.1", 100000),
+        ("192.168.0.1", "192.0.0.127", 100000), // duplicate client_addr
+        ("2601::123:abcd", "2001::1234", 100000),
+        ("::1", "2001::1234", 100000),    // duplicate phantom Addr
+        ("172.128.0.2", "8.0.0.1", 1), // timeout immediately
+        // client registering with v4 will also create registrations for v6 just in-case
+        ("192.168.0.1", "2801::1234", 100000),
+    ];
+
+    for entry in &test_tuples {
+        let s1 = SessionDetails::new(entry.0, entry.1, entry.2, PORT_NO_MATCH, PORT_NO_MATCH, IpNextHeaderProtocols::Tcp).unwrap();
+        let f1 = Flow::from_parts(
+            IpAddr::from_str(entry.0).unwrap(),
+            IpAddr::from_str(entry.1).unwrap(),
+            0,
+            443,
+            IpNextHeaderProtocols::Tcp,
+        );
+
+        assert_eq!(f1.tag(), s1.tag());
+    }
+}
+
+
+    #[test]
     fn test_session_tracker_basics() {
         let mut st = SessionTracker::new();
 
@@ -744,7 +760,7 @@ mod tests {
                 dst_port: u16::try_from(PHANTOM_PORT_DEFAULT).unwrap(),
                 proto: IpNextHeaderProtocols::Tcp,
             };
-            assert!(st.is_tracked_session(f), "Session should be tracked- {}", f);
+            assert!(st.is_tracked_session(f), "Session should be tracked- {:?}, {}", entry, f.tag());
         }
 
         let tt = test_tuples[0];
@@ -791,7 +807,7 @@ mod tests {
                 dst_port: u16::try_from(PHANTOM_PORT_DEFAULT).unwrap(),
                 proto: IpNextHeaderProtocols::Tcp,
             };
-            assert_eq!(st.is_tracked_session(f), entry.3)
+            assert_eq!(st.is_tracked_session(f), entry.3, "{:?}, {}", entry, f.tag())
         }
 
         thread::sleep(dur);

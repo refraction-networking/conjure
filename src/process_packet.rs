@@ -137,7 +137,7 @@ impl PerCoreGlobal {
             None => {}
         };
 
-        if tcp_pkt.get_destination() != 443 {
+        if tcp_pkt.get_destination() == 443 {
             self.stats.tls_packets_this_period += 1;
             self.stats.tls_bytes_this_period += frame_len as u64;
 
@@ -147,6 +147,13 @@ impl PerCoreGlobal {
     }
 
     fn handle_udp_pkt(&mut self, udp_pkt: UdpPacket, ip_pkt: &IpPacket , frame_len: usize) {
+
+        // TODO - this is not necessarily what we want to track.
+        // We might add more verbose logging from `debug/not-src-443`
+        if udp_pkt.get_destination() == 443 {
+            self.stats.tls_packets_this_period += 1;
+            self.stats.tls_bytes_this_period += frame_len as u64;
+        }
 
         let flow = Flow::new_udp(&ip_pkt, &udp_pkt);
         match self.check_for_tagged_flow(&flow, ip_pkt) {
@@ -357,6 +364,7 @@ impl PerCoreGlobal {
     /// assert_eq!(None, station);
     /// assert_eq!(Some(()), client);
     /// ```
+    ///
     fn filter_station_traffic(&mut self, src: String) -> Option<()> {
         for addr in self.filter_list.iter() {
             if src == *addr {

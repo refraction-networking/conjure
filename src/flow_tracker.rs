@@ -1,15 +1,13 @@
 use std::collections::{HashSet, VecDeque};
-use util::precise_time_ns;
+use std::net::{IpAddr, SocketAddr};
+use std::fmt;
 
 use pnet::packet::ip::{IpNextHeaderProtocol,IpNextHeaderProtocols};
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
-use std::net::{IpAddr, SocketAddr};
 
-use std::fmt;
-use util::IpPacket;
-
-use sessions::SessionTracker;
+use util::{IpPacket,precise_time_ns};
+use sessions::{SessionTracker, Taggable};
 
 // All members are stored in host-order, even src_ip and dst_ip.
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
@@ -35,6 +33,21 @@ impl fmt::Display for Flow {
                 true => write!(f, "{} -> {}", socket_src, socket_dst),
                 false => write!(f, "_ -> {}", socket_dst),
             }
+        }
+    }
+}
+
+
+impl Taggable for Flow {
+    fn tag(&self) -> String{
+        let proto_prefix = match self.proto {
+            IpNextHeaderProtocols::Tcp => "t-",
+            IpNextHeaderProtocols::Udp => "u-",
+            _ => "",
+        };
+        match self.dst_ip.is_ipv6() {
+            true => format!("{}_-{}-:{}", proto_prefix, self.dst_ip, self.dst_port),
+            false => format!("{}{}-{}-:{}", proto_prefix, self.src_ip, self.dst_ip, self.dst_port),
         }
     }
 }
@@ -128,6 +141,20 @@ impl fmt::Display for FlowNoSrcPort {
                 true => write!(f, "{} -> {}", socket_src, socket_dst),
                 false => write!(f, "_ -> {}", socket_dst),
             }
+        }
+    }
+}
+
+impl Taggable for FlowNoSrcPort {
+    fn tag(&self) -> String {
+        let proto_prefix = match self.proto {
+            IpNextHeaderProtocols::Tcp => "t-",
+            IpNextHeaderProtocols::Udp => "u-",
+            _ => "",
+        };
+        match self.dst_ip.is_ipv6() {
+            true => format!("{}_-{}-:{}", proto_prefix, self.dst_ip, self.dst_port),
+            false => format!("{}{}-{}-:{}", proto_prefix, self.src_ip, self.dst_ip, self.dst_port),
         }
     }
 }
