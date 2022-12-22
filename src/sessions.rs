@@ -51,7 +51,7 @@ use util::precise_time_ns;
 
 use flow_tracker::FLOW_CLIENT_LOG;
 use protobuf::Message;
-use signalling::{StationOperations, StationToDetector};
+use signalling::{StationOperations, StationToDetector, IpProto};
 
 const S2NS: u128 = 1000 * 1000 * 1000;
 // time to add beyond original timeout if a session is still receiving packets
@@ -70,6 +70,7 @@ pub enum SessionError {
     InvalidPhantom,
     InvalidClient,
     MixedV4V6Error,
+    UnrecognizedProto,
 }
 
 pub type SessionResult = Result<SessionDetails, SessionError>;
@@ -85,6 +86,9 @@ impl fmt::Display for SessionError {
             }
             SessionError::MixedV4V6Error => {
                 write!(f, "Client/Phantom v4/v6 mismatch")
+            }
+            SessionError::UnrecognizedProto => {
+                write!(f, "Unknown IP next header protocol provided")
             }
         }
     }
@@ -175,13 +179,18 @@ impl From<&StationToDetector> for SessionResult {
         let phantom = s2d.get_phantom_ip();
         let src_port = s2d.get_src_port();
         let dst_port = s2d.get_dst_port();
+        let proto = match s2d.get_ip_proto() {
+            IpProto::Tcp => IpNextHeaderProtocols::Tcp,
+            IpProto::Udp => IpNextHeaderProtocols::Udp,
+            _ => return Err(SessionError::UnrecognizedProto),
+        };
         SessionDetails::new(
             source,
             phantom,
             u128::from(s2d.get_timeout_ns()),
             src_port,
             dst_port,
-            IpNextHeaderProtocols::Tcp,
+            proto,
         )
     }
 }

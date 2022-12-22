@@ -57,9 +57,9 @@ func TestManagerFunctionality(t *testing.T) {
 
 	rm.AddRegistration(newReg)
 
-	storedReg := rm.GetRegistrations(newReg.DarkDecoy)[string(newReg.Keys.ConjureHMAC("MinTrasportHMACString"))]
+	storedReg := rm.GetRegistrations(newReg.PhantomIp)[string(newReg.Keys.ConjureHMAC("MinTrasportHMACString"))]
 
-	if storedReg.DarkDecoy.String() != "192.122.190.148" || storedReg.Covert != "52.44.73.6:443" {
+	if storedReg.PhantomIp.String() != "192.122.190.148" || storedReg.Covert != "52.44.73.6:443" {
 		t.Fatalf("Improper registration returned: %v\n", storedReg.String())
 	}
 }

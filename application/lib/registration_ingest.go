@@ -181,9 +181,9 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 
 	// Perform liveness test IFF not done by other station or v6 (v6 should
 	// never be live)
-	if !reg.PreScanned() && reg.DarkDecoy.To4() != nil {
+	if !reg.PreScanned() && reg.PhantomIp.To4() != nil {
 		// New registration received over channel that requires liveness scan for the phantom
-		live, response := rm.PhantomIsLive(reg.DarkDecoy.String(), 443)
+		live, response := rm.PhantomIsLive(reg.PhantomIp.String(), 443)
 
 		// TODO JMWAMPLE REMOVE
 		if live {
@@ -203,14 +203,14 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 			go tryShareRegistrationOverAPI(reg, rm.PreshareEndpoint, rm.Logger)
 		}
 
-		if rm.IsBlocklistedPhantom(reg.DarkDecoy) {
+		if rm.IsBlocklistedPhantom(reg.PhantomIp) {
 			// Note: Phantom blocklist is applied for registrations using the
 			// decoy registrar at this stage because the phantom may only be
 			// blocked on this station. We may want other stations to be
 			// informed about the registration, but prevent this station
 			// specifically from handling / interfering in any subsequent
 			// connection. See PR #75
-			logger.Warnf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
+			logger.Warnf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.PhantomIp)
 			Stat().AddErrReg()
 			rm.AddBlocklistedPhantomReg()
 			return
@@ -333,7 +333,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	gen := uint(c2s.GetDecoyListGeneration())
 	clientLibVer := uint(c2s.GetClientLibVersion())
 	phantomAddr, err := rm.PhantomSelector.Select(
-		conjureKeys.DarkDecoySeed, gen, clientLibVer, includeV6)
+		conjureKeys.ConjureSeed, gen, clientLibVer, includeV6)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed phantom select: gen %d libv %d v6 %t err: %v",
@@ -353,7 +353,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 
 	regSrc := c2sw.GetRegistrationSource()
 	reg := DecoyRegistration{
-		DarkDecoy:          phantomAddr,
+		PhantomIp:          phantomAddr,
 		registrationAddr:   net.IP(c2sw.GetRegistrationAddress()),
 		Keys:               &conjureKeys,
 		Covert:             c2s.GetCovertAddress(),

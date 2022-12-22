@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -28,60 +27,6 @@ const DETECTOR_REG_CHANNEL string = "dark_decoy_map"
 // AES_GCM_TAG_SIZE the size of the aesgcm tag used when generating the client to
 // station message.
 const AES_GCM_TAG_SIZE = 16
-
-// Transport defines the interface for the manager to interface with variable
-// transports that wrap the traffic sent by clients.
-type Transport interface {
-	// The human-friendly name of the transport.
-	Name() string
-
-	// The prefix used when including this transport in logs.
-	LogPrefix() string
-
-	// GetIdentifier takes in a registration and returns an identifier
-	// for it. This identifier should be unique for each registration on
-	// a given phantom; registrations on different phantoms can have the
-	// same identifier.
-	GetIdentifier(*DecoyRegistration) string
-}
-
-// WrappingTransport describes any transport that is able to passively
-// listen to incoming network connections and identify itself, then actively
-// wrap the connection.
-type WrappingTransport interface {
-	Transport
-
-	// WrapConnection attempts to wrap the given connection in the transport.
-	// It takes the information gathered so far on the connection in data, attempts
-	// to identify itself, and if it positively identifies itself wraps the connection
-	// in the transport, returning a connection that's ready to be used by others.
-	//
-	// If the returned error is nil or non-nil and non-{ transports.ErrTryAgain, transports.ErrNotTransport },
-	// the caller may no longer use data or conn.
-	//
-	// Implementations should not Read from conn unless they have positively identified
-	// that the transport exists and are in the process of wrapping the connection.
-	//
-	// Implementations should not Read from data unless they are are attempting to
-	// wrap the connection. Use data.Bytes() to get all of the data that has been
-	// seen on the connection.
-	//
-	// If implementations cannot tell if the transport exists on the connection (e.g. there
-	// hasn't yet been enough data sent to be conclusive), they should return
-	// transports.ErrTryAgain. If the transport can be conclusively determined to not
-	// exist on the connection, implementations should return transports.ErrNotTransport.
-	WrapConnection(data *bytes.Buffer, conn net.Conn, phantom net.IP, rm *RegistrationManager) (reg *DecoyRegistration, wrapped net.Conn, err error)
-}
-
-// ConnectingTransport describes transports that actively form an
-// outgoing connection to clients to initiate the conversation.
-type ConnectingTransport interface {
-	Transport
-
-	// Connect attempts to connect to the client from the phantom address
-	// derived in the registration.
-	Connect(context.Context, *DecoyRegistration) (net.Conn, error)
-}
 
 // RegistrationManager manages registration tracking for the station.
 type RegistrationManager struct {
@@ -194,7 +139,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	gen := uint(c2s.GetDecoyListGeneration())
 	clientLibVer := uint(c2s.GetClientLibVersion())
 	phantomAddr, err := regManager.PhantomSelector.Select(
-		conjureKeys.DarkDecoySeed, gen, clientLibVer, includeV6)
+		conjureKeys.ConjureSeed, gen, clientLibVer, includeV6)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed phantom select: gen %d libv %d v6 %t err: %v",
@@ -205,7 +150,7 @@ func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, 
 	}
 
 	reg := DecoyRegistration{
-		DarkDecoy:          phantomAddr,
+		PhantomIp:          phantomAddr,
 		Keys:               conjureKeys,
 		Covert:             c2s.GetCovertAddress(),
 		Mask:               c2s.GetMaskedDecoyServerName(),
@@ -233,13 +178,13 @@ func (regManager *RegistrationManager) ValidateRegistration(reg *DecoyRegistrati
 		return false, errIncompleteReg
 	} else if reg.Keys == nil {
 		return false, errIncompleteReg
-	} else if reg.DarkDecoy == nil {
+	} else if reg.PhantomIp == nil {
 		return false, errIncompleteReg
 	} else if reg.RegistrationSource == nil {
 		return false, errIncompleteReg
 	} else if _, ok := regManager.registeredDecoys.transports[reg.Transport]; !ok {
 		return false, errTransportNotEnabled
-	} else if *reg.RegistrationSource != pb.RegistrationSource_Detector && regManager.IsBlocklistedPhantom(reg.DarkDecoy) {
+	} else if *reg.RegistrationSource != pb.RegistrationSource_Detector && regManager.IsBlocklistedPhantom(reg.PhantomIp) {
 		return false, errBlocklistedPhantom
 	}
 
@@ -258,7 +203,7 @@ func (regManager *RegistrationManager) TrackRegistration(d *DecoyRegistration) e
 // AddRegistration officially adds the registration to usage by marking it as valid.
 func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 
-	darkDecoyAddr := d.DarkDecoy.String()
+	darkDecoyAddr := d.PhantomIp.String()
 	err := regManager.registeredDecoys.register(darkDecoyAddr, d)
 	if err != nil {
 		regManager.Logger.Errorf("Error registering decoy: %s", err)
@@ -310,7 +255,9 @@ func (regManager *RegistrationManager) MarkActive(reg *DecoyRegistration) {
 
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
-	DarkDecoy          net.IP
+	PhantomIp   net.IP
+	PhantomPort int32
+
 	registrationAddr   net.IP
 	Keys               *ConjureSharedKeys
 	Covert, Mask       string
@@ -345,7 +292,7 @@ func (reg *DecoyRegistration) String() string {
 		DecoyListVersion uint32
 		Source           *pb.RegistrationSource
 	}{
-		Phantom:          reg.DarkDecoy.String(),
+		Phantom:          reg.PhantomIp.String(),
 		SharedSecret:     hex.EncodeToString(reg.Keys.SharedSecret),
 		Mask:             reg.Mask,
 		Flags:            reg.Flags,
@@ -390,7 +337,7 @@ func (reg *DecoyRegistration) IDString() string {
 // between stations where the station notifies other stations of a registration.
 func (reg *DecoyRegistration) GenerateClientToStation() *pb.ClientToStation {
 	v4 := false
-	if reg.DarkDecoy.To4() != nil {
+	if reg.PhantomIp.To4() != nil {
 		v4 = true
 	}
 	v6 := !v4
@@ -451,6 +398,26 @@ func (reg *DecoyRegistration) PreScanned() bool {
 // client IPs.
 func (reg *DecoyRegistration) GetRegistrationAddress() string {
 	return reg.registrationAddr.String()
+}
+
+// GetDstPort returns a destination port if one was registered. This function
+// first checks if a Phantom Port was selected, if none is available it uses
+// the default port for the Transport associated with the session.
+//
+// This function does NOT check the validity of the
+func (reg *DecoyRegistration) GetDstPort() int32 {
+	if reg.PhantomPort != -1 {
+		return reg.PhantomPort
+	}
+
+	return -1 //reg.Transport.GetDefaultPort()
+}
+
+// GetSrcPort returns a source port if one was registered. Currently this is not
+// supported -- for now  this is intended as plumbing for potentially supporting
+// seeded source port selection for the client.
+func (reg *DecoyRegistration) GetSrcPort() int32 {
+	return 0
 }
 
 type regStatus int
@@ -536,7 +503,7 @@ func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 		return fmt.Errorf("unknown transport %d", d.Transport)
 	}
 
-	phantomAddr := d.DarkDecoy.String()
+	phantomAddr := d.PhantomIp.String()
 	identifier := t.GetIdentifier(d)
 
 	// Newly tracked registrations are not valid and have only been seen once.
@@ -598,7 +565,7 @@ func (r *RegisteredDecoys) markActive(d *DecoyRegistration) {
 	r.m.Lock()
 	defer r.m.Unlock()
 
-	phantomAddr := d.DarkDecoy.String()
+	phantomAddr := d.PhantomIp.String()
 	if regTimeout, ok := r.decoysTimeouts[d.IDString()+phantomAddr]; ok {
 		regTimeout.status = regStatusUsed
 
@@ -675,7 +642,7 @@ func (r *RegisteredDecoys) registrationExists(d *DecoyRegistration) *DecoyRegist
 
 	identifier := t.GetIdentifier(d)
 
-	phantomAddr := d.DarkDecoy.String()
+	phantomAddr := d.PhantomIp.String()
 
 	_, exists := r.decoys[phantomAddr]
 	if !exists {
@@ -799,7 +766,7 @@ func registerForDetector(reg *DecoyRegistration, duration uint64) {
 	}
 
 	src := reg.registrationAddr.String()
-	phantom := reg.DarkDecoy.String()
+	phantom := reg.PhantomIp.String()
 	op := pb.StationOperations_New
 	msg := &pb.StationToDetector{
 		PhantomIp: &phantom,
@@ -851,11 +818,17 @@ func updateInDetector(reg *DecoyRegistration, duration uint64) {
 	}
 
 	src := reg.registrationAddr.String()
-	phantom := reg.DarkDecoy.String()
+	phantom := reg.PhantomIp.String()
 	op := pb.StationOperations_Update
+	protocol := pb.IpProto_Tcp
+	srcPort := reg.GetSrcPort()
+	dstPort := reg.GetDstPort()
 	msg := &pb.StationToDetector{
 		PhantomIp: &phantom,
 		ClientIp:  &src,
+		DstPort:   &dstPort,
+		SrcPort:   &srcPort,
+		Proto:     &protocol,
 		TimeoutNs: &duration,
 		Operation: &op,
 	}

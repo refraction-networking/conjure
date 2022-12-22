@@ -35,7 +35,7 @@ func TestSuccessfulWrap(t *testing.T) {
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
 
-	_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+	_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 	if err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
@@ -68,7 +68,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
 
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}
@@ -91,7 +91,7 @@ func TestTryAgain(t *testing.T) {
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])
 
-		_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+		_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 		if !errors.Is(err, transports.ErrTryAgain) {
 			t.Fatalf("expected ErrTryAgain, got %v", err)
 		}
@@ -102,7 +102,7 @@ func TestTryAgain(t *testing.T) {
 
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}

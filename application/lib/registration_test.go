@@ -107,7 +107,7 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 		t.Skip("Skipping redis related test w/out mock")
 	}
 	reg := DecoyRegistration{
-		DarkDecoy:        net.ParseIP("1.2.3.4"),
+		PhantomIp:        net.ParseIP("1.2.3.4"),
 		registrationAddr: net.ParseIP(""),
 	}
 
@@ -122,7 +122,7 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 	channel := pubsub.Channel()
 
 	// send message to redis pubsub, wait, then close subscriber & channel
-	registerForDetector(&reg)
+	registerForDetector(&reg, uint64(defaultUnusedTimeout.Nanoseconds()))
 
 	time.AfterFunc(time.Second*1, func() {
 		_ = pubsub.Close()
@@ -146,8 +146,8 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 	recvClient := net.ParseIP(parsed.GetClientIp())
 
 	// check IP equality
-	if reg.DarkDecoy.String() != recvPhantom.String() {
-		t.Fatalf("Expected Phantom %v, got %v", reg.DarkDecoy, recvPhantom)
+	if reg.PhantomIp.String() != recvPhantom.String() {
+		t.Fatalf("Expected Phantom %v, got %v", reg.PhantomIp, recvPhantom)
 	}
 
 	if reg.registrationAddr.String() != recvClient.String() {
@@ -179,12 +179,12 @@ func TestRegisterForDetectorArray(t *testing.T) {
 
 	for _, addr := range addrs {
 		reg := &DecoyRegistration{
-			DarkDecoy:        net.ParseIP(addr),
+			PhantomIp:        net.ParseIP(addr),
 			registrationAddr: net.ParseIP(clientAddr),
 		}
 
 		// send message to redis pubsub, wait, then close subscriber & channel
-		registerForDetector(reg)
+		registerForDetector(reg, uint64(defaultUnusedTimeout.Nanoseconds()))
 
 		// check message
 		msg := <-channel
@@ -204,8 +204,8 @@ func TestRegisterForDetectorArray(t *testing.T) {
 		recvClient := net.ParseIP(parsed.GetClientIp())
 
 		// check IP equality
-		if reg.DarkDecoy.String() != recvPhantom.String() {
-			t.Fatalf("Expected Phantom %v, got %v", reg.DarkDecoy, recvPhantom)
+		if reg.PhantomIp.String() != recvPhantom.String() {
+			t.Fatalf("Expected Phantom %v, got %v", reg.PhantomIp, recvPhantom)
 		}
 
 		if reg.registrationAddr.String() != recvClient.String() {
@@ -242,13 +242,13 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 	for _, addr := range addrs {
 		wg.Add(1)
 		reg := &DecoyRegistration{
-			DarkDecoy:        net.ParseIP(addr),
+			PhantomIp:        net.ParseIP(addr),
 			registrationAddr: net.ParseIP(clientAddr),
 		}
 
 		// send message to redis pubsub, wait, then close subscriber & channel
 		go func() {
-			registerForDetector(reg)
+			registerForDetector(reg, uint64(defaultUnusedTimeout.Nanoseconds()))
 		}()
 	}
 

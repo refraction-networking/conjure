@@ -179,7 +179,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		p.selectorMutex.RLock()
 		defer p.selectorMutex.RUnlock()
 		phantom4, err := p.ipSelector.Select(
-			cjkeys.DarkDecoySeed,
+			cjkeys.ConjureSeed,
 			uint(c2sPayload.GetRegistrationPayload().GetDecoyListGeneration()), //generation type uint
 			clientLibVer,
 			false,
@@ -198,7 +198,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		p.selectorMutex.RLock()
 		defer p.selectorMutex.RUnlock()
 		phantom6, err := p.ipSelector.Select(
-			cjkeys.DarkDecoySeed,
+			cjkeys.ConjureSeed,
 			uint(c2sPayload.GetRegistrationPayload().GetDecoyListGeneration()),
 			clientLibVer,
 			true,

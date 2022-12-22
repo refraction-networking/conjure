@@ -314,6 +314,12 @@ enum StationOperations {
     Clear = 3;
 }
 
+enum IpProto {
+    Unk = 0;
+    Tcp = 1;
+    Udp = 2;
+}
+
 message StationToDetector {
     optional string phantom_ip = 1;
     optional string client_ip = 2;
@@ -324,6 +330,7 @@ message StationToDetector {
 
     optional int32 dst_port = 10;
     optional int32 src_port = 11;
+    optional IpProto proto = 12;
 }
 
 // Adding message response from Station to Client for bidirectional API
