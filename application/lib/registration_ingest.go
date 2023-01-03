@@ -10,8 +10,10 @@ import (
 	"sync"
 	"time"
 
+	pbany "github.com/golang/protobuf/ptypes/any"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/refraction-networking/conjure/application/liveness"
 	"github.com/refraction-networking/conjure/application/log"
@@ -351,20 +353,88 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 		return nil, fmt.Errorf("failed because IPv6 client chose IPv4 phantom")
 	}
 
+	transportParams, err := rm.getTransportParams(c2s.GetTransport(), c2s.GetTransportParams(), clientLibVer)
+	if err != nil {
+		return nil, fmt.Errorf("error handling transport params: %s", err)
+	}
+
+	phantomPort, err := rm.GetPhantomDstPort(c2s.GetTransport(), transportParams, clientLibVer)
+	if err != nil {
+		return nil, fmt.Errorf("error selecting phantom dst port: %s", err)
+	}
+
 	regSrc := c2sw.GetRegistrationSource()
 	reg := DecoyRegistration{
-		PhantomIp:          phantomAddr,
-		registrationAddr:   net.IP(c2sw.GetRegistrationAddress()),
-		Keys:               &conjureKeys,
-		Covert:             c2s.GetCovertAddress(),
-		Mask:               c2s.GetMaskedDecoyServerName(),
-		Flags:              c2s.Flags,
-		Transport:          c2s.GetTransport(),
-		DecoyListVersion:   c2s.GetDecoyListGeneration(),
-		RegistrationTime:   time.Now(),
+		DecoyListVersion: c2s.GetDecoyListGeneration(),
+		registrationAddr: net.IP(c2sw.GetRegistrationAddress()),
+		Keys:             &conjureKeys,
+		Covert:           c2s.GetCovertAddress(),
+		Transport:        c2s.GetTransport(),
+		TransportParams:  transportParams,
+		Flags:            c2s.Flags,
+
+		PhantomIp:   phantomAddr,
+		PhantomPort: phantomPort,
+
+		Mask: c2s.GetMaskedDecoyServerName(),
+
 		RegistrationSource: &regSrc,
+		RegistrationTime:   time.Now(),
 		regCount:           0,
 	}
 
 	return &reg, nil
+}
+
+func (rm *RegistrationManager) getTransportParams(t pb.TransportType, data *pbany.Any, libVer uint) (any, error) {
+	var err error
+
+	// For backwards compatibility we create a generic transport params object
+	// for transports that existed before the transportParams fields existed.
+	if libVer < 1 {
+		f := false
+		return &pb.GenericTransportParams{
+			RandomizeDstPort: &f,
+		}, nil
+	}
+
+	switch t {
+	case pb.TransportType_Min:
+		fallthrough
+	case pb.TransportType_Obfs4:
+		var m *pb.GenericTransportParams
+		err = anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
+		return m, err
+	default:
+		return nil, fmt.Errorf("unknown transport")
+	}
+}
+
+func (rm *RegistrationManager) GetPhantomDstPort(t pb.TransportType, params any, libVer uint) (uint, error) {
+
+	var randomize bool = false
+	if p, ok := params.(pb.GenericTransportParams); ok {
+		randomize = p.GetRandomizeDstPort()
+	}
+
+	var transport, ok = rm.Transports[t]
+	if !ok {
+		return 0, fmt.Errorf("unknown transport")
+	}
+
+	if randomize {
+		randomizingTransport, ok := transport.(PortRandomizingTransport)
+		if !ok {
+			return 0, fmt.Errorf("port randomization requested by param, but not supported by transport")
+		}
+
+		return randomizingTransport.GetPortSelector()(reg.Seed, params)
+	}
+
+	fixedTransport, ok := transport.(FixedPortTransport)
+	if !ok {
+		return 0, fmt.Errorf("fixed port requested by param, but not supported by selected transport")
+	}
+
+	return fixedTransport.ServicePort(), nil
 }

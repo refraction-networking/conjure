@@ -9,6 +9,7 @@ import (
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
 	dd "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports"
+	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"gitlab.com/yawning/obfs4.git/common/drbg"
 	"gitlab.com/yawning/obfs4.git/common/ntor"
 	"gitlab.com/yawning/obfs4.git/transports/obfs4"
@@ -21,6 +22,12 @@ func (Transport) LogPrefix() string { return "OBFS4" }
 
 func (Transport) GetIdentifier(r *dd.DecoyRegistration) string {
 	return string(r.Keys.Obfs4Keys.PublicKey.Bytes()[:]) + string(r.Keys.Obfs4Keys.NodeID.Bytes()[:])
+}
+
+// GetProto returns the next layer protocol that the transport uses. Implements
+// the Transport interface.
+func (Transport) GetProto() pb.IpProto {
+	return pb.IpProto_Tcp
 }
 
 func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, net.Conn, error) {
@@ -90,4 +97,21 @@ func getObfs4Registrations(regManager *dd.RegistrationManager, darkDecoyAddr net
 	}
 
 	return regs
+}
+
+// ServicePort returns the fixed port that the transport uses. Implements the
+// FixedPortTransport interface for transports.
+func ServicePort() uint16 {
+	return 443
+}
+
+const (
+	portRangeMin = 22
+	portRangeMax = 65535
+)
+
+// GetPortSelector returns a port selector created for this specific type of
+// Transport.
+func GetPortSelector() func([]byte, any) (uint16, error) {
+	return transports.PortSelectorRange(portRangeMin, portRangeMax)
 }
