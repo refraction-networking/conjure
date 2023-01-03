@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	pbany "github.com/golang/protobuf/ptypes/any"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -358,7 +357,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 		return nil, fmt.Errorf("error handling transport params: %s", err)
 	}
 
-	phantomPort, err := rm.GetPhantomDstPort(c2s.GetTransport(), transportParams, clientLibVer)
+	phantomPort, err := rm.GetPhantomDstPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer)
 	if err != nil {
 		return nil, fmt.Errorf("error selecting phantom dst port: %s", err)
 	}
@@ -374,7 +373,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 		Flags:            c2s.Flags,
 
 		PhantomIp:   phantomAddr,
-		PhantomPort: phantomPort,
+		PhantomPort: int32(phantomPort), // TODO Does this cast mater?
 
 		Mask: c2s.GetMaskedDecoyServerName(),
 
@@ -386,7 +385,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	return &reg, nil
 }
 
-func (rm *RegistrationManager) getTransportParams(t pb.TransportType, data *pbany.Any, libVer uint) (any, error) {
+func (rm *RegistrationManager) getTransportParams(t pb.TransportType, data *anypb.Any, libVer uint) (any, error) {
 	var err error
 
 	// For backwards compatibility we create a generic transport params object
@@ -410,14 +409,16 @@ func (rm *RegistrationManager) getTransportParams(t pb.TransportType, data *pban
 	}
 }
 
-func (rm *RegistrationManager) GetPhantomDstPort(t pb.TransportType, params any, libVer uint) (uint, error) {
+// GetPhantomDstPort returns the proper phantom port based on registration type, transport
+// parameters provided by the client and session details (also provided by the client).
+func (rm *RegistrationManager) GetPhantomDstPort(t pb.TransportType, params any, seed []byte, libVer uint) (uint16, error) {
 
 	var randomize bool = false
 	if p, ok := params.(pb.GenericTransportParams); ok {
 		randomize = p.GetRandomizeDstPort()
 	}
 
-	var transport, ok = rm.Transports[t]
+	var transport, ok = rm.registeredDecoys.transports[t]
 	if !ok {
 		return 0, fmt.Errorf("unknown transport")
 	}
@@ -428,7 +429,7 @@ func (rm *RegistrationManager) GetPhantomDstPort(t pb.TransportType, params any,
 			return 0, fmt.Errorf("port randomization requested by param, but not supported by transport")
 		}
 
-		return randomizingTransport.GetPortSelector()(reg.Seed, params)
+		return randomizingTransport.GetPortSelector()(seed, params)
 	}
 
 	fixedTransport, ok := transport.(FixedPortTransport)

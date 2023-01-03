@@ -29,6 +29,20 @@ func (mockTransport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst 
 	return nil, nil, nil
 }
 
+func (mockTransport) GetProto() pb.IpProto {
+	return pb.IpProto_Tcp
+}
+
+// Mock can be used as a randomizing dst port transport
+func (mockTransport) GetPortSelector() func([]byte, any) (uint16, error) {
+	return func([]byte, any) (uint16, error) { return 443, nil }
+}
+
+// Mock can be used as a fixed dst port transport
+func (mockTransport) ServicePort() uint16 {
+	return 443
+}
+
 func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 	clientToStationBytes, _ := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
 	sharedSecret, _ := hex.DecodeString("5414c734ad5dc53e6b56a7bb47ce695a14a3ef076a3d5ace9cbf3b4d12706b73")

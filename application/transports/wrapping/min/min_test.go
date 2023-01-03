@@ -23,8 +23,9 @@ func TestSuccessfulWrap(t *testing.T) {
 	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min)
 	defer c2p.Close()
 	defer sfp.Close()
+	require.NotNil(t, reg)
 
-	hmacID := reg.Keys.ConjureHMAC("MinTrasportHMACString")
+	hmacID := reg.Keys.ConjureHMAC("MinTransportHMACString")
 	message := []byte(`test message!`)
 
 	_, err := c2p.Write(append(hmacID, message...))
@@ -36,19 +37,12 @@ func TestSuccessfulWrap(t *testing.T) {
 	buffer.Write(buf[:n])
 
 	_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
-	if err != nil {
-		t.Fatalf("expected nil, got %v", err)
-	}
+	require.Nil(t, err, "error getting wrapped connection")
 
 	received := make([]byte, len(message))
 	_, err = io.ReadFull(wrapped, received)
-	if err != nil {
-		t.Fatalf("failed reading from connection: %v", err)
-	}
-
-	if !bytes.Equal(message, received) {
-		t.Fatalf("expected %v, got %v", message, received)
-	}
+	require.Nil(t, err, "failed reading from connection")
+	require.True(t, bytes.Equal(message, received))
 }
 
 func TestUnsuccessfulWrap(t *testing.T) {

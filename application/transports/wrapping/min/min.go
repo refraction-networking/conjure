@@ -9,6 +9,8 @@ import (
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
+const minTagLength = 32
+
 // Transport provides a struct implementing the Transport, WrappingTransport,
 // PortRandomizingTransport, and FixedPortTransport interfaces.
 type Transport struct{}
@@ -43,18 +45,18 @@ func (Transport) GetProto() pb.IpProto {
 // If the returned error is nil or non-nil and non-{ transports.ErrTryAgain,
 // transports.ErrNotTransport }, the caller may no longer use data or conn.
 func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, net.Conn, error) {
-	if data.Len() < 32 {
+	if data.Len() < minTagLength {
 		return nil, nil, transports.ErrTryAgain
 	}
 
-	hmacID := data.String()[:32]
+	hmacID := data.String()[:minTagLength]
 	reg, ok := regManager.GetRegistrations(originalDst)[hmacID]
 	if !ok {
 		return nil, nil, transports.ErrNotTransport
 	}
 
 	// We don't want the first 32 bytes
-	data.Next(32)
+	data.Next(minTagLength)
 
 	return reg, transports.PrependToConn(c, data), nil
 }
