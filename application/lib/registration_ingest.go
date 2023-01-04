@@ -189,7 +189,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 	// never be live)
 	if !reg.PreScanned() && reg.PhantomIp.To4() != nil {
 		// New registration received over channel that requires liveness scan for the phantom
-		live, response := rm.PhantomIsLive(reg.PhantomIp.String(), 443)
+		live, response := rm.PhantomIsLive(reg.PhantomIp.String(), uint16(reg.PhantomPort))
 
 		// TODO JMWAMPLE REMOVE
 		if live {
