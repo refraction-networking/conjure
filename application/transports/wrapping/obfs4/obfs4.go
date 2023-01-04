@@ -13,6 +13,8 @@ import (
 	"gitlab.com/yawning/obfs4.git/common/drbg"
 	"gitlab.com/yawning/obfs4.git/common/ntor"
 	"gitlab.com/yawning/obfs4.git/transports/obfs4"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type Transport struct{}
@@ -28,6 +30,14 @@ func (Transport) GetIdentifier(r *dd.DecoyRegistration) string {
 // the Transport interface.
 func (Transport) GetProto() pb.IpProto {
 	return pb.IpProto_Tcp
+}
+
+// ParseParams gives the specific transport an option to parse a generic object
+// into parameters provided by the client during registration.
+func (Transport) ParseParams(data *anypb.Any) (any, error) {
+	var m *pb.GenericTransportParams
+	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
+	return m, err
 }
 
 func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, net.Conn, error) {

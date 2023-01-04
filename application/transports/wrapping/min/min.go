@@ -7,6 +7,8 @@ import (
 	dd "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 const minTagLength = 32
@@ -35,6 +37,14 @@ func (Transport) GetIdentifier(d *dd.DecoyRegistration) string {
 // the Transport interface.
 func (Transport) GetProto() pb.IpProto {
 	return pb.IpProto_Tcp
+}
+
+// ParseParams gives the specific transport an option to parse a generic object
+// into parameters provided by the client during registration.
+func (Transport) ParseParams(data *anypb.Any) (any, error) {
+	var m *pb.GenericTransportParams
+	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
+	return m, err
 }
 
 // WrapConnection attempts to wrap the given connection in the transport. It

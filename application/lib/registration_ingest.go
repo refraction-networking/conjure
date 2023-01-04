@@ -405,8 +405,6 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 }
 
 func (rm *RegistrationManager) getTransportParams(t pb.TransportType, data *anypb.Any, libVer uint) (any, error) {
-	var err error
-
 	if data == nil {
 		return nil, nil
 	}
@@ -420,21 +418,12 @@ func (rm *RegistrationManager) getTransportParams(t pb.TransportType, data *anyp
 		}, nil
 	}
 
-	if ok := rm.IsEnabledTransport(t); !ok {
+	var transport, ok = rm.registeredDecoys.transports[t]
+	if !ok {
 		return nil, fmt.Errorf("unknown transport")
-
 	}
 
-	switch t {
-	case pb.TransportType_Min:
-		fallthrough
-	case pb.TransportType_Obfs4:
-		var m *pb.GenericTransportParams
-		err = anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
-		return m, err
-	default:
-		return nil, nil
-	}
+	return transport.ParseParams(data)
 }
 
 // GetPhantomDstPort returns the proper phantom port based on registration type, transport
@@ -445,7 +434,19 @@ func (rm *RegistrationManager) GetPhantomDstPort(t pb.TransportType, params any,
 		return 0, fmt.Errorf("unknown transport")
 	}
 
+	var randomize bool = false
+	if p, ok := params.(*pb.GenericTransportParams); ok {
+		randomize = p.GetRandomizeDstPort()
+	}
+
 	if libVer < randomizeDstPortMinVersion {
+
+		if randomize {
+			// This should not be possible as clients with older library versions will not have
+			// support for transport parameters.
+			return 0, fmt.Errorf("randomization requested in params by low client lib version")
+		}
+
 		fixedTransport, ok := transport.(FixedPortTransport)
 		if !ok {
 			// This should not be possible in a well configured client.
@@ -453,11 +454,6 @@ func (rm *RegistrationManager) GetPhantomDstPort(t pb.TransportType, params any,
 		}
 
 		return fixedTransport.ServicePort(), nil
-	}
-
-	var randomize bool = false
-	if p, ok := params.(*pb.GenericTransportParams); ok {
-		randomize = p.GetRandomizeDstPort()
 	}
 
 	if randomize {

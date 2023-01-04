@@ -6,6 +6,7 @@ import (
 	"net"
 
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // Transport defines the interface for the manager to interface with variable
@@ -28,6 +29,10 @@ type Transport interface {
 	// will need to update the enum in the protobuf file and change the packet
 	// processing in the detector.
 	GetProto() pb.IpProto
+
+	// ParseParams gives the specific transport an option to parse a generic object
+	// into parameters provided by the client during registration.
+	ParseParams(data *anypb.Any) (any, error)
 }
 
 // WrappingTransport describes any transport that is able to passively

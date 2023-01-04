@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -15,33 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
-
-type mockTransport struct{}
-
-func (mockTransport) Name() string      { return "MockTransport" }
-func (mockTransport) LogPrefix() string { return "MOCK" }
-
-func (mockTransport) GetIdentifier(d *DecoyRegistration) string {
-	return string(d.Keys.ConjureHMAC("MockTrasportHMACString"))
-}
-
-func (mockTransport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *RegistrationManager) (*DecoyRegistration, net.Conn, error) {
-	return nil, nil, nil
-}
-
-func (mockTransport) GetProto() pb.IpProto {
-	return pb.IpProto_Tcp
-}
-
-// Mock can be used as a randomizing dst port transport
-func (mockTransport) GetPortSelector() func([]byte, any) (uint16, error) {
-	return func([]byte, any) (uint16, error) { return 444, nil }
-}
-
-// Mock can be used as a fixed dst port transport
-func (mockTransport) ServicePort() uint16 {
-	return 443
-}
 
 func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 	clientToStationBytes, _ := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
