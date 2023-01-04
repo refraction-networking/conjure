@@ -8,6 +8,7 @@ import (
 
 	cj "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
 
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"github.com/stretchr/testify/require"
@@ -64,4 +65,37 @@ func TestManagerFunctionality(t *testing.T) {
 	if storedReg.PhantomIp.String() != "192.122.190.148" || storedReg.Covert != "52.44.73.6:443" {
 		t.Fatalf("Improper registration returned: %v\n", storedReg.String())
 	}
+}
+
+func TestPortSelectionInterfaces(t *testing.T) {
+	var minT = min.Transport{}
+	var obfs4T = obfs4.Transport{}
+	var randDstPort cj.PortRandomizingTransport
+	var fixedDstPort cj.FixedPortTransport
+
+	// Ensure that the Fixed port interface for the existing transports (as of implementing port
+	// randomization) return the backwards compatible fixed port (443)
+	fixedDstPort = minT
+	require.NotNil(t, fixedDstPort)
+	require.Equal(t, uint16(443), fixedDstPort.ServicePort())
+
+	fixedDstPort = obfs4T
+	require.NotNil(t, fixedDstPort)
+	require.Equal(t, uint16(443), fixedDstPort.ServicePort())
+
+	// Ensure that the existing transport that implement Port randomization can be used as such.
+	randDstPort = minT
+	require.NotNil(t, randDstPort)
+	selector := randDstPort.GetPortSelector()
+	require.NotNil(t, selector)
+	_, err := selector([]byte{}, nil)
+	require.Nil(t, err)
+
+	randDstPort = obfs4T
+	require.NotNil(t, randDstPort)
+	selector = randDstPort.GetPortSelector()
+	require.NotNil(t, selector)
+	_, err = selector([]byte{}, nil)
+	require.Nil(t, err)
+
 }

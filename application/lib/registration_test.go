@@ -35,7 +35,7 @@ func (mockTransport) GetProto() pb.IpProto {
 
 // Mock can be used as a randomizing dst port transport
 func (mockTransport) GetPortSelector() func([]byte, any) (uint16, error) {
-	return func([]byte, any) (uint16, error) { return 443, nil }
+	return func([]byte, any) (uint16, error) { return 444, nil }
 }
 
 // Mock can be used as a fixed dst port transport
@@ -297,7 +297,13 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 }
 
 func TestRegString(t *testing.T) {
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
 	rm := NewRegistrationManager(&RegConfig{})
+
+	// The mock registration has transport id 0, so we hard code that here too
+	var transportType pb.TransportType = 0
+	err := rm.AddTransport(transportType, mockTransport{})
+	require.Nil(t, err)
 
 	c2s, keys := mockReceiveFromDetector()
 

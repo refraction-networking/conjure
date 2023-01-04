@@ -63,7 +63,7 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.
 
 // ServicePort returns the fixed port that the transport uses. Implements the
 // FixedPortTransport interface for transports.
-func ServicePort() uint16 {
+func (Transport) ServicePort() uint16 {
 	return 443
 }
 
@@ -74,6 +74,6 @@ const (
 
 // GetPortSelector returns a port selector created for this specific type of
 // Transport.
-func GetPortSelector() func([]byte, any) (uint16, error) {
+func (Transport) GetPortSelector() func([]byte, any) (uint16, error) {
 	return transports.PortSelectorRange(portRangeMin, portRangeMax)
 }

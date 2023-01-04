@@ -25,6 +25,11 @@ const (
 	jobBufferDivisor = 10
 )
 
+const (
+	// Earliest client library version ID that supports destination port randomization
+	randomizeDstPortMinVersion uint = 3
+)
+
 // HandleRegUpdates is responsible for launching and managing registration
 // ingest from the perspective of the RegistrationManager. The keys to success
 // in this job are:
@@ -320,17 +325,10 @@ func (rm *RegistrationManager) parseRegMessage(msg []byte) ([]*DecoyRegistration
 	return newRegs, nil
 }
 
-// NewRegistrationC2SWrapper creates a new registration from details provided. Adds the registration
-// to tracking map, But marks it as not valid.
-func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, includeV6 bool) (*DecoyRegistration, error) {
-	c2s := c2sw.GetRegistrationPayload()
-
-	// Generate keys from shared secret using HKDF
-	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret(), c2s.GetTransport())
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate keys: %v", err)
-	}
-
+// NewRegistration creates a new registration from details provided. Adds the registration
+// to tracking map, But marks it as not valid. This is a utility function, it its not
+// used in the ingest pipeline
+func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
 	gen := uint(c2s.GetDecoyListGeneration())
 	clientLibVer := uint(c2s.GetClientLibVersion())
 	phantomAddr, err := rm.PhantomSelector.Select(
@@ -344,14 +342,6 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 			err)
 	}
 
-	clientAddr := net.IP(c2sw.GetRegistrationAddress())
-
-	if phantomAddr.To4() != nil && clientAddr.To4() == nil {
-		// This can happen if the client chooses from a set that contains no
-		// ipv6 options even if include ipv6 is enabled they will get ipv4.
-		return nil, fmt.Errorf("failed because IPv6 client chose IPv4 phantom")
-	}
-
 	transportParams, err := rm.getTransportParams(c2s.GetTransport(), c2s.GetTransportParams(), clientLibVer)
 	if err != nil {
 		return nil, fmt.Errorf("error handling transport params: %s", err)
@@ -362,11 +352,9 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 		return nil, fmt.Errorf("error selecting phantom dst port: %s", err)
 	}
 
-	regSrc := c2sw.GetRegistrationSource()
 	reg := DecoyRegistration{
 		DecoyListVersion: c2s.GetDecoyListGeneration(),
-		registrationAddr: net.IP(c2sw.GetRegistrationAddress()),
-		Keys:             &conjureKeys,
+		Keys:             conjureKeys,
 		Covert:           c2s.GetCovertAddress(),
 		Transport:        c2s.GetTransport(),
 		TransportParams:  transportParams,
@@ -377,7 +365,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 
 		Mask: c2s.GetMaskedDecoyServerName(),
 
-		RegistrationSource: &regSrc,
+		RegistrationSource: registrationSource,
 		RegistrationTime:   time.Now(),
 		regCount:           0,
 	}
@@ -385,8 +373,43 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	return &reg, nil
 }
 
+// NewRegistrationC2SWrapper creates a new registration from details provided. Adds the registration
+// to tracking map, But marks it as not valid.
+func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, includeV6 bool) (*DecoyRegistration, error) {
+	c2s := c2sw.GetRegistrationPayload()
+
+	// Generate keys from shared secret using HKDF
+	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret(), c2s.GetTransport())
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate keys: %v", err)
+	}
+
+	regSrc := c2sw.GetRegistrationSource()
+
+	reg, err := rm.NewRegistration(c2s, &conjureKeys, includeV6, &regSrc)
+	if err != nil || reg == nil {
+		return nil, fmt.Errorf("failed to build registration: %s", err)
+	}
+
+	clientAddr := net.IP(c2sw.GetRegistrationAddress())
+
+	if reg.PhantomIp.To4() != nil && clientAddr.To4() == nil {
+		// This can happen if the client chooses from a set that contains no
+		// ipv6 options even if include ipv6 is enabled they will get ipv4.
+		return nil, fmt.Errorf("failed because IPv6 client chose IPv4 phantom")
+	}
+
+	reg.registrationAddr = clientAddr
+
+	return reg, nil
+}
+
 func (rm *RegistrationManager) getTransportParams(t pb.TransportType, data *anypb.Any, libVer uint) (any, error) {
 	var err error
+
+	if data == nil {
+		return nil, nil
+	}
 
 	// For backwards compatibility we create a generic transport params object
 	// for transports that existed before the transportParams fields existed.
@@ -397,6 +420,11 @@ func (rm *RegistrationManager) getTransportParams(t pb.TransportType, data *anyp
 		}, nil
 	}
 
+	if ok := rm.IsEnabledTransport(t); !ok {
+		return nil, fmt.Errorf("unknown transport")
+
+	}
+
 	switch t {
 	case pb.TransportType_Min:
 		fallthrough
@@ -405,22 +433,31 @@ func (rm *RegistrationManager) getTransportParams(t pb.TransportType, data *anyp
 		err = anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
 		return m, err
 	default:
-		return nil, fmt.Errorf("unknown transport")
+		return nil, nil
 	}
 }
 
 // GetPhantomDstPort returns the proper phantom port based on registration type, transport
 // parameters provided by the client and session details (also provided by the client).
 func (rm *RegistrationManager) GetPhantomDstPort(t pb.TransportType, params any, seed []byte, libVer uint) (uint16, error) {
-
-	var randomize bool = false
-	if p, ok := params.(pb.GenericTransportParams); ok {
-		randomize = p.GetRandomizeDstPort()
-	}
-
 	var transport, ok = rm.registeredDecoys.transports[t]
 	if !ok {
 		return 0, fmt.Errorf("unknown transport")
+	}
+
+	if libVer < randomizeDstPortMinVersion {
+		fixedTransport, ok := transport.(FixedPortTransport)
+		if !ok {
+			// This should not be possible in a well configured client.
+			return 0, fmt.Errorf("client doesn't support randomization, but transport doesn't support static dst port")
+		}
+
+		return fixedTransport.ServicePort(), nil
+	}
+
+	var randomize bool = false
+	if p, ok := params.(*pb.GenericTransportParams); ok {
+		randomize = p.GetRandomizeDstPort()
 	}
 
 	if randomize {

@@ -55,7 +55,7 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 
 	p, err := NewPhantomIPSelector()
 	if err != nil {
-		// fmt.Errorf("failed to create the PhantomIPSelector object: %v", err)
+		logger.Errorf("failed to create the PhantomIPSelector object: %v", err)
 		return nil
 	}
 	return &RegistrationManager{
@@ -116,6 +116,12 @@ func (regManager *RegistrationManager) AddTransport(index pb.TransportType, t Tr
 	return nil
 }
 
+// IsEnabledTransport checks if the provided transport ID is enabled in the regisrtar
+func (regManager *RegistrationManager) IsEnabledTransport(index pb.TransportType) bool {
+	_, ok := regManager.registeredDecoys.transports[index]
+	return ok
+}
+
 // GetWrappingTransports Returns a map of the wrapping transport types to their transports. This return value
 // can be mutated freely.
 func (regManager *RegistrationManager) GetWrappingTransports() map[pb.TransportType]WrappingTransport {
@@ -131,39 +137,6 @@ func (regManager *RegistrationManager) GetWrappingTransports() map[pb.TransportT
 	}
 
 	return m
-}
-
-// NewRegistration creates a new registration from details provided. Adds the registration
-// to tracking map, But marks it as not valid.
-func (regManager *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
-	gen := uint(c2s.GetDecoyListGeneration())
-	clientLibVer := uint(c2s.GetClientLibVersion())
-	phantomAddr, err := regManager.PhantomSelector.Select(
-		conjureKeys.ConjureSeed, gen, clientLibVer, includeV6)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed phantom select: gen %d libv %d v6 %t err: %v",
-			gen,
-			clientLibVer,
-			includeV6,
-			err)
-	}
-
-	reg := DecoyRegistration{
-		PhantomIp:          phantomAddr,
-		Keys:               conjureKeys,
-		Covert:             c2s.GetCovertAddress(),
-		Mask:               c2s.GetMaskedDecoyServerName(),
-		Flags:              c2s.Flags,
-		Transport:          c2s.GetTransport(),
-		DecoyListVersion:   c2s.GetDecoyListGeneration(),
-		RegistrationTime:   time.Now(),
-		RegistrationSource: registrationSource,
-		regCount:           0,
-		clientLibVer:       c2s.GetClientLibVersion(),
-	}
-
-	return &reg, nil
 }
 
 var errIncompleteReg = errors.New("incomplete registration")
