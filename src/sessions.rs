@@ -51,18 +51,12 @@ use util::precise_time_ns;
 
 use flow_tracker::FLOW_CLIENT_LOG;
 use protobuf::Message;
-use signalling::{StationOperations, StationToDetector, IpProto};
+use signalling::{IpProto, StationOperations, StationToDetector};
 
 const S2NS: u128 = 1000 * 1000 * 1000;
 // time to add beyond original timeout if a session is still receiving packets
 // that need to be forwarded to the data plane proxying logic. (300 s = 5 mins)
 const TIMEOUT_PHANTOMS_NS: u128 = 300 * S2NS;
-
-// We _can_ filter by phantom port if we so choose, and randomize the port that
-// the clients connect to. However we are currently using exclusively port 443.
-// adding this here as a placeholder for now.
-const PHANTOM_PORT_DEFAULT: i32 = 443;
-const PORT_NO_MATCH: i32 = 0;
 
 // "errors" we want to catch
 #[derive(Debug)]
@@ -99,12 +93,8 @@ pub struct SessionDetails {
     pub client_ip: IpAddr,
     pub phantom_ip: IpAddr,
 
-    // Ports are int32 to allow for non-port values to be used as indicators
-    // (i.e. indicating "don't match on port"). If the port is 0 the no matching
-    // is applied. Otherwise, if the port is in the valid range it should be
-    // matched exactly.
-    pub dst_port: i32,
-    pub src_port: i32,
+    pub dst_port: u16,
+    pub src_port: u16,
 
     proto: IpNextHeaderProtocol,
 
@@ -123,10 +113,7 @@ impl Taggable for SessionDetails {
             false => format!("{}{}-{}", proto_prefix, self.client_ip, self.phantom_ip),
         };
 
-        match self.dst_port {
-            PORT_NO_MATCH => format!("{}-:{}", base, PHANTOM_PORT_DEFAULT),
-            port => format!("{}-:{}", base, port),
-        }
+        format!("{}-:{}", base, self.dst_port)
     }
 }
 
@@ -137,8 +124,8 @@ impl SessionDetails {
         client_ip: &str,
         phantom_ip: &str,
         timeout: u128,
-        src_port: i32,
-        dst_port: i32,
+        src_port: u16,
+        dst_port: u16,
         proto: IpNextHeaderProtocol,
     ) -> SessionResult {
         let phantom: IpAddr = match phantom_ip.parse() {
@@ -177,9 +164,9 @@ impl From<&StationToDetector> for SessionResult {
     fn from(s2d: &StationToDetector) -> Self {
         let source = s2d.get_client_ip();
         let phantom = s2d.get_phantom_ip();
-        let src_port = s2d.get_src_port();
-        let dst_port = s2d.get_dst_port();
-        let proto = match s2d.get_ip_proto() {
+        let src_port = s2d.get_src_port() as u16;
+        let dst_port = s2d.get_dst_port() as u16;
+        let proto = match s2d.get_proto() {
             IpProto::Tcp => IpNextHeaderProtocols::Tcp,
             IpProto::Udp => IpNextHeaderProtocols::Udp,
             _ => return Err(SessionError::UnrecognizedProto),
@@ -471,7 +458,6 @@ fn get_redis_conn() -> redis::Connection {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::convert::TryFrom;
     use std::str::FromStr;
     use std::{thread, time};
 
@@ -485,6 +471,11 @@ mod tests {
     // use rand::{thread_rng, Rng};
 
     const S2NS_U64: u64 = 1000 * 1000 * 1000;
+
+    // We _can_ filter by phantom port if we so choose, and randomize the port that
+    // the clients connect to. However we are currently using exclusively port 443.
+    // adding this here as a placeholder for now.
+    const PHANTOM_PORT_DEFAULT: u16 = 443;
 
     /*
     // Disabled because the #bench interface is unstable in test::
@@ -602,6 +593,7 @@ mod tests {
             s2d.set_client_ip(entry.0.to_string());
             s2d.set_phantom_ip(entry.1.to_string());
             s2d.set_timeout_ns(entry.2);
+            s2d.set_proto(IpProto::Tcp);
             s2d.set_operation(StationOperations::New);
 
             pubsub_handle_s2d(&map, &s2d)
@@ -625,6 +617,7 @@ mod tests {
             s2d.set_client_ip(entry.0.to_string());
             s2d.set_phantom_ip(entry.1.to_string());
             s2d.set_timeout_ns(entry.2);
+            s2d.set_proto(IpProto::Tcp);
             s2d.set_operation(StationOperations::Update);
 
             pubsub_handle_s2d(&map, &s2d)
@@ -681,6 +674,7 @@ mod tests {
             s2d.set_client_ip(entry.0.to_string());
             s2d.set_phantom_ip(entry.1.to_string());
             s2d.set_timeout_ns(entry.2);
+            s2d.set_proto(IpProto::Tcp);
             let sd = match SessionResult::from(&s2d) {
                 Ok(sd) => sd,
                 Err(e) => {
@@ -701,6 +695,7 @@ mod tests {
             s2d.set_client_ip(entry.0.to_string());
             s2d.set_phantom_ip(entry.1.to_string());
             s2d.set_timeout_ns(entry.2);
+            s2d.set_proto(IpProto::Tcp);
             match SessionResult::from(&s2d) {
                 Ok(_) => {
                     panic!("Should have failed");
@@ -797,8 +792,8 @@ mod tests {
                 entry.0,
                 entry.1,
                 entry.2,
-                PORT_NO_MATCH,
-                PORT_NO_MATCH,
+                PHANTOM_PORT_DEFAULT,
+                PHANTOM_PORT_DEFAULT,
                 IpNextHeaderProtocols::Tcp,
             )
             .unwrap();
@@ -835,8 +830,8 @@ mod tests {
                 entry.0,
                 entry.1,
                 entry.2,
-                PORT_NO_MATCH,
-                PORT_NO_MATCH,
+                PHANTOM_PORT_DEFAULT,
+                PHANTOM_PORT_DEFAULT,
                 IpNextHeaderProtocols::Tcp,
             )
             .unwrap();
@@ -855,7 +850,7 @@ mod tests {
             let f = &FlowNoSrcPort {
                 src_ip: src,
                 dst_ip: entry.1.parse().unwrap(),
-                dst_port: u16::try_from(PHANTOM_PORT_DEFAULT).unwrap(),
+                dst_port: PHANTOM_PORT_DEFAULT,
                 proto: IpNextHeaderProtocols::Tcp,
             };
             assert!(
@@ -871,8 +866,8 @@ mod tests {
             tt.0,
             tt.1,
             tt.2,
-            PORT_NO_MATCH,
-            PORT_NO_MATCH,
+            PHANTOM_PORT_DEFAULT,
+            PHANTOM_PORT_DEFAULT,
             IpNextHeaderProtocols::Tcp,
         )
         .unwrap();
@@ -906,8 +901,8 @@ mod tests {
                 entry.0,
                 entry.1,
                 u128::from(entry.2),
-                PORT_NO_MATCH,
-                PORT_NO_MATCH,
+                PHANTOM_PORT_DEFAULT,
+                PHANTOM_PORT_DEFAULT,
                 IpNextHeaderProtocols::Tcp,
             )
             .unwrap();
@@ -923,7 +918,7 @@ mod tests {
             let f = &FlowNoSrcPort {
                 src_ip: entry.0.parse().unwrap(),
                 dst_ip: entry.1.parse().unwrap(),
-                dst_port: u16::try_from(PHANTOM_PORT_DEFAULT).unwrap(),
+                dst_port: PHANTOM_PORT_DEFAULT,
                 proto: IpNextHeaderProtocols::Tcp,
             };
             assert_eq!(

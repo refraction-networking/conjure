@@ -189,7 +189,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 	// never be live)
 	if !reg.PreScanned() && reg.PhantomIp.To4() != nil {
 		// New registration received over channel that requires liveness scan for the phantom
-		live, response := rm.PhantomIsLive(reg.PhantomIp.String(), uint16(reg.PhantomPort))
+		live, response := rm.PhantomIsLive(reg.PhantomIp.String(), reg.PhantomPort)
 
 		// TODO JMWAMPLE REMOVE
 		if live {
@@ -361,7 +361,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		Flags:            c2s.Flags,
 
 		PhantomIp:   phantomAddr,
-		PhantomPort: int32(phantomPort), // TODO Does this cast mater?
+		PhantomPort: phantomPort,
 
 		Mask: c2s.GetMaskedDecoyServerName(),
 

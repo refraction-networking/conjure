@@ -6,6 +6,8 @@ syntax = "proto2";
 
 package tapdance;
 
+import "google/protobuf/any.proto";
+
 enum KeyType {
     AES_GCM_128 = 90;
     AES_GCM_256 = 91; // not supported atm
@@ -243,6 +245,8 @@ message ClientToStation {
     // NullTransport, MinTransport, Obfs4Transport, etc. Transport type we want from phantom proxy
     optional TransportType transport = 12;
 
+    optional google.protobuf.Any transport_params = 13;
+
     // Station is only required to check this variable during session initialization.
     // If set, station must facilitate connection to said target by itself, i.e. write into squid
     // socket an HTTP/SOCKS/any other connection request.
@@ -262,12 +266,19 @@ message ClientToStation {
     optional RegistrationFlags flags = 24;
 
     // Transport Extensions
+    // TODO(jmwample) - move to WebRTC specific transport params protobuf message.
     optional WebRTCSignal webrtc_signal = 31;
 
     // Random-sized junk to defeat packet size fingerprinting.
     optional bytes padding = 100;
 }
 
+message GenericTransportParams {
+    // Indicates whether the client has elected to use destination port
+    // randomization. Should be checked against selected transport to ensure
+    // that destination port randomization is supported.
+    optional bool randomize_dst_port = 13;
+}
 
 enum RegistrationSource {
   Unspecified = 0;
@@ -328,8 +339,8 @@ message StationToDetector {
 
     optional StationOperations operation = 4;
 
-    optional int32 dst_port = 10;
-    optional int32 src_port = 11;
+    optional uint32 dst_port = 10;
+    optional uint32 src_port = 11;
     optional IpProto proto = 12;
 }
 

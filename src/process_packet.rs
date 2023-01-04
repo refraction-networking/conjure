@@ -131,7 +131,7 @@ impl PerCoreGlobal {
     fn handle_tcp_pkt(&mut self, tcp_pkt: TcpPacket, ip_pkt: &IpPacket, frame_len: usize) {
         self.stats.tcp_packets_this_period += 1;
 
-        let flow = Flow::new(&ip_pkt, &tcp_pkt);
+        let flow = Flow::new(ip_pkt, &tcp_pkt);
         match self.check_for_tagged_flow(&flow, ip_pkt) {
             Some(_) => return,
             None => {}
@@ -154,7 +154,7 @@ impl PerCoreGlobal {
             self.stats.tls_bytes_this_period += frame_len as u64;
         }
 
-        let flow = Flow::new_udp(&ip_pkt, &udp_pkt);
+        let flow = Flow::new_udp(ip_pkt, &udp_pkt);
         match self.check_for_tagged_flow(&flow, ip_pkt) {
             Some(_) => return,
             None => {}
@@ -167,7 +167,7 @@ impl PerCoreGlobal {
     }
 
     fn check_for_tagged_flow(&mut self, flow: &Flow, ip_pkt: &IpPacket) -> Option<()> {
-        let cj_flow = FlowNoSrcPort::from_flow(&flow);
+        let cj_flow = FlowNoSrcPort::from_flow(flow);
         if self.flow_tracker.is_phantom_session(&cj_flow) {
             // Handle packet destined for registered IP
             match self.filter_station_traffic(flow.src_ip.to_string()) {
@@ -179,13 +179,13 @@ impl PerCoreGlobal {
                     // Update expire time if necessary
                     self.flow_tracker.update_phantom_flow(&cj_flow);
                     // Forward packet...
-                    self.forward_pkt(&ip_pkt);
+                    self.forward_pkt(ip_pkt);
                     // TODO: if it was RST or FIN, close things
                     return Some(());
                 }
             }
         }
-        return None;
+        None
     }
 
     // Takes an IPv4 packet Assumes (for now) that TLS records are in a single
@@ -197,7 +197,7 @@ impl PerCoreGlobal {
             None => return,
         };
 
-        let flow = Flow::new(&ip_pkt, &tcp_pkt);
+        let flow = Flow::new(ip_pkt, &tcp_pkt);
         let tcp_flags = tcp_pkt.get_flags();
 
         if panic::catch_unwind(|| tcp_pkt.payload()).is_err() {
@@ -219,7 +219,7 @@ impl PerCoreGlobal {
                     // Update expire time if necessary
                     self.flow_tracker.update_phantom_flow(&cj_flow);
                     // Forward packet...
-                    self.forward_pkt(&ip_pkt);
+                    self.forward_pkt(ip_pkt);
                     // TODO: if it was RST or FIN, close things
                     return;
                 }

@@ -229,7 +229,7 @@ func (regManager *RegistrationManager) MarkActive(reg *DecoyRegistration) {
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
 	PhantomIp   net.IP
-	PhantomPort int32
+	PhantomPort uint16
 
 	registrationAddr   net.IP
 	Keys               *ConjureSharedKeys
@@ -374,23 +374,17 @@ func (reg *DecoyRegistration) GetRegistrationAddress() string {
 	return reg.registrationAddr.String()
 }
 
-// GetDstPort returns a destination port if one was registered. This function
-// first checks if a Phantom Port was selected, if none is available it uses
-// the default port for the Transport associated with the session.
-//
-// This function does NOT check the validity of the
-func (reg *DecoyRegistration) GetDstPort() int32 {
-	if reg.PhantomPort != -1 {
-		return reg.PhantomPort
-	}
-
-	return -1 //reg.Transport.GetDefaultPort()
+// GetDstPort returns the destination port of the phantom flow selected when the registration was
+// created. For now there is no extra fancy-ness needed here because every valid registration will
+// have selected a uint16 destination port on creation.
+func (reg *DecoyRegistration) GetDstPort() uint16 {
+	return reg.PhantomPort
 }
 
 // GetSrcPort returns a source port if one was registered. Currently this is not
 // supported -- for now  this is intended as plumbing for potentially supporting
 // seeded source port selection for the client.
-func (reg *DecoyRegistration) GetSrcPort() int32 {
+func (reg *DecoyRegistration) GetSrcPort() uint16 {
 	return 0
 }
 
@@ -795,8 +789,8 @@ func updateInDetector(reg *DecoyRegistration, duration uint64) {
 	phantom := reg.PhantomIp.String()
 	op := pb.StationOperations_Update
 	protocol := pb.IpProto_Tcp
-	srcPort := reg.GetSrcPort()
-	dstPort := reg.GetDstPort()
+	srcPort := uint32(reg.GetSrcPort())
+	dstPort := uint32(reg.GetDstPort())
 	msg := &pb.StationToDetector{
 		PhantomIp: &phantom,
 		ClientIp:  &src,
