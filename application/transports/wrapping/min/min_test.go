@@ -25,7 +25,7 @@ func TestSuccessfulWrap(t *testing.T) {
 	defer sfp.Close()
 	require.NotNil(t, reg)
 
-	hmacID := reg.Keys.ConjureHMAC("MinTransportHMACString")
+	hmacID := reg.Keys.ConjureHMAC("MinTrasportHMACString")
 	message := []byte(`test message!`)
 
 	_, err := c2p.Write(append(hmacID, message...))

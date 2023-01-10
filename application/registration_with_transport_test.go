@@ -59,7 +59,7 @@ func TestManagerFunctionality(t *testing.T) {
 
 	potentialRegistrations := rm.GetRegistrations(newReg.PhantomIp)
 	require.NotEqual(t, 0, len(potentialRegistrations))
-	storedReg := potentialRegistrations[string(newReg.Keys.ConjureHMAC("MinTransportHMACString"))]
+	storedReg := potentialRegistrations[string(newReg.Keys.ConjureHMAC("MinTrasportHMACString"))]
 	require.NotNil(t, storedReg)
 
 	if storedReg.PhantomIp.String() != "192.122.190.148" || storedReg.Covert != "52.44.73.6:443" {

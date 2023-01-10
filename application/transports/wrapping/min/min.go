@@ -37,10 +37,9 @@ func (Transport) LogPrefix() string { return "MIN" }
 
 // GetIdentifier takes in a registration and returns an identifier for it. This
 // identifier should be unique for each registration on a given phantom;
-// registrations on different phantoms can have the same identifier. ,
-// implementing the Transport interface.
+// registrations on different phantoms can have the same identifier.
 func (Transport) GetIdentifier(d *dd.DecoyRegistration) string {
-	return string(d.Keys.ConjureHMAC("MinTransportHMACString"))
+	return string(d.Keys.ConjureHMAC("MinTrasportHMACString"))
 }
 
 // GetProto returns the next layer protocol that the transport uses. Implements

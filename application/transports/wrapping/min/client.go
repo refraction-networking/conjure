@@ -72,7 +72,7 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 // 	// }
 
 // 	// // Send hmac(seed, str) bytes to indicate to station (min transport)
-// 	// connectTag := conjureHMAC(reg.keys.SharedSecret, "MinTransportHMACString")
+// 	// connectTag := conjureHMAC(reg.keys.SharedSecret, "MinTrasportHMACString")
 // 	// conn.Write(connectTag)
 // 	// return conn, nil
 // 	return nil, nil
