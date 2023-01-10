@@ -44,17 +44,15 @@ func PrependToConn(c net.Conn, r io.Reader) PrefixConn {
 
 // PortSelectorRange provides a generic and basic way to return a seeded port
 // selection function that uses a custom range.
-func PortSelectorRange(min, max int64) func([]byte, any) (uint16, error) {
-	return func(seed []byte, args any) (uint16, error) {
+func PortSelectorRange(min, max int64, seed []byte) (uint16, error) {
 
-		// Naive Method. Get random in port range.
-		hkdfReader := hkdf.New(sha256.New, seed, nil, []byte("phantom-select-port"))
-		port, err := rand.Int(hkdfReader, big.NewInt(max-min))
-		if err != nil {
-			return 0, nil
-		}
-
-		port.Add(port, big.NewInt(min))
-		return uint16(port.Uint64()), nil
+	// Naive Method. Get random in port range.
+	hkdfReader := hkdf.New(sha256.New, seed, nil, []byte("phantom-select-dst-port"))
+	port, err := rand.Int(hkdfReader, big.NewInt(max-min))
+	if err != nil {
+		return 0, nil
 	}
+
+	port.Add(port, big.NewInt(min))
+	return uint16(port.Uint64()), nil
 }

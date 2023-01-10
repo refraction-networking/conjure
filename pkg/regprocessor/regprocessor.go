@@ -49,6 +49,8 @@ type RegProcessor struct {
 	ipSelector    ipSelector
 	sock          zmqSender
 	metrics       *metrics.Metrics
+
+	transports map[pb.TransportType]lib.Transport
 }
 
 // NewRegProcessor initialize a new RegProcessor
@@ -82,6 +84,7 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 		ipSelector:    phantomSelector,
 		sock:          sock,
 		metrics:       metrics,
+		transports:    make(map[pb.TransportType]lib.Transport),
 	}, nil
 }
 
@@ -108,14 +111,30 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 		ipSelector:    phantomSelector,
 		sock:          sock,
 		metrics:       metrics,
+		transports:    make(map[pb.TransportType]lib.Transport),
 	}, nil
 }
 
+// AddTransport initializes a transport so that it can be tracked by the manager when
+// clients register.
+func (p *RegProcessor) AddTransport(index pb.TransportType, t lib.Transport) error {
+	if p == nil {
+		return fmt.Errorf("failed to add transport to uninitialized RegProcessor")
+	}
+
+	if p.transports == nil {
+		p.transports = make(map[pb.TransportType]lib.Transport)
+	}
+
+	p.transports[index] = t
+	return nil
+}
+
 // sendToZMQ sends registration message to zmq
-func (s *RegProcessor) sendToZMQ(message []byte) error {
-	s.zmqMutex.Lock()
-	_, err := s.sock.SendBytes(message, zmq.DONTWAIT)
-	s.zmqMutex.Unlock()
+func (p *RegProcessor) sendToZMQ(message []byte) error {
+	p.zmqMutex.Lock()
+	_, err := p.sock.SendBytes(message, zmq.DONTWAIT)
+	p.zmqMutex.Unlock()
 
 	return err
 }
@@ -211,8 +230,27 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		regResp.Ipv6Addr = phantom6
 	}
 
-	port := uint32(443)
-	regResp.Port = &port // future  -change to randomized
+	c2s := c2sPayload.GetRegistrationPayload()
+	if c2s == nil {
+		return nil, fmt.Errorf("missing registration payload")
+	}
+
+	transportType := c2s.GetTransport()
+	transportParams := c2s.GetTransportParams()
+	t, ok := p.transports[transportType]
+	if !ok {
+		return nil, fmt.Errorf("unknown transport")
+	}
+
+	dstPort, err := t.GetDstPort(uint(c2s.GetClientLibVersion()), cjkeys.ConjureSeed, transportParams)
+	if err != nil {
+		return nil, fmt.Errorf("error determining destination port: %v", err)
+	}
+
+	// we have to cast to uint32 because protobuf using varint for all int / uint types and doesn't
+	// have an outward facing uint16 type.
+	port := uint32(dstPort)
+	regResp.DstPort = &port
 
 	return regResp, nil
 }

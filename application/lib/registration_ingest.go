@@ -347,7 +347,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		return nil, fmt.Errorf("error handling transport params: %s", err)
 	}
 
-	phantomPort, err := rm.GetPhantomDstPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer)
+	phantomPort, err := rm.getPhantomDstPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer)
 	if err != nil {
 		return nil, fmt.Errorf("error selecting phantom dst port: %s", err)
 	}
@@ -405,70 +405,31 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 }
 
 func (rm *RegistrationManager) getTransportParams(t pb.TransportType, data *anypb.Any, libVer uint) (any, error) {
-	if data == nil {
-		return nil, nil
-	}
-
-	// For backwards compatibility we create a generic transport params object
-	// for transports that existed before the transportParams fields existed.
-	if libVer < 1 {
-		f := false
-		return &pb.GenericTransportParams{
-			RandomizeDstPort: &f,
-		}, nil
-	}
-
-	var transport, ok = rm.registeredDecoys.transports[t]
-	if !ok {
-		return nil, fmt.Errorf("unknown transport")
-	}
-
-	return transport.ParseParams(data)
-}
-
-// GetPhantomDstPort returns the proper phantom port based on registration type, transport
-// parameters provided by the client and session details (also provided by the client).
-func (rm *RegistrationManager) GetPhantomDstPort(t pb.TransportType, params any, seed []byte, libVer uint) (uint16, error) {
 	var transport, ok = rm.registeredDecoys.transports[t]
 	if !ok {
 		return 0, fmt.Errorf("unknown transport")
 	}
 
-	var randomize bool = false
-	if p, ok := params.(*pb.GenericTransportParams); ok {
-		randomize = p.GetRandomizeDstPort()
+	return transport.ParseParams(libVer, data)
+}
+
+// getPhantomDstPort returns the proper phantom port based on registration type, transport
+// parameters provided by the client and session details (also provided by the client).
+func (rm *RegistrationManager) getPhantomDstPort(t pb.TransportType, params any, seed []byte, libVer uint) (uint16, error) {
+	var transport, ok = rm.registeredDecoys.transports[t]
+	if !ok {
+		return 0, fmt.Errorf("unknown transport")
 	}
 
 	if libVer < randomizeDstPortMinVersion {
-
-		if randomize {
-			// This should not be possible as clients with older library versions will not have
-			// support for transport parameters.
-			return 0, fmt.Errorf("randomization requested in params by low client lib version")
-		}
-
-		fixedTransport, ok := transport.(FixedPortTransport)
-		if !ok {
-			// This should not be possible in a well configured client.
-			return 0, fmt.Errorf("client doesn't support randomization, but transport doesn't support static dst port")
-		}
-
-		return fixedTransport.ServicePort(), nil
+		// Before randomizeDstPortMinVersion all transport (min and obfs4) exclusively used 443 as
+		// their destination port.
+		return 443, nil
 	}
 
-	if randomize {
-		randomizingTransport, ok := transport.(PortRandomizingTransport)
-		if !ok {
-			return 0, fmt.Errorf("port randomization requested by param, but not supported by transport")
-		}
-
-		return randomizingTransport.GetPortSelector()(seed, params)
-	}
-
-	fixedTransport, ok := transport.(FixedPortTransport)
-	if !ok {
-		return 0, fmt.Errorf("fixed port requested by param, but not supported by selected transport")
-	}
-
-	return fixedTransport.ServicePort(), nil
+	// GetDstPort Given the library version, a seed, and a generic object containing parameters the
+	// transport should be able to return the destination port that a clients phantom connection
+	// will attempt to reach. The libVersion is provided incase of version dependent changes in the
+	// transport selection algorithms themselves.
+	return transport.GetDstPort(libVer, seed, params)
 }

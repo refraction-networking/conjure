@@ -66,7 +66,7 @@ func TestRegistrationLookup(t *testing.T) {
 	rm := NewRegistrationManager(&RegConfig{})
 
 	// The mock registration has transport id 0, so we hard code that here too
-	err := rm.AddTransport(0, mockTransport{})
+	err := rm.AddTransport(0, &mockTransport{})
 	require.Nil(t, err)
 
 	c2s, keys := mockReceiveFromDetector()
@@ -274,7 +274,7 @@ func TestRegString(t *testing.T) {
 
 	// The mock registration has transport id 0, so we hard code that here too
 	var transportType pb.TransportType = 0
-	err := rm.AddTransport(transportType, mockTransport{})
+	err := rm.AddTransport(transportType, &mockTransport{})
 	require.Nil(t, err)
 
 	c2s, keys := mockReceiveFromDetector()

@@ -17,11 +17,25 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
+const (
+	// Earliest client library version ID that supports destination port randomization
+	randomizeDstPortMinVersion uint = 3
+
+	// port range boundaries for min when randomizing
+	portRangeMin = 22
+	portRangeMax = 65535
+)
+
+// Transport implements the station Transport interface for the obfs4 transport
 type Transport struct{}
 
-func (Transport) Name() string      { return "obfs4" }
+// Name implements the station Transport interface
+func (Transport) Name() string { return "obfs4" }
+
+// LogPrefix implements the station Transport interface
 func (Transport) LogPrefix() string { return "OBFS4" }
 
+// GetIdentifier implements the station Transport interface
 func (Transport) GetIdentifier(r *dd.DecoyRegistration) string {
 	return string(r.Keys.Obfs4Keys.PublicKey.Bytes()[:]) + string(r.Keys.Obfs4Keys.NodeID.Bytes()[:])
 }
@@ -34,12 +48,26 @@ func (Transport) GetProto() pb.IpProto {
 
 // ParseParams gives the specific transport an option to parse a generic object
 // into parameters provided by the client during registration.
-func (Transport) ParseParams(data *anypb.Any) (any, error) {
+func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
+	if data == nil {
+		return nil, nil
+	}
+
+	// For backwards compatibility we create a generic transport params object
+	// for transports that existed before the transportParams fields existed.
+	if libVersion < randomizeDstPortMinVersion {
+		f := false
+		return &pb.GenericTransportParams{
+			RandomizeDstPort: &f,
+		}, nil
+	}
+
 	var m *pb.GenericTransportParams
 	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
 	return m, err
 }
 
+// WrapConnection implements the station Transport interface
 func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, net.Conn, error) {
 	if data.Len() < ClientMinHandshakeLength {
 		return nil, nil, transports.ErrTryAgain
@@ -109,19 +137,27 @@ func getObfs4Registrations(regManager *dd.RegistrationManager, darkDecoyAddr net
 	return regs
 }
 
-// ServicePort returns the fixed port that the transport uses. Implements the
-// FixedPortTransport interface for transports.
-func (Transport) ServicePort() uint16 {
-	return 443
-}
+// GetDstPort Given the library version, a seed, and a generic object
+// containing parameters the transport should be able to return the
+// destination port that a clients phantom connection will attempt to reach
+func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, error) {
 
-const (
-	portRangeMin = 22
-	portRangeMax = 65535
-)
+	if libVersion < randomizeDstPortMinVersion {
+		return 443, nil
+	}
 
-// GetPortSelector returns a port selector created for this specific type of
-// Transport.
-func (Transport) GetPortSelector() func([]byte, any) (uint16, error) {
-	return transports.PortSelectorRange(portRangeMin, portRangeMax)
+	if params == nil {
+		return 443, nil
+	}
+
+	parameters, ok := params.(pb.GenericTransportParams)
+	if !ok {
+		return 0, fmt.Errorf("bad parameters provided")
+	}
+
+	if parameters.GetRandomizeDstPort() {
+		return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
+	}
+
+	return 443, nil
 }

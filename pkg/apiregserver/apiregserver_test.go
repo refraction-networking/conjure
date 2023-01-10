@@ -318,7 +318,7 @@ func TestCorrectBidirectionalAPI(t *testing.T) {
 		return &pb.RegistrationResponse{
 			Ipv4Addr: &v4int,
 			Ipv6Addr: net.ParseIP(fakeV6Phantom),
-			Port:     &port,
+			DstPort:  &port,
 		}, nil
 	}
 

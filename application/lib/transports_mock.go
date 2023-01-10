@@ -15,93 +15,54 @@ const (
 	mockIDFO = 2
 )
 
-type mockTransport struct{}
+type mockTransport struct {
+	id uint
+}
 
-func (mockTransport) Name() string      { return "MockTransport" }
-func (mockTransport) LogPrefix() string { return "MOCK" }
+func (*mockTransport) Name() string      { return "MockTransport" }
+func (*mockTransport) LogPrefix() string { return "MOCK" }
 
-func (mockTransport) GetIdentifier(d *DecoyRegistration) string {
+func (*mockTransport) GetIdentifier(d *DecoyRegistration) string {
 	return string(d.Keys.ConjureHMAC("MockTransportHMACString"))
 }
 
-func (mockTransport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *RegistrationManager) (*DecoyRegistration, net.Conn, error) {
+func (*mockTransport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *RegistrationManager) (*DecoyRegistration, net.Conn, error) {
 	return nil, nil, nil
 }
 
-func (mockTransport) GetProto() pb.IpProto {
+func (*mockTransport) GetProto() pb.IpProto {
 	return pb.IpProto_Tcp
 }
 
-func (mockTransport) ParseParams(data *anypb.Any) (any, error) {
+// Match the parseParams for the min transport for now. We can add a better mock in the future if we
+// need to evaluate more parameters.
+func (*mockTransport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
+	if data == nil {
+		return nil, nil
+	}
+
+	// For backwards compatibility we create a generic transport params object
+	// for transports that existed before the transportParams fields existed.
+	if libVersion < randomizeDstPortMinVersion {
+		f := false
+		return &pb.GenericTransportParams{
+			RandomizeDstPort: &f,
+		}, nil
+	}
+
 	var m *pb.GenericTransportParams
 	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
 	return m, err
 }
 
-// Mock can be used as a randomizing dst port transport
-func (mockTransport) GetPortSelector() func([]byte, any) (uint16, error) {
-	return func([]byte, any) (uint16, error) { return 444, nil }
-}
+// GetDstPort Given the library version, a seed, and a generic object
+// containing parameters the transport should be able to return the
+// destination port that a clients phantom connection will attempt to reach
+func (m *mockTransport) GetDstPort(libVersion uint, seed []byte, parameters any) (uint16, error) {
+	if m.id == mockIDFO || !parameters.(*pb.GenericTransportParams).GetRandomizeDstPort() {
+		// mock return non randomized
+		return 443, nil
+	}
 
-// Mock can be used as a fixed dst port transport
-func (mockTransport) ServicePort() uint16 {
-	return 443
-}
-
-// mtro MockTransportRandomizinOnly
-type mtro struct{}
-
-func (mtro) Name() string      { return "MockTransportRandomizing" }
-func (mtro) LogPrefix() string { return "MOCKRO" }
-
-func (mtro) GetIdentifier(d *DecoyRegistration) string {
-	return string(d.Keys.ConjureHMAC("MockTransportHMACString"))
-}
-
-func (mtro) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *RegistrationManager) (*DecoyRegistration, net.Conn, error) {
-	return nil, nil, nil
-}
-
-func (mtro) GetProto() pb.IpProto {
-	return pb.IpProto_Tcp
-}
-
-func (mtro) ParseParams(data *anypb.Any) (any, error) {
-	var m *pb.GenericTransportParams
-	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
-	return m, err
-}
-
-// Mock can be used as a randomizing dst port transport
-func (mtro) GetPortSelector() func([]byte, any) (uint16, error) {
-	return func([]byte, any) (uint16, error) { return 444, nil }
-}
-
-// mtfo MockTransportFixedOnly
-type mtfo struct{}
-
-func (mtfo) Name() string      { return "MockTransportFixed" }
-func (mtfo) LogPrefix() string { return "MOCKFO" }
-
-func (mtfo) GetIdentifier(d *DecoyRegistration) string {
-	return string(d.Keys.ConjureHMAC("MockTransportHMACString"))
-}
-
-func (mtfo) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *RegistrationManager) (*DecoyRegistration, net.Conn, error) {
-	return nil, nil, nil
-}
-
-func (mtfo) GetProto() pb.IpProto {
-	return pb.IpProto_Tcp
-}
-
-func (mtfo) ParseParams(data *anypb.Any) (any, error) {
-	var m *pb.GenericTransportParams
-	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
-	return m, err
-}
-
-// Mock can be used as a fixed dst port transport
-func (mtfo) ServicePort() uint16 {
-	return 443
+	return 444, nil
 }

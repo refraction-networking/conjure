@@ -10,9 +10,11 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	zmq "github.com/pebbe/zmq4"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -42,8 +44,10 @@ func generateC2SWrapperPayload() (c2sPayload *pb.C2SWrapper, c2sPayloadBytes []b
 	trueBool := true
 	falseBool := false
 	v := uint32(1)
+	t := pb.TransportType_Min
 
 	c2s := pb.ClientToStation{
+		Transport: &t,
 		DecoyListGeneration: &generation,
 		CovertAddress:       &covert,
 		V4Support:           &trueBool,
@@ -345,6 +349,8 @@ func TestRegisterBidirectional(t *testing.T) {
 	s := newRegProcessor()
 	s.sock = fakeSender
 	s.ipSelector = fakeSelector
+	err := s.AddTransport(pb.TransportType_Min, min.Transport{})
+	require.Nil(t, err)
 
 	// Client sends to station v4 or v6, shared secret, etc.
 	c2sPayload, _ := generateC2SWrapperPayload() // v4 support
