@@ -30,8 +30,8 @@ func (*mockTransport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst
 	return nil, nil, nil
 }
 
-func (*mockTransport) GetProto() pb.IpProto {
-	return pb.IpProto_Tcp
+func (*mockTransport) GetProto() pb.IPProto {
+	return pb.IPProto_Tcp
 }
 
 // Match the parseParams for the min transport for now. We can add a better mock in the future if we

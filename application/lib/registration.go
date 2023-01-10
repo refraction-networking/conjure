@@ -788,7 +788,7 @@ func updateInDetector(reg *DecoyRegistration, duration uint64) {
 	src := reg.registrationAddr.String()
 	phantom := reg.PhantomIp.String()
 	op := pb.StationOperations_Update
-	protocol := pb.IpProto_Tcp
+	protocol := pb.IPProto_Tcp
 	srcPort := uint32(reg.GetSrcPort())
 	dstPort := uint32(reg.GetDstPort())
 	msg := &pb.StationToDetector{

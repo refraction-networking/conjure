@@ -5223,7 +5223,7 @@ pub struct StationToDetector {
     operation: ::std::option::Option<StationOperations>,
     dst_port: ::std::option::Option<u32>,
     src_port: ::std::option::Option<u32>,
-    proto: ::std::option::Option<IpProto>,
+    proto: ::std::option::Option<IPProto>,
     // special fields
     pub unknown_fields: ::protobuf::UnknownFields,
     pub cached_size: ::protobuf::CachedSize,
@@ -5388,11 +5388,11 @@ impl StationToDetector {
         self.src_port = ::std::option::Option::Some(v);
     }
 
-    // optional .tapdance.IpProto proto = 12;
+    // optional .tapdance.IPProto proto = 12;
 
 
-    pub fn get_proto(&self) -> IpProto {
-        self.proto.unwrap_or(IpProto::Unk)
+    pub fn get_proto(&self) -> IPProto {
+        self.proto.unwrap_or(IPProto::Unk)
     }
     pub fn clear_proto(&mut self) {
         self.proto = ::std::option::Option::None;
@@ -5403,7 +5403,7 @@ impl StationToDetector {
     }
 
     // Param is passed by value, moved
-    pub fn set_proto(&mut self, v: IpProto) {
+    pub fn set_proto(&mut self, v: IPProto) {
         self.proto = ::std::option::Option::Some(v);
     }
 }
@@ -5578,7 +5578,7 @@ impl ::protobuf::Message for StationToDetector {
                 |m: &StationToDetector| { &m.src_port },
                 |m: &mut StationToDetector| { &mut m.src_port },
             ));
-            fields.push(::protobuf::reflect::accessor::make_option_accessor::<_, ::protobuf::types::ProtobufTypeEnum<IpProto>>(
+            fields.push(::protobuf::reflect::accessor::make_option_accessor::<_, ::protobuf::types::ProtobufTypeEnum<IPProto>>(
                 "proto",
                 |m: &StationToDetector| { &m.proto },
                 |m: &mut StationToDetector| { &mut m.proto },
@@ -5627,7 +5627,7 @@ pub struct RegistrationResponse {
     // message fields
     ipv4addr: ::std::option::Option<u32>,
     ipv6addr: ::protobuf::SingularField<::std::vec::Vec<u8>>,
-    port: ::std::option::Option<u32>,
+    dst_port: ::std::option::Option<u32>,
     serverRandom: ::protobuf::SingularField<::std::vec::Vec<u8>>,
     error: ::protobuf::SingularField<::std::string::String>,
     pub clientConf: ::protobuf::SingularPtrField<ClientConf>,
@@ -5702,23 +5702,23 @@ impl RegistrationResponse {
         self.ipv6addr.take().unwrap_or_else(|| ::std::vec::Vec::new())
     }
 
-    // optional uint32 port = 3;
+    // optional uint32 dst_port = 3;
 
 
-    pub fn get_port(&self) -> u32 {
-        self.port.unwrap_or(0)
+    pub fn get_dst_port(&self) -> u32 {
+        self.dst_port.unwrap_or(0)
     }
-    pub fn clear_port(&mut self) {
-        self.port = ::std::option::Option::None;
+    pub fn clear_dst_port(&mut self) {
+        self.dst_port = ::std::option::Option::None;
     }
 
-    pub fn has_port(&self) -> bool {
-        self.port.is_some()
+    pub fn has_dst_port(&self) -> bool {
+        self.dst_port.is_some()
     }
 
     // Param is passed by value, moved
-    pub fn set_port(&mut self, v: u32) {
-        self.port = ::std::option::Option::Some(v);
+    pub fn set_dst_port(&mut self, v: u32) {
+        self.dst_port = ::std::option::Option::Some(v);
     }
 
     // optional bytes serverRandom = 4;
@@ -5856,7 +5856,7 @@ impl ::protobuf::Message for RegistrationResponse {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     }
                     let tmp = is.read_uint32()?;
-                    self.port = ::std::option::Option::Some(tmp);
+                    self.dst_port = ::std::option::Option::Some(tmp);
                 },
                 4 => {
                     ::protobuf::rt::read_singular_bytes_into(wire_type, is, &mut self.serverRandom)?;
@@ -5885,7 +5885,7 @@ impl ::protobuf::Message for RegistrationResponse {
         if let Some(ref v) = self.ipv6addr.as_ref() {
             my_size += ::protobuf::rt::bytes_size(2, &v);
         }
-        if let Some(v) = self.port {
+        if let Some(v) = self.dst_port {
             my_size += ::protobuf::rt::value_size(3, v, ::protobuf::wire_format::WireTypeVarint);
         }
         if let Some(ref v) = self.serverRandom.as_ref() {
@@ -5910,7 +5910,7 @@ impl ::protobuf::Message for RegistrationResponse {
         if let Some(ref v) = self.ipv6addr.as_ref() {
             os.write_bytes(2, &v)?;
         }
-        if let Some(v) = self.port {
+        if let Some(v) = self.dst_port {
             os.write_uint32(3, v)?;
         }
         if let Some(ref v) = self.serverRandom.as_ref() {
@@ -5973,9 +5973,9 @@ impl ::protobuf::Message for RegistrationResponse {
                 |m: &mut RegistrationResponse| { &mut m.ipv6addr },
             ));
             fields.push(::protobuf::reflect::accessor::make_option_accessor::<_, ::protobuf::types::ProtobufTypeUint32>(
-                "port",
-                |m: &RegistrationResponse| { &m.port },
-                |m: &mut RegistrationResponse| { &mut m.port },
+                "dst_port",
+                |m: &RegistrationResponse| { &m.dst_port },
+                |m: &mut RegistrationResponse| { &mut m.dst_port },
             ));
             fields.push(::protobuf::reflect::accessor::make_singular_field_accessor::<_, ::protobuf::types::ProtobufTypeBytes>(
                 "serverRandom",
@@ -6010,7 +6010,7 @@ impl ::protobuf::Clear for RegistrationResponse {
     fn clear(&mut self) {
         self.ipv4addr = ::std::option::Option::None;
         self.ipv6addr.clear();
-        self.port = ::std::option::Option::None;
+        self.dst_port = ::std::option::Option::None;
         self.serverRandom.clear();
         self.error.clear();
         self.clientConf.clear();
@@ -6765,31 +6765,31 @@ impl ::protobuf::reflect::ProtobufValue for StationOperations {
 }
 
 #[derive(Clone,PartialEq,Eq,Debug,Hash)]
-pub enum IpProto {
+pub enum IPProto {
     Unk = 0,
     Tcp = 1,
     Udp = 2,
 }
 
-impl ::protobuf::ProtobufEnum for IpProto {
+impl ::protobuf::ProtobufEnum for IPProto {
     fn value(&self) -> i32 {
         *self as i32
     }
 
-    fn from_i32(value: i32) -> ::std::option::Option<IpProto> {
+    fn from_i32(value: i32) -> ::std::option::Option<IPProto> {
         match value {
-            0 => ::std::option::Option::Some(IpProto::Unk),
-            1 => ::std::option::Option::Some(IpProto::Tcp),
-            2 => ::std::option::Option::Some(IpProto::Udp),
+            0 => ::std::option::Option::Some(IPProto::Unk),
+            1 => ::std::option::Option::Some(IPProto::Tcp),
+            2 => ::std::option::Option::Some(IPProto::Udp),
             _ => ::std::option::Option::None
         }
     }
 
     fn values() -> &'static [Self] {
-        static values: &'static [IpProto] = &[
-            IpProto::Unk,
-            IpProto::Tcp,
-            IpProto::Udp,
+        static values: &'static [IPProto] = &[
+            IPProto::Unk,
+            IPProto::Tcp,
+            IPProto::Udp,
         ];
         values
     }
@@ -6797,21 +6797,21 @@ impl ::protobuf::ProtobufEnum for IpProto {
     fn enum_descriptor_static() -> &'static ::protobuf::reflect::EnumDescriptor {
         static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::EnumDescriptor> = ::protobuf::rt::LazyV2::INIT;
         descriptor.get(|| {
-            ::protobuf::reflect::EnumDescriptor::new_pb_name::<IpProto>("IpProto", file_descriptor_proto())
+            ::protobuf::reflect::EnumDescriptor::new_pb_name::<IPProto>("IPProto", file_descriptor_proto())
         })
     }
 }
 
-impl ::std::marker::Copy for IpProto {
+impl ::std::marker::Copy for IPProto {
 }
 
-impl ::std::default::Default for IpProto {
+impl ::std::default::Default for IPProto {
     fn default() -> Self {
-        IpProto::Unk
+        IPProto::Unk
     }
 }
 
-impl ::protobuf::reflect::ProtobufValue for IpProto {
+impl ::protobuf::reflect::ProtobufValue for IPProto {
     fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
         ::protobuf::reflect::ReflectValueRef::Enum(::protobuf::ProtobufEnum::descriptor(self))
     }
@@ -6898,100 +6898,100 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     operation\x18\x04\x20\x01(\x0e2\x1b.tapdance.StationOperationsR\toperati\
     on\x12\x19\n\x08dst_port\x18\n\x20\x01(\rR\x07dstPort\x12\x19\n\x08src_p\
     ort\x18\x0b\x20\x01(\rR\x07srcPort\x12'\n\x05proto\x18\x0c\x20\x01(\x0e2\
-    \x11.tapdance.IpProtoR\x05proto\"\xd2\x01\n\x14RegistrationResponse\x12\
+    \x11.tapdance.IPProtoR\x05proto\"\xd9\x01\n\x14RegistrationResponse\x12\
     \x1a\n\x08ipv4addr\x18\x01\x20\x01(\x07R\x08ipv4addr\x12\x1a\n\x08ipv6ad\
-    dr\x18\x02\x20\x01(\x0cR\x08ipv6addr\x12\x12\n\x04port\x18\x03\x20\x01(\
-    \rR\x04port\x12\"\n\x0cserverRandom\x18\x04\x20\x01(\x0cR\x0cserverRando\
-    m\x12\x14\n\x05error\x18\x05\x20\x01(\tR\x05error\x124\n\nclientConf\x18\
-    \x06\x20\x01(\x0b2\x14.tapdance.ClientConfR\nclientConf\"\xaf\x01\n\x0bD\
-    nsResponse\x12\x18\n\x07success\x18\x01\x20\x01(\x08R\x07success\x12/\n\
-    \x13clientconf_outdated\x18\x02\x20\x01(\x08R\x12clientconfOutdated\x12U\
-    \n\x16bidirectional_response\x18\x03\x20\x01(\x0b2\x1e.tapdance.Registra\
-    tionResponseR\x15bidirectionalResponse*+\n\x07KeyType\x12\x0f\n\x0bAES_G\
-    CM_128\x10Z\x12\x0f\n\x0bAES_GCM_256\x10[*)\n\x0cDnsRegMethod\x12\x07\n\
-    \x03UDP\x10\0\x12\x07\n\x03DOT\x10\x01\x12\x07\n\x03DOH\x10\x02*\xe7\x01\
-    \n\x0eC2S_Transition\x12\x11\n\rC2S_NO_CHANGE\x10\0\x12\x14\n\x10C2S_SES\
-    SION_INIT\x10\x01\x12\x1b\n\x17C2S_SESSION_COVERT_INIT\x10\x0b\x12\x18\n\
-    \x14C2S_EXPECT_RECONNECT\x10\x02\x12\x15\n\x11C2S_SESSION_CLOSE\x10\x03\
-    \x12\x14\n\x10C2S_YIELD_UPLOAD\x10\x04\x12\x16\n\x12C2S_ACQUIRE_UPLOAD\
-    \x10\x05\x12\x20\n\x1cC2S_EXPECT_UPLOADONLY_RECONN\x10\x06\x12\x0e\n\tC2\
-    S_ERROR\x10\xff\x01*\x98\x01\n\x0eS2C_Transition\x12\x11\n\rS2C_NO_CHANG\
-    E\x10\0\x12\x14\n\x10S2C_SESSION_INIT\x10\x01\x12\x1b\n\x17S2C_SESSION_C\
-    OVERT_INIT\x10\x0b\x12\x19\n\x15S2C_CONFIRM_RECONNECT\x10\x02\x12\x15\n\
-    \x11S2C_SESSION_CLOSE\x10\x03\x12\x0e\n\tS2C_ERROR\x10\xff\x01*\xac\x01\
-    \n\x0eErrorReasonS2C\x12\x0c\n\x08NO_ERROR\x10\0\x12\x11\n\rCOVERT_STREA\
-    M\x10\x01\x12\x13\n\x0fCLIENT_REPORTED\x10\x02\x12\x13\n\x0fCLIENT_PROTO\
-    COL\x10\x03\x12\x14\n\x10STATION_INTERNAL\x10\x04\x12\x12\n\x0eDECOY_OVE\
-    RLOAD\x10\x05\x12\x11\n\rCLIENT_STREAM\x10d\x12\x12\n\x0eCLIENT_TIMEOUT\
-    \x10e*9\n\rTransportType\x12\x08\n\x04Null\x10\0\x12\x07\n\x03Min\x10\
-    \x01\x12\t\n\x05Obfs4\x10\x02\x12\n\n\x06Webrtc\x10c*\x86\x01\n\x12Regis\
-    trationSource\x12\x0f\n\x0bUnspecified\x10\0\x12\x0c\n\x08Detector\x10\
-    \x01\x12\x07\n\x03API\x10\x02\x12\x13\n\x0fDetectorPrescan\x10\x03\x12\
-    \x14\n\x10BidirectionalAPI\x10\x04\x12\x07\n\x03DNS\x10\x05\x12\x14\n\
-    \x10BidirectionalDNS\x10\x06*@\n\x11StationOperations\x12\x0b\n\x07Unkno\
-    wn\x10\0\x12\x07\n\x03New\x10\x01\x12\n\n\x06Update\x10\x02\x12\t\n\x05C\
-    lear\x10\x03*$\n\x07IpProto\x12\x07\n\x03Unk\x10\0\x12\x07\n\x03Tcp\x10\
-    \x01\x12\x07\n\x03Udp\x10\x02J\x8fy\n\x07\x12\x05\0\0\xf3\x02\x01\n\x08\
-    \n\x01\x0c\x12\x03\0\0\x12\n\xb0\x01\n\x01\x02\x12\x03\x06\0\x112\xa5\
-    \x01\x20TODO:\x20We're\x20using\x20proto2\x20because\x20it's\x20the\x20d\
-    efault\x20on\x20Ubuntu\x2016.04.\n\x20At\x20some\x20point\x20we\x20will\
-    \x20want\x20to\x20migrate\x20to\x20proto3,\x20but\x20we\x20are\x20not\n\
-    \x20using\x20any\x20proto3\x20features\x20yet.\n\n\t\n\x02\x03\0\x12\x03\
-    \x08\0#\n\n\n\x02\x05\0\x12\x04\n\0\r\x01\n\n\n\x03\x05\0\x01\x12\x03\n\
-    \x05\x0c\n\x0b\n\x04\x05\0\x02\0\x12\x03\x0b\x04\x15\n\x0c\n\x05\x05\0\
-    \x02\0\x01\x12\x03\x0b\x04\x0f\n\x0c\n\x05\x05\0\x02\0\x02\x12\x03\x0b\
-    \x12\x14\n\x20\n\x04\x05\0\x02\x01\x12\x03\x0c\x04\x15\"\x13\x20not\x20s\
-    upported\x20atm\n\n\x0c\n\x05\x05\0\x02\x01\x01\x12\x03\x0c\x04\x0f\n\
-    \x0c\n\x05\x05\0\x02\x01\x02\x12\x03\x0c\x12\x14\n\n\n\x02\x04\0\x12\x04\
-    \x0f\0\x14\x01\n\n\n\x03\x04\0\x01\x12\x03\x0f\x08\x0e\n4\n\x04\x04\0\
-    \x02\0\x12\x03\x11\x04\x1b\x1a'\x20A\x20public\x20key,\x20as\x20used\x20\
-    by\x20the\x20station.\n\n\x0c\n\x05\x04\0\x02\0\x04\x12\x03\x11\x04\x0c\
-    \n\x0c\n\x05\x04\0\x02\0\x05\x12\x03\x11\r\x12\n\x0c\n\x05\x04\0\x02\0\
-    \x01\x12\x03\x11\x13\x16\n\x0c\n\x05\x04\0\x02\0\x03\x12\x03\x11\x19\x1a\
-    \n\x0b\n\x04\x04\0\x02\x01\x12\x03\x13\x04\x1e\n\x0c\n\x05\x04\0\x02\x01\
-    \x04\x12\x03\x13\x04\x0c\n\x0c\n\x05\x04\0\x02\x01\x06\x12\x03\x13\r\x14\
-    \n\x0c\n\x05\x04\0\x02\x01\x01\x12\x03\x13\x15\x19\n\x0c\n\x05\x04\0\x02\
-    \x01\x03\x12\x03\x13\x1c\x1d\n\n\n\x02\x04\x01\x12\x04\x16\0<\x01\n\n\n\
-    \x03\x04\x01\x01\x12\x03\x16\x08\x14\n\xa1\x01\n\x04\x04\x01\x02\0\x12\
-    \x03\x1b\x04!\x1a\x93\x01\x20The\x20hostname/SNI\x20to\x20use\x20for\x20\
-    this\x20host\n\n\x20The\x20hostname\x20is\x20the\x20only\x20required\x20\
-    field,\x20although\x20other\n\x20fields\x20are\x20expected\x20to\x20be\
-    \x20present\x20in\x20most\x20cases.\n\n\x0c\n\x05\x04\x01\x02\0\x04\x12\
-    \x03\x1b\x04\x0c\n\x0c\n\x05\x04\x01\x02\0\x05\x12\x03\x1b\r\x13\n\x0c\n\
-    \x05\x04\x01\x02\0\x01\x12\x03\x1b\x14\x1c\n\x0c\n\x05\x04\x01\x02\0\x03\
-    \x12\x03\x1b\x1f\x20\n\xf7\x01\n\x04\x04\x01\x02\x01\x12\x03\"\x04\"\x1a\
-    \xe9\x01\x20The\x2032-bit\x20ipv4\x20address,\x20in\x20network\x20byte\
-    \x20order\n\n\x20If\x20the\x20IPv4\x20address\x20is\x20absent,\x20then\
-    \x20it\x20may\x20be\x20resolved\x20via\n\x20DNS\x20by\x20the\x20client,\
-    \x20or\x20the\x20client\x20may\x20discard\x20this\x20decoy\x20spec\n\x20\
-    if\x20local\x20DNS\x20is\x20untrusted,\x20or\x20the\x20service\x20may\
-    \x20be\x20multihomed.\n\n\x0c\n\x05\x04\x01\x02\x01\x04\x12\x03\"\x04\
-    \x0c\n\x0c\n\x05\x04\x01\x02\x01\x05\x12\x03\"\r\x14\n\x0c\n\x05\x04\x01\
-    \x02\x01\x01\x12\x03\"\x15\x1d\n\x0c\n\x05\x04\x01\x02\x01\x03\x12\x03\"\
-    \x20!\n>\n\x04\x04\x01\x02\x02\x12\x03%\x04\x20\x1a1\x20The\x20128-bit\
-    \x20ipv6\x20address,\x20in\x20network\x20byte\x20order\n\n\x0c\n\x05\x04\
-    \x01\x02\x02\x04\x12\x03%\x04\x0c\n\x0c\n\x05\x04\x01\x02\x02\x05\x12\
-    \x03%\r\x12\n\x0c\n\x05\x04\x01\x02\x02\x01\x12\x03%\x13\x1b\n\x0c\n\x05\
-    \x04\x01\x02\x02\x03\x12\x03%\x1e\x1f\n\x91\x01\n\x04\x04\x01\x02\x03\
-    \x12\x03+\x04\x1f\x1a\x83\x01\x20The\x20Tapdance\x20station\x20public\
-    \x20key\x20to\x20use\x20when\x20contacting\x20this\n\x20decoy\n\n\x20If\
-    \x20omitted,\x20the\x20default\x20station\x20public\x20key\x20(if\x20any\
-    )\x20is\x20used.\n\n\x0c\n\x05\x04\x01\x02\x03\x04\x12\x03+\x04\x0c\n\
-    \x0c\n\x05\x04\x01\x02\x03\x06\x12\x03+\r\x13\n\x0c\n\x05\x04\x01\x02\
-    \x03\x01\x12\x03+\x14\x1a\n\x0c\n\x05\x04\x01\x02\x03\x03\x12\x03+\x1d\
-    \x1e\n\xee\x01\n\x04\x04\x01\x02\x04\x12\x032\x04\x20\x1a\xe0\x01\x20The\
-    \x20maximum\x20duration,\x20in\x20milliseconds,\x20to\x20maintain\x20an\
-    \x20open\n\x20connection\x20to\x20this\x20decoy\x20(because\x20the\x20de\
-    coy\x20may\x20close\x20the\n\x20connection\x20itself\x20after\x20this\
-    \x20length\x20of\x20time)\n\n\x20If\x20omitted,\x20a\x20default\x20of\
-    \x2030,000\x20milliseconds\x20is\x20assumed.\n\n\x0c\n\x05\x04\x01\x02\
-    \x04\x04\x12\x032\x04\x0c\n\x0c\n\x05\x04\x01\x02\x04\x05\x12\x032\r\x13\
-    \n\x0c\n\x05\x04\x01\x02\x04\x01\x12\x032\x14\x1b\n\x0c\n\x05\x04\x01\
-    \x02\x04\x03\x12\x032\x1e\x1f\n\xb0\x02\n\x04\x04\x01\x02\x05\x12\x03;\
-    \x04\x1f\x1a\xa2\x02\x20The\x20maximum\x20TCP\x20window\x20size\x20to\
-    \x20attempt\x20to\x20use\x20for\x20this\x20decoy.\n\n\x20If\x20omitted,\
-    \x20a\x20default\x20of\x2015360\x20is\x20assumed.\n\n\x20TODO:\x20the\
-    \x20default\x20is\x20based\x20on\x20the\x20current\x20heuristic\x20of\
+    dr\x18\x02\x20\x01(\x0cR\x08ipv6addr\x12\x19\n\x08dst_port\x18\x03\x20\
+    \x01(\rR\x07dstPort\x12\"\n\x0cserverRandom\x18\x04\x20\x01(\x0cR\x0cser\
+    verRandom\x12\x14\n\x05error\x18\x05\x20\x01(\tR\x05error\x124\n\nclient\
+    Conf\x18\x06\x20\x01(\x0b2\x14.tapdance.ClientConfR\nclientConf\"\xaf\
+    \x01\n\x0bDnsResponse\x12\x18\n\x07success\x18\x01\x20\x01(\x08R\x07succ\
+    ess\x12/\n\x13clientconf_outdated\x18\x02\x20\x01(\x08R\x12clientconfOut\
+    dated\x12U\n\x16bidirectional_response\x18\x03\x20\x01(\x0b2\x1e.tapdanc\
+    e.RegistrationResponseR\x15bidirectionalResponse*+\n\x07KeyType\x12\x0f\
+    \n\x0bAES_GCM_128\x10Z\x12\x0f\n\x0bAES_GCM_256\x10[*)\n\x0cDnsRegMethod\
+    \x12\x07\n\x03UDP\x10\0\x12\x07\n\x03DOT\x10\x01\x12\x07\n\x03DOH\x10\
+    \x02*\xe7\x01\n\x0eC2S_Transition\x12\x11\n\rC2S_NO_CHANGE\x10\0\x12\x14\
+    \n\x10C2S_SESSION_INIT\x10\x01\x12\x1b\n\x17C2S_SESSION_COVERT_INIT\x10\
+    \x0b\x12\x18\n\x14C2S_EXPECT_RECONNECT\x10\x02\x12\x15\n\x11C2S_SESSION_\
+    CLOSE\x10\x03\x12\x14\n\x10C2S_YIELD_UPLOAD\x10\x04\x12\x16\n\x12C2S_ACQ\
+    UIRE_UPLOAD\x10\x05\x12\x20\n\x1cC2S_EXPECT_UPLOADONLY_RECONN\x10\x06\
+    \x12\x0e\n\tC2S_ERROR\x10\xff\x01*\x98\x01\n\x0eS2C_Transition\x12\x11\n\
+    \rS2C_NO_CHANGE\x10\0\x12\x14\n\x10S2C_SESSION_INIT\x10\x01\x12\x1b\n\
+    \x17S2C_SESSION_COVERT_INIT\x10\x0b\x12\x19\n\x15S2C_CONFIRM_RECONNECT\
+    \x10\x02\x12\x15\n\x11S2C_SESSION_CLOSE\x10\x03\x12\x0e\n\tS2C_ERROR\x10\
+    \xff\x01*\xac\x01\n\x0eErrorReasonS2C\x12\x0c\n\x08NO_ERROR\x10\0\x12\
+    \x11\n\rCOVERT_STREAM\x10\x01\x12\x13\n\x0fCLIENT_REPORTED\x10\x02\x12\
+    \x13\n\x0fCLIENT_PROTOCOL\x10\x03\x12\x14\n\x10STATION_INTERNAL\x10\x04\
+    \x12\x12\n\x0eDECOY_OVERLOAD\x10\x05\x12\x11\n\rCLIENT_STREAM\x10d\x12\
+    \x12\n\x0eCLIENT_TIMEOUT\x10e*9\n\rTransportType\x12\x08\n\x04Null\x10\0\
+    \x12\x07\n\x03Min\x10\x01\x12\t\n\x05Obfs4\x10\x02\x12\n\n\x06Webrtc\x10\
+    c*\x86\x01\n\x12RegistrationSource\x12\x0f\n\x0bUnspecified\x10\0\x12\
+    \x0c\n\x08Detector\x10\x01\x12\x07\n\x03API\x10\x02\x12\x13\n\x0fDetecto\
+    rPrescan\x10\x03\x12\x14\n\x10BidirectionalAPI\x10\x04\x12\x07\n\x03DNS\
+    \x10\x05\x12\x14\n\x10BidirectionalDNS\x10\x06*@\n\x11StationOperations\
+    \x12\x0b\n\x07Unknown\x10\0\x12\x07\n\x03New\x10\x01\x12\n\n\x06Update\
+    \x10\x02\x12\t\n\x05Clear\x10\x03*$\n\x07IPProto\x12\x07\n\x03Unk\x10\0\
+    \x12\x07\n\x03Tcp\x10\x01\x12\x07\n\x03Udp\x10\x02J\x8fy\n\x07\x12\x05\0\
+    \0\xf3\x02\x01\n\x08\n\x01\x0c\x12\x03\0\0\x12\n\xb0\x01\n\x01\x02\x12\
+    \x03\x06\0\x112\xa5\x01\x20TODO:\x20We're\x20using\x20proto2\x20because\
+    \x20it's\x20the\x20default\x20on\x20Ubuntu\x2016.04.\n\x20At\x20some\x20\
+    point\x20we\x20will\x20want\x20to\x20migrate\x20to\x20proto3,\x20but\x20\
+    we\x20are\x20not\n\x20using\x20any\x20proto3\x20features\x20yet.\n\n\t\n\
+    \x02\x03\0\x12\x03\x08\0#\n\n\n\x02\x05\0\x12\x04\n\0\r\x01\n\n\n\x03\
+    \x05\0\x01\x12\x03\n\x05\x0c\n\x0b\n\x04\x05\0\x02\0\x12\x03\x0b\x04\x15\
+    \n\x0c\n\x05\x05\0\x02\0\x01\x12\x03\x0b\x04\x0f\n\x0c\n\x05\x05\0\x02\0\
+    \x02\x12\x03\x0b\x12\x14\n\x20\n\x04\x05\0\x02\x01\x12\x03\x0c\x04\x15\"\
+    \x13\x20not\x20supported\x20atm\n\n\x0c\n\x05\x05\0\x02\x01\x01\x12\x03\
+    \x0c\x04\x0f\n\x0c\n\x05\x05\0\x02\x01\x02\x12\x03\x0c\x12\x14\n\n\n\x02\
+    \x04\0\x12\x04\x0f\0\x14\x01\n\n\n\x03\x04\0\x01\x12\x03\x0f\x08\x0e\n4\
+    \n\x04\x04\0\x02\0\x12\x03\x11\x04\x1b\x1a'\x20A\x20public\x20key,\x20as\
+    \x20used\x20by\x20the\x20station.\n\n\x0c\n\x05\x04\0\x02\0\x04\x12\x03\
+    \x11\x04\x0c\n\x0c\n\x05\x04\0\x02\0\x05\x12\x03\x11\r\x12\n\x0c\n\x05\
+    \x04\0\x02\0\x01\x12\x03\x11\x13\x16\n\x0c\n\x05\x04\0\x02\0\x03\x12\x03\
+    \x11\x19\x1a\n\x0b\n\x04\x04\0\x02\x01\x12\x03\x13\x04\x1e\n\x0c\n\x05\
+    \x04\0\x02\x01\x04\x12\x03\x13\x04\x0c\n\x0c\n\x05\x04\0\x02\x01\x06\x12\
+    \x03\x13\r\x14\n\x0c\n\x05\x04\0\x02\x01\x01\x12\x03\x13\x15\x19\n\x0c\n\
+    \x05\x04\0\x02\x01\x03\x12\x03\x13\x1c\x1d\n\n\n\x02\x04\x01\x12\x04\x16\
+    \0<\x01\n\n\n\x03\x04\x01\x01\x12\x03\x16\x08\x14\n\xa1\x01\n\x04\x04\
+    \x01\x02\0\x12\x03\x1b\x04!\x1a\x93\x01\x20The\x20hostname/SNI\x20to\x20\
+    use\x20for\x20this\x20host\n\n\x20The\x20hostname\x20is\x20the\x20only\
+    \x20required\x20field,\x20although\x20other\n\x20fields\x20are\x20expect\
+    ed\x20to\x20be\x20present\x20in\x20most\x20cases.\n\n\x0c\n\x05\x04\x01\
+    \x02\0\x04\x12\x03\x1b\x04\x0c\n\x0c\n\x05\x04\x01\x02\0\x05\x12\x03\x1b\
+    \r\x13\n\x0c\n\x05\x04\x01\x02\0\x01\x12\x03\x1b\x14\x1c\n\x0c\n\x05\x04\
+    \x01\x02\0\x03\x12\x03\x1b\x1f\x20\n\xf7\x01\n\x04\x04\x01\x02\x01\x12\
+    \x03\"\x04\"\x1a\xe9\x01\x20The\x2032-bit\x20ipv4\x20address,\x20in\x20n\
+    etwork\x20byte\x20order\n\n\x20If\x20the\x20IPv4\x20address\x20is\x20abs\
+    ent,\x20then\x20it\x20may\x20be\x20resolved\x20via\n\x20DNS\x20by\x20the\
+    \x20client,\x20or\x20the\x20client\x20may\x20discard\x20this\x20decoy\
+    \x20spec\n\x20if\x20local\x20DNS\x20is\x20untrusted,\x20or\x20the\x20ser\
+    vice\x20may\x20be\x20multihomed.\n\n\x0c\n\x05\x04\x01\x02\x01\x04\x12\
+    \x03\"\x04\x0c\n\x0c\n\x05\x04\x01\x02\x01\x05\x12\x03\"\r\x14\n\x0c\n\
+    \x05\x04\x01\x02\x01\x01\x12\x03\"\x15\x1d\n\x0c\n\x05\x04\x01\x02\x01\
+    \x03\x12\x03\"\x20!\n>\n\x04\x04\x01\x02\x02\x12\x03%\x04\x20\x1a1\x20Th\
+    e\x20128-bit\x20ipv6\x20address,\x20in\x20network\x20byte\x20order\n\n\
+    \x0c\n\x05\x04\x01\x02\x02\x04\x12\x03%\x04\x0c\n\x0c\n\x05\x04\x01\x02\
+    \x02\x05\x12\x03%\r\x12\n\x0c\n\x05\x04\x01\x02\x02\x01\x12\x03%\x13\x1b\
+    \n\x0c\n\x05\x04\x01\x02\x02\x03\x12\x03%\x1e\x1f\n\x91\x01\n\x04\x04\
+    \x01\x02\x03\x12\x03+\x04\x1f\x1a\x83\x01\x20The\x20Tapdance\x20station\
+    \x20public\x20key\x20to\x20use\x20when\x20contacting\x20this\n\x20decoy\
+    \n\n\x20If\x20omitted,\x20the\x20default\x20station\x20public\x20key\x20\
+    (if\x20any)\x20is\x20used.\n\n\x0c\n\x05\x04\x01\x02\x03\x04\x12\x03+\
+    \x04\x0c\n\x0c\n\x05\x04\x01\x02\x03\x06\x12\x03+\r\x13\n\x0c\n\x05\x04\
+    \x01\x02\x03\x01\x12\x03+\x14\x1a\n\x0c\n\x05\x04\x01\x02\x03\x03\x12\
+    \x03+\x1d\x1e\n\xee\x01\n\x04\x04\x01\x02\x04\x12\x032\x04\x20\x1a\xe0\
+    \x01\x20The\x20maximum\x20duration,\x20in\x20milliseconds,\x20to\x20main\
+    tain\x20an\x20open\n\x20connection\x20to\x20this\x20decoy\x20(because\
+    \x20the\x20decoy\x20may\x20close\x20the\n\x20connection\x20itself\x20aft\
+    er\x20this\x20length\x20of\x20time)\n\n\x20If\x20omitted,\x20a\x20defaul\
+    t\x20of\x2030,000\x20milliseconds\x20is\x20assumed.\n\n\x0c\n\x05\x04\
+    \x01\x02\x04\x04\x12\x032\x04\x0c\n\x0c\n\x05\x04\x01\x02\x04\x05\x12\
+    \x032\r\x13\n\x0c\n\x05\x04\x01\x02\x04\x01\x12\x032\x14\x1b\n\x0c\n\x05\
+    \x04\x01\x02\x04\x03\x12\x032\x1e\x1f\n\xb0\x02\n\x04\x04\x01\x02\x05\
+    \x12\x03;\x04\x1f\x1a\xa2\x02\x20The\x20maximum\x20TCP\x20window\x20size\
+    \x20to\x20attempt\x20to\x20use\x20for\x20this\x20decoy.\n\n\x20If\x20omi\
+    tted,\x20a\x20default\x20of\x2015360\x20is\x20assumed.\n\n\x20TODO:\x20t\
+    he\x20default\x20is\x20based\x20on\x20the\x20current\x20heuristic\x20of\
     \x20only\n\x20using\x20decoys\x20that\x20permit\x20windows\x20of\x2015KB\
     \x20or\x20larger.\x20\x20If\x20this\n\x20heuristic\x20changes,\x20then\
     \x20this\x20default\x20doesn't\x20make\x20sense.\n\n\x0c\n\x05\x04\x01\
@@ -7479,11 +7479,11 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     order\n\n\r\n\x05\x04\x11\x02\x01\x04\x12\x04\xde\x02\x02\n\n\r\n\x05\
     \x04\x11\x02\x01\x05\x12\x04\xde\x02\x0b\x10\n\r\n\x05\x04\x11\x02\x01\
     \x01\x12\x04\xde\x02\x11\x19\n\r\n\x05\x04\x11\x02\x01\x03\x12\x04\xde\
-    \x02\x1c\x1d\n,\n\x04\x04\x11\x02\x02\x12\x04\xe1\x02\x02\x1b\x1a\x1e\
+    \x02\x1c\x1d\n,\n\x04\x04\x11\x02\x02\x12\x04\xe1\x02\x02\x1f\x1a\x1e\
     \x20Respond\x20with\x20randomized\x20port\n\n\r\n\x05\x04\x11\x02\x02\
     \x04\x12\x04\xe1\x02\x02\n\n\r\n\x05\x04\x11\x02\x02\x05\x12\x04\xe1\x02\
-    \x0b\x11\n\r\n\x05\x04\x11\x02\x02\x01\x12\x04\xe1\x02\x12\x16\n\r\n\x05\
-    \x04\x11\x02\x02\x03\x12\x04\xe1\x02\x19\x1a\nd\n\x04\x04\x11\x02\x03\
+    \x0b\x11\n\r\n\x05\x04\x11\x02\x02\x01\x12\x04\xe1\x02\x12\x1a\n\r\n\x05\
+    \x04\x11\x02\x02\x03\x12\x04\xe1\x02\x1d\x1e\nd\n\x04\x04\x11\x02\x03\
     \x12\x04\xe5\x02\x02\"\x1aV\x20Future:\x20station\x20provides\x20client\
     \x20with\x20secret,\x20want\x20chanel\x20present\n\x20Leave\x20null\x20f\
     or\x20now\n\n\r\n\x05\x04\x11\x02\x03\x04\x12\x04\xe5\x02\x02\n\n\r\n\

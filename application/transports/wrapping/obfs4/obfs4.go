@@ -42,8 +42,8 @@ func (Transport) GetIdentifier(r *dd.DecoyRegistration) string {
 
 // GetProto returns the next layer protocol that the transport uses. Implements
 // the Transport interface.
-func (Transport) GetProto() pb.IpProto {
-	return pb.IpProto_Tcp
+func (Transport) GetProto() pb.IPProto {
+	return pb.IPProto_Tcp
 }
 
 // ParseParams gives the specific transport an option to parse a generic object

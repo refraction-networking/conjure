@@ -51,7 +51,7 @@ use util::precise_time_ns;
 
 use flow_tracker::FLOW_CLIENT_LOG;
 use protobuf::Message;
-use signalling::{IpProto, StationOperations, StationToDetector};
+use signalling::{IPProto, StationOperations, StationToDetector};
 
 const S2NS: u128 = 1000 * 1000 * 1000;
 // time to add beyond original timeout if a session is still receiving packets
@@ -167,8 +167,8 @@ impl From<&StationToDetector> for SessionResult {
         let src_port = s2d.get_src_port() as u16;
         let dst_port = s2d.get_dst_port() as u16;
         let proto = match s2d.get_proto() {
-            IpProto::Tcp => IpNextHeaderProtocols::Tcp,
-            IpProto::Udp => IpNextHeaderProtocols::Udp,
+            IPProto::Tcp => IpNextHeaderProtocols::Tcp,
+            IPProto::Udp => IpNextHeaderProtocols::Udp,
             _ => return Err(SessionError::UnrecognizedProto),
         };
         SessionDetails::new(
@@ -593,7 +593,7 @@ mod tests {
             s2d.set_client_ip(entry.0.to_string());
             s2d.set_phantom_ip(entry.1.to_string());
             s2d.set_timeout_ns(entry.2);
-            s2d.set_proto(IpProto::Tcp);
+            s2d.set_proto(IPProto::Tcp);
             s2d.set_operation(StationOperations::New);
 
             pubsub_handle_s2d(&map, &s2d)
@@ -617,7 +617,7 @@ mod tests {
             s2d.set_client_ip(entry.0.to_string());
             s2d.set_phantom_ip(entry.1.to_string());
             s2d.set_timeout_ns(entry.2);
-            s2d.set_proto(IpProto::Tcp);
+            s2d.set_proto(IPProto::Tcp);
             s2d.set_operation(StationOperations::Update);
 
             pubsub_handle_s2d(&map, &s2d)
@@ -674,7 +674,7 @@ mod tests {
             s2d.set_client_ip(entry.0.to_string());
             s2d.set_phantom_ip(entry.1.to_string());
             s2d.set_timeout_ns(entry.2);
-            s2d.set_proto(IpProto::Tcp);
+            s2d.set_proto(IPProto::Tcp);
             let sd = match SessionResult::from(&s2d) {
                 Ok(sd) => sd,
                 Err(e) => {
@@ -695,7 +695,7 @@ mod tests {
             s2d.set_client_ip(entry.0.to_string());
             s2d.set_phantom_ip(entry.1.to_string());
             s2d.set_timeout_ns(entry.2);
-            s2d.set_proto(IpProto::Tcp);
+            s2d.set_proto(IPProto::Tcp);
             match SessionResult::from(&s2d) {
                 Ok(_) => {
                     panic!("Should have failed");

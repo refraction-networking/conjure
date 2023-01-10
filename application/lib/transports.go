@@ -26,7 +26,7 @@ type Transport interface {
 	// GetProto returns the IP protocol used by the transport. Typical transports will use TCP or
 	// UDP, if something beyond these is required you will need to update the enum in the protobuf
 	// file and change the packet processing in the detector.
-	GetProto() pb.IpProto
+	GetProto() pb.IPProto
 
 	// GetDstPort Given the library version, a seed, and a generic object containing parameters the
 	// transport should be able to return the destination port that a clients phantom connection
