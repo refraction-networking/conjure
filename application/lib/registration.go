@@ -226,10 +226,20 @@ func (regManager *RegistrationManager) MarkActive(reg *DecoyRegistration) {
 	regManager.registeredDecoys.markActive(reg)
 }
 
+
+// Cleanup sends a signal to the detector to empty cached sessions. This ensures that the detector
+// does not forward traffic for sessions that it knows about for a previous launch of the station
+// that the current session doesn't know about.
+func (regManager *RegistrationManager) Cleanup() {
+	clearDetector()
+}
+
+
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
 	PhantomIp   net.IP
 	PhantomPort uint16
+	PhantomProto pb.IPProto
 
 	registrationAddr   net.IP
 	Keys               *ConjureSharedKeys
@@ -438,10 +448,10 @@ func NewRegisteredDecoys() *RegisteredDecoys {
 		transports:     make(map[pb.TransportType]Transport),
 		decoysTimeouts: make(map[string]*DecoyTimeout),
 		registerForDetector: func(d *DecoyRegistration) {
-			registerForDetector(d, uint64(defaultUnusedTimeout.Nanoseconds()))
+			sendToDetector(d, uint64(defaultUnusedTimeout.Nanoseconds()), pb.StationOperations_New)
 		},
 		updateInDetector: func(d *DecoyRegistration) {
-			registerForDetector(d, uint64(defaultActiveTimeout.Nanoseconds()))
+			sendToDetector(d, uint64(defaultUnusedTimeout.Nanoseconds()), pb.StationOperations_Update)
 		},
 	}
 }
@@ -726,7 +736,7 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) (int, int)
 // **NOTE**: If you mess with this function make sure the
 // session tracking tests on the detector side do what you expect
 // them to do. (conjure/src/session.rs)
-func registerForDetector(reg *DecoyRegistration, duration uint64) {
+func sendToDetector(reg *DecoyRegistration, duration uint64, op pb.StationOperations) {
 	client := getRedisClient()
 	if client == nil {
 		fmt.Printf("couldn't connect to redis")
@@ -735,10 +745,15 @@ func registerForDetector(reg *DecoyRegistration, duration uint64) {
 
 	src := reg.registrationAddr.String()
 	phantom := reg.PhantomIp.String()
-	op := pb.StationOperations_New
+	// protocol := reg.GetProto()
+	srcPort := uint32(reg.GetSrcPort())
+	dstPort := uint32(reg.GetDstPort())
 	msg := &pb.StationToDetector{
 		PhantomIp: &phantom,
 		ClientIp:  &src,
+		DstPort:   &dstPort,
+		SrcPort:   &srcPort,
+		Proto:     &reg.PhantomProto,
 		TimeoutNs: &duration,
 		Operation: &op,
 	}
@@ -762,42 +777,6 @@ func clearDetector() {
 
 	op := pb.StationOperations_Clear
 	msg := &pb.StationToDetector{
-		Operation: &op,
-	}
-
-	s2d, err := proto.Marshal(msg)
-	if err != nil {
-		// throw(fit)
-		return
-	}
-
-	ctx := context.Background()
-	client.Publish(ctx, DETECTOR_REG_CHANNEL, string(s2d))
-}
-
-// **NOTE**: If you mess with this function make sure the
-// session tracking tests on the detector side do what you expect
-// them to do. (conjure/src/session.rs)
-func updateInDetector(reg *DecoyRegistration, duration uint64) {
-	client := getRedisClient()
-	if client == nil {
-		fmt.Printf("couldn't connect to redis")
-		return
-	}
-
-	src := reg.registrationAddr.String()
-	phantom := reg.PhantomIp.String()
-	op := pb.StationOperations_Update
-	protocol := pb.IPProto_Tcp
-	srcPort := uint32(reg.GetSrcPort())
-	dstPort := uint32(reg.GetDstPort())
-	msg := &pb.StationToDetector{
-		PhantomIp: &phantom,
-		ClientIp:  &src,
-		DstPort:   &dstPort,
-		SrcPort:   &srcPort,
-		Proto:     &protocol,
-		TimeoutNs: &duration,
 		Operation: &op,
 	}
 

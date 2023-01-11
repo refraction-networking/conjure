@@ -202,7 +202,10 @@ func main() {
 	}
 
 	for transportType, t := range defaultTransports {
-		processor.AddTransport(transportType, t)
+		err := processor.AddTransport(transportType, t)
+		if err != nil {
+			log.Fatalf("failed to add transport: %s - %d", t.Name(), transportType)
+		}
 	}
 
 	regServers := []regServer{}

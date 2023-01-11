@@ -352,6 +352,11 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		return nil, fmt.Errorf("error selecting phantom dst port: %s", err)
 	}
 
+	phantomProto, err := rm.getTransportProto(c2s.GetTransport(), transportParams, clientLibVer)
+	if err != nil {
+		return nil, fmt.Errorf("error determining phantom connection proto: %s", err)
+	}
+
 	reg := DecoyRegistration{
 		DecoyListVersion: c2s.GetDecoyListGeneration(),
 		Keys:             conjureKeys,
@@ -362,6 +367,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 
 		PhantomIp:   phantomAddr,
 		PhantomPort: phantomPort,
+		PhantomProto: phantomProto,
 
 		Mask: c2s.GetMaskedDecoyServerName(),
 
@@ -411,6 +417,17 @@ func (rm *RegistrationManager) getTransportParams(t pb.TransportType, data *anyp
 	}
 
 	return transport.ParseParams(libVer, data)
+}
+
+// getTransportProto returns the IP next layer protocol that this session will use to connect.
+// For transport this could potentially depend on library version, params, etc.
+func (rm *RegistrationManager) getTransportProto(t pb.TransportType, params any, libVer uint) (pb.IPProto, error) {
+	var transport, ok = rm.registeredDecoys.transports[t]
+	if !ok {
+		return 0, fmt.Errorf("unknown transport")
+	}
+
+	return transport.GetProto(), nil
 }
 
 // getPhantomDstPort returns the proper phantom port based on registration type, transport

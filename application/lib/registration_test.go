@@ -108,7 +108,7 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 	channel := pubsub.Channel()
 
 	// send message to redis pubsub, wait, then close subscriber & channel
-	registerForDetector(&reg, uint64(defaultUnusedTimeout.Nanoseconds()))
+	sendToDetector(&reg, uint64(defaultUnusedTimeout.Nanoseconds()), pb.StationOperations_New)
 
 	time.AfterFunc(time.Second*1, func() {
 		_ = pubsub.Close()
@@ -170,7 +170,7 @@ func TestRegisterForDetectorArray(t *testing.T) {
 		}
 
 		// send message to redis pubsub, wait, then close subscriber & channel
-		registerForDetector(reg, uint64(defaultUnusedTimeout.Nanoseconds()))
+		sendToDetector(reg, uint64(defaultUnusedTimeout.Nanoseconds()), pb.StationOperations_New)
 
 		// check message
 		msg := <-channel
@@ -234,7 +234,7 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 
 		// send message to redis pubsub, wait, then close subscriber & channel
 		go func() {
-			registerForDetector(reg, uint64(defaultUnusedTimeout.Nanoseconds()))
+			sendToDetector(reg, uint64(defaultUnusedTimeout.Nanoseconds()), pb.StationOperations_New)
 		}()
 	}
 
