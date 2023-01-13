@@ -76,8 +76,8 @@ pub unsafe extern "C" fn rust_process_packet(
     #[allow(unused_mut)]
     let mut global = &mut *ptr;
 
-    let mut rust_view_len = frame_len as usize;
-    let rust_view = slice::from_raw_parts_mut(raw_ethframe as *mut u8, frame_len as usize);
+    let mut rust_view_len = frame_len;
+    let rust_view = slice::from_raw_parts_mut(raw_ethframe as *mut u8, frame_len);
 
     // If this is a GRE, we want to ignore the GRE overhead in our packets
     rust_view_len -= global.gre_offset;
