@@ -68,9 +68,7 @@ pub fn extract_payloads(
             [0; REPRESENTATIVE_AND_FSP_LEN];
         let mut in_offset: usize = tls_payload.len() - 92;
         let mut out_offset: usize = 0;
-        while in_offset < (tls_payload.len() - 3)
-            && out_offset < (REPRESENTATIVE_AND_FSP_LEN - 2)
-        {
+        while in_offset < (tls_payload.len() - 3) && out_offset < (REPRESENTATIVE_AND_FSP_LEN - 2) {
             extract_stego_bytes(
                 &tls_payload[in_offset..in_offset + 4],
                 &mut stego_repr_and_fsp[out_offset..out_offset + 3],
