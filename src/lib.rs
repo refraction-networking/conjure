@@ -195,7 +195,7 @@ impl PerCoreStats {
         let (user_secs, user_usecs, sys_secs, sys_usecs) = c_api::c_get_cpu_time();
         let user_microsecs: i64 = user_usecs + 1000000 * user_secs;
         let sys_microsecs: i64 = sys_usecs + 1000000 * sys_secs;
-        let epoch_secs: f64 = (cur_measure_time - self.last_measure_time) as f64/1_000_000_000 as f64;
+        let epoch_secs: f64 = (cur_measure_time - self.last_measure_time) as f64/1_000_000_000_f64;
 
         /*
         let measured_dur_ns = cur_measure_time - self.last_measure_time;
@@ -237,13 +237,13 @@ impl PerCoreStats {
             self.bytes_this_period as f64/epoch_secs,
             self.src_443_bytes_this_period,
             self.src_443_bytes_this_period as f64/epoch_secs,
-            100 as f64 * (self.bytes_this_period - self.src_443_bytes_this_period) as f64 / self.bytes_this_period as f64,
+            100_f64 * (self.bytes_this_period - self.src_443_bytes_this_period) as f64 / self.bytes_this_period as f64,
             self.dst_443_bytes_this_period,
             self.dst_443_bytes_this_period as f64/epoch_secs,
-            100 as f64 * self.dst_443_bytes_this_period as f64 / self.bytes_this_period as f64,
+            100_f64 * self.dst_443_bytes_this_period as f64 / self.bytes_this_period as f64,
             self.src_gt1024_bytes_this_period,
             self.src_gt1024_bytes_this_period as f64/epoch_secs,
-            100 as f64 * self.src_gt1024_bytes_this_period as f64 / self.bytes_this_period as f64,
+            100_f64 * self.src_gt1024_bytes_this_period as f64 / self.bytes_this_period as f64,
         );
 
         self.elligator_this_period = 0;
