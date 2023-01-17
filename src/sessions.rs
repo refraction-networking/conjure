@@ -46,16 +46,16 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 
 use redis;
-use time::precise_time_ns;
+use util::precise_time_ns;
 
 use flow_tracker::{FlowNoSrcPort, FLOW_CLIENT_LOG};
 use protobuf::Message;
 use signalling::StationToDetector;
 
-const S2NS: u64 = 1000 * 1000 * 1000;
+const S2NS: u128 = 1000 * 1000 * 1000;
 // time to add beyond original timeout if a session is still receiving packets
 // that need to be forwarded to the data plane proxying logic. (300 s = 5 mins)
-const TIMEOUT_PHANTOMS_NS: u64 = 300 * S2NS;
+const TIMEOUT_PHANTOMS_NS: u128 = 300 * S2NS;
 
 // We _can_ filter by phantom port if we so choose, and randomize the port that
 // the clients connect to. However we are currently using exclusively port 443.
@@ -93,13 +93,13 @@ pub struct SessionDetails {
     pub client_ip: IpAddr,
     pub phantom_ip: IpAddr,
     pub phantom_port: u16,
-    timeout: u64,
+    timeout: u128,
 }
 
 impl SessionDetails {
     // This function parses acceptable Session Details and returns an error if
     // the details provided do not fit current requirements for parsing
-    pub fn new(client_ip: &str, phantom_ip: &str, timeout: u64) -> SessionResult {
+    pub fn new(client_ip: &str, phantom_ip: &str, timeout: u128) -> SessionResult {
         let phantom: IpAddr = match phantom_ip.parse() {
             Ok(ip) => ip,
             Err(_) => return Err(SessionError::InvalidPhantom),
@@ -141,7 +141,7 @@ impl From<&StationToDetector> for SessionResult {
     fn from(s2d: &StationToDetector) -> Self {
         let source = s2d.get_client_ip();
         let phantom = s2d.get_phantom_ip();
-        SessionDetails::new(source, phantom, s2d.get_timeout_ns())
+        SessionDetails::new(source, phantom, u128::from(s2d.get_timeout_ns()))
     }
 }
 
@@ -173,7 +173,7 @@ pub struct SessionTracker {
     // Note: In the future phantom port can be optionally added to the key
     // string to further filter incoming connections. This is left off for now
     // to allow for testing of source-refraction.
-    pub tracked_sessions: Arc<RwLock<HashMap<String, u64>>>,
+    pub tracked_sessions: Arc<RwLock<HashMap<String, u128>>>,
 }
 
 impl Default for SessionTracker {
@@ -253,7 +253,7 @@ impl SessionTracker {
         self.try_update_session_timeout(key, TIMEOUT_PHANTOMS_NS);
     }
 
-    fn try_update_session_timeout(&mut self, key: String, extra_time: u64) {
+    fn try_update_session_timeout(&mut self, key: String, extra_time: u128) {
         // Get writable map
         let mut mmap = self.tracked_sessions.write().expect("RwLock broken");
 
@@ -313,7 +313,7 @@ impl SessionTracker {
 }
 
 // No returns in this function so that it runs for the lifetime of the process.
-fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u64>>>) {
+fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u128>>>) {
     let mut con = get_redis_conn();
     let mut pubsub = con.as_pubsub();
     pubsub
@@ -400,6 +400,8 @@ mod tests {
     use signalling::StationToDetector;
     use std::{thread, time};
 
+    const S2NS_U64: u64 = 1000 * 1000 * 1000;
+
     #[test]
     #[ignore] // Requires redis to run properly.
     fn test_session_tracker_pubsub() {
@@ -411,18 +413,18 @@ mod tests {
         // redis::cmd("PUBLISH").arg("dark_decoy_map").arg(octs).execute(&self.redis_conn);
         let st = SessionTracker::new();
 
-        let test_tuples = [
+        let test_tuples: [(&str, &str, u64); 8] = [
             // (client_ip, phantom_ip, timeout)
             ("172.128.0.2", "8.0.0.1", 1), // timeout immediately
-            ("192.168.0.1", "10.10.0.1", 5 * S2NS),
-            ("192.168.0.1", "192.0.0.127", 5 * S2NS),
-            ("", "2345::6789", 5 * S2NS),
+            ("192.168.0.1", "10.10.0.1", 5 * S2NS_U64),
+            ("192.168.0.1", "192.0.0.127", 5 * S2NS_U64),
+            ("", "2345::6789", 5 * S2NS_U64),
             // duplicate with shorter timeout should not drop
-            ("2601::123:abcd", "2001::1234", 5 * S2NS),
-            ("::1", "2001::1234", S2NS),
+            ("2601::123:abcd", "2001::1234", 5 * S2NS_U64),
+            ("::1", "2001::1234", S2NS_U64),
             // duplicate with long timeout should prevent drop
             ("7.0.0.2", "8.8.8.8", 1),
-            ("7.0.0.2", "8.8.8.8", 5 * S2NS),
+            ("7.0.0.2", "8.8.8.8", 5 * S2NS_U64),
         ];
 
         st.spawn_update_thread();
@@ -500,7 +502,7 @@ mod tests {
             };
             // assert_eq!(entry.0, sd.client_ip.to_string());
             assert_eq!(entry.1, sd.phantom_ip.to_string());
-            assert_eq!(entry.2, sd.timeout)
+            assert_eq!(u128::from(entry.2), sd.timeout)
         }
 
         for entry in &test_tuples_bad {
@@ -574,19 +576,19 @@ mod tests {
         let test_tuples = [
             // (client_ip, phantom_ip, timeout)
             ("172.128.0.2", "8.0.0.1", 1, false), // timeout immediately
-            ("192.168.0.1", "10.10.0.1", 5 * S2NS, true),
-            ("192.168.0.1", "192.0.0.127", 5 * S2NS, true),
+            ("192.168.0.1", "10.10.0.1", 5 * S2NS_U64, true),
+            ("192.168.0.1", "192.0.0.127", 5 * S2NS_U64, true),
             // client registering with v4 will also create registrations for v6 just in-case
-            ("192.168.0.1", "2801::1234", 5 * S2NS, true),
+            ("192.168.0.1", "2801::1234", 5 * S2NS_U64, true),
             // duplicate with shorter timeout should not drop
-            ("2601::123:abcd", "2001::1234", 5 * S2NS, true),
-            ("::1", "2001::1234", S2NS, true),
+            ("2601::123:abcd", "2001::1234", 5 * S2NS_U64, true),
+            ("::1", "2001::1234", S2NS_U64, true),
             // duplicate with long timeout should prevent drop
             ("7.0.0.2", "8.8.8.8", 1, true),
-            ("7.0.0.2", "8.8.8.8", 5 * S2NS, true),
+            ("7.0.0.2", "8.8.8.8", 5 * S2NS_U64, true),
         ];
         for entry in &test_tuples {
-            let s1 = SessionDetails::new(entry.0, entry.1, entry.2).unwrap();
+            let s1 = SessionDetails::new(entry.0, entry.1, u128::from(entry.2)).unwrap();
             st.insert_session(s1);
         }
 
