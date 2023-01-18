@@ -2,6 +2,10 @@ module github.com/refraction-networking/conjure
 
 go 1.18
 
+// replace gitlab.com/yawning/obfs4.git => github.com/jmwample/obfs4.git v0.0.0-20230113193642-07b111e6b208
+
+replace gitlab.com/yawning/obfs4.git => github.com/jmwample/obfs4 v0.0.0-20230113193642-07b111e6b208
+
 require (
 	git.torproject.org/pluggable-transports/goptlib.git v1.3.0
 	github.com/BurntSushi/toml v1.2.1
@@ -14,9 +18,9 @@ require (
 	github.com/refraction-networking/gotapdance v1.3.4
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.1
-	gitlab.com/yawning/obfs4.git v0.0.0-20220904064028-336a71d6e4cf
+	gitlab.com/yawning/obfs4.git v0.0.0-20220204003609-77af0cba934d
 	golang.org/x/crypto v0.5.0
-	google.golang.org/grpc v1.51.0
+	google.golang.org/grpc v1.52.0
 	google.golang.org/protobuf v1.28.1
 )
 

@@ -66,11 +66,9 @@ pub fn extract_payloads(
         //  of the 92 byte magic number here.
         let mut stego_repr_and_fsp: [u8; REPRESENTATIVE_AND_FSP_LEN] =
             [0; REPRESENTATIVE_AND_FSP_LEN];
-        let mut in_offset: usize = tls_payload.len() as usize - 92;
+        let mut in_offset: usize = tls_payload.len() - 92;
         let mut out_offset: usize = 0;
-        while in_offset < (tls_payload.len() - 3) as usize
-            && out_offset < (REPRESENTATIVE_AND_FSP_LEN - 2) as usize
-        {
+        while in_offset < (tls_payload.len() - 3) && out_offset < (REPRESENTATIVE_AND_FSP_LEN - 2) {
             extract_stego_bytes(
                 &tls_payload[in_offset..in_offset + 4],
                 &mut stego_repr_and_fsp[out_offset..out_offset + 3],
@@ -143,9 +141,9 @@ pub fn extract_payloads(
             ));
             return Err(err);
         }
-        in_offset = tls_payload.len() as usize - 92 - vsp_stego_size as usize;
+        in_offset = tls_payload.len() - 92 - vsp_stego_size as usize;
         out_offset = 0;
-        while in_offset < (tls_payload.len() - 3) as usize && out_offset < (vsp_size - 2) as usize {
+        while in_offset < (tls_payload.len() - 3) && out_offset < (vsp_size - 2) as usize {
             extract_stego_bytes(
                 &tls_payload[in_offset..in_offset + 4],
                 &mut encrypted_variable_size_payload[out_offset..out_offset + 3],

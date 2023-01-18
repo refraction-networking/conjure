@@ -144,7 +144,7 @@ pub fn c_decrypt_aes_gcm(key: &[u8], iv: &[u8], ciphertext: &[u8]) -> Vec<u8> {
     };
 
     unsafe {
-        pt_out.set_len(pt_len as usize);
+        pt_out.set_len(pt_len);
     }
 
     pt_out

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"os"
 
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
 	dd "github.com/refraction-networking/conjure/application/lib"
@@ -94,12 +93,8 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 		args.Add("drbg-seed", seed.Hex())
 
 		t := &obfs4.Transport{}
-		stateDir, err := os.MkdirTemp("", "")
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create tmp-dir for WrapConn")
-		}
 
-		factory, err := t.ServerFactory(stateDir, &args)
+		factory, err := t.ServerFactory("", &args)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create server factory: %w", err)
 		}
