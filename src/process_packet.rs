@@ -132,10 +132,9 @@ impl PerCoreGlobal {
         self.stats.tcp_packets_this_period += 1;
 
         let flow = Flow::new(ip_pkt, &tcp_pkt);
-        match self.check_for_tagged_flow(&flow, ip_pkt) {
-            Some(_) => return,
-            None => {}
-        };
+        if self.check_for_tagged_flow(&flow, ip_pkt).is_some() {
+            return;
+        }
 
         if tcp_pkt.get_destination() == 443 {
             self.stats.tls_packets_this_period += 1;
@@ -155,10 +154,9 @@ impl PerCoreGlobal {
         }
 
         let flow = Flow::new_udp(ip_pkt, &udp_pkt);
-        match self.check_for_tagged_flow(&flow, ip_pkt) {
-            Some(_) => return,
-            None => {}
-        };
+        if self.check_for_tagged_flow(&flow, ip_pkt).is_some() {
+            return;
+        }
 
         if udp_pkt.get_destination() == 53 {
             let flow = Flow::new_udp(ip_pkt, &udp_pkt);
