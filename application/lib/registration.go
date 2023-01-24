@@ -9,6 +9,7 @@ import (
 	golog "log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -276,7 +277,7 @@ func (reg *DecoyRegistration) String() string {
 		DecoyListVersion uint32
 		Source           *pb.RegistrationSource
 	}{
-		Phantom:          reg.PhantomIp.String(),
+		Phantom:          net.JoinHostPort(reg.PhantomIp.String(), strconv.FormatUint(uint64(reg.PhantomPort), 10)),
 		SharedSecret:     hex.EncodeToString(reg.Keys.SharedSecret),
 		Mask:             reg.Mask,
 		Flags:            reg.Flags,
@@ -451,7 +452,7 @@ func NewRegisteredDecoys() *RegisteredDecoys {
 			sendToDetector(d, uint64(defaultUnusedTimeout.Nanoseconds()), pb.StationOperations_New)
 		},
 		updateInDetector: func(d *DecoyRegistration) {
-			sendToDetector(d, uint64(defaultUnusedTimeout.Nanoseconds()), pb.StationOperations_Update)
+			sendToDetector(d, uint64(defaultActiveTimeout.Nanoseconds()), pb.StationOperations_Update)
 		},
 	}
 }

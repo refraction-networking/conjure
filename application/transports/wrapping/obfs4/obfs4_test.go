@@ -2,6 +2,7 @@ package obfs4
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log"
@@ -16,6 +17,7 @@ import (
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/internal/tests"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
 	"github.com/stretchr/testify/require"
@@ -276,4 +278,29 @@ func TestObfs4StateDir(t *testing.T) {
 
 	require.FileExists(t, path.Join(stateDir,  "./obfs4_state.json"))
 	require.FileExists(t, path.Join(stateDir, "./obfs4_bridgeline.txt"))
+}
+
+func TestTryParamsToDstPort(t *testing.T) {
+	clv := randomizeDstPortMinVersion
+	seed, _ := hex.DecodeString("0000000000000000000000000000000000")
+
+	cases := []struct{
+		r bool
+		p uint16
+	}{{true, 57045}, {false, 443}}
+
+	for _, testCase := range cases {
+		ct := ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &testCase.r}}
+		var transport Transport
+
+		rawParams, err := anypb.New(ct.GetParams())
+		require.Nil(t, err)
+
+		params, err := transport.ParseParams(clv, rawParams)
+		require.Nil(t, err)
+
+		port, err := transport.GetDstPort(clv, seed, params)
+		require.Nil(t, err)
+		require.Equal(t, testCase.p, port)
+	}
 }

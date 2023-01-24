@@ -58,6 +58,16 @@ const S2NS: u128 = 1000 * 1000 * 1000;
 // that need to be forwarded to the data plane proxying logic. (300 s = 5 mins)
 const TIMEOUT_PHANTOMS_NS: u128 = 300 * S2NS;
 
+impl fmt::Display for IPProto {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            IPProto::Tcp => write!(f, "tcp"),
+            IPProto::Udp => write!(f, "udp"),
+            IPProto::Unk => write!(f, "unk"),
+        }
+    }
+}
+
 // "errors" we want to catch
 #[derive(Debug)]
 pub enum SessionError {
@@ -189,10 +199,19 @@ impl fmt::Display for SessionDetails {
             match FLOW_CLIENT_LOG {
                 true => write!(
                     f,
-                    "{} -> {} ({}ns)",
-                    self.client_ip, self.phantom_ip, self.timeout
+                    "{}:{} -> {}:{} {} ({}ns)",
+                    self.client_ip,
+                    self.src_port,
+                    self.phantom_ip,
+                    self.dst_port,
+                    self.proto,
+                    self.timeout
                 ),
-                false => write!(f, "_ -> {} ({}ns)", self.phantom_ip, self.timeout),
+                false => write!(
+                    f,
+                    "_:{} -> {}:{} {} ({}ns)",
+                    self.src_port, self.phantom_ip, self.dst_port, self.proto, self.timeout
+                ),
             }
         }
     }
@@ -379,11 +398,6 @@ fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u128>>>) {
             }
         };
 
-        if station_to_det.get_operation() != StationOperations::Unknown {
-            debug!("unknown operation requested by application");
-            continue;
-        }
-
         pubsub_handle_s2d(&map, &station_to_det)
     }
 }
@@ -441,7 +455,7 @@ fn pubsub_add_or_update_session(map: &Arc<RwLock<HashMap<String, u128>>>, sd: Se
     // when they fall out of scope but this is more clear.)
     drop(mmap);
 
-    // debug!("Added registered ip {} from redis", sd);
+    debug!("Added registered ip {} from redis", sd);
 }
 
 fn pubsub_clear(map: &Arc<RwLock<HashMap<String, u128>>>) {

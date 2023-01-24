@@ -2,12 +2,14 @@ package min
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/internal/tests"
@@ -99,5 +101,30 @@ func TestTryAgain(t *testing.T) {
 	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
+	}
+}
+
+func TestTryParamsToDstPort(t *testing.T) {
+	clv := randomizeDstPortMinVersion
+	seed, _ := hex.DecodeString("0000000000000000000000000000000000")
+
+	cases := []struct{
+		r bool
+		p uint16
+	}{{true, 58047}, {false, 443}}
+
+	for _, testCase := range cases {
+		ct := ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &testCase.r}}
+		var transport Transport
+
+		rawParams, err := anypb.New(ct.GetParams())
+		require.Nil(t, err)
+
+		params, err := transport.ParseParams(clv, rawParams)
+		require.Nil(t, err)
+
+		port, err := transport.GetDstPort(clv, seed, params)
+		require.Nil(t, err)
+		require.Equal(t, testCase.p, port)
 	}
 }

@@ -61,7 +61,7 @@ func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 		}, nil
 	}
 
-	var m *pb.GenericTransportParams
+	var m = &pb.GenericTransportParams{}
 	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
 	return m, err
 }
@@ -145,7 +145,7 @@ func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, e
 		return 443, nil
 	}
 
-	parameters, ok := params.(pb.GenericTransportParams)
+	parameters, ok := params.(*pb.GenericTransportParams)
 	if !ok {
 		return 0, fmt.Errorf("bad parameters provided")
 	}
