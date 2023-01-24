@@ -159,24 +159,24 @@ func (blt *CachedLivenessTester) printStats(logger *log.Logger) {
 	nlf := atomic.LoadInt64(&s.newLivenessFail)
 	nlcl := atomic.LoadInt64(&s.newLivenessCachedLive)
 	nlcn := atomic.LoadInt64(&s.newLivenessCachedNonLive)
-	total := math.Max(float64(nlp+nlf + +nlcl + nlcn), 1)
+	total := math.Max(float64(nlp+nlf+nlcl+nlcn), 1)
 
 	liveCacheLen := 0
-	var liveCacheCap float64 = 0
+	var liveCacheCapPct float64 = 0
 	if blt.ipCacheLive != nil {
 		liveCacheLen = blt.ipCacheLive.Len()
-		liveCacheCap = blt.ipCacheLive.Cap()
+		liveCacheCapPct = float64(liveCacheLen) / float64(blt.ipCacheLive.Cap()) * 100
 	}
 
 	nonLiveCacheLen := 0
-	var nonLiveCacheCap float64 = 0
+	var nonLiveCacheCapPct float64 = 0
 	if blt.ipCacheLive != nil {
 		nonLiveCacheLen = blt.ipCacheNonLive.Len()
-		nonLiveCacheCap = blt.ipCacheNonLive.Cap()
-
+		nonLiveCacheCapPct = float64(nonLiveCacheLen) / float64(blt.ipCacheNonLive.Cap()) * 100
 	}
 
-	logger.Infof("liveness-stats: %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %d %.3f%%",
+	logger.Infof("liveness-stats: %d %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %.3f/s %d %.3f%% %d %.3f%%",
+		nlp+nlf+nlcl+nlcn,
 		nlp,
 		float64(nlp)/float64(total)*100,
 		float64(nlp)/float64(epochDur)*1000,
@@ -190,9 +190,9 @@ func (blt *CachedLivenessTester) printStats(logger *log.Logger) {
 		float64(nlcn)/float64(total)*100,
 		float64(nlcn)/float64(epochDur)*1000,
 		liveCacheLen,
-		liveCacheCap,
+		liveCacheCapPct,
 		nonLiveCacheLen,
-		nonLiveCacheCap,
+		nonLiveCacheCapPct,
 	)
 }
 
