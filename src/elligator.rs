@@ -107,8 +107,7 @@ pub fn extract_payloads(
         let fixed_size_payload_bytes = match cipher.decrypt(nonce, &stego_repr_and_fsp[32..54]) {
             Ok(fspb) => fspb,
             Err(err) => {
-                let err: Box<dyn Error> =
-                    From::from(format!("fsp_aes_gcm.decrypt failed: {err}"));
+                let err: Box<dyn Error> = From::from(format!("fsp_aes_gcm.decrypt failed: {err}"));
                 return Err(err);
             }
         };
@@ -117,9 +116,8 @@ pub fn extract_payloads(
 
         let vsp_size = fixed_size_payload.vsp_size; // includes aes gcm tag
         if vsp_size <= 16 {
-            let err: Box<dyn Error> = From::from(format!(
-                "Variable Stego Payload Size {vsp_size} too small"
-            ));
+            let err: Box<dyn Error> =
+                From::from(format!("Variable Stego Payload Size {vsp_size} too small"));
             return Err(err);
             //  return Ok((keys, fixed_size_payload, vec![]));
         }
