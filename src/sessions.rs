@@ -616,7 +616,7 @@ mod tests {
         let mm = map.read().expect("RwLock Broken");
         let len = mm.len();
         drop(mm);
-        assert_eq!(len, 6, "Incorrect len for map after ingest: {}", len);
+        assert_eq!(len, 6, "Incorrect len for map after ingest: {len}");
 
         // Test updates
         let test_tuples = [
@@ -640,14 +640,14 @@ mod tests {
         let mm = map.read().expect("RwLock Broken");
         let len = mm.len();
         drop(mm);
-        assert_eq!(len, 9, "Incorrect len for map after ingest: {}", len);
+        assert_eq!(len, 9, "Incorrect len for map after ingest: {len}");
 
         pubsub_clear(&map);
 
         let mm = map.read().expect("RwLock Broken");
         let len = mm.len();
         drop(mm);
-        assert_eq!(len, 0, "Incorrect len for map after ingest: {}", len);
+        assert_eq!(len, 0, "Incorrect len for map after ingest: {len}");
     }
 
     #[test]
@@ -715,7 +715,7 @@ mod tests {
                     panic!("Should have failed");
                 }
                 Err(e) => {
-                    assert_eq!(format!("{}", e), format!("{}", entry.3));
+                    assert_eq!(format!("{e}"), format!("{}", entry.3));
                 }
             };
         }

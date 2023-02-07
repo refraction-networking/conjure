@@ -30,8 +30,8 @@ impl fmt::Display for Flow {
 
         unsafe {
             match FLOW_CLIENT_LOG {
-                true => write!(f, "{} -> {}", socket_src, socket_dst),
-                false => write!(f, "_ -> {}", socket_dst),
+                true => write!(f, "{socket_src} -> {socket_dst}"),
+                false => write!(f, "_ -> {socket_dst}"),
             }
         }
     }
@@ -146,8 +146,8 @@ impl fmt::Display for FlowNoSrcPort {
 
         unsafe {
             match FLOW_CLIENT_LOG {
-                true => write!(f, "{} -> {}", socket_src, socket_dst),
-                false => write!(f, "_ -> {}", socket_dst),
+                true => write!(f, "{socket_src} -> {socket_dst}"),
+                false => write!(f, "_ -> {socket_dst}"),
             }
         }
     }
@@ -368,7 +368,7 @@ mod tests {
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow6).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow6}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "_ -> [26ff::1]:443");
 
         let flow4 = Flow {
@@ -380,7 +380,7 @@ mod tests {
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow4).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow4}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "_ -> 128.138.97.6:443");
 
         let flow_n6 = FlowNoSrcPort {
@@ -391,7 +391,7 @@ mod tests {
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow_n6).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow_n6}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "_ -> [26ff::1]:443");
 
         let flow_n4 = FlowNoSrcPort {
@@ -402,7 +402,7 @@ mod tests {
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow_n4).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow_n4}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "_ -> 128.138.97.6:443");
 
         Flow::set_log_client(true);
@@ -416,7 +416,7 @@ mod tests {
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow6).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow6}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "[2601::abcd:ef00]:5672 -> [26ff::1]:443");
 
         let flow4 = Flow {
@@ -428,7 +428,7 @@ mod tests {
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow4).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow4}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "10.22.0.1:5672 -> 128.138.97.6:443");
 
         let flow_n6 = FlowNoSrcPort {
@@ -439,7 +439,7 @@ mod tests {
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow_n6).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow_n6}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "[2601::abcd:ef00]:0 -> [26ff::1]:443");
 
         let flow_n4 = FlowNoSrcPort {
@@ -450,7 +450,7 @@ mod tests {
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow_n4).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow_n4}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "10.22.0.1:0 -> 128.138.97.6:443");
     }
 
@@ -465,7 +465,7 @@ mod tests {
         };
 
         let (src, dst) = flow.export_addrs();
-        print!("{:?} {:?}", src, dst);
+        print!("{src:?} {dst:?}");
         assert_eq!(vec![10, 22, 0, 1], src);
         assert_eq!(vec![128, 138, 97, 6], dst);
 
@@ -478,7 +478,7 @@ mod tests {
         };
 
         let (src, dst) = flow6.export_addrs();
-        print!("{:?} {:?}", src, dst);
+        print!("{src:?} {dst:?}");
         assert_eq!(
             vec![0x26, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xab, 0xcd, 0xef, 0x00],
             src

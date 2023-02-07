@@ -396,7 +396,7 @@ mod tests {
         let nets = value.detector_filter_list;
 
         for net in nets.iter() {
-            println!("{}", net);
+            println!("{net}");
         }
     }
 }

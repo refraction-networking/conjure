@@ -136,7 +136,7 @@ pub fn tcp_seq_lt(a: u32, b: u32) -> bool {
 // top. Units are "kB", which I'm guessing is KiB.
 pub fn mem_used_kb() -> u64 {
     let my_pid: i32 = unsafe { libc::getpid() };
-    let f = match File::open(format!("/proc/{}/status", my_pid)) {
+    let f = match File::open(format!("/proc/{my_pid}/status")) {
         Ok(f) => f,
         Err(e) => {
             error!("Failed to open /proc/{}/status: {:?}", my_pid, e);
