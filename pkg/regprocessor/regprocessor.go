@@ -240,9 +240,14 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		return nil, fmt.Errorf("unknown transport")
 	}
 
-	dstPort, err := t.GetDstPort(uint(c2s.GetClientLibVersion()), cjkeys.ConjureSeed, transportParams)
+	params, err := t.ParseParams(uint(c2s.GetClientLibVersion()), transportParams)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse transport parameters: %w", err)
+	}
+
+	dstPort, err := t.GetDstPort(uint(c2s.GetClientLibVersion()), cjkeys.ConjureSeed, params)
 	if err != nil {
-		return nil, fmt.Errorf("error determining destination port: %v", err)
+		return nil, fmt.Errorf("error determining destination port: %w", err)
 	}
 
 	// we have to cast to uint32 because protobuf using varint for all int / uint types and doesn't

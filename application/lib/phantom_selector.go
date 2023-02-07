@@ -374,7 +374,7 @@ func selectPhantomImplV0(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 		}
 	}
 	if result == nil {
-		return nil, errors.New("let's rewrite the phantom address selector")
+		return nil, ErrLegacyAddrSelectBug
 	}
 	return result, nil
 }
