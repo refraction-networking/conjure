@@ -205,8 +205,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		)
 
 		if err != nil {
-			// p.logger.Println("Failed to select IPv4Address:", err)
-			return nil, ErrRegProcessFailed
+			return nil, err
 		}
 
 		addr4 := binary.BigEndian.Uint32(phantom4.To4())
@@ -223,8 +222,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 			true,
 		)
 		if err != nil {
-			// p.logger.Println("Failed to select IPv6Address:", err)
-			return nil, ErrRegProcessFailed
+			return nil, err
 		}
 
 		regResp.Ipv6Addr = phantom6

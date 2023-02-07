@@ -455,7 +455,7 @@ fn pubsub_add_or_update_session(map: &Arc<RwLock<HashMap<String, u128>>>, sd: Se
     // when they fall out of scope but this is more clear.)
     drop(mmap);
 
-    debug!("Added registered ip {} from redis", sd);
+    // debug!("Added registered ip {} from redis", sd);
 }
 
 fn pubsub_clear(map: &Arc<RwLock<HashMap<String, u128>>>) {
