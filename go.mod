@@ -32,6 +32,8 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/oschwald/geoip2-golang v1.8.0 // indirect
+	github.com/oschwald/maxminddb-golang v1.10.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	gitlab.com/yawning/edwards25519-extra.git v0.0.0-20211229043746-2f91fcc9fbdb // indirect
 	golang.org/x/sys v0.4.0 // indirect

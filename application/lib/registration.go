@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/refraction-networking/conjure/application/geoip"
 	"github.com/refraction-networking/conjure/application/liveness"
 	"github.com/refraction-networking/conjure/application/log"
 
@@ -38,6 +39,7 @@ type RegistrationManager struct {
 	Logger           *log.Logger
 	PhantomSelector  *PhantomIPSelector
 	LivenessTester   liveness.Tester
+	GeoIP            geoip.Database
 
 	// ingestChan is included here so that the capacity and use is available to
 	// stats
@@ -59,6 +61,16 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 		logger.Errorf("failed to create the PhantomIPSelector object: %v", err)
 		return nil
 	}
+
+	geoipDB, err := geoip.New(conf.DBConfig)
+	if errors.Is(err, geoip.ErrMissingDB) {
+		// if a database is missing, log to warm, but functionality should be the same
+		logger.Warn(err)
+	} else if err != nil {
+		logger.Errorf("failed to create geoip database: %v", err)
+		return nil
+	}
+
 	return &RegistrationManager{
 		RegConfig:         conf,
 		RegistrationStats: newRegistrationStats(),
@@ -66,6 +78,7 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 		registeredDecoys:  NewRegisteredDecoys(),
 		PhantomSelector:   p,
 		LivenessTester:    lt,
+		GeoIP:             geoipDB,
 	}
 }
 
@@ -99,6 +112,17 @@ func (regManager *RegistrationManager) OnReload(conf *RegConfig) {
 
 	regManager.RegConfig.PhantomBlocklist = conf.PhantomBlocklist
 	regManager.RegConfig.phantomBlocklist = conf.phantomBlocklist
+
+	geoipDB, err := geoip.New(conf.DBConfig)
+	if errors.Is(err, geoip.ErrMissingDB) {
+		// if a database is missing, log to warm, but functionality should be the same
+		regManager.Logger.Warn(err)
+	} else if err != nil {
+		regManager.Logger.Errorf("failed to create geoip database: %v", err)
+		return
+	}
+
+	regManager.GeoIP = geoipDB
 }
 
 // AddTransport initializes a transport so that it can be tracked by the manager when
@@ -227,7 +251,6 @@ func (regManager *RegistrationManager) MarkActive(reg *DecoyRegistration) {
 	regManager.registeredDecoys.markActive(reg)
 }
 
-
 // Cleanup sends a signal to the detector to empty cached sessions. This ensures that the detector
 // does not forward traffic for sessions that it knows about for a previous launch of the station
 // that the current session doesn't know about.
@@ -235,14 +258,16 @@ func (regManager *RegistrationManager) Cleanup() {
 	clearDetector()
 }
 
-
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
-	PhantomIp   net.IP
-	PhantomPort uint16
+	PhantomIp    net.IP
+	PhantomPort  uint16
 	PhantomProto pb.IPProto
 
-	registrationAddr   net.IP
+	registrationAddr net.IP
+	regCC            string
+	regASN           uint
+
 	Keys               *ConjureSharedKeys
 	Covert, Mask       string
 	Flags              *pb.RegistrationFlags
