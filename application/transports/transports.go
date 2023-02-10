@@ -1,9 +1,14 @@
 package transports
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"io"
+	"math/big"
 	"net"
+
+	"golang.org/x/crypto/hkdf"
 )
 
 var (
@@ -31,6 +36,23 @@ func (pc PrefixConn) Read(p []byte) (int, error) {
 	return pc.r.Read(p)
 }
 
+// PrependToConn creates a PrefixConn which allows arbitrary readers to serve as
+// the data source of a net.Conn.
 func PrependToConn(c net.Conn, r io.Reader) PrefixConn {
 	return PrefixConn{Conn: c, r: io.MultiReader(r, c)}
+}
+
+// PortSelectorRange provides a generic and basic way to return a seeded port
+// selection function that uses a custom range.
+func PortSelectorRange(min, max int64, seed []byte) (uint16, error) {
+
+	// Naive Method. Get random in port range.
+	hkdfReader := hkdf.New(sha256.New, seed, nil, []byte("phantom-select-dst-port"))
+	port, err := rand.Int(hkdfReader, big.NewInt(max-min))
+	if err != nil {
+		return 0, nil
+	}
+
+	port.Add(port, big.NewInt(min))
+	return uint16(port.Uint64()), nil
 }

@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/mux"
+	"github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regprocessor"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
@@ -192,7 +193,7 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 	}
 	reqLogger := s.logger.WithFields(logFields)
 
-	reqLogger.Debugf("recived new request")
+	reqLogger.Debugf("received new request")
 
 	payload, err := s.getC2SFromReq(w, r)
 	if err != nil {
@@ -220,7 +221,10 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 		switch err {
 		case regprocessor.ErrNoC2SBody:
 			http.Error(w, "no C2S body", http.StatusBadRequest)
+		case lib.ErrLegacyAddrSelectBug:
+			http.Error(w, "bad seed", http.StatusBadRequest)
 		default:
+			reqLogger.Errorf("failed to create registration response: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		return
@@ -256,7 +260,7 @@ func (s *APIRegServer) compareClientConfGen(genNum uint32) *pb.ClientConf {
 	s.ccMutex.RLock()
 	defer s.ccMutex.RUnlock()
 
-	// Check that server has a currnet (latest) client config
+	// Check that server has a current (latest) client config
 	if s.latestClientConf == nil {
 		s.logger.Debugf("Server latest ClientConf is nil")
 		return nil

@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -15,19 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
-
-type mockTransport struct{}
-
-func (mockTransport) Name() string      { return "MockTransport" }
-func (mockTransport) LogPrefix() string { return "MOCK" }
-
-func (mockTransport) GetIdentifier(d *DecoyRegistration) string {
-	return string(d.Keys.ConjureHMAC("MockTrasportHMACString"))
-}
-
-func (mockTransport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *RegistrationManager) (*DecoyRegistration, net.Conn, error) {
-	return nil, nil, nil
-}
 
 func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 	clientToStationBytes, _ := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
@@ -80,7 +66,7 @@ func TestRegistrationLookup(t *testing.T) {
 	rm := NewRegistrationManager(&RegConfig{})
 
 	// The mock registration has transport id 0, so we hard code that here too
-	err := rm.AddTransport(0, mockTransport{})
+	err := rm.AddTransport(0, &mockTransport{})
 	require.Nil(t, err)
 
 	c2s, keys := mockReceiveFromDetector()
@@ -107,7 +93,7 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 		t.Skip("Skipping redis related test w/out mock")
 	}
 	reg := DecoyRegistration{
-		DarkDecoy:        net.ParseIP("1.2.3.4"),
+		PhantomIp:        net.ParseIP("1.2.3.4"),
 		registrationAddr: net.ParseIP(""),
 	}
 
@@ -122,7 +108,7 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 	channel := pubsub.Channel()
 
 	// send message to redis pubsub, wait, then close subscriber & channel
-	registerForDetector(&reg)
+	sendToDetector(&reg, uint64(defaultUnusedTimeout.Nanoseconds()), pb.StationOperations_New)
 
 	time.AfterFunc(time.Second*1, func() {
 		_ = pubsub.Close()
@@ -146,8 +132,8 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 	recvClient := net.ParseIP(parsed.GetClientIp())
 
 	// check IP equality
-	if reg.DarkDecoy.String() != recvPhantom.String() {
-		t.Fatalf("Expected Phantom %v, got %v", reg.DarkDecoy, recvPhantom)
+	if reg.PhantomIp.String() != recvPhantom.String() {
+		t.Fatalf("Expected Phantom %v, got %v", reg.PhantomIp, recvPhantom)
 	}
 
 	if reg.registrationAddr.String() != recvClient.String() {
@@ -179,12 +165,12 @@ func TestRegisterForDetectorArray(t *testing.T) {
 
 	for _, addr := range addrs {
 		reg := &DecoyRegistration{
-			DarkDecoy:        net.ParseIP(addr),
+			PhantomIp:        net.ParseIP(addr),
 			registrationAddr: net.ParseIP(clientAddr),
 		}
 
 		// send message to redis pubsub, wait, then close subscriber & channel
-		registerForDetector(reg)
+		sendToDetector(reg, uint64(defaultUnusedTimeout.Nanoseconds()), pb.StationOperations_New)
 
 		// check message
 		msg := <-channel
@@ -204,8 +190,8 @@ func TestRegisterForDetectorArray(t *testing.T) {
 		recvClient := net.ParseIP(parsed.GetClientIp())
 
 		// check IP equality
-		if reg.DarkDecoy.String() != recvPhantom.String() {
-			t.Fatalf("Expected Phantom %v, got %v", reg.DarkDecoy, recvPhantom)
+		if reg.PhantomIp.String() != recvPhantom.String() {
+			t.Fatalf("Expected Phantom %v, got %v", reg.PhantomIp, recvPhantom)
 		}
 
 		if reg.registrationAddr.String() != recvClient.String() {
@@ -242,13 +228,13 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 	for _, addr := range addrs {
 		wg.Add(1)
 		reg := &DecoyRegistration{
-			DarkDecoy:        net.ParseIP(addr),
+			PhantomIp:        net.ParseIP(addr),
 			registrationAddr: net.ParseIP(clientAddr),
 		}
 
 		// send message to redis pubsub, wait, then close subscriber & channel
 		go func() {
-			registerForDetector(reg)
+			sendToDetector(reg, uint64(defaultUnusedTimeout.Nanoseconds()), pb.StationOperations_New)
 		}()
 	}
 
@@ -283,7 +269,13 @@ func TestRegisterForDetectorMultithread(t *testing.T) {
 }
 
 func TestRegString(t *testing.T) {
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
 	rm := NewRegistrationManager(&RegConfig{})
+
+	// The mock registration has transport id 0, so we hard code that here too
+	var transportType pb.TransportType = 0
+	err := rm.AddTransport(transportType, &mockTransport{})
+	require.Nil(t, err)
 
 	c2s, keys := mockReceiveFromDetector()
 

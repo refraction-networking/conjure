@@ -45,22 +45,28 @@ use std::net::IpAddr;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
+use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
 use redis;
 use util::precise_time_ns;
 
-use flow_tracker::{FlowNoSrcPort, FLOW_CLIENT_LOG};
+use flow_tracker::FLOW_CLIENT_LOG;
 use protobuf::Message;
-use signalling::StationToDetector;
+use signalling::{IPProto, StationOperations, StationToDetector};
 
 const S2NS: u128 = 1000 * 1000 * 1000;
 // time to add beyond original timeout if a session is still receiving packets
 // that need to be forwarded to the data plane proxying logic. (300 s = 5 mins)
 const TIMEOUT_PHANTOMS_NS: u128 = 300 * S2NS;
 
-// We _can_ filter by phantom port if we so choose, and randomize the port that
-// the clients connect to. However we are currently using exclusively port 443.
-// adding this here as a placeholder for now.
-const DEFAULT_PHANTOM_PORT: u16 = 443;
+impl fmt::Display for IPProto {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            IPProto::Tcp => write!(f, "tcp"),
+            IPProto::Udp => write!(f, "udp"),
+            IPProto::Unk => write!(f, "unk"),
+        }
+    }
+}
 
 // "errors" we want to catch
 #[derive(Debug)]
@@ -68,6 +74,7 @@ pub enum SessionError {
     InvalidPhantom,
     InvalidClient,
     MixedV4V6Error,
+    UnrecognizedProto,
 }
 
 pub type SessionResult = Result<SessionDetails, SessionError>;
@@ -84,6 +91,9 @@ impl fmt::Display for SessionError {
             SessionError::MixedV4V6Error => {
                 write!(f, "Client/Phantom v4/v6 mismatch")
             }
+            SessionError::UnrecognizedProto => {
+                write!(f, "Unknown IP next header protocol provided")
+            }
         }
     }
 }
@@ -92,14 +102,42 @@ impl fmt::Display for SessionError {
 pub struct SessionDetails {
     pub client_ip: IpAddr,
     pub phantom_ip: IpAddr,
-    pub phantom_port: u16,
+
+    pub dst_port: u16,
+    pub src_port: u16,
+
+    proto: IpNextHeaderProtocol,
+
     timeout: u128,
+}
+impl Taggable for SessionDetails {
+    fn tag(&self) -> String {
+        let proto_prefix = match self.proto {
+            IpNextHeaderProtocols::Tcp => "t-",
+            IpNextHeaderProtocols::Udp => "u-",
+            _ => "",
+        };
+
+        let base = match self.phantom_ip.is_ipv6() {
+            true => format!("{}_-{}", proto_prefix, self.phantom_ip),
+            false => format!("{}{}-{}", proto_prefix, self.client_ip, self.phantom_ip),
+        };
+
+        format!("{}-:{}", base, self.dst_port)
+    }
 }
 
 impl SessionDetails {
     // This function parses acceptable Session Details and returns an error if
     // the details provided do not fit current requirements for parsing
-    pub fn new(client_ip: &str, phantom_ip: &str, timeout: u128) -> SessionResult {
+    pub fn new(
+        client_ip: &str,
+        phantom_ip: &str,
+        timeout: u128,
+        src_port: u16,
+        dst_port: u16,
+        proto: IpNextHeaderProtocol,
+    ) -> SessionResult {
         let phantom: IpAddr = match phantom_ip.parse() {
             Ok(ip) => ip,
             Err(_) => return Err(SessionError::InvalidPhantom),
@@ -123,17 +161,12 @@ impl SessionDetails {
         let s = SessionDetails {
             client_ip: src,
             phantom_ip: phantom,
-            phantom_port: DEFAULT_PHANTOM_PORT,
+            dst_port,
+            src_port,
+            proto,
             timeout,
         };
         Ok(s)
-    }
-
-    pub fn get_key(&self) -> String {
-        match self.phantom_ip.is_ipv6() {
-            true => format!("{}", self.phantom_ip),
-            false => format!("{}-{}", self.client_ip, self.phantom_ip),
-        }
     }
 }
 
@@ -141,7 +174,21 @@ impl From<&StationToDetector> for SessionResult {
     fn from(s2d: &StationToDetector) -> Self {
         let source = s2d.get_client_ip();
         let phantom = s2d.get_phantom_ip();
-        SessionDetails::new(source, phantom, u128::from(s2d.get_timeout_ns()))
+        let src_port = s2d.get_src_port() as u16;
+        let dst_port = s2d.get_dst_port() as u16;
+        let proto = match s2d.get_proto() {
+            IPProto::Tcp => IpNextHeaderProtocols::Tcp,
+            IPProto::Udp => IpNextHeaderProtocols::Udp,
+            _ => return Err(SessionError::UnrecognizedProto),
+        };
+        SessionDetails::new(
+            source,
+            phantom,
+            u128::from(s2d.get_timeout_ns()),
+            src_port,
+            dst_port,
+            proto,
+        )
     }
 }
 
@@ -152,10 +199,19 @@ impl fmt::Display for SessionDetails {
             match FLOW_CLIENT_LOG {
                 true => write!(
                     f,
-                    "{} -> {} ({}ns)",
-                    self.client_ip, self.phantom_ip, self.timeout
+                    "{}:{} -> {}:{} {} ({}ns)",
+                    self.client_ip,
+                    self.src_port,
+                    self.phantom_ip,
+                    self.dst_port,
+                    self.proto,
+                    self.timeout
                 ),
-                false => write!(f, "_ -> {} ({}ns)", self.phantom_ip, self.timeout),
+                false => write!(
+                    f,
+                    "_:{} -> {}:{} {} ({}ns)",
+                    self.src_port, self.phantom_ip, self.dst_port, self.proto, self.timeout
+                ),
             }
         }
     }
@@ -182,6 +238,12 @@ impl Default for SessionTracker {
     }
 }
 
+/// trait for types that define their own function for creating a tag relevant
+/// to storing and looking up session types.
+pub trait Taggable {
+    fn tag(&self) -> String;
+}
+
 impl SessionTracker {
     pub fn new() -> SessionTracker {
         SessionTracker {
@@ -198,11 +260,8 @@ impl SessionTracker {
         thread::spawn(move || ingest_from_pubsub(write_map));
     }
 
-    pub fn is_tracked_session(&self, flow: &FlowNoSrcPort) -> bool {
-        let key = match flow.dst_ip.is_ipv6() {
-            true => format!("{}", flow.dst_ip),
-            false => format!("{}-{}", flow.src_ip, flow.dst_ip),
-        };
+    pub fn is_tracked_session<T: Taggable>(&self, flow: &T) -> bool {
+        let key = flow.tag();
         self.session_exists(&key)
     }
 
@@ -240,20 +299,16 @@ impl SessionTracker {
     /// Used to update (increase) the time that we  consider a session
     /// valid for tracking purposes. Called when packets from a session are
     /// seen so that forwarding continues past the original registration timeout.
-    pub fn update_session(&mut self, flow: &FlowNoSrcPort) {
-        let key = match flow.dst_ip.is_ipv6() {
-            true => format!("{}", flow.dst_ip),
-            false => format!("{}-{}", flow.src_ip, flow.dst_ip),
-        };
-
+    pub fn update_session<T: Taggable>(&mut self, flow: &T) {
+        let key = flow.tag();
         if !self.session_exists(&key) {
             return;
         }
 
-        self.try_update_session_timeout(key, TIMEOUT_PHANTOMS_NS);
+        self.try_update_session_timeout(&key, TIMEOUT_PHANTOMS_NS);
     }
 
-    fn try_update_session_timeout(&mut self, key: String, extra_time: u128) {
+    fn try_update_session_timeout(&mut self, key: &str, extra_time: u128) {
         // Get writable map
         let mut mmap = self.tracked_sessions.write().expect("RwLock broken");
 
@@ -261,7 +316,7 @@ impl SessionTracker {
         let expire_time = precise_time_ns() + extra_time;
 
         // compare and keep the longer
-        if let Some(v) = mmap.get_mut(&key) {
+        if let Some(v) = mmap.get_mut(key) {
             // compare and keep the longer
             if *v < expire_time {
                 *v = expire_time;
@@ -271,9 +326,9 @@ impl SessionTracker {
 
     fn insert_session(&mut self, session: SessionDetails) {
         // is this already in the map?
-        let key = session.get_key();
+        let key = session.tag();
         if self.session_exists(&key) {
-            self.try_update_session_timeout(key, session.timeout);
+            self.try_update_session_timeout(&key, session.timeout);
             return;
         }
 
@@ -294,7 +349,7 @@ impl SessionTracker {
 
     // explicitly used for testing
     fn _delete_session(&mut self, session: SessionDetails) {
-        let key = &session.get_key();
+        let key = &session.tag();
         if !self.session_exists(key) {
             return;
         }
@@ -342,49 +397,71 @@ fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u128>>>) {
                 continue;
             }
         };
-        let sd = match SessionResult::from(&station_to_det) {
-            Ok(m) => m,
-            Err(e) => {
-                debug!("Error converting S2D to SD: {}", e);
-                continue;
-            }
-        };
 
-        // is this already in the map?
-        let key = sd.get_key();
-        // Get writable map
-        let mut mmap = map.write().expect("RwLock broken");
-        let exists = mmap.contains_key(&key);
+        pubsub_handle_s2d(&map, &station_to_det)
+    }
+}
 
-        if exists {
-            // Set timeout
-            let expire_time = precise_time_ns() + sd.timeout;
-
-            if let Some(v) = mmap.get_mut(&key) {
-                // compare and keep the longer
-                if *v < expire_time {
-                    *v = expire_time;
-                }
-            };
-
-            // Explicitly drop map write lock here (locks are automatically dropped
-            // when they fall out of scope but this is more clear.)
-            drop(mmap);
-            continue;
+fn pubsub_handle_s2d(map: &Arc<RwLock<HashMap<String, u128>>>, s2d: &StationToDetector) {
+    let sd = match SessionResult::from(s2d) {
+        Ok(m) => m,
+        Err(e) => {
+            debug!("Error converting S2D to SD: {}", e);
+            return;
         }
+    };
 
+    match s2d.get_operation() {
+        StationOperations::New => pubsub_add_or_update_session(map, sd),
+        StationOperations::Update => pubsub_add_or_update_session(map, sd),
+        StationOperations::Clear => pubsub_clear(map),
+        StationOperations::Unknown => {
+            debug!("unknown operation requested by application")
+        }
+    }
+}
+
+fn pubsub_add_or_update_session(map: &Arc<RwLock<HashMap<String, u128>>>, sd: SessionDetails) {
+    // is this already in the map?
+    let key = sd.tag();
+    // Get writable map
+    let mut mmap = map.write().expect("RwLock broken");
+    let exists = mmap.contains_key(&key);
+
+    if exists {
         // Set timeout
         let expire_time = precise_time_ns() + sd.timeout;
 
-        // Insert
-        *mmap.entry(key).or_insert(expire_time) = expire_time;
+        if let Some(v) = mmap.get_mut(&key) {
+            // compare and keep the longer
+            if *v < expire_time {
+                *v = expire_time;
+            }
+        };
 
-        // Get rid of writable reference to map. (locks are automatically dropped
+        // Explicitly drop map write lock here (locks are automatically dropped
         // when they fall out of scope but this is more clear.)
         drop(mmap);
-
-        // debug!("Added registered ip {} from redis", sd);
+        return;
     }
+
+    // Set timeout
+    let expire_time = precise_time_ns() + sd.timeout;
+
+    // Insert
+    *mmap.entry(key).or_insert(expire_time) = expire_time;
+
+    // Get rid of writable reference to map. (locks are automatically dropped
+    // when they fall out of scope but this is more clear.)
+    drop(mmap);
+
+    // debug!("Added registered ip {} from redis", sd);
+}
+
+fn pubsub_clear(map: &Arc<RwLock<HashMap<String, u128>>>) {
+    // Get writable map
+    let mut mmap = map.write().expect("RwLock broken");
+    mmap.clear()
 }
 
 fn get_redis_conn() -> redis::Connection {
@@ -394,13 +471,67 @@ fn get_redis_conn() -> redis::Connection {
 
 #[cfg(test)]
 mod tests {
-    // use std::fmt::Write;
-    use flow_tracker::FlowNoSrcPort;
-    use sessions::*;
-    use signalling::StationToDetector;
+    use std::collections::HashMap;
+    use std::str::FromStr;
     use std::{thread, time};
 
+    use flow_tracker::{Flow, FlowNoSrcPort};
+    use pnet::packet::ip::IpNextHeaderProtocols;
+    use sessions::*;
+    use signalling::StationToDetector;
+
+    // use test::{self, Bencher};
+    // use rand::distributions::Alphanumeric;
+    // use rand::{thread_rng, Rng};
+
     const S2NS_U64: u64 = 1000 * 1000 * 1000;
+
+    // We _can_ filter by phantom port if we so choose, and randomize the port that
+    // the clients connect to. However we are currently using exclusively port 443.
+    // adding this here as a placeholder for now.
+    const PHANTOM_PORT_DEFAULT: u16 = 443;
+
+    /*
+    // Disabled because the #bench interface is unstable in test::
+    pub fn test_map(x: &HashMap<String, u128>, module: &str) -> Option<u128> {
+        x.get(module).cloned()
+    }
+
+    // fn create_data<T: std::iter::FromIterator<(Cow<'static, str>, i32)>>(number_of_items: usize) -> T {
+    fn create_data<T: std::iter::FromIterator<(String, u128)>>(number_of_items: usize) -> T {
+        let base = 100;
+        (0..number_of_items)
+            .map(|x:usize| {
+                (thread_rng()
+                    .sample_iter(&Alphanumeric)
+                    .take(30)
+                    .map(char::from)
+                    .collect::<String>(), u128::try_from(base+x).unwrap())
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+
+    #[bench]
+    fn bench_10_000_item_hash_map(b: &mut Bencher) {
+        let mut tests:HashMap<String, u128> = test::black_box(create_data(10_000));
+        tests.insert(String::from("q3428f9"), 1);
+
+        b.iter(|| test_map(&tests, test::black_box("q3428f9")))
+    }
+
+    #[bench]
+    #[ignore] // slow test generating 10m string
+    fn bench_10_000_000_item_hash_map(b: &mut Bencher) {
+        let mut tests:HashMap<String, u128> = test::black_box(create_data(10_000_000));
+        tests.insert(String::from("q3428f9"), 1);
+
+        b.iter(|| test_map(&tests, test::black_box("q3428f9")))
+    }
+    */
 
     #[test]
     #[ignore] // Requires redis to run properly.
@@ -453,6 +584,73 @@ mod tests {
     }
 
     #[test]
+    fn test_pubsub_ingest() {
+        let map = Arc::new(RwLock::new(HashMap::new()));
+
+        // Test inserts
+        let test_tuples = [
+            // (client_ip, phantom_ip, timeout)
+            ("172.128.0.2", "8.0.0.1", 1), // timeout immediately
+            ("192.168.0.1", "10.10.0.1", 5 * S2NS_U64),
+            ("192.168.0.1", "192.0.0.127", 5 * S2NS_U64),
+            ("", "2345::6789", 5 * S2NS_U64),
+            // duplicate with shorter timeout should not drop
+            ("2601::123:abcd", "2001::1234", 5 * S2NS_U64),
+            ("::1", "2001::1234", S2NS_U64),
+            // duplicate with long timeout should prevent drop
+            ("7.0.0.2", "8.8.8.8", 1),
+            ("7.0.0.2", "8.8.8.8", 5 * S2NS_U64),
+        ];
+
+        for entry in &test_tuples {
+            let mut s2d = StationToDetector::new();
+            s2d.set_client_ip(entry.0.to_string());
+            s2d.set_phantom_ip(entry.1.to_string());
+            s2d.set_timeout_ns(entry.2);
+            s2d.set_proto(IPProto::Tcp);
+            s2d.set_operation(StationOperations::New);
+
+            pubsub_handle_s2d(&map, &s2d)
+        }
+
+        let mm = map.read().expect("RwLock Broken");
+        let len = mm.len();
+        drop(mm);
+        assert_eq!(len, 6, "Incorrect len for map after ingest: {len}");
+
+        // Test updates
+        let test_tuples = [
+            // (client_ip, phantom_ip, timeout)
+            ("1.1.1.1", "8.0.0.1", 100 * S2NS_U64),
+            ("::1", "2001::4567", 100 * S2NS_U64),
+            ("2.2.2.2", "8.8.8.8", 100 * S2NS_U64),
+        ];
+
+        for entry in &test_tuples {
+            let mut s2d = StationToDetector::new();
+            s2d.set_client_ip(entry.0.to_string());
+            s2d.set_phantom_ip(entry.1.to_string());
+            s2d.set_timeout_ns(entry.2);
+            s2d.set_proto(IPProto::Tcp);
+            s2d.set_operation(StationOperations::Update);
+
+            pubsub_handle_s2d(&map, &s2d)
+        }
+
+        let mm = map.read().expect("RwLock Broken");
+        let len = mm.len();
+        drop(mm);
+        assert_eq!(len, 9, "Incorrect len for map after ingest: {len}");
+
+        pubsub_clear(&map);
+
+        let mm = map.read().expect("RwLock Broken");
+        let len = mm.len();
+        drop(mm);
+        assert_eq!(len, 0, "Incorrect len for map after ingest: {len}");
+    }
+
+    #[test]
     fn test_session_details_from() {
         let test_tuples = [
             // (client_ip, phantom_ip, timeout)
@@ -490,6 +688,7 @@ mod tests {
             s2d.set_client_ip(entry.0.to_string());
             s2d.set_phantom_ip(entry.1.to_string());
             s2d.set_timeout_ns(entry.2);
+            s2d.set_proto(IPProto::Tcp);
             let sd = match SessionResult::from(&s2d) {
                 Ok(sd) => sd,
                 Err(e) => {
@@ -510,14 +709,118 @@ mod tests {
             s2d.set_client_ip(entry.0.to_string());
             s2d.set_phantom_ip(entry.1.to_string());
             s2d.set_timeout_ns(entry.2);
+            s2d.set_proto(IPProto::Tcp);
             match SessionResult::from(&s2d) {
                 Ok(_) => {
                     panic!("Should have failed");
                 }
                 Err(e) => {
-                    assert_eq!(format!("{}", e), format!("{}", entry.3));
+                    assert_eq!(format!("{e}"), format!("{}", entry.3));
                 }
             };
+        }
+    }
+
+    #[test]
+    fn test_session_tracker_tagging() {
+        let test_tuples = [
+            // (client_ip, phantom_ip, timeout, dst_port, proto)
+            (
+                "192.168.0.1",
+                "10.10.0.1",
+                100000,
+                443,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            (
+                "192.168.0.1",
+                "192.0.0.127",
+                100000,
+                443,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            (
+                "2601::123:abcd",
+                "2001::1234",
+                100000,
+                443,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            ("::1", "2001::1234", 100000, 443, IpNextHeaderProtocols::Tcp),
+            // client registering with v4 will also create registrations for v6 just in-case
+            (
+                "192.168.0.1",
+                "2801::1234",
+                100000,
+                443,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            // Random ports
+            (
+                "192.168.0.1",
+                "192.0.0.127",
+                100000,
+                1024,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            (
+                "2601::123:abcd",
+                "2001::1234",
+                100000,
+                5555,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            (
+                "::1",
+                "2001::1234",
+                100000,
+                55535,
+                IpNextHeaderProtocols::Tcp,
+            ),
+            // Random ports and udp
+            (
+                "192.168.0.1",
+                "192.0.0.127",
+                100000,
+                1024,
+                IpNextHeaderProtocols::Udp,
+            ),
+            (
+                "2601::123:abcd",
+                "2001::1234",
+                100000,
+                5555,
+                IpNextHeaderProtocols::Udp,
+            ),
+            (
+                "::1",
+                "2001::1234",
+                100000,
+                55535,
+                IpNextHeaderProtocols::Udp,
+            ),
+        ];
+
+        for entry in &test_tuples {
+            let s1 = SessionDetails::new(
+                entry.0,
+                entry.1,
+                entry.2,
+                PHANTOM_PORT_DEFAULT,
+                PHANTOM_PORT_DEFAULT,
+                IpNextHeaderProtocols::Tcp,
+            )
+            .unwrap();
+
+            let f1 = Flow::from_parts(
+                IpAddr::from_str(entry.0).unwrap(),
+                IpAddr::from_str(entry.1).unwrap(),
+                0,
+                443,
+                IpNextHeaderProtocols::Tcp,
+            );
+
+            assert_eq!(f1.tag(), s1.tag());
         }
     }
 
@@ -537,7 +840,15 @@ mod tests {
         ];
 
         for entry in &test_tuples {
-            let s1 = SessionDetails::new(entry.0, entry.1, entry.2).unwrap();
+            let s1 = SessionDetails::new(
+                entry.0,
+                entry.1,
+                entry.2,
+                PHANTOM_PORT_DEFAULT,
+                PHANTOM_PORT_DEFAULT,
+                IpNextHeaderProtocols::Tcp,
+            )
+            .unwrap();
             st.insert_session(s1);
         }
 
@@ -553,15 +864,27 @@ mod tests {
             let f = &FlowNoSrcPort {
                 src_ip: src,
                 dst_ip: entry.1.parse().unwrap(),
-                dst_port: DEFAULT_PHANTOM_PORT,
+                dst_port: PHANTOM_PORT_DEFAULT,
+                proto: IpNextHeaderProtocols::Tcp,
             };
-            if !st.is_tracked_session(f) {
-                panic!("Session should be tracked")
-            }
+            assert!(
+                st.is_tracked_session(f),
+                "Session should be tracked- {:?}, {}",
+                entry,
+                f.tag()
+            );
         }
 
         let tt = test_tuples[0];
-        let sd = SessionDetails::new(tt.0, tt.1, tt.2).unwrap();
+        let sd = SessionDetails::new(
+            tt.0,
+            tt.1,
+            tt.2,
+            PHANTOM_PORT_DEFAULT,
+            PHANTOM_PORT_DEFAULT,
+            IpNextHeaderProtocols::Tcp,
+        )
+        .unwrap();
         st._delete_session(sd);
 
         if st.len() != 4 {
@@ -588,7 +911,15 @@ mod tests {
             ("7.0.0.2", "8.8.8.8", 5 * S2NS_U64, true),
         ];
         for entry in &test_tuples {
-            let s1 = SessionDetails::new(entry.0, entry.1, u128::from(entry.2)).unwrap();
+            let s1 = SessionDetails::new(
+                entry.0,
+                entry.1,
+                u128::from(entry.2),
+                PHANTOM_PORT_DEFAULT,
+                PHANTOM_PORT_DEFAULT,
+                IpNextHeaderProtocols::Tcp,
+            )
+            .unwrap();
             st.insert_session(s1);
         }
 
@@ -601,9 +932,16 @@ mod tests {
             let f = &FlowNoSrcPort {
                 src_ip: entry.0.parse().unwrap(),
                 dst_ip: entry.1.parse().unwrap(),
-                dst_port: DEFAULT_PHANTOM_PORT,
+                dst_port: PHANTOM_PORT_DEFAULT,
+                proto: IpNextHeaderProtocols::Tcp,
             };
-            assert_eq!(st.is_tracked_session(f), entry.3)
+            assert_eq!(
+                st.is_tracked_session(f),
+                entry.3,
+                "{:?}, {}",
+                entry,
+                f.tag()
+            )
         }
 
         thread::sleep(dur);

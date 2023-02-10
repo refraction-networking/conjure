@@ -36,7 +36,9 @@ do
     ip route add local 0.0.0.0/0 dev tun${CORE} table custom
 
     do_or_die "iptables -t nat -I PREROUTING 1 -p tcp -i tun${CORE} -j DNAT --to ${IP4_ADDR}:41245"
+    do_or_die "iptables -t nat -I PREROUTING 1 -p udp -i tun${CORE} -j DNAT --to ${IP4_ADDR}:41245"
     do_or_die "ip6tables -t nat -I PREROUTING 1 -p tcp -i tun${CORE} -j DNAT --to ${IP6_ADDR}:41245"
+    do_or_die "ip6tables -t nat -I PREROUTING 1 -p udp -i tun${CORE} -j DNAT --to ${IP6_ADDR}:41245"
     do_or_die "iptables -I INPUT 1 -i tun${CORE} -j ACCEPT"
     do_or_die "ip6tables -I INPUT 1 -i tun${CORE} -j ACCEPT"
 done

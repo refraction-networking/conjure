@@ -56,6 +56,7 @@ func main() {
 	regManager := cj.NewRegistrationManager(conf.RegConfig)
 	sharedLogger = regManager.Logger
 	logger := sharedLogger
+	defer regManager.Cleanup()
 
 	// Should we log client IP addresses
 	logClientIP, err = strconv.ParseBool(os.Getenv("LOG_CLIENT_IP"))

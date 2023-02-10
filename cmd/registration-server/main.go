@@ -12,6 +12,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 	zmq "github.com/pebbe/zmq4"
+	"github.com/refraction-networking/conjure/application/lib"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/apiregserver"
 	"github.com/refraction-networking/conjure/pkg/dnsregserver"
 	"github.com/refraction-networking/conjure/pkg/metrics"
@@ -41,6 +44,12 @@ type config struct {
 	latestClientConf   *pb.ClientConf
 	LogLevel           string `toml:"log_level"`
 	LogMetricsInterval uint16 `toml:"log_metrics_interval"`
+}
+
+var defaultTransports = map[pb.TransportType]lib.Transport{
+	pb.TransportType_Min:   min.Transport{},
+	pb.TransportType_Obfs4: obfs4.Transport{},
+	// [transports:enable]
 }
 
 // parseClientConf parse the latest ClientConf based on path file
@@ -190,6 +199,13 @@ func main() {
 
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	for transportType, t := range defaultTransports {
+		err := processor.AddTransport(transportType, t)
+		if err != nil {
+			log.Fatalf("failed to add transport: %s - %d", t.Name(), transportType)
+		}
 	}
 
 	regServers := []regServer{}

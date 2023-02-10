@@ -1,14 +1,13 @@
 use std::collections::{HashSet, VecDeque};
-use util::precise_time_ns;
-
-use pnet::packet::tcp::TcpPacket;
-use pnet::packet::udp::UdpPacket;
+use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 
-use std::fmt;
-use util::IpPacket;
+use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
+use pnet::packet::tcp::TcpPacket;
+use pnet::packet::udp::UdpPacket;
 
-use sessions::SessionTracker;
+use sessions::{SessionTracker, Taggable};
+use util::{precise_time_ns, IpPacket};
 
 // All members are stored in host-order, even src_ip and dst_ip.
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
@@ -17,6 +16,7 @@ pub struct Flow {
     pub dst_ip: IpAddr,
     pub src_port: u16,
     pub dst_port: u16,
+    pub proto: IpNextHeaderProtocol,
 }
 
 // flow log client should only ever be set at initialization so this should
@@ -30,9 +30,26 @@ impl fmt::Display for Flow {
 
         unsafe {
             match FLOW_CLIENT_LOG {
-                true => write!(f, "{} -> {}", socket_src, socket_dst),
-                false => write!(f, "_ -> {}", socket_dst),
+                true => write!(f, "{socket_src} -> {socket_dst}"),
+                false => write!(f, "_ -> {socket_dst}"),
             }
+        }
+    }
+}
+
+impl Taggable for Flow {
+    fn tag(&self) -> String {
+        let proto_prefix = match self.proto {
+            IpNextHeaderProtocols::Tcp => "t-",
+            IpNextHeaderProtocols::Udp => "u-",
+            _ => "",
+        };
+        match self.dst_ip.is_ipv6() {
+            true => format!("{}_-{}-:{}", proto_prefix, self.dst_ip, self.dst_port),
+            false => format!(
+                "{}{}-{}-:{}",
+                proto_prefix, self.src_ip, self.dst_ip, self.dst_port
+            ),
         }
     }
 }
@@ -45,12 +62,14 @@ impl Flow {
                 dst_ip: IpAddr::V4(pkt.get_destination()),
                 src_port: tcp_pkt.get_source(),
                 dst_port: tcp_pkt.get_destination(),
+                proto: IpNextHeaderProtocols::Tcp,
             },
             IpPacket::V6(pkt) => Flow {
                 src_ip: IpAddr::V6(pkt.get_source()),
                 dst_ip: IpAddr::V6(pkt.get_destination()),
                 src_port: tcp_pkt.get_source(),
                 dst_port: tcp_pkt.get_destination(),
+                proto: IpNextHeaderProtocols::Tcp,
             },
         }
     }
@@ -62,22 +81,31 @@ impl Flow {
                 dst_ip: IpAddr::V4(pkt.get_destination()),
                 src_port: udp_pkt.get_source(),
                 dst_port: udp_pkt.get_destination(),
+                proto: IpNextHeaderProtocols::Udp,
             },
             IpPacket::V6(pkt) => Flow {
                 src_ip: IpAddr::V6(pkt.get_source()),
                 dst_ip: IpAddr::V6(pkt.get_destination()),
                 src_port: udp_pkt.get_source(),
                 dst_port: udp_pkt.get_destination(),
+                proto: IpNextHeaderProtocols::Udp,
             },
         }
     }
 
-    pub fn from_parts(sip: IpAddr, dip: IpAddr, sport: u16, dport: u16) -> Flow {
+    pub fn from_parts(
+        sip: IpAddr,
+        dip: IpAddr,
+        sport: u16,
+        dport: u16,
+        proto: IpNextHeaderProtocol,
+    ) -> Flow {
         Flow {
             src_ip: sip,
             dst_ip: dip,
             src_port: sport,
             dst_port: dport,
+            proto,
         }
     }
 
@@ -108,6 +136,7 @@ pub struct FlowNoSrcPort {
     pub src_ip: IpAddr,
     pub dst_ip: IpAddr,
     pub dst_port: u16,
+    pub proto: IpNextHeaderProtocol,
 }
 
 impl fmt::Display for FlowNoSrcPort {
@@ -117,9 +146,26 @@ impl fmt::Display for FlowNoSrcPort {
 
         unsafe {
             match FLOW_CLIENT_LOG {
-                true => write!(f, "{} -> {}", socket_src, socket_dst),
-                false => write!(f, "_ -> {}", socket_dst),
+                true => write!(f, "{socket_src} -> {socket_dst}"),
+                false => write!(f, "_ -> {socket_dst}"),
             }
+        }
+    }
+}
+
+impl Taggable for FlowNoSrcPort {
+    fn tag(&self) -> String {
+        let proto_prefix = match self.proto {
+            IpNextHeaderProtocols::Tcp => "t-",
+            IpNextHeaderProtocols::Udp => "u-",
+            _ => "",
+        };
+        match self.dst_ip.is_ipv6() {
+            true => format!("{}_-{}-:{}", proto_prefix, self.dst_ip, self.dst_port),
+            false => format!(
+                "{}{}-{}-:{}",
+                proto_prefix, self.src_ip, self.dst_ip, self.dst_port
+            ),
         }
     }
 }
@@ -131,26 +177,37 @@ impl FlowNoSrcPort {
                 src_ip: IpAddr::V4(pkt.get_source()),
                 dst_ip: IpAddr::V4(pkt.get_destination()),
                 dst_port: tcp_pkt.get_destination(),
+                proto: ip_pkt.next_layer(),
             },
             IpPacket::V6(pkt) => FlowNoSrcPort {
                 src_ip: IpAddr::V6(pkt.get_source()),
                 dst_ip: IpAddr::V6(pkt.get_destination()),
                 dst_port: tcp_pkt.get_destination(),
+                proto: ip_pkt.next_layer(),
             },
         }
     }
-    pub fn from_parts(sip: IpAddr, dip: IpAddr, dport: u16) -> FlowNoSrcPort {
+
+    pub fn from_parts(
+        src_ip: IpAddr,
+        dst_ip: IpAddr,
+        dst_port: u16,
+        proto: IpNextHeaderProtocol,
+    ) -> FlowNoSrcPort {
         FlowNoSrcPort {
-            src_ip: sip,
-            dst_ip: dip,
-            dst_port: dport,
+            src_ip,
+            dst_ip,
+            dst_port,
+            proto,
         }
     }
+
     pub fn from_flow(f: &Flow) -> FlowNoSrcPort {
         FlowNoSrcPort {
             src_ip: f.src_ip,
             dst_ip: f.dst_ip,
             dst_port: f.dst_port,
+            proto: f.proto,
         }
     }
 
@@ -295,6 +352,7 @@ impl FlowTracker {
 #[cfg(test)]
 mod tests {
     use flow_tracker::{Flow, FlowNoSrcPort};
+    use pnet::packet::ip::IpNextHeaderProtocols;
     use std::fmt::Write;
 
     #[test]
@@ -306,10 +364,11 @@ mod tests {
             dst_ip: "26ff::1".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow6).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow6}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "_ -> [26ff::1]:443");
 
         let flow4 = Flow {
@@ -317,30 +376,33 @@ mod tests {
             dst_ip: "128.138.97.6".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow4).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow4}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "_ -> 128.138.97.6:443");
 
         let flow_n6 = FlowNoSrcPort {
             src_ip: "2601::abcd:ef00".parse().unwrap(),
             dst_ip: "26ff::1".parse().unwrap(),
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow_n6).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow_n6}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "_ -> [26ff::1]:443");
 
         let flow_n4 = FlowNoSrcPort {
             src_ip: "10.22.0.1".parse().unwrap(),
             dst_ip: "128.138.97.6".parse().unwrap(),
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow_n4).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow_n4}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "_ -> 128.138.97.6:443");
 
         Flow::set_log_client(true);
@@ -350,10 +412,11 @@ mod tests {
             dst_ip: "26ff::1".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow6).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow6}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "[2601::abcd:ef00]:5672 -> [26ff::1]:443");
 
         let flow4 = Flow {
@@ -361,30 +424,33 @@ mod tests {
             dst_ip: "128.138.97.6".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow4).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow4}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "10.22.0.1:5672 -> 128.138.97.6:443");
 
         let flow_n6 = FlowNoSrcPort {
             src_ip: "2601::abcd:ef00".parse().unwrap(),
             dst_ip: "26ff::1".parse().unwrap(),
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow_n6).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow_n6}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "[2601::abcd:ef00]:0 -> [26ff::1]:443");
 
         let flow_n4 = FlowNoSrcPort {
             src_ip: "10.22.0.1".parse().unwrap(),
             dst_ip: "128.138.97.6".parse().unwrap(),
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let mut output = String::new();
-        write!(&mut output, "{}", flow_n4).expect("Error occurred while trying to write in String");
+        write!(&mut output, "{flow_n4}").expect("Error occurred while trying to write in String");
         assert_eq!(output, "10.22.0.1:0 -> 128.138.97.6:443");
     }
 
@@ -395,10 +461,11 @@ mod tests {
             dst_ip: "128.138.97.6".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let (src, dst) = flow.export_addrs();
-        print!("{:?} {:?}", src, dst);
+        print!("{src:?} {dst:?}");
         assert_eq!(vec![10, 22, 0, 1], src);
         assert_eq!(vec![128, 138, 97, 6], dst);
 
@@ -407,10 +474,11 @@ mod tests {
             dst_ip: "26ff::1".parse().unwrap(),
             src_port: 5672,
             dst_port: 443,
+            proto: IpNextHeaderProtocols::Tcp,
         };
 
         let (src, dst) = flow6.export_addrs();
-        print!("{:?} {:?}", src, dst);
+        print!("{src:?} {dst:?}");
         assert_eq!(
             vec![0x26, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xab, 0xcd, 0xef, 0x00],
             src

@@ -107,8 +107,7 @@ pub fn extract_payloads(
         let fixed_size_payload_bytes = match cipher.decrypt(nonce, &stego_repr_and_fsp[32..54]) {
             Ok(fspb) => fspb,
             Err(err) => {
-                let err: Box<dyn Error> =
-                    From::from(format!("fsp_aes_gcm.decrypt failed: {}", err));
+                let err: Box<dyn Error> = From::from(format!("fsp_aes_gcm.decrypt failed: {err}"));
                 return Err(err);
             }
         };
@@ -117,17 +116,14 @@ pub fn extract_payloads(
 
         let vsp_size = fixed_size_payload.vsp_size; // includes aes gcm tag
         if vsp_size <= 16 {
-            let err: Box<dyn Error> = From::from(format!(
-                "Variable Stego Payload Size {} too small",
-                vsp_size
-            ));
+            let err: Box<dyn Error> =
+                From::from(format!("Variable Stego Payload Size {vsp_size} too small"));
             return Err(err);
             //  return Ok((keys, fixed_size_payload, vec![]));
         }
         if vsp_size % 3 != 0 {
             let err: Box<dyn Error> = From::from(format!(
-                "Variable Stego Payload Size {} non-divisible by 3",
-                vsp_size
+                "Variable Stego Payload Size {vsp_size} non-divisible by 3"
             ));
             return Err(err);
         }
@@ -164,7 +160,7 @@ pub fn extract_payloads(
         ) {
             Ok(vsp) => vsp,
             Err(err) => {
-                let err: Box<dyn Error> = From::from(format!("failed to decrypt vsp: {}", err));
+                let err: Box<dyn Error> = From::from(format!("failed to decrypt vsp: {err}"));
                 return Err(err);
             }
         };
@@ -178,7 +174,7 @@ pub fn extract_payloads(
     match result {
         Ok(res) => res,
         Err(e) => {
-            let err: Box<dyn Error> = From::from(format!("{:?}", e));
+            let err: Box<dyn Error> = From::from(format!("{e:?}"));
             Err(err)
         }
     }

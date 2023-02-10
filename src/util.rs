@@ -10,6 +10,8 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::time::SystemTime;
 
+use pnet::packet::ethernet::{EtherType, EtherTypes};
+use pnet::packet::ip::IpNextHeaderProtocol;
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::{TcpOptionNumbers, TcpPacket};
@@ -36,6 +38,20 @@ impl<'p> IpPacket<'p> {
             IpPacket::V6(v6) => v6.payload(),
         };
         UdpPacket::new(payload)
+    }
+
+    pub fn next_layer(&'p self) -> IpNextHeaderProtocol {
+        match self {
+            IpPacket::V4(v4) => v4.get_next_level_protocol(),
+            IpPacket::V6(v6) => v6.get_next_header(),
+        }
+    }
+
+    pub fn ethertype(&'p self) -> EtherType {
+        match self {
+            IpPacket::V4(_) => EtherTypes::Ipv4,
+            IpPacket::V6(_) => EtherTypes::Ipv6,
+        }
     }
 }
 
@@ -120,7 +136,7 @@ pub fn tcp_seq_lt(a: u32, b: u32) -> bool {
 // top. Units are "kB", which I'm guessing is KiB.
 pub fn mem_used_kb() -> u64 {
     let my_pid: i32 = unsafe { libc::getpid() };
-    let f = match File::open(format!("/proc/{}/status", my_pid)) {
+    let f = match File::open(format!("/proc/{my_pid}/status")) {
         Ok(f) => f,
         Err(e) => {
             error!("Failed to open /proc/{}/status: {:?}", my_pid, e);

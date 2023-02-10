@@ -20,6 +20,15 @@ const (
 	phantomHkdfMinVersion         uint = 2
 )
 
+var (
+	// ErrLegacyAddrSelectBug indicates that we have hit a corner case in a legacy address selection
+	// algorithm that causes phantom address selection to fail.
+	ErrLegacyAddrSelectBug = errors.New("no valid addresses specified")
+	// ErrMissingAddrs indicates that no subnets were provided with addresses to select from. This
+	// is only valid for phantomHkdfMinVersion and newer.
+	ErrMissingAddrs = errors.New("no valid addresses specified to select")
+)
+
 // getSubnetsVarint - return EITHER all subnet strings as one composite array if
 // we are selecting unweighted, or return the array associated with the (seed)
 // selected array of subnet strings based on the associated weights
@@ -276,7 +285,7 @@ func selectPhantomImplVarint(seed []byte, subnets []*net.IPNet) (net.IP, error) 
 
 	// If the total number of addresses is 0 something has gone wrong
 	if addressTotal.Cmp(big.NewInt(0)) <= 0 {
-		return nil, fmt.Errorf("no valid addresses specified")
+		return nil, ErrLegacyAddrSelectBug
 	}
 
 	// Pick a value using the seed in the range of between 0 and the total
@@ -345,7 +354,7 @@ func selectPhantomImplV0(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 	}
 
 	if addressTotal.Cmp(big.NewInt(0)) <= 0 {
-		return nil, fmt.Errorf("no valid addresses specified")
+		return nil, ErrLegacyAddrSelectBug
 	}
 
 	id := &big.Int{}
@@ -365,7 +374,7 @@ func selectPhantomImplV0(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 		}
 	}
 	if result == nil {
-		return nil, errors.New("let's rewrite the phantom address selector")
+		return nil, ErrLegacyAddrSelectBug
 	}
 	return result, nil
 }
@@ -479,7 +488,7 @@ func selectPhantomImplHkdf(seed []byte, subnets []*net.IPNet) (net.IP, error) {
 
 	// If the total number of addresses is 0 something has gone wrong
 	if addressTotal.Cmp(big.NewInt(0)) <= 0 {
-		return nil, fmt.Errorf("no valid addresses specified")
+		return nil, ErrMissingAddrs
 	}
 
 	// Pick a value using the seed in the range of between 0 and the total

@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate arrayref;
-//extern crate lazycell;
 extern crate libc;
 #[macro_use]
 extern crate log;
@@ -110,7 +109,7 @@ const STATION_CONF_PATH: &str = "CJ_STATION_CONFIG";
 
 impl PerCoreGlobal {
     fn new(priv_key: [u8; 32], the_lcore: i32, workers_socket_addr: &str) -> PerCoreGlobal {
-        let tun = TunTap::new(IFF_TUN, &format!("tun{}", the_lcore)).unwrap();
+        let tun = TunTap::new(IFF_TUN, &format!("tun{the_lcore}")).unwrap();
         tun.set_up().unwrap();
 
         // Setup ZMQ
@@ -274,7 +273,7 @@ pub unsafe extern "C" fn rust_detect_init(
 
     let key = *array_ref![std::slice::from_raw_parts(ckey, 32_usize), 0, 32];
 
-    let s = format!("/tmp/dark-decoy-reporter-{}.fifo", lcore_id);
+    let s = format!("/tmp/dark-decoy-reporter-{lcore_id}.fifo");
     c_api::c_open_reporter(s);
     report!("reset");
 

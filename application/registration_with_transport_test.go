@@ -8,6 +8,7 @@ import (
 
 	cj "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
 
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"github.com/stretchr/testify/require"
@@ -51,15 +52,38 @@ func TestManagerFunctionality(t *testing.T) {
 
 	source := pb.RegistrationSource_Detector
 	newReg, err := rm.NewRegistration(c2s, &keys, c2s.GetV6Support(), &source)
-	if err != nil {
-		t.Fatalf("Registration failed: %v", err)
-	}
+	require.Nil(t, err, "registration failed")
 
 	rm.AddRegistration(newReg)
+	require.True(t, rm.RegistrationExists(newReg))
 
-	storedReg := rm.GetRegistrations(newReg.DarkDecoy)[string(newReg.Keys.ConjureHMAC("MinTrasportHMACString"))]
+	potentialRegistrations := rm.GetRegistrations(newReg.PhantomIp)
+	require.NotEqual(t, 0, len(potentialRegistrations))
+	storedReg := potentialRegistrations[string(newReg.Keys.ConjureHMAC("MinTrasportHMACString"))]
+	require.NotNil(t, storedReg)
 
-	if storedReg.DarkDecoy.String() != "192.122.190.148" || storedReg.Covert != "52.44.73.6:443" {
+	if storedReg.PhantomIp.String() != "192.122.190.148" || storedReg.Covert != "52.44.73.6:443" {
 		t.Fatalf("Improper registration returned: %v\n", storedReg.String())
 	}
+}
+
+func TestPortSelectionInterface(t *testing.T) {
+
+	var transportVersionEarly uint = 1
+	seed, _ := hex.DecodeString("0000000000000000000000000000000000")
+
+	backwardCompatibleTransports := []cj.Transport{
+		min.Transport{},
+		obfs4.Transport{},
+	}
+
+	for _, transport := range backwardCompatibleTransports {
+
+		// check that the static port generation works for earlier library versions that
+		// will send nil for pb.TransportParams
+		port, err := transport.GetDstPort(transportVersionEarly, seed, nil)
+		require.Nil(t, err)
+		require.Equal(t, uint16(443), port)
+	}
+
 }
