@@ -374,6 +374,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		RegistrationSource: registrationSource,
 		RegistrationTime:   time.Now(),
 		regCount:           0,
+		tunnelCount:        0,
 	}
 
 	return &reg, nil

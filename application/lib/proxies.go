@@ -176,6 +176,10 @@ func halfPipe(src net.Conn, dst net.Conn,
 // Proxy take a registration and a net.Conn and forwards client traffic to the
 // clients covert destination.
 func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
+
+	// New successful connection to station for this registration
+	atomic.AddInt64(&reg.tunnelCount, 1)
+
 	covertConn, err := net.Dial("tcp", reg.Covert)
 	if errors.Is(err, syscall.ECONNRESET) {
 		err = fmt.Errorf("rst")

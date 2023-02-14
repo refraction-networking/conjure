@@ -279,6 +279,8 @@ type DecoyRegistration struct {
 	regCount           int32
 	clientLibVer       uint32
 
+	tunnelCount int64
+
 	// validity marks whether the registration has been validated through liveness and other checks.
 	// This also denotes whether the registration has been shared with the detector.
 	Valid bool
@@ -662,11 +664,21 @@ func (r *RegisteredDecoys) registrationExists(d *DecoyRegistration) *DecoyRegist
 }
 
 type regExpireLogMsg struct {
-	Valid      bool
-	DecoyAddr  string
-	Reg2expire int64
-	RegID      string
-	RegCount   int32
+	Valid          bool
+	PhantomAddr    string
+	PhantomDstPort uint
+	Reg2expire     int64
+	RegCount       int32
+
+	ASN           uint
+	CC            string
+	V6            bool
+	Transport     string
+	Registrar     string
+	TransportOpts []string
+	RegOpts       []string
+	TunnelCount   uint
+	Tags          []string
 }
 
 func (r *RegisteredDecoys) getExpiredRegistrations() []string {
@@ -703,11 +715,18 @@ func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
 	}
 
 	stats := &regExpireLogMsg{
-		Valid:      expiredRegObj.Valid,
-		DecoyAddr:  expiredReg.decoy,
-		Reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
-		RegID:      expiredReg.regID,
-		RegCount:   expiredRegObj.regCount,
+		Valid:          expiredRegObj.Valid,
+		PhantomAddr:    expiredReg.decoy,
+		PhantomDstPort: uint(expiredRegObj.PhantomPort),
+		Reg2expire:     int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
+		RegCount:       expiredRegObj.regCount,
+
+		ASN:         expiredRegObj.regASN,
+		CC:          expiredRegObj.regCC,
+		Transport:   expiredRegObj.Transport.String(),
+		Registrar:   expiredRegObj.RegistrationSource.String(),
+		V6:          expiredRegObj.PhantomIp.To4() == nil,
+		TunnelCount: uint(expiredRegObj.tunnelCount),
 	}
 
 	if expiredRegObj.Valid {
@@ -738,8 +757,7 @@ func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
 func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) (int, int) {
 	var expiredRegTimeoutIndices = r.getExpiredRegistrations()
 
-	// TODO JMWAMPLE REMOVE
-	logger.Infof("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
+	logger.Debugf("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
 		r.TotalRegistrations(), len(r.decoysTimeouts), len(expiredRegTimeoutIndices))
 
 	expiredValid := 0
@@ -747,12 +765,13 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) (int, int)
 
 		stats := r.removeRegistration(idx)
 		if stats != nil {
+			statsStr, _ := json.Marshal(stats)
 			if stats.Valid {
 				expiredValid++
+				logger.Infof("expired reg %s", statsStr)
+			} else {
+				logger.Debugf("expired reg %s", statsStr)
 			}
-			statsStr, _ := json.Marshal(stats)
-			logger.Printf("expired registration %s", statsStr)
-			// TODO JMWAMPLE LOG SESSIONS WITH NON-ZERO TRANSFER, COUNT OF ZERO
 		}
 	}
 
