@@ -37,6 +37,8 @@ func generalizeErr(err error) error {
 		return nil
 	} else if errors.Is(err, net.ErrClosed) {
 		return nil
+	} else if errors.Is(err, io.EOF) {
+		return nil
 	} else if errors.Is(err, syscall.ECONNRESET) {
 		return errConnReset
 	} else if errors.Is(err, syscall.ECONNREFUSED) {
@@ -108,11 +110,11 @@ func halfPipe(src net.Conn, dst net.Conn,
 			}
 
 			if ew != nil {
-				if ew != io.EOF {
+				if e := generalizeErr(ew); e != nil {
 					if isUpload {
-						stats.CovertConnErr = generalizeErr(ew).Error()
+						stats.CovertConnErr = e.Error()
 					} else {
-						stats.ClientConnErr = generalizeErr(ew).Error()
+						stats.ClientConnErr = e.Error()
 					}
 				}
 				break
@@ -123,11 +125,11 @@ func halfPipe(src net.Conn, dst net.Conn,
 			}
 		}
 		if er != nil {
-			if er != io.EOF {
+			if e := generalizeErr(er); e != nil {
 				if isUpload {
-					stats.ClientConnErr = generalizeErr(er).Error()
+					stats.ClientConnErr = e.Error()
 				} else {
-					stats.CovertConnErr = generalizeErr(er).Error()
+					stats.CovertConnErr = e.Error()
 				}
 			}
 			break
