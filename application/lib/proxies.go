@@ -45,7 +45,7 @@ func generalizeErr(err error) error {
 		return errConnRefused
 	} else if errors.Is(err, syscall.ECONNABORTED) {
 		return errConnAborted
-	} else if errN, ok := err.(net.Error); ok && !errN.Timeout() {
+	} else if errN, ok := err.(net.Error); ok && errN.Timeout() {
 		return errConnTimeout
 	}
 
