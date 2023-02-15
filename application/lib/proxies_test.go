@@ -61,8 +61,8 @@ func TestProxyMockCovertReset(t *testing.T) {
 	}
 
 	wg.Add(2)
-	go halfPipe(clientConn, covertConn, wg, oncePrintErr, logger, "Up "+"ABCDEF")
-	go halfPipe(covertConn, clientConn, wg, oncePrintErr, logger, "Down "+"ABCDEF")
+	go halfPipe(clientConn, covertConn, wg, oncePrintErr, logger, "Up "+"ABCDEF", &tunnelStats{proxyStats: getProxyStats()})
+	go halfPipe(covertConn, clientConn, wg, oncePrintErr, logger, "Down "+"ABCDEF", &tunnelStats{proxyStats: getProxyStats()})
 
 	wg.Wait()
 }
@@ -133,8 +133,8 @@ func TestHalfpipeDeadlineEcho(t *testing.T) {
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(clientStation, stationCovert, &wg, &oncePrintErr, logger, "Up "+"XXXXXX")
-	go halfPipe(stationCovert, clientStation, &wg, &oncePrintErr, logger, "Down "+"XXXXXX")
+	go halfPipe(clientStation, stationCovert, &wg, &oncePrintErr, logger, "Up "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
+	go halfPipe(stationCovert, clientStation, &wg, &oncePrintErr, logger, "Down "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
 
 	go func() {
 		defer covertCovert.Close()
@@ -182,8 +182,8 @@ func TestHalfpipeDeadlineUpload(t *testing.T) {
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(clientStation, stationCovert, &wg, &oncePrintErr, logger, "Up "+"XXXXXX")
-	go halfPipe(stationCovert, clientStation, &wg, &oncePrintErr, logger, "Down "+"XXXXXX")
+	go halfPipe(clientStation, stationCovert, &wg, &oncePrintErr, logger, "Up "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
+	go halfPipe(stationCovert, clientStation, &wg, &oncePrintErr, logger, "Down "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
 
 	go func() {
 		defer covertCovert.Close()
@@ -227,8 +227,8 @@ func TestHalfpipeDeadlineActual(t *testing.T) {
 	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
-	go halfPipe(clientStation, stationCovert, &wg, &oncePrintErr, logger, "Up "+"XXXXXX")
-	go halfPipe(stationCovert, clientStation, &wg, &oncePrintErr, logger, "Down "+"XXXXXX")
+	go halfPipe(clientStation, stationCovert, &wg, &oncePrintErr, logger, "Up "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
+	go halfPipe(stationCovert, clientStation, &wg, &oncePrintErr, logger, "Down "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
 
 	var serverErr error
 	go func() {
