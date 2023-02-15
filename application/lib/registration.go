@@ -670,15 +670,15 @@ type regExpireLogMsg struct {
 	Reg2expire     int64
 	RegCount       int32
 
-	ASN           uint
-	CC            string
-	V6            bool
-	Transport     string
-	Registrar     string
-	TransportOpts []string
-	RegOpts       []string
-	TunnelCount   uint
-	Tags          []string
+	ASN           uint     `json:",omitempty"`
+	CC            string   `json:",omitempty"`
+	V6            bool     `json:",omitempty"`
+	Transport     string   `json:",omitempty"`
+	Registrar     string   `json:",omitempty"`
+	TransportOpts []string `json:",omitempty"`
+	RegOpts       []string `json:",omitempty"`
+	TunnelCount   uint     `json:",omitempty"`
+	Tags          []string `json:",omitempty"`
 }
 
 func (r *RegisteredDecoys) getExpiredRegistrations() []string {

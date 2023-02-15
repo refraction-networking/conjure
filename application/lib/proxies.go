@@ -16,13 +16,40 @@ import (
 	"github.com/refraction-networking/conjure/application/log"
 )
 
-// errConnReset replaces the reset error in the halfpipe to remove ips and extra bytes
-var errConnReset = errors.New("rst")
-
-// replaces the ip.timeout error in the halfpipe to remove ips and extra bytes
-var errConnTimeout = errors.New("timeout")
-
 const proxyStallTimeout = 30 * time.Second
+
+var (
+	// errConnReset replaces the reset error in the halfpipe to remove ips and extra bytes
+	errConnReset = errors.New("rst")
+
+	// replaces the ip.timeout error in the halfpipe to remove ips and extra bytes
+	errConnTimeout = errors.New("timeout")
+
+	// replaces refused error to prevent client IP logging
+	errConnRefused = errors.New("refused")
+
+	// replaces refused error to prevent client IP logging
+	errConnAborted = errors.New("aborted")
+)
+
+func generalizeErr(err error) error {
+	if err == nil {
+		return nil
+	} else if errors.Is(err, net.ErrClosed) {
+		return nil
+	} else if errors.Is(err, syscall.ECONNRESET) {
+		return errConnReset
+	} else if errors.Is(err, syscall.ECONNREFUSED) {
+		return errConnRefused
+	} else if errors.Is(err, syscall.ECONNABORTED) {
+		return errConnAborted
+	} else if errN, ok := err.(net.Error); ok && !errN.Timeout() {
+		return errConnTimeout
+	}
+
+	// if it is not a well known error, return it
+	return err
+}
 
 // this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to pass around
 // TODO: refactor
@@ -83,9 +110,9 @@ func halfPipe(src net.Conn, dst net.Conn,
 			if ew != nil {
 				if ew != io.EOF {
 					if isUpload {
-						stats.CovertConnErr = err.Error()
+						stats.CovertConnErr = generalizeErr(ew).Error()
 					} else {
-						stats.ClientConnErr = err.Error()
+						stats.ClientConnErr = generalizeErr(ew).Error()
 					}
 				}
 				break
@@ -98,9 +125,9 @@ func halfPipe(src net.Conn, dst net.Conn,
 		if er != nil {
 			if er != io.EOF {
 				if isUpload {
-					stats.ClientConnErr = err.Error()
+					stats.ClientConnErr = generalizeErr(er).Error()
 				} else {
-					stats.CovertConnErr = err.Error()
+					stats.CovertConnErr = generalizeErr(er).Error()
 				}
 			}
 			break
@@ -121,18 +148,7 @@ func halfPipe(src net.Conn, dst net.Conn,
 
 	// Close dst
 	errDst := dst.Close()
-	if errors.Is(errDst, net.ErrClosed) {
-		err = nil
-	} else if errors.Is(errDst, syscall.ECONNRESET) {
-		// get simple communication of reset into logs without IPs
-		err = errConnReset
-	} else if et, ok := err.(net.Error); ok && et.Timeout() {
-		err = errConnTimeout
-	} else if errDst != nil {
-		logger.Errorf("error closing writer: %s", errDst)
-		err = errDst
-	}
-	if err != nil {
+	if err = generalizeErr(errDst); err != nil {
 		if isUpload {
 			if stats.CovertConnErr == "" {
 				stats.CovertConnErr = err.Error()
@@ -146,19 +162,7 @@ func halfPipe(src net.Conn, dst net.Conn,
 
 	// Close src
 	errSrc := src.Close()
-	if errors.Is(errSrc, net.ErrClosed) {
-		err = nil
-	} else if errors.Is(errSrc, syscall.ECONNRESET) {
-		// get simple communication of reset into logs without IPs
-		err = errConnReset
-	} else if et, ok := err.(net.Error); ok && et.Timeout() {
-		err = errConnTimeout
-	} else if errSrc != nil {
-		logger.Errorf("error closing reader: %s", errSrc)
-		err = errSrc
-	}
-
-	if err != nil {
+	if err = generalizeErr(errSrc); err != nil {
 		if isUpload {
 			if stats.ClientConnErr == "" {
 				stats.ClientConnErr = err.Error()
@@ -196,14 +200,8 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	}
 
 	covertConn, err := net.Dial("tcp", reg.Covert)
-	if errors.Is(err, syscall.ECONNRESET) {
-		tunStats.CovertDialErr = "rst"
-	} else if errors.Is(err, syscall.ECONNREFUSED) {
-		tunStats.CovertDialErr = "refused"
-	} else if errors.Is(err, syscall.ECONNABORTED) {
-		tunStats.CovertDialErr = "aborted"
-	} else if errN, ok := err.(net.Error); ok && !errN.Timeout() {
-		tunStats.CovertDialErr = "timeout"
+	if e := generalizeErr(err); e != nil {
+		tunStats.CovertDialErr = e.Error()
 	}
 
 	// Any common error that is a non-station issue should have covert IP
@@ -267,15 +265,15 @@ type tunnelStats struct {
 	CovertConnErr string
 	ClientConnErr string
 
-	ASN           uint
-	CC            string
-	V6            bool
-	Transport     string
-	Registrar     string
-	TransportOpts []string
-	RegOpts       []string
-	TunnelCount   uint
-	Tags          []string
+	ASN           uint     `json:",omitempty"`
+	CC            string   `json:",omitempty"`
+	V6            bool     `json:",omitempty"`
+	Transport     string   `json:",omitempty"`
+	Registrar     string   `json:",omitempty"`
+	TransportOpts []string `json:",omitempty"`
+	RegOpts       []string `json:",omitempty"`
+	TunnelCount   uint     `json:",omitempty"`
+	Tags          []string `json:",omitempty"`
 }
 
 func (ts *tunnelStats) Print(logger *log.Logger) {
