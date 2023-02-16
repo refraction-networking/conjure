@@ -212,6 +212,8 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 		Transport:   reg.Transport.String(),
 		Registrar:   reg.RegistrationSource.String(),
 		V6:          reg.PhantomIp.To4() == nil,
+		LibVer:      uint(reg.clientLibVer),
+		Gen:         uint(reg.DecoyListVersion),
 	}
 
 	covertConn, err := net.Dial("tcp", reg.Covert)
@@ -289,6 +291,8 @@ type tunnelStats struct {
 	CC            string   `json:",omitempty"`
 	Transport     string   `json:",omitempty"`
 	Registrar     string   `json:",omitempty"`
+	LibVer        uint
+	Gen           uint
 	TransportOpts []string `json:",omitempty"`
 	RegOpts       []string `json:",omitempty"`
 	Tags          []string `json:",omitempty"`
