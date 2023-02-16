@@ -765,13 +765,11 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) (int, int)
 
 		stats := r.removeRegistration(idx)
 		if stats != nil {
-			statsStr, _ := json.Marshal(stats)
 			if stats.Valid {
 				expiredValid++
-				logger.Infof("expired reg %s", statsStr)
-			} else {
-				logger.Debugf("expired reg %s", statsStr)
 			}
+			statsStr, _ := json.Marshal(stats)
+			logger.Debugf("expired reg %s", statsStr)
 		}
 	}
 

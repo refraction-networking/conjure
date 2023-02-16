@@ -22,13 +22,19 @@ var (
 	// errConnReset replaces the reset error in the halfpipe to remove ips and extra bytes
 	errConnReset = errors.New("rst")
 
-	// replaces the ip.timeout error in the halfpipe to remove ips and extra bytes
+	// errConnTimeout replaces the ip.timeout error in the halfpipe to remove ips and extra bytes
 	errConnTimeout = errors.New("timeout")
+
+	// errBrokenPipe replaces the write: broken pipe error to prevent client IP logging
+	errBrokenPipe = errors.New("broken_pipe")
 
 	// replaces refused error to prevent client IP logging
 	errConnRefused = errors.New("refused")
 
-	// replaces refused error to prevent client IP logging
+	// errUnreachable replaces unreachable error to prevent client IP logging
+	errUnreachable = errors.New("unreachable")
+
+	// errConnAborted replaces aborted error to prevent client IP logging
 	errConnAborted = errors.New("aborted")
 )
 
@@ -45,6 +51,10 @@ func generalizeErr(err error) error {
 		return errConnRefused
 	} else if errors.Is(err, syscall.ECONNABORTED) {
 		return errConnAborted
+	} else if errors.Is(err, syscall.EPIPE) {
+		return errBrokenPipe
+	} else if errors.Is(err, syscall.EHOSTUNREACH) {
+		return errUnreachable
 	} else if errN, ok := err.(net.Error); ok && errN.Timeout() {
 		return errConnTimeout
 	}
@@ -193,6 +203,9 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	tunStats := &tunnelStats{
 		proxyStats: getProxyStats(),
 
+		PhantomAddr:    reg.PhantomIp.String(),
+		PhantomDstPort: uint(reg.PhantomPort),
+
 		TunnelCount: uint(atomic.LoadInt64(&reg.tunnelCount)),
 		ASN:         reg.regASN,
 		CC:          reg.regCC,
@@ -266,6 +279,9 @@ type tunnelStats struct {
 	CovertDialErr string
 	CovertConnErr string
 	ClientConnErr string
+
+	PhantomAddr    string
+	PhantomDstPort uint
 
 	ASN           uint     `json:",omitempty"`
 	CC            string   `json:",omitempty"`
