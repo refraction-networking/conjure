@@ -670,14 +670,14 @@ type regExpireLogMsg struct {
 	Reg2expire     int64
 	RegCount       int32
 
-	ASN           uint     `json:",omitempty"`
-	CC            string   `json:",omitempty"`
-	V6            bool     `json:",omitempty"`
+	ASN           uint   `json:",omitempty"`
+	CC            string `json:",omitempty"`
+	V6            bool
 	Transport     string   `json:",omitempty"`
 	Registrar     string   `json:",omitempty"`
 	TransportOpts []string `json:",omitempty"`
 	RegOpts       []string `json:",omitempty"`
-	TunnelCount   uint     `json:",omitempty"`
+	TunnelCount   uint
 	Tags          []string `json:",omitempty"`
 }
 

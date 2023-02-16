@@ -283,14 +283,14 @@ type tunnelStats struct {
 	PhantomAddr    string
 	PhantomDstPort uint
 
+	TunnelCount   uint
+	V6            bool
 	ASN           uint     `json:",omitempty"`
 	CC            string   `json:",omitempty"`
-	V6            bool     `json:",omitempty"`
 	Transport     string   `json:",omitempty"`
 	Registrar     string   `json:",omitempty"`
 	TransportOpts []string `json:",omitempty"`
 	RegOpts       []string `json:",omitempty"`
-	TunnelCount   uint     `json:",omitempty"`
 	Tags          []string `json:",omitempty"`
 }
 
