@@ -119,6 +119,10 @@ func halfPipe(src net.Conn, dst net.Conn,
 				Stat().AddBytesDown(int64(nw))
 			}
 
+			if ew == nil && nw != nr {
+				ew = io.ErrShortWrite
+			}
+
 			if ew != nil {
 				if e := generalizeErr(ew); e != nil {
 					if isUpload {
@@ -129,10 +133,7 @@ func halfPipe(src net.Conn, dst net.Conn,
 				}
 				break
 			}
-			if nw != nr {
-				err = io.ErrShortWrite
-				break
-			}
+
 		}
 		if er != nil {
 			if e := generalizeErr(er); e != nil {
@@ -287,10 +288,10 @@ type tunnelStats struct {
 
 	TunnelCount   uint
 	V6            bool
-	ASN           uint     `json:",omitempty"`
-	CC            string   `json:",omitempty"`
-	Transport     string   `json:",omitempty"`
-	Registrar     string   `json:",omitempty"`
+	ASN           uint   `json:",omitempty"`
+	CC            string `json:",omitempty"`
+	Transport     string `json:",omitempty"`
+	Registrar     string `json:",omitempty"`
 	LibVer        uint
 	Gen           uint
 	TransportOpts []string `json:",omitempty"`
