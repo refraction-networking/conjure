@@ -162,7 +162,10 @@ func halfPipe(src net.Conn, dst net.Conn,
 	// Close dst
 	errDst := dst.Close()
 	if err = generalizeErr(errDst); err != nil {
-		if isUpload {
+		if errors.Is(err, errConnTimeout) {
+			stats.CovertConnErr = err.Error()
+			stats.ClientConnErr = err.Error()
+		} else if isUpload {
 			if stats.CovertConnErr == "" {
 				stats.CovertConnErr = err.Error()
 			}
@@ -176,7 +179,10 @@ func halfPipe(src net.Conn, dst net.Conn,
 	// Close src
 	errSrc := src.Close()
 	if err = generalizeErr(errSrc); err != nil {
-		if isUpload {
+		if errors.Is(err, errConnTimeout) {
+			stats.CovertConnErr = err.Error()
+			stats.ClientConnErr = err.Error()
+		} else if isUpload {
 			if stats.ClientConnErr == "" {
 				stats.ClientConnErr = err.Error()
 			}
