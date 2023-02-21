@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/refraction-networking/conjure/application/geoip"
 	"github.com/refraction-networking/conjure/application/liveness"
 	"github.com/refraction-networking/conjure/application/log"
 
@@ -38,6 +39,7 @@ type RegistrationManager struct {
 	Logger           *log.Logger
 	PhantomSelector  *PhantomIPSelector
 	LivenessTester   liveness.Tester
+	GeoIP            geoip.Database
 
 	// ingestChan is included here so that the capacity and use is available to
 	// stats
@@ -59,6 +61,16 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 		logger.Errorf("failed to create the PhantomIPSelector object: %v", err)
 		return nil
 	}
+
+	geoipDB, err := geoip.New(conf.DBConfig)
+	if errors.Is(err, geoip.ErrMissingDB) {
+		// if a database is missing, log to warm, but functionality should be the same
+		logger.Warn(err)
+	} else if err != nil {
+		logger.Errorf("failed to create geoip database: %v", err)
+		return nil
+	}
+
 	return &RegistrationManager{
 		RegConfig:         conf,
 		RegistrationStats: newRegistrationStats(),
@@ -66,6 +78,7 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 		registeredDecoys:  NewRegisteredDecoys(),
 		PhantomSelector:   p,
 		LivenessTester:    lt,
+		GeoIP:             geoipDB,
 	}
 }
 
@@ -99,6 +112,17 @@ func (regManager *RegistrationManager) OnReload(conf *RegConfig) {
 
 	regManager.RegConfig.PhantomBlocklist = conf.PhantomBlocklist
 	regManager.RegConfig.phantomBlocklist = conf.phantomBlocklist
+
+	geoipDB, err := geoip.New(conf.DBConfig)
+	if errors.Is(err, geoip.ErrMissingDB) {
+		// if a database is missing, log to warm, but functionality should be the same
+		regManager.Logger.Warn(err)
+	} else if err != nil {
+		regManager.Logger.Errorf("failed to create geoip database: %v", err)
+		return
+	}
+
+	regManager.GeoIP = geoipDB
 }
 
 // AddTransport initializes a transport so that it can be tracked by the manager when
@@ -227,7 +251,6 @@ func (regManager *RegistrationManager) MarkActive(reg *DecoyRegistration) {
 	regManager.registeredDecoys.markActive(reg)
 }
 
-
 // Cleanup sends a signal to the detector to empty cached sessions. This ensures that the detector
 // does not forward traffic for sessions that it knows about for a previous launch of the station
 // that the current session doesn't know about.
@@ -235,14 +258,16 @@ func (regManager *RegistrationManager) Cleanup() {
 	clearDetector()
 }
 
-
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
-	PhantomIp   net.IP
-	PhantomPort uint16
+	PhantomIp    net.IP
+	PhantomPort  uint16
 	PhantomProto pb.IPProto
 
-	registrationAddr   net.IP
+	registrationAddr net.IP
+	regCC            string
+	regASN           uint
+
 	Keys               *ConjureSharedKeys
 	Covert, Mask       string
 	Flags              *pb.RegistrationFlags
@@ -253,6 +278,8 @@ type DecoyRegistration struct {
 	DecoyListVersion   uint32
 	regCount           int32
 	clientLibVer       uint32
+
+	tunnelCount int64
 
 	// validity marks whether the registration has been validated through liveness and other checks.
 	// This also denotes whether the registration has been shared with the detector.
@@ -637,11 +664,21 @@ func (r *RegisteredDecoys) registrationExists(d *DecoyRegistration) *DecoyRegist
 }
 
 type regExpireLogMsg struct {
-	Valid      bool
-	DecoyAddr  string
-	Reg2expire int64
-	RegID      string
-	RegCount   int32
+	Valid          bool
+	PhantomAddr    string
+	PhantomDstPort uint
+	Reg2expire     int64
+	RegCount       int32
+
+	ASN           uint   `json:",omitempty"`
+	CC            string `json:",omitempty"`
+	V6            bool
+	Transport     string   `json:",omitempty"`
+	Registrar     string   `json:",omitempty"`
+	TransportOpts []string `json:",omitempty"`
+	RegOpts       []string `json:",omitempty"`
+	TunnelCount   uint
+	Tags          []string `json:",omitempty"`
 }
 
 func (r *RegisteredDecoys) getExpiredRegistrations() []string {
@@ -678,11 +715,18 @@ func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
 	}
 
 	stats := &regExpireLogMsg{
-		Valid:      expiredRegObj.Valid,
-		DecoyAddr:  expiredReg.decoy,
-		Reg2expire: int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
-		RegID:      expiredReg.regID,
-		RegCount:   expiredRegObj.regCount,
+		Valid:          expiredRegObj.Valid,
+		PhantomAddr:    expiredReg.decoy,
+		PhantomDstPort: uint(expiredRegObj.PhantomPort),
+		Reg2expire:     int64(time.Since(expiredReg.registrationTime) / time.Millisecond),
+		RegCount:       expiredRegObj.regCount,
+
+		ASN:         expiredRegObj.regASN,
+		CC:          expiredRegObj.regCC,
+		Transport:   expiredRegObj.Transport.String(),
+		Registrar:   expiredRegObj.RegistrationSource.String(),
+		V6:          expiredRegObj.PhantomIp.To4() == nil,
+		TunnelCount: uint(expiredRegObj.tunnelCount),
 	}
 
 	if expiredRegObj.Valid {
@@ -713,8 +757,7 @@ func (r *RegisteredDecoys) removeRegistration(index string) *regExpireLogMsg {
 func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) (int, int) {
 	var expiredRegTimeoutIndices = r.getExpiredRegistrations()
 
-	// TODO JMWAMPLE REMOVE
-	logger.Infof("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
+	logger.Debugf("cleansing registrations - registrations: %d, timeouts: %d, expired: %d",
 		r.TotalRegistrations(), len(r.decoysTimeouts), len(expiredRegTimeoutIndices))
 
 	expiredValid := 0
@@ -726,8 +769,7 @@ func (r *RegisteredDecoys) removeOldRegistrations(logger *log.Logger) (int, int)
 				expiredValid++
 			}
 			statsStr, _ := json.Marshal(stats)
-			logger.Printf("expired registration %s", statsStr)
-			// TODO JMWAMPLE LOG SESSIONS WITH NON-ZERO TRANSFER, COUNT OF ZERO
+			logger.Debugf("expired reg %s", statsStr)
 		}
 	}
 

@@ -20,4 +20,8 @@ func TestConfigParse(t *testing.T) {
 	lc := c.LivenessConfig()
 	require.NotEqual(t, "", lc.CacheDuration)
 	require.NotEqual(t, "", lc.CacheDurationNonLive)
+
+	// var db geoip.Database
+	require.NotNil(t, c.RegConfig.DBConfig)
+	// require.IsType(t, db, c.RegConfig.DBConfig)
 }

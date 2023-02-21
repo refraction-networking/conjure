@@ -16,20 +16,52 @@ import (
 	"github.com/refraction-networking/conjure/application/log"
 )
 
-type sessionStats struct {
-	Duration int64
-	Written  int64
-	Tag      string
-	Err      string
-}
-
-// errConnReset replaces the reset error in the halfpipe to remove ips and extra bytes
-var errConnReset = errors.New("rst")
-
-// replaces the ip.timeout error in the halfpipe to remove ips and extra bytes
-var errConnTimeout = errors.New("timeout")
-
 const proxyStallTimeout = 30 * time.Second
+
+var (
+	// errConnReset replaces the reset error in the halfpipe to remove ips and extra bytes
+	errConnReset = errors.New("rst")
+
+	// errConnTimeout replaces the ip.timeout error in the halfpipe to remove ips and extra bytes
+	errConnTimeout = errors.New("timeout")
+
+	// errBrokenPipe replaces the write: broken pipe error to prevent client IP logging
+	errBrokenPipe = errors.New("broken_pipe")
+
+	// replaces refused error to prevent client IP logging
+	errConnRefused = errors.New("refused")
+
+	// errUnreachable replaces unreachable error to prevent client IP logging
+	errUnreachable = errors.New("unreachable")
+
+	// errConnAborted replaces aborted error to prevent client IP logging
+	errConnAborted = errors.New("aborted")
+)
+
+func generalizeErr(err error) error {
+	if err == nil {
+		return nil
+	} else if errors.Is(err, net.ErrClosed) {
+		return nil
+	} else if errors.Is(err, io.EOF) {
+		return nil
+	} else if errors.Is(err, syscall.ECONNRESET) {
+		return errConnReset
+	} else if errors.Is(err, syscall.ECONNREFUSED) {
+		return errConnRefused
+	} else if errors.Is(err, syscall.ECONNABORTED) {
+		return errConnAborted
+	} else if errors.Is(err, syscall.EPIPE) {
+		return errBrokenPipe
+	} else if errors.Is(err, syscall.EHOSTUNREACH) {
+		return errUnreachable
+	} else if errN, ok := err.(net.Error); ok && errN.Timeout() {
+		return errConnTimeout
+	}
+
+	// if it is not a well known error, return it
+	return err
+}
 
 // this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to pass around
 // TODO: refactor
@@ -37,7 +69,7 @@ func halfPipe(src net.Conn, dst net.Conn,
 	wg *sync.WaitGroup,
 	oncePrintErr *sync.Once,
 	logger *log.Logger,
-	tag string) {
+	tag string, stats *tunnelStats) {
 
 	var proxyStartTime = time.Now()
 	isUpload := strings.HasPrefix(tag, "Up")
@@ -73,124 +105,128 @@ func halfPipe(src net.Conn, dst net.Conn,
 
 	// If we run into perf problems, we can revert
 
-	written, err := func() (totWritten int64, err error) {
-		buf := make([]byte, 32*1024)
-		for {
-			nr, er := src.Read(buf)
-			if nr > 0 {
-				nw, ew := dst.Write(buf[0:nr])
-				totWritten += int64(nw)
-				// Update stats:
-				getProxyStats().addBytes(int64(nw), isUpload)
-				if isUpload {
-					Stat().AddBytesUp(int64(nw))
-				} else {
-					Stat().AddBytesDown(int64(nw))
-				}
+	buf := make([]byte, 32*1024)
+	for {
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			nw, ew := dst.Write(buf[0:nr])
 
-				if ew != nil {
-					if ew != io.EOF {
-						err = ew
-					}
-					break
-				}
-				if nw != nr {
-					err = io.ErrShortWrite
-					break
-				}
+			// Update stats:
+			stats.addBytes(int64(nw), isUpload)
+			if isUpload {
+				Stat().AddBytesUp(int64(nw))
+			} else {
+				Stat().AddBytesDown(int64(nw))
 			}
-			if er != nil {
-				if er != io.EOF {
-					err = er
+
+			if ew == nil && nw != nr {
+				ew = io.ErrShortWrite
+			}
+
+			if ew != nil {
+				if e := generalizeErr(ew); e != nil {
+					if isUpload {
+						stats.CovertConnErr = e.Error()
+					} else {
+						stats.ClientConnErr = e.Error()
+					}
 				}
 				break
 			}
 
-			// refresh stall timeout - set both because it only happens on write
-			// so if connection is sending traffic unidirectionally we prevent
-			// the receiving side from timing out.
-			err := src.SetDeadline(time.Now().Add(proxyStallTimeout))
-			if err != nil {
-				logger.Errorln("error setting deadline for src conn: ", tag)
-			}
-			err = dst.SetDeadline(time.Now().Add(proxyStallTimeout))
-			if err != nil {
-				logger.Errorln("error setting deadline for dst conn: ", tag)
-			}
-
 		}
-		return totWritten, err
+		if er != nil {
+			if e := generalizeErr(er); e != nil {
+				if isUpload {
+					stats.ClientConnErr = e.Error()
+				} else {
+					stats.CovertConnErr = e.Error()
+				}
+			}
+			break
+		}
 
-	}()
+		// refresh stall timeout - set both because it only happens on write
+		// so if connection is sending traffic unidirectionally we prevent
+		// the receiving side from timing out.
+		err := src.SetDeadline(time.Now().Add(proxyStallTimeout))
+		if err != nil {
+			logger.Errorln("error setting deadline for src conn: ", tag)
+		}
+		err = dst.SetDeadline(time.Now().Add(proxyStallTimeout))
+		if err != nil {
+			logger.Errorln("error setting deadline for dst conn: ", tag)
+		}
+	}
 
 	// Close dst
 	errDst := dst.Close()
-	if errors.Is(errDst, net.ErrClosed) {
-		err = nil
-	} else if errors.Is(errDst, syscall.ECONNRESET) {
-		// get simple communication of reset into logs without IPs
-		err = errConnReset
-	} else if et, ok := err.(net.Error); ok && et.Timeout() {
-		err = errConnTimeout
-	} else if errDst != nil {
-		logger.Errorf("error closing writer: %s", err)
-		err = errDst
+	if err = generalizeErr(errDst); err != nil {
+		if isUpload {
+			if stats.CovertConnErr == "" {
+				stats.CovertConnErr = err.Error()
+			}
+		} else {
+			if stats.ClientConnErr == "" {
+				stats.ClientConnErr = err.Error()
+			}
+		}
 	}
 
 	// Close src
 	errSrc := src.Close()
-	if errors.Is(errSrc, net.ErrClosed) {
-		err = nil
-	} else if errors.Is(errSrc, syscall.ECONNRESET) {
-		// get simple communication of reset into logs without IPs
-		err = errConnReset
-	} else if et, ok := err.(net.Error); ok && et.Timeout() {
-		err = errConnTimeout
-	} else if errSrc != nil {
-		logger.Errorf("error closing reader: %s", errSrc)
-		err = errSrc
+	if err = generalizeErr(errSrc); err != nil {
+		if isUpload {
+			if stats.ClientConnErr == "" {
+				stats.ClientConnErr = err.Error()
+			}
+		} else {
+			if stats.CovertConnErr == "" {
+				stats.CovertConnErr = err.Error()
+			}
+		}
 	}
 
-	// Compute/log stats
+	// Finalize tunnel stats
 	proxyEndTime := time.Since(proxyStartTime)
-	stats := sessionStats{
-		Duration: int64(proxyEndTime / time.Millisecond),
-		Written:  written,
-		Tag:      tag,
-		Err:      ""}
-	if err != nil {
-		stats.Err = err.Error()
-	}
-
-	getProxyStats().addCompleted(stats.Written, isUpload)
-
-	statsStr, _ := json.Marshal(stats)
-	if stats.Written != 0 {
-		logger.Printf("stopping forwarding %s", statsStr)
-	} else {
-		logger.Debugf("stopping forwarding %s", statsStr)
-	}
+	stats.duration(int64(proxyEndTime/time.Millisecond), isUpload)
+	stats.completed(isUpload)
 	wg.Done()
 }
 
 // Proxy take a registration and a net.Conn and forwards client traffic to the
 // clients covert destination.
 func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
+
+	// New successful connection to station for this registration
+	atomic.AddInt64(&reg.tunnelCount, 1)
+
+	tunStats := &tunnelStats{
+		proxyStats: getProxyStats(),
+
+		PhantomAddr:    reg.PhantomIp.String(),
+		PhantomDstPort: uint(reg.PhantomPort),
+
+		TunnelCount: uint(atomic.LoadInt64(&reg.tunnelCount)),
+		ASN:         reg.regASN,
+		CC:          reg.regCC,
+		Transport:   reg.Transport.String(),
+		Registrar:   reg.RegistrationSource.String(),
+		V6:          reg.PhantomIp.To4() == nil,
+		LibVer:      uint(reg.clientLibVer),
+		Gen:         uint(reg.DecoyListVersion),
+	}
+
 	covertConn, err := net.Dial("tcp", reg.Covert)
-	if errors.Is(err, syscall.ECONNRESET) {
-		err = fmt.Errorf("rst")
-	} else if errors.Is(err, syscall.ECONNREFUSED) {
-		err = fmt.Errorf("refused")
-	} else if errors.Is(err, syscall.ECONNABORTED) {
-		err = fmt.Errorf("aborted")
-	} else if errN, ok := err.(net.Error); ok && !errN.Timeout() {
-		err = fmt.Errorf("timeout")
+	if e := generalizeErr(err); e != nil {
+		tunStats.CovertDialErr = e.Error()
 	}
 
 	// Any common error that is a non-station issue should have covert IP
 	// removed.
-	if err != nil {
-		logger.Errorf("failed to dial target: %s", err)
+	if tunStats.CovertDialErr != "" {
+		tunStats.Print(logger)
+		// logger.Errorf("failed to dial target: %s", err)
 		return
 	}
 
@@ -210,10 +246,12 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 
 	getProxyStats().addSession()
 
-	go halfPipe(clientConn, covertConn, &wg, &oncePrintErr, logger, "Up "+reg.IDString())
-	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down "+reg.IDString())
+	go halfPipe(clientConn, covertConn, &wg, &oncePrintErr, logger, "Up "+reg.IDString(), tunStats)
+	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down "+reg.IDString(), tunStats)
 	wg.Wait()
 	getProxyStats().removeSession()
+
+	tunStats.Print(logger)
 }
 
 func writePROXYHeader(conn net.Conn, originalIPPort string) error {
@@ -232,6 +270,63 @@ func writePROXYHeader(conn net.Conn, originalIPPort string) error {
 	proxyHeader := fmt.Sprintf("PROXY %s %s 127.0.0.1 %s 1234\r\n", transportProtocol, host, port)
 	_, err = conn.Write([]byte(proxyHeader))
 	return err
+}
+
+type tunnelStats struct {
+	proxyStats *ProxyStats
+
+	Duration  int64
+	BytesUp   int64
+	BytesDown int64
+
+	CovertDialErr string
+	CovertConnErr string
+	ClientConnErr string
+
+	PhantomAddr    string
+	PhantomDstPort uint
+
+	TunnelCount   uint
+	V6            bool
+	ASN           uint   `json:",omitempty"`
+	CC            string `json:",omitempty"`
+	Transport     string `json:",omitempty"`
+	Registrar     string `json:",omitempty"`
+	LibVer        uint
+	Gen           uint
+	TransportOpts []string `json:",omitempty"`
+	RegOpts       []string `json:",omitempty"`
+	Tags          []string `json:",omitempty"`
+}
+
+func (ts *tunnelStats) Print(logger *log.Logger) {
+	tunStatsStr, _ := json.Marshal(ts)
+	logger.Printf("proxy closed %s", tunStatsStr)
+}
+
+func (ts *tunnelStats) completed(isUpload bool) {
+	if isUpload {
+		ts.proxyStats.addCompleted(ts.BytesUp, isUpload)
+	} else {
+		ts.proxyStats.addCompleted(ts.BytesDown, isUpload)
+	}
+}
+
+func (ts *tunnelStats) duration(duration int64, isUpload bool) {
+	// only set duration once, so that the first to close gives us the (real) lower bound on tunnel
+	// duration.
+	if atomic.LoadInt64(&ts.Duration) == 0 {
+		atomic.StoreInt64(&ts.Duration, duration)
+	}
+}
+
+func (ts *tunnelStats) addBytes(n int64, isUpload bool) {
+	if isUpload {
+		atomic.AddInt64(&ts.BytesUp, n)
+	} else {
+		atomic.AddInt64(&ts.BytesDown, n)
+	}
+	ts.proxyStats.addBytes(int64(n), isUpload)
 }
 
 // ProxyStats track metrics about byte transfer.

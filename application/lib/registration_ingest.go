@@ -279,7 +279,7 @@ func (rm *RegistrationManager) parseRegMessage(msg []byte) ([]*DecoyRegistration
 		return nil, err
 	}
 
-	// if either addres is not provided (reg came over api / client ip
+	// if either address is not provided (reg came over api / client ip
 	// logging disabled) fill with zeros to avoid nil dereference.
 	if parsed.GetRegistrationAddress() == nil {
 		parsed.RegistrationAddress = make([]byte, 16)
@@ -365,8 +365,8 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		TransportParams:  transportParams,
 		Flags:            c2s.Flags,
 
-		PhantomIp:   phantomAddr,
-		PhantomPort: phantomPort,
+		PhantomIp:    phantomAddr,
+		PhantomPort:  phantomPort,
 		PhantomProto: phantomProto,
 
 		Mask: c2s.GetMaskedDecoyServerName(),
@@ -374,6 +374,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		RegistrationSource: registrationSource,
 		RegistrationTime:   time.Now(),
 		regCount:           0,
+		tunnelCount:        0,
 	}
 
 	return &reg, nil
@@ -406,6 +407,14 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	}
 
 	reg.registrationAddr = clientAddr
+	reg.regCC, err = rm.GeoIP.CC(reg.registrationAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed geoip cc lookup: %w", err)
+	}
+	reg.regASN, err = rm.GeoIP.ASN(reg.registrationAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed geoip asn lookup: %w", err)
+	}
 
 	return reg, nil
 }
