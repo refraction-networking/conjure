@@ -1,10 +1,12 @@
-package prefix
+package http
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"io"
+	"net/http"
 	"os"
 	"testing"
 
@@ -27,10 +29,13 @@ func TestSuccessfulWrap(t *testing.T) {
 	defer sfp.Close()
 	require.NotNil(t, reg)
 
-	hmacID := reg.Keys.ConjureHMAC("PrefixTransportHMACString")
+	hmacID := reg.Keys.ConjureHMAC(hmacString)
 	message := []byte(`test message!`)
 
-	_, err := c2p.Write(append(hmacID, message...))
+	req, err := http.NewRequest(http.MethodGet, "/", bytes.NewReader(message))
+	require.Nil(t, err)
+	req.Header.Add("X-Ignore", base64.StdEncoding.EncodeToString(hmacID))
+	err = req.Write(c2p)
 	require.Nil(t, err)
 
 	var buf [4096]byte
@@ -54,20 +59,23 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 
+	message := []byte(`test message!`)
+
 	// No real reason for sending the shared secret; it's just 32 bytes
 	// (same length as HMAC ID) that should have no significance.
-	_, err := c2p.Write(tests.SharedSecret)
+	req, err := http.NewRequest(http.MethodGet, "/", bytes.NewReader(message))
+	require.Nil(t, err)
+	req.Header.Add("X-Ignore", base64.StdEncoding.EncodeToString(tests.SharedSecret))
+	err = req.Write(c2p)
 	require.Nil(t, err)
 
-	var buf [32]byte
+	var buf [128]byte
 	var buffer bytes.Buffer
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
 
 	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
-	if !errors.Is(err, transports.ErrNotTransport) {
-		t.Fatalf("expected ErrNotTransport, got %v", err)
-	}
+	require.ErrorIs(t, err, transports.ErrNotTransport)
 }
 
 func TestTryAgain(t *testing.T) {
@@ -78,30 +86,65 @@ func TestTryAgain(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 
-	var buf [32]byte
 	var buffer bytes.Buffer
-	for _, b := range tests.SharedSecret[:31] {
-		_, err = c2p.Write([]byte{b})
-		require.Nil(t, err)
 
-		n, _ := sfp.Read(buf[:])
-		buffer.Write(buf[:n])
+	// The only way that we should be able to get ErrTryAgain is if it was
+	// called on a read with 0 bytes
+	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	require.ErrorIs(t, err, transports.ErrTryAgain)
+	message := []byte(`test message!`)
 
-		_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
-		if !errors.Is(err, transports.ErrTryAgain) {
-			t.Fatalf("expected ErrTryAgain, got %v", err)
-		}
-	}
-
-	_, err = c2p.Write(tests.SharedSecret[31:])
+	// No real reason for sending the shared secret; it's just 32 bytes
+	// (same length as HMAC ID) that should have no significance.
+	req, err := http.NewRequest(http.MethodGet, "/", bytes.NewReader(message))
+	require.Nil(t, err)
+	req.Header.Add("X-Ignore", base64.StdEncoding.EncodeToString(tests.SharedSecret))
+	err = req.Write(c2p)
 	require.Nil(t, err)
 
+	var buf [128]byte
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
+
 	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
-	if !errors.Is(err, transports.ErrNotTransport) {
-		t.Fatalf("expected ErrNotTransport, got %v", err)
-	}
+	require.ErrorIs(t, err, transports.ErrNotTransport)
+}
+
+func TestSuccessfulWrapLargeMessage(t *testing.T) {
+	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
+
+	var transport Transport
+	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
+	defer c2p.Close()
+	defer sfp.Close()
+	require.NotNil(t, reg)
+
+	hmacID := reg.Keys.ConjureHMAC(hmacString)
+	message := make([]byte, 10000)
+	_, err := rand.Read(message)
+	require.Nil(t, err)
+
+	req, err := http.NewRequest(http.MethodGet, "/", bytes.NewReader(message))
+	require.Nil(t, err)
+	req.Header.Add("X-Ignore", base64.StdEncoding.EncodeToString(hmacID))
+	err = req.Write(c2p)
+	require.Nil(t, err)
+
+	var buf [4096]byte
+	var buffer bytes.Buffer
+	n, _ := sfp.Read(buf[:])
+	buffer.Write(buf[:n])
+
+	_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	require.Nil(t, err, "error getting wrapped connection")
+
+	received := make([]byte, len(message))
+	n, err = io.ReadFull(wrapped, received)
+	require.Nil(t, err, "failed reading from connection")
+	require.True(t, bytes.Equal(message[:n], received), "xptd: %s\nrecv: %s", hex.EncodeToString(message[:len(received)]), hex.EncodeToString(received))
+	// t.Log("l:", n)
 }
 
 func TestTryParamsToDstPort(t *testing.T) {
@@ -111,7 +154,7 @@ func TestTryParamsToDstPort(t *testing.T) {
 	cases := []struct {
 		r bool
 		p uint16
-	}{{true, 58047}, {false, 443}}
+	}{{true, 58047}, {false, defaultPort}}
 
 	for _, testCase := range cases {
 		ct := ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &testCase.r}}

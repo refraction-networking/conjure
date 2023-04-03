@@ -1,4 +1,4 @@
-package prefix
+package http
 
 import (
 	"fmt"
@@ -20,21 +20,20 @@ type ClientTransport struct {
 	// state any
 }
 
-// Name returns the human-friendly name of the transport, implementing the
-// Transport interface.
+// Name returns a string identifier for the Transport for logging
 func (*ClientTransport) Name() string {
-	return "prefix"
+	return "min"
 }
 
 // String returns a string identifier for the Transport for logging (including string formatters)
 func (*ClientTransport) String() string {
-	return "prefix"
+	return "min"
 }
 
 // ID provides an identifier that will be sent to the conjure station during the registration so
 // that the station knows what transport to expect connecting to the chosen phantom.
 func (*ClientTransport) ID() pb.TransportType {
-	return pb.TransportType_Prefix
+	return pb.TransportType_Min
 }
 
 // GetParams returns a generic protobuf with any parameters from both the registration and the
@@ -58,7 +57,7 @@ func (t *ClientTransport) SetParams(p any) error {
 // GetDstPort returns the destination port that the client should open the phantom connection to
 func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 	if t.Parameters == nil || !t.Parameters.GetRandomizeDstPort() {
-		return 443, nil
+		return defaultPort, nil
 	}
 
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)

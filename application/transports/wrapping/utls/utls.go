@@ -1,16 +1,22 @@
-package prefix
+package utls
 
 import (
 	"bytes"
 	"fmt"
 	"net"
-	"regexp"
 
 	dd "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	tls "github.com/refraction-networking/utls"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+)
+
+const (
+	httpPrefixRegexString = ""
+	httpPrefixMinLen      = 32
+	hmacString            = "UTLSTransportHMACString"
 )
 
 const (
@@ -20,61 +26,28 @@ const (
 	// port range boundaries for prefix transport when randomizing
 	portRangeMin = 1024
 	portRangeMax = 65535
+	minTagLength = 32
+
+	defaultPort = 443
 )
-
-const minTagLength = 32
-
-type prefix struct {
-	// Regular expression to match
-	*regexp.Regexp
-
-	// Raw regular expression to parse
-	raw string
-
-	// Static string to match to rule out protocols without using a regex.
-	staticMatch []byte
-
-	// Minimum length to guarantee we have received the whole identifier
-	// (i.e. return ErrTryAgain)
-	minLen int
-
-	// Maximum length after which we can rule out prefix if we have not found a known identifier
-	// (i.e. return ErrNotTransport)
-	maxLen int
-
-	// Minimum client library version that supports this prefix
-	minVer uint
-}
-
-// DefaultPrefixes provides the prefixes supported by default for use when
-// initializing the prefix transport.
-var DefaultPrefixes = []prefix{}
-var defaultPrefixes = []prefix{
-	{nil, `GET / HTTP/1.1\r\n`, []byte("GET / HTTP/1.1\r\n"), 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion},
-	{nil, `POST / HTTP/1.1\r\n`, []byte("POST / HTTP/1.1\r\n"), 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion},
-	{nil, `HTTP/1.1 200\r\n`, []byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, randomizeDstPortMinVersion},
-	{nil, `HTTP/1.1 200\r\n`, []byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, randomizeDstPortMinVersion},
-}
 
 // Transport provides a struct implementing the Transport, WrappingTransport,
 // PortRandomizingTransport, and FixedPortTransport interfaces.
-type Transport struct {
-	SupportedPrefixes []prefix
-}
+type Transport struct{}
 
 // Name returns the human-friendly name of the transport, implementing the
 // Transport interface..
-func (Transport) Name() string { return "PrefixTransport" }
+func (Transport) Name() string { return "UTLSTransport" }
 
 // LogPrefix returns the prefix used when including this transport in logs,
 // implementing the Transport interface.
-func (Transport) LogPrefix() string { return "PREF" }
+func (Transport) LogPrefix() string { return "UTLS" }
 
 // GetIdentifier takes in a registration and returns an identifier for it. This
 // identifier should be unique for each registration on a given phantom;
 // registrations on different phantoms can have the same identifier.
 func (Transport) GetIdentifier(d *dd.DecoyRegistration) string {
-	return string(d.Keys.ConjureHMAC("PrefixTransportHMACString"))
+	return string(d.Keys.ConjureHMAC(hmacString))
 }
 
 // GetProto returns the next layer protocol that the transport uses. Implements
@@ -110,11 +83,11 @@ func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, error) {
 
 	if libVersion < randomizeDstPortMinVersion {
-		return 443, nil
+		return 0, transports.ErrTransportNotSupported
 	}
 
 	if params == nil {
-		return 443, nil
+		return defaultPort, nil
 	}
 
 	parameters, ok := params.(*pb.GenericTransportParams)
@@ -126,7 +99,7 @@ func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, e
 		return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 	}
 
-	return 443, nil
+	return defaultPort, nil
 }
 
 // WrapConnection attempts to wrap the given connection in the transport. It
@@ -136,34 +109,34 @@ func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, e
 //
 // If the returned error is nil or non-nil and non-{ transports.ErrTryAgain,
 // transports.ErrNotTransport }, the caller may no longer use data or conn.
-func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, net.Conn, error) {
-	if data.Len() < minTagLength {
+func (t *Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, net.Conn, error) {
+	dataLen := data.Len()
+
+	if dataLen == 0 {
 		return nil, nil, transports.ErrTryAgain
 	}
 
-	hmacID, err := t.tryParsePrefix(data)
-	if err != nil {
-		return nil, nil, err
-	} else if hmacID == "" {
-		return nil, nil, transports.ErrNotTransport
+	// fmt.Println(hex.EncodeToString(data.Bytes()))
+	ch := tls.UnmarshalClientHello(data.Bytes())
+	if ch == nil {
+		// fmt.Printf("failed to read request\n%s\n", err)
+		return nil, nil, fmt.Errorf("%w: failed to unmarshal tls", transports.ErrNotTransport)
 	}
 
-	// hmacID := data.String()[:minTagLength]
-	reg, ok := regManager.GetRegistrations(originalDst)[hmacID]
+	hmacID := ch.Random
+	reg, ok := regManager.GetRegistrations(originalDst)[string(hmacID)]
 	if !ok {
 		return nil, nil, transports.ErrNotTransport
 	}
 
-	// We don't want the first 32 bytes
-	data.Next(minTagLength)
-
-	return reg, transports.PrependToConn(c, data), nil
+	return reg, c, nil
 }
 
-func (t Transport) tryParsePrefix(data *bytes.Buffer) (string, error) {
-	return "", transports.ErrTransportNotSupported
-}
-
-func init() {
-
-}
+// TODO:
+// http params for method and path
+// utls params for hello id and SNI
+// combined formatFirst transport
+// formatAll transport
+// prefix transport
+//
+// ClientTransport connect method.
