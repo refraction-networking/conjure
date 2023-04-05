@@ -13,6 +13,7 @@ import (
 func TestUnmarshall(t *testing.T) {
 	src, err := anypb.New(&pb.GenericTransportParams{RandomizeDstPort: proto.Bool(true)})
 	require.Nil(t, err)
+	src.TypeUrl = ""
 
 	dst := &pb.GenericTransportParams{}
 	err = transports.UnmarshalAnypbTo(src, dst)
