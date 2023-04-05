@@ -8,7 +8,6 @@ import (
 	dd "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -65,7 +64,7 @@ func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 	}
 
 	var m = &pb.GenericTransportParams{}
-	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
+	err := transports.UnmarshalAnypbTo(data, m)
 	return m, err
 }
 
