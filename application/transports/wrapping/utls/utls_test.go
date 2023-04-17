@@ -2,10 +2,18 @@ package utls
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"testing"
@@ -20,79 +28,72 @@ import (
 	tls "github.com/refraction-networking/utls"
 )
 
-func formatClientPacket(reg *cj.DecoyRegistration, params any) ([]byte, error) {
-
+func connect(conn net.Conn, reg *cj.DecoyRegistration) (net.Conn, error) {
 	// TODO: put these in params
-	helloID := tls.HelloChrome_102
+	helloID := tls.HelloChrome_62
 	config := tls.Config{ServerName: "", InsecureSkipVerify: true}
 
-	uTLSConn := tls.UClient(nil, &config, helloID)
+	uTLSConn := tls.UClient(conn, &config, helloID)
 	hmacID := reg.Keys.ConjureHMAC(hmacString)
 
-	err := uTLSConn.BuildHandshakeState() // Apply our client hello ID
+	newRand := make([]byte, 32)
+	_, err := rand.Read(newRand)
 	if err != nil {
 		return nil, err
 	}
-	uTLSConn.SetClientRandom(hmacID)
+
+	err = uTLSConn.BuildHandshakeState() // Apply our client hello ID
+	if err != nil {
+		return nil, err
+	}
+	uTLSConn.SetClientRandom(newRand)
+	// fmt.Printf("clientRandom set - handshaking %s\n", hex.EncodeToString(hmacID))
+
+	uTLSConn.HandshakeState.Hello.SessionId = xorBytes(hmacID, newRand)
+
 	err = uTLSConn.MarshalClientHello() // apply the updated ch random value
 	if err != nil {
 		return nil, err
 	}
 
-	return uTLSConn.HandshakeState.Hello.Marshal()
+	return uTLSConn, uTLSConn.Handshake()
 }
 
-func DisabledTestMarshalRandom(t *testing.T) {
-	hmacID := make([]byte, 32)
-	_, err := rand.Read(hmacID)
-	require.Nil(t, err)
+func TestByteRegex(t *testing.T) {
+	testCases := []struct {
+		s string
+		l uint16
+	}{
+		{s: "16030100e2000000", l: 226},
+		{s: "160301ff00000000", l: 65280},
+	}
 
-	helloID := tls.HelloChrome_102
-	config := tls.Config{ServerName: "", InsecureSkipVerify: true}
+	badCases := []string{
+		"15030100e2000000",
+		"160301ff",
+		"0016030100e2000000",
+	}
 
-	uTLSConn := tls.UClient(nil, &config, helloID)
+	for _, c := range testCases {
+		b, err := hex.DecodeString(c.s)
+		require.Nil(t, err)
 
-	err = uTLSConn.BuildHandshakeState()
-	require.Nil(t, err)
-	uTLSConn.SetClientRandom(hmacID)
+		out := tlsHeaderRegex.FindSubmatch(b)
+		// for _, x := range out {
+		// 	t.Logf("%s", hex.EncodeToString(x))
+		// }
+		require.Equal(t, 2, len(out))
+		require.Equal(t, 2, len(out[1]))
+		u := binary.BigEndian.Uint16(out[1])
+		require.Equal(t, c.l, u)
+	}
+	for _, c := range badCases {
+		b, err := hex.DecodeString(c)
+		require.Nil(t, err)
 
-	err = uTLSConn.BuildHandshakeState()
-	require.Nil(t, err)
-
-	// t.Log(hex.EncodeToString(hmacID))
-	// t.Log(hex.EncodeToString(uTLSConn.HandshakeState.Hello.Random))
-
-	b, err := uTLSConn.HandshakeState.Hello.Marshal()
-	require.Nil(t, err)
-
-	ch := tls.UnmarshalClientHello(b)
-	require.NotNil(t, ch)
-	// t.Log(hex.EncodeToString(ch.Random))
-	require.True(t, bytes.Equal(ch.Random, hmacID))
-}
-
-func DisabledTestMarshalSNI(t *testing.T) {
-	hmacID := [32]byte{}
-	_, err := rand.Read(hmacID[:])
-	require.Nil(t, err)
-
-	helloID := tls.HelloChrome_102
-	config := tls.Config{ServerName: hex.EncodeToString(hmacID[:]), InsecureSkipVerify: true}
-
-	uTLSConn := tls.UClient(nil, &config, helloID)
-
-	err = uTLSConn.BuildHandshakeState()
-	require.Nil(t, err)
-
-	b, err := uTLSConn.HandshakeState.Hello.Marshal()
-	require.Nil(t, err)
-
-	ch := tls.UnmarshalClientHello(b)
-	require.NotNil(t, ch)
-
-	recv, err := hex.DecodeString(ch.ServerName)
-	require.Nil(t, err)
-	require.True(t, bytes.Equal(recv, hmacID[:]))
+		out := tlsHeaderRegex.FindSubmatch(b)
+		require.Equal(t, 0, len(out))
+	}
 }
 
 func TestSuccessfulWrap(t *testing.T) {
@@ -108,22 +109,46 @@ func TestSuccessfulWrap(t *testing.T) {
 
 	message := []byte(`test message!`)
 
-	connectMsg, err := formatClientPacket(reg, nil)
+	go func() {
+		var buf [1501]byte
+
+		var wrapped net.Conn
+		var err error
+		for {
+			n, err := sfp.Read(buf[:])
+			if err != nil {
+				panic("station read error")
+			}
+
+			reg, wrapped, err = transport.WrapConnection(bytes.NewBuffer(buf[:n]), sfp, reg.PhantomIp, manager)
+			if errors.Is(err, transports.ErrNotTransport) {
+				panic("failed to find registration")
+			} else if errors.Is(err, transports.ErrTransportNotSupported) {
+				panic("transport supposed to be supported but isn't")
+			} else if err == nil {
+				break
+			} // on transports.ErrTryAgain it should continue loop.
+		}
+
+		stationReceived := make([]byte, len(message))
+		_, err = io.ReadFull(wrapped, stationReceived)
+		if err != nil {
+			panic(fmt.Sprintf("failed ReadFull: %s %s", stationReceived, err))
+		}
+		_, err = wrapped.Write(stationReceived)
+		if err != nil {
+			panic("failed Write")
+		}
+	}()
+
+	clientConn, err := connect(c2p, reg)
 	require.Nil(t, err)
-	_, err = c2p.Write(connectMsg)
-	require.Nil(t, err)
 
-	var buf [4096]byte
-	n, _ := sfp.Read(buf[:])
-
-	_, wrapped, err := transport.WrapConnection(bytes.NewBuffer(buf[:n]), sfp, reg.PhantomIp, manager)
-	require.Nil(t, err, "error getting wrapped connection")
-
-	_, err = c2p.Write(message)
+	_, err = clientConn.Write(message)
 	require.Nil(t, err)
 
 	received := make([]byte, len(message))
-	_, err = io.ReadFull(wrapped, received)
+	_, err = io.ReadFull(clientConn, received)
 	require.Nil(t, err, "failed reading from connection")
 	require.True(t, bytes.Equal(message, received))
 }
@@ -197,31 +222,52 @@ func TestSuccessfulWrapLargeMessage(t *testing.T) {
 	defer sfp.Close()
 	require.NotNil(t, reg)
 
-	connectMsg, err := formatClientPacket(reg, nil)
-	require.Nil(t, err)
-	_, err = c2p.Write(connectMsg)
-	require.Nil(t, err)
-
-	var buf [4096]byte
-	var buffer bytes.Buffer
-	n, _ := sfp.Read(buf[:])
-	buffer.Write(buf[:n])
-
-	_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
-	require.Nil(t, err, "error getting wrapped connection")
-
 	message := make([]byte, 10000)
-	_, err = rand.Read(message)
+	_, err := rand.Read(message)
 	require.Nil(t, err)
 
-	_, err = c2p.Write(message)
+	go func() {
+		var buf [1501]byte
+
+		var wrapped net.Conn
+		var err error
+		for {
+			n, err := sfp.Read(buf[:])
+			if err != nil {
+				panic("station read error")
+			}
+
+			reg, wrapped, err = transport.WrapConnection(bytes.NewBuffer(buf[:n]), sfp, reg.PhantomIp, manager)
+			if errors.Is(err, transports.ErrNotTransport) {
+				panic("failed to find registration")
+			} else if errors.Is(err, transports.ErrTransportNotSupported) {
+				panic("transport supposed to be supported but isn't")
+			} else if err == nil {
+				break
+			} // on transports.ErrTryAgain it should continue loop.
+		}
+
+		stationReceived := make([]byte, len(message))
+		_, err = io.ReadFull(wrapped, stationReceived)
+		if err != nil {
+			panic(fmt.Sprintf("failed ReadFull: %s %s", stationReceived, err))
+		}
+		_, err = wrapped.Write(stationReceived)
+		if err != nil {
+			panic("failed Write")
+		}
+	}()
+
+	clientConn, err := connect(c2p, reg)
+	require.Nil(t, err)
+
+	_, err = clientConn.Write(message)
 	require.Nil(t, err)
 
 	received := make([]byte, len(message))
-	n, err = io.ReadFull(wrapped, received)
+	n, err := io.ReadFull(clientConn, received)
 	require.Nil(t, err, "failed reading from connection")
-	require.True(t, bytes.Equal(message[:n], received), "xptd: %s\nrecv: %s", hex.EncodeToString(message[:len(received)]), hex.EncodeToString(received))
-	// t.Log("l:", n)
+	require.True(t, bytes.Equal(message[:n], received))
 }
 
 func TestTryParamsToDstPort(t *testing.T) {
@@ -248,3 +294,124 @@ func TestTryParamsToDstPort(t *testing.T) {
 		require.Equal(t, testCase.p, port)
 	}
 }
+
+func TestUtlsSessionResumption(t *testing.T) {
+	// testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	// os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
+
+	// var transport Transport
+	// manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
+	// c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
+	// defer c2p.Close()
+	// defer sfp.Close()
+	// require.NotNil(t, reg)
+	var err error
+	c2p, sfp := net.Pipe()
+
+	message := []byte(`test message!`)
+
+	randVal := [32]byte{}
+	rand.Read(randVal[:])
+
+	go func() {
+
+		config := &tls.Config{
+			Certificates:           make([]tls.Certificate, 2),
+			InsecureSkipVerify:     true,
+			MinVersion:             tls.VersionTLS10,
+			MaxVersion:             tls.VersionTLS13,
+			SessionTicketsDisabled: false,
+			ClientAuth:             tls.NoClientCert,
+		}
+		// config.Certificates[0].Certificate = [][]byte{testRSACertificate}
+		// config.Certificates[0].PrivateKey = testRSAPrivateKey
+		// config.Certificates[1].Certificate = [][]byte{testSNICertificate}
+		// config.Certificates[1].PrivateKey = testRSAPrivateKey
+		// config.BuildNameToCertificate()
+		config.SetSessionTicketKeys([][32]byte{randVal})
+
+		wrapped := tls.Server(sfp, config)
+
+		stationReceived := make([]byte, len(message))
+		_, err := io.ReadFull(wrapped, stationReceived)
+		if err != nil {
+			panic(fmt.Sprintf("failed ReadFull: %s %s", stationReceived, err))
+		}
+		_, err = wrapped.Write(stationReceived)
+		if err != nil {
+			panic("failed Write")
+		}
+	}()
+
+	sessionTicket := []uint8(`Here goes phony session ticket: phony enough to get into ASCII range
+Ticket could be of any length, but for camouflage purposes it's better to use uniformly random contents
+and common length. See https://tlsfingerprint.io/session-tickets`)
+
+	// clientConn, err := connect(c2p, reg)
+	config := &tls.Config{ServerName: "", InsecureSkipVerify: true}
+
+	// Create a session ticket that wasn't actually issued by the server.
+	sessionState := tls.MakeClientSessionState(sessionTicket, uint16(tls.VersionTLS12),
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		randVal[:],
+		nil, nil)
+
+	clientTLSConn := tls.UClient(c2p, config, tls.HelloGolang)
+	require.NotNil(t, clientTLSConn)
+
+	err = clientTLSConn.BuildHandshakeState()
+	require.Nil(t, err)
+
+	err = clientTLSConn.SetSessionState(sessionState)
+	require.Nil(t, err)
+
+	_, err = clientTLSConn.Write(message)
+	require.Nil(t, err)
+
+	received := make([]byte, len(message))
+	_, err = io.ReadFull(clientTLSConn, received)
+	require.Nil(t, err, "failed reading from connection")
+	require.True(t, bytes.Equal(message, received))
+}
+
+const (
+	// ticketKeyNameLen is the number of bytes of identifier that is prepended to
+	// an encrypted session ticket in order to identify the key used to encrypt it.
+	ticketKeyNameLen = 16
+)
+
+// returns the session state and the marshalled sessionTicket, or an error should one occur.
+func forgeSession(secret [32]byte) (*tls.ClientSessionState, []byte, error) {
+	serverState := tls.ForgeServerState(secret)
+	stateBytes := serverState.Marshal()
+
+	encrypted := make([]byte, ticketKeyNameLen+aes.BlockSize+len(stateBytes)+sha256.Size)
+	keyName := encrypted[:ticketKeyNameLen]
+	iv := encrypted[ticketKeyNameLen : ticketKeyNameLen+aes.BlockSize]
+	macBytes := encrypted[len(encrypted)-sha256.Size:]
+
+	if _, err := io.ReadFull(c.config.rand(), iv); err != nil {
+		return nil, nil, err
+	}
+
+	copy(keyName, key.KeyName[:])
+	block, err := aes.NewCipher(key.AesKey[:])
+	if err != nil {
+		return nil, nil, errors.New("tls: failed to create cipher while encrypting ticket: " + err.Error())
+	}
+	cipher.NewCTR(block, iv).XORKeyStream(encrypted[ticketKeyNameLen+aes.BlockSize:], stateBytes)
+
+	mac := hmac.New(sha256.New, key.HmacKey[:])
+	mac.Write(encrypted[:len(encrypted)-sha256.Size])
+	mac.Sum(macBytes[:0])
+
+	state := tls.MakeClientSessionState(encrypted, uint16(tls.VersionTLS12),
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		masterSecret,
+		nil, nil)
+
+	return state, encrypted, nil
+}
+
+// https://github.com/refraction-networking/utls/blob/c785bd3a1e8dd394d36526a2f3f118a21fc002c5/handshake_server_tls13.go#L736
+// https://github.com/refraction-networking/utls/blob/c785bd3a1e8dd394d36526a2f3f118a21fc002c5/handshake_server.go#L769
