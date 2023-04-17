@@ -64,9 +64,9 @@ var defaultPrefixes = []Prefix{
 	{nil, `\u0016\u0003\u0001\u0040\u0000\u0001`, []byte("\u0016\u0003\u0001\u0040\u0000\u0001"), 6, 6 + minTagLength, randomizeDstPortMinVersion},
 	// TLS Server Hello
 	{nil, `\u0016\u0003\u0003\u0040\u0000\u0002`, []byte("\u0016\u0003\u0003\u0040\u0000\u0002\r\n"), 6, 6 + minTagLength, randomizeDstPortMinVersion},
-	// TLS Client Alert
+	// TLS Alert Warning
 	{nil, `\u0015\u0003\u0001\u0000\u0002`, []byte("\u0015\u0003\u0001\u0000\u0002"), 5, 5 + minTagLength, randomizeDstPortMinVersion},
-	// TLS Server Alert
+	// TLS Alert Fatal
 	{nil, `\u0015\u0003\u0002\u0000\u0002`, []byte("\u0015\u0003\u0002\u0000\u0002"), 5, 5 + minTagLength, randomizeDstPortMinVersion},
 	// DNS over TCP
 	{nil, `\u0005\u00DC\u005F\u00E0\u0001\u0020`, []byte("\u0005\u00DC\u005F\u00E0\u0001\u0020"), 6, 6 + minTagLength, randomizeDstPortMinVersion},
