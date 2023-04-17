@@ -24,42 +24,58 @@ const (
 
 const minTagLength = 32
 
-type prefix struct {
+// Prefix provides the elements required for independent prefixes to be usable as part of the
+// transport.
+type Prefix struct {
 	// Regular expression to match
 	*regexp.Regexp
 
 	// Raw regular expression to parse
-	raw string
+	Raw string
 
 	// Static string to match to rule out protocols without using a regex.
-	staticMatch []byte
+	StaticMatch []byte
 
 	// Minimum length to guarantee we have received the whole identifier
 	// (i.e. return ErrTryAgain)
-	minLen int
+	MinLen int
 
 	// Maximum length after which we can rule out prefix if we have not found a known identifier
 	// (i.e. return ErrNotTransport)
-	maxLen int
+	MaxLen int
 
 	// Minimum client library version that supports this prefix
-	minVer uint
+	MinVer uint
 }
 
 // DefaultPrefixes provides the prefixes supported by default for use when
 // initializing the prefix transport.
-var DefaultPrefixes = []prefix{}
-var defaultPrefixes = []prefix{
+var DefaultPrefixes = []Prefix{}
+var defaultPrefixes = []Prefix{
+	//Min
+	{nil, `.*`, []byte{}, minTagLength, minTagLength, randomizeDstPortMinVersion},
+	// HTTP GET
 	{nil, `GET / HTTP/1.1\r\n`, []byte("GET / HTTP/1.1\r\n"), 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion},
+	// HTTP POST
 	{nil, `POST / HTTP/1.1\r\n`, []byte("POST / HTTP/1.1\r\n"), 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion},
+	// HTTP Response
 	{nil, `HTTP/1.1 200\r\n`, []byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, randomizeDstPortMinVersion},
-	{nil, `HTTP/1.1 200\r\n`, []byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, randomizeDstPortMinVersion},
+	// TLS Client Hello
+	{nil, `\u0016\u0003\u0001\u0040\u0000\u0001`, []byte("\u0016\u0003\u0001\u0040\u0000\u0001"), 6, 6 + minTagLength, randomizeDstPortMinVersion},
+	// TLS Server Hello
+	{nil, `\u0016\u0003\u0003\u0040\u0000\u0002`, []byte("\u0016\u0003\u0003\u0040\u0000\u0002\r\n"), 6, 6 + minTagLength, randomizeDstPortMinVersion},
+	// TLS Client Alert
+	{nil, `\u0015\u0003\u0001\u0000\u0002`, []byte("\u0015\u0003\u0001\u0000\u0002"), 5, 5 + minTagLength, randomizeDstPortMinVersion},
+	// TLS Server Alert
+	{nil, `\u0015\u0003\u0002\u0000\u0002`, []byte("\u0015\u0003\u0002\u0000\u0002"), 5, 5 + minTagLength, randomizeDstPortMinVersion},
+	// DNS over TCP
+	{nil, `\u0005\u00DC\u005F\u00E0\u0001\u0020`, []byte("\u0005\u00DC\u005F\u00E0\u0001\u0020"), 6, 6 + minTagLength, randomizeDstPortMinVersion},
 }
 
 // Transport provides a struct implementing the Transport, WrappingTransport,
 // PortRandomizingTransport, and FixedPortTransport interfaces.
 type Transport struct {
-	SupportedPrefixes []prefix
+	SupportedPrefixes []Prefix
 }
 
 // Name returns the human-friendly name of the transport, implementing the
@@ -165,5 +181,15 @@ func (t Transport) tryParsePrefix(data *bytes.Buffer) (string, error) {
 }
 
 func init() {
-
+	for _, p := range defaultPrefixes {
+		out := Prefix{
+			Regexp:      regexp.MustCompile(p.Raw),
+			Raw:         p.Raw,
+			StaticMatch: p.StaticMatch,
+			MinLen:      p.MinLen,
+			MaxLen:      p.MaxLen,
+			MinVer:      p.MinVer,
+		}
+		DefaultPrefixes = append(DefaultPrefixes, out)
+	}
 }
