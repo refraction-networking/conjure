@@ -60,25 +60,32 @@ struct Args {
     cc_db: String,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let args = Args::parse();
 
-    let handler = Arc::new(Mutex::new(PacketHandler::create(
-        &args.asn_db,
-        &args.cc_db,
-    )?));
+fn read_interfaces<W: Write + std::marker::Send + 'static>(
+    interfaces: String,
+    handler: Arc<Mutex<PacketHandler>>,
+    arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
+) -> Result<(), Box<dyn Error>> {
 
-    let file = File::create(args.out)?;
-    let writer = PcapNgWriter::new(file).expect("failed to build writer");
-    let arc_writer = Arc::new(Mutex::new(writer));
 
-    let mut paths = fs::read_dir("test_pcaps/").unwrap();
+    println!("Reading interface: {}", interfaces);
+    Ok(())
+}
+
+fn read_pcap_dir<W: Write + std::marker::Send + 'static>(
+    pcap_dir: String,
+    handler: Arc<Mutex<PacketHandler>>,
+    arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
+) -> Result<(), Box<dyn Error>> {
+
+
+    let mut paths = fs::read_dir(pcap_dir.clone()).unwrap();
     let pool = ThreadPool::new(paths.count());
     let term = Arc::new(AtomicBool::new(false));
     signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term))?;
 
     // refresh the path list and launch jobs
-    paths = fs::read_dir("test_pcaps/").unwrap();
+    paths = fs::read_dir(pcap_dir).unwrap();
     for (n, path) in paths.enumerate() {
         match path {
             Ok(p) => {
@@ -93,9 +100,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
 
                 // println!("{}", p.path().display());
-                let h = handler.clone();
-                let w = arc_writer.clone();
-                let t = term.clone();
+                let h = Arc::clone(&handler);
+                let w = Arc::clone(&arc_writer);
+                let t = Arc::clone(&term);
                 pool.execute(move || {
                     let cap = Capture::from_file(p.path()).unwrap();
                     read_packets(n as u32, cap, h, w, t);
@@ -108,6 +115,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     pool.join(); // all threads must complete or the process will hang
 
     Ok(())
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let args = Args::parse();
+
+    let handler = Arc::new(Mutex::new(PacketHandler::create(
+        &args.asn_db,
+        &args.cc_db,
+    )?));
+
+    let file = File::create(args.out)?;
+    let writer = PcapNgWriter::new(file).expect("failed to build writer");
+    let arc_writer = Arc::new(Mutex::new(writer));
+
+    match args.pcap_dir {
+        Some(pcap_dir) => read_pcap_dir(pcap_dir, handler, arc_writer),
+        None           => read_interfaces(args.interfaces, handler, arc_writer),
+    }
+
+     //Ok(())
 }
 
 // abstracts over live captures (Capture<Active>) and file captures
