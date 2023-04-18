@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::error::Error;
+use std::fmt;
 use std::net::IpAddr;
 
 use ipnet::IpNet;
@@ -29,6 +30,33 @@ pub struct SupplementalFields {
     pub asn: u32,
     pub subnet: IpNet,
     pub direction: bool,
+}
+
+#[derive(Debug)]
+pub enum PacketError {
+    Skip,
+    SkipCC,
+    SkipASN,
+    OtherError(Box<dyn Error>),
+}
+
+impl std::error::Error for PacketError {}
+
+impl fmt::Display for PacketError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PacketError::Skip => write!(f, "irrelevant addr"),
+            PacketError::SkipCC => write!(f, "irrelevant or missing cc"),
+            PacketError::SkipASN => write!(f, "irrelevant or missing asn"),
+            PacketError::OtherError(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl From<Box<dyn Error>> for PacketError {
+    fn from(value: Box<dyn Error>) -> Self {
+        PacketError::OtherError(value)
+    }
 }
 
 impl From<SupplementalFields> for Vec<EnhancedPacketOption<'_>> {
@@ -73,30 +101,20 @@ impl PacketHandler {
         &self,
         src: IpAddr,
         dst: IpAddr,
-    ) -> Result<SupplementalFields, Box<dyn Error>> {
+    ) -> Result<SupplementalFields, PacketError> {
         let direction = self.should_anonymize(src, dst);
         let ip_of_interest = match direction {
-            AnonymizeTypes::None => return Err("skip")?,
+            AnonymizeTypes::None => Err(PacketError::Skip)?,
             AnonymizeTypes::Upload => src,
             AnonymizeTypes::Download => dst,
         };
 
-        let (asn_rec, prefix) = self
-            .asn_reader
-            .lookup_prefix::<geoip2::Asn>(ip_of_interest)?;
-        let asn = asn_rec.autonomous_system_number.unwrap();
-        if !self.is_asn_of_interest(asn) {
-            return Err("skip")?;
-        }
+        let (asn, prefix) = self.get_asn(ip_of_interest).unwrap();
         let subnet = IpNet::new(ip_of_interest, prefix.try_into().unwrap())
             .unwrap()
             .trunc();
 
-        let country_rec: geoip2::Country = self.cc_reader.lookup(ip_of_interest).unwrap();
-        let country = String::from(country_rec.country.unwrap().iso_code.unwrap());
-        if !self.is_cc_of_interest(&country) {
-            return Err("skip")?;
-        }
+        let country = self.get_cc(ip_of_interest).unwrap();
 
         Ok(SupplementalFields {
             cc: country,
@@ -117,16 +135,57 @@ impl PacketHandler {
         AnonymizeTypes::None
     }
 
-    // returns true if the Country Code filter list is empty or if the provided cc in question
-    // is in our acceptable Country Code list.
-    fn is_cc_of_interest(&self, cc: &String) -> bool {
-        self.cc_filter.is_empty() || self.cc_filter.contains(&cc)
+    fn get_asn(&self, addr: IpAddr) -> Result<(u32, usize), PacketError> {
+        // Requires Nightly
+        let (asn, prefix) = if addr.is_loopback() {
+            match addr {
+                IpAddr::V4(_) => (0, 8),
+                IpAddr::V6(_) => (0,128),
+            }
+        } else if let IpAddr::V6(a6) = addr && a6.is_unique_local(){
+            (0, 7)
+        } else if !addr.is_global() {
+            match addr {
+                IpAddr::V4(_) => (0, 32),
+                IpAddr::V6(_) => (0, 128),
+            }
+        } else {
+            let (asn_rec, prefix) = match self.asn_reader.lookup_prefix::<geoip2::Asn>(addr){
+                Ok((a, p)) => (a,p),
+                Err(e) => Err(PacketError::OtherError(Box::new(e)))?
+            };
+            let asn = asn_rec.autonomous_system_number.unwrap();
+            (asn, prefix)
+        };
+
+        // if the ASN filter list is empty or if the provided asn in question
+        // is in our acceptable ASN list we want this packet, otherwise skip
+        if !(self.asn_filter.is_empty() || self.asn_filter.contains(&asn)) {
+            Err(PacketError::SkipASN)?
+        }
+
+        Ok((asn, prefix))
     }
 
-    // returns true if the ASN filter list is empty or if the provided cc in question
-    // is in our acceptable ASN list.
-    fn is_asn_of_interest(&self, asn: u32) -> bool {
-        self.asn_filter.is_empty() || self.asn_filter.contains(&asn)
+    fn get_cc(&self, addr: IpAddr) -> Result<String, PacketError> {
+        // Requires Nightly
+        let country = if addr.is_loopback() {
+            String::from("lo")
+        } else if let IpAddr::V6(a6) = addr && a6.is_unique_local(){
+            String::from("lo")
+        } else if !addr.is_global() {
+            String::from("pv")
+        } else {
+            let country_rec: geoip2::Country = self.cc_reader.lookup(addr).unwrap();
+            String::from(country_rec.country.unwrap().iso_code.unwrap())
+        };
+
+        // if the Country Code filter list is empty or if the provided cc in question
+        // is in our acceptable Country Code list we want this packet, otherwise skip
+        if !(self.cc_filter.is_empty() || self.cc_filter.contains(&country)) {
+            return Err(PacketError::SkipCC)?;
+        }
+        Ok(country)
     }
 }
 

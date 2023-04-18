@@ -1,16 +1,19 @@
+#![feature(ip)]
+#![feature(let_chains)]
+
 extern crate maxminddb;
 
 mod ip;
 mod packet_handler;
 use ip::get_mut_ip_packet;
-use packet_handler::{PacketHandler, SupplementalFields};
+use packet_handler::{PacketError, PacketHandler, SupplementalFields};
 
 // use hex;
 use clap::Parser;
 use pcap::{Activated, Capture, Device};
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
-use pcap_file::pcapng::PcapNgWriter;
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
+use pcap_file::pcapng::PcapNgWriter;
 use pcap_file::DataLink;
 use pnet::packet::ethernet::MutableEthernetPacket;
 use pnet::packet::Packet;
@@ -60,21 +63,21 @@ struct Args {
     cc_db: String,
 }
 
-
 fn read_interfaces<W: Write + std::marker::Send + 'static>(
     interfaces: String,
     handler: Arc<Mutex<PacketHandler>>,
     arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
 ) -> Result<(), Box<dyn Error>> {
-
-
-    let pool = ThreadPool::new(interfaces.matches(",").count()+1);
+    let pool = ThreadPool::new(interfaces.matches(',').count() + 1);
     let term = Arc::new(AtomicBool::new(false));
     signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term))?;
 
-    for (n, iface) in interfaces.split(",").enumerate() {
-
-        match Device::list().unwrap().into_iter().find(|d| d.name == iface) {
+    for (n, iface) in interfaces.split(',').enumerate() {
+        match Device::list()
+            .unwrap()
+            .into_iter()
+            .find(|d| d.name == iface)
+        {
             Some(dev) => {
                 let h = Arc::clone(&handler);
                 let w = Arc::clone(&arc_writer);
@@ -87,7 +90,7 @@ fn read_interfaces<W: Write + std::marker::Send + 'static>(
                         .unwrap();
                     read_packets(n as u32, cap, h, w, t);
                 });
-            },
+            }
             None => println!("Couldn't find interface '{iface}'"),
         }
     }
@@ -102,8 +105,6 @@ fn read_pcap_dir<W: Write + std::marker::Send + 'static>(
     handler: Arc<Mutex<PacketHandler>>,
     arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
 ) -> Result<(), Box<dyn Error>> {
-
-
     let mut paths = fs::read_dir(pcap_dir.clone()).unwrap();
     let pool = ThreadPool::new(paths.count());
     let term = Arc::new(AtomicBool::new(false));
@@ -114,16 +115,6 @@ fn read_pcap_dir<W: Write + std::marker::Send + 'static>(
     for (n, path) in paths.enumerate() {
         match path {
             Ok(p) => {
-                let interface = InterfaceDescriptionBlock {
-                    linktype: DataLink::ETHERNET,
-                    snaplen: 0xFFFF,
-                    options: vec![],
-                };
-                match { arc_writer.lock().unwrap().write_pcapng_block(interface) } {
-                    Ok(_) => continue,
-                    Err(e) => println!("failed to write interface: {e}"),
-                }
-
                 // println!("{}", p.path().display());
                 let h = Arc::clone(&handler);
                 let w = Arc::clone(&arc_writer);
@@ -151,21 +142,27 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?));
 
     let file = File::create(args.out)?;
-    let writer = PcapNgWriter::new(file).expect("failed to build writer");
+    let mut writer = PcapNgWriter::new(file).expect("failed to build writer");
+    let interface = InterfaceDescriptionBlock {
+        linktype: DataLink::ETHERNET,
+        snaplen: 0xFFFF,
+        options: vec![],
+    };
+    writer.write_pcapng_block(interface)?;
     let arc_writer = Arc::new(Mutex::new(writer));
 
     match args.pcap_dir {
         Some(pcap_dir) => read_pcap_dir(pcap_dir, handler, arc_writer),
-        None           => read_interfaces(args.interfaces, handler, arc_writer),
+        None => read_interfaces(args.interfaces, handler, arc_writer),
     }
 
-     //Ok(())
+    //Ok(())
 }
 
 // abstracts over live captures (Capture<Active>) and file captures
 // (Capture<Offline>) using generics and the Activated trait,
 fn read_packets<T: Activated, W: Write>(
-    id: u32,
+    _id: u32,
     mut capture: Capture<T>,
     handler: Arc<Mutex<PacketHandler>>,
     writer: Arc<Mutex<PcapNgWriter<W>>>,
@@ -193,7 +190,13 @@ fn read_packets<T: Activated, W: Write>(
             h.get_supplemental(ip_pkt.source(), ip_pkt.destination())
         } {
             Ok(s) => s,
-            Err(_e) => continue,
+            Err(e) => {
+                match e {
+                    PacketError::Skip => {}
+                    _ => println!("skip packet: {e}"),
+                }
+                continue;
+            }
         };
 
         match ip_pkt.anonymize(
@@ -207,7 +210,7 @@ fn read_packets<T: Activated, W: Write>(
 
         let data = eth.packet();
         let eth_out = EnhancedPacketBlock {
-            interface_id: id,
+            interface_id: 0,
             timestamp: Duration::from_micros(packet.header.ts.tv_usec as u64),
             original_len: data.len() as u32,
             data: Cow::Borrowed(data),
@@ -216,7 +219,7 @@ fn read_packets<T: Activated, W: Write>(
 
         match { writer.lock().unwrap().write_pcapng_block(eth_out) } {
             Ok(_) => continue,
-            Err(e) => println!("failed to write packet: {e}"),
+            Err(e) => println!("thread {_id} failed to write packet: {e}"),
         }
     }
 }
