@@ -8,7 +8,7 @@ use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketOption;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
-pub struct PacketHandler<'r> {
+pub struct PacketHandler {
     pub asn_reader: Reader<Vec<u8>>,
     pub cc_reader: Reader<Vec<u8>>,
 
@@ -17,7 +17,7 @@ pub struct PacketHandler<'r> {
     pub target_subnets: Vec<IpNet>,
 
     // cc_filter allows us to rule out packets we are not interested in capturing before processing them
-    pub cc_filter: Vec<&'r str>,
+    pub cc_filter: Vec<String>,
     // asn_filter allows us to rule out packets we are not interested in capturing before processing them
     pub asn_filter: Vec<u32>,
 
@@ -55,7 +55,7 @@ enum AnonymizeTypes {
     None,
 }
 
-impl PacketHandler<'_> {
+impl PacketHandler {
     pub fn create(asn_path: &str, ccdb_path: &str) -> Result<Self, Box<dyn Error>> {
         let mut p = PacketHandler {
             asn_reader: maxminddb::Reader::open_readfile(String::from(asn_path))?,
@@ -93,13 +93,13 @@ impl PacketHandler<'_> {
             .trunc();
 
         let country_rec: geoip2::Country = self.cc_reader.lookup(ip_of_interest).unwrap();
-        let country = country_rec.country.unwrap().iso_code.unwrap();
-        if !self.is_cc_of_interest(country) {
+        let country = String::from(country_rec.country.unwrap().iso_code.unwrap());
+        if !self.is_cc_of_interest(&country) {
             return Err("skip")?;
         }
 
         Ok(SupplementalFields {
-            cc: String::from(country),
+            cc: country,
             asn,
             subnet,
             direction: direction == AnonymizeTypes::Upload,
@@ -119,7 +119,7 @@ impl PacketHandler<'_> {
 
     // returns true if the Country Code filter list is empty or if the provided cc in question
     // is in our acceptable Country Code list.
-    fn is_cc_of_interest(&self, cc: &str) -> bool {
+    fn is_cc_of_interest(&self, cc: &String) -> bool {
         self.cc_filter.is_empty() || self.cc_filter.contains(&cc)
     }
 

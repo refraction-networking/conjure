@@ -115,7 +115,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn read_packets<T: Activated, W: Write>(
     id: u32,
     mut capture: Capture<T>,
-    handler: Arc<Mutex<PacketHandler<'_>>>,
+    handler: Arc<Mutex<PacketHandler>>,
     writer: Arc<Mutex<PcapNgWriter<W>>>,
     terminate: Arc<AtomicBool>,
 ) {
