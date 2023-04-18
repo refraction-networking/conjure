@@ -7,7 +7,7 @@ use packet_handler::{PacketHandler, SupplementalFields};
 
 // use hex;
 use clap::Parser;
-use pcap::{Activated, Capture};
+use pcap::{Activated, Capture, Device};
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
 use pcap_file::pcapng::PcapNgWriter;
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
@@ -68,7 +68,32 @@ fn read_interfaces<W: Write + std::marker::Send + 'static>(
 ) -> Result<(), Box<dyn Error>> {
 
 
-    println!("Reading interface: {}", interfaces);
+    let pool = ThreadPool::new(interfaces.matches(",").count()+1);
+    let term = Arc::new(AtomicBool::new(false));
+    signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term))?;
+
+    for (n, iface) in interfaces.split(",").enumerate() {
+
+        match Device::list().unwrap().into_iter().find(|d| d.name == iface) {
+            Some(dev) => {
+                let h = Arc::clone(&handler);
+                let w = Arc::clone(&arc_writer);
+                let t = Arc::clone(&term);
+                pool.execute(move || {
+                    let cap = Capture::from_device(dev)
+                        .unwrap()
+                        .immediate_mode(true) // enable immediate mode
+                        .open()
+                        .unwrap();
+                    read_packets(n as u32, cap, h, w, t);
+                });
+            },
+            None => println!("Couldn't find interface '{iface}'"),
+        }
+    }
+
+    pool.join();
+
     Ok(())
 }
 
