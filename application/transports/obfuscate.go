@@ -76,7 +76,7 @@ func (GCMObfuscator) Obfuscate(plainText []byte, stationPubkey []byte) ([]byte, 
 	}
 	var clientPrivate, clientPublic, representative [32]byte
 	var sharedSecret []byte
-	for ok := false; ok != true; {
+	for ok := false; !ok; {
 		var sliceKeyPrivate []byte = clientPrivate[:]
 		_, err := rand.Read(sliceKeyPrivate)
 		if err != nil {
@@ -161,7 +161,7 @@ func (CTRObfuscator) Obfuscate(plainText []byte, stationPubkey []byte) ([]byte, 
 	}
 	var clientPrivate, clientPublic, representative [32]byte
 	var sharedSecret []byte
-	for ok := false; ok != true; {
+	for ok := false; !ok; {
 		var sliceKeyPrivate []byte = clientPrivate[:]
 		_, err := rand.Read(sliceKeyPrivate)
 		if err != nil {
