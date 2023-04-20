@@ -1,3 +1,5 @@
+use crate::limit::Limit;
+
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
@@ -12,6 +14,7 @@ use rand::RngCore;
 pub struct PacketHandler {
     pub asn_reader: Reader<Vec<u8>>,
     pub cc_reader: Reader<Vec<u8>>,
+    pub limiter: Option<Box<dyn Limit>>,
 
     // target_subnets is used to determine whether source or destination is the address we need
     // to anonymize.
@@ -84,13 +87,20 @@ enum AnonymizeTypes {
 }
 
 impl PacketHandler {
-    pub fn create(asn_path: &str, ccdb_path: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn create(
+        asn_path: &str,
+        ccdb_path: &str,
+        limiter: Option<Box<dyn Limit>>,
+        cc_filter: Vec<String>,
+        asn_filter: Vec<u32>,
+    ) -> Result<Self, Box<dyn Error>> {
         let mut p = PacketHandler {
             asn_reader: maxminddb::Reader::open_readfile(String::from(asn_path))?,
             cc_reader: maxminddb::Reader::open_readfile(String::from(ccdb_path))?,
             target_subnets: vec!["192.122.190.0/24".parse()?],
-            cc_filter: vec![],
-            asn_filter: vec![],
+            cc_filter,
+            asn_filter,
+            limiter,
             seed: [0u8; 32],
         };
         OsRng.fill_bytes(&mut p.seed);
@@ -98,7 +108,7 @@ impl PacketHandler {
     }
 
     pub fn get_supplemental(
-        &self,
+        &mut self,
         src: IpAddr,
         dst: IpAddr,
     ) -> Result<SupplementalFields, PacketError> {
@@ -115,6 +125,14 @@ impl PacketHandler {
             .trunc();
 
         let country = self.get_cc(ip_of_interest).unwrap();
+
+        if let Some(l) = self.limiter.as_deref_mut() {
+            if let Err(e) = l.count_or_drop_many(vec![asn.into(), country.clone().into()]) {
+                // if we fail to count for some reason (full for one of the fields or term flag
+                // return err). The error value is available if we want more in debug print / return
+                Err(e)?
+            }
+        }
 
         Ok(SupplementalFields {
             cc: country,
@@ -229,7 +247,6 @@ mod tests {
                 EnhancedPacketOption::Comment(Cow::Borrowed("cc:IR")),
                 EnhancedPacketOption::Comment(Cow::Borrowed("asn:12345")),
             ],
-            // ,subnet:192.168.0.0/16,len:16
         };
 
         // Write back parsed Block

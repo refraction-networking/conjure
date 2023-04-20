@@ -1,9 +1,11 @@
 #![feature(ip)]
 #![feature(let_chains)]
+#![feature(associated_type_bounds)]
 
 extern crate maxminddb;
 
 mod ip;
+mod limit;
 mod packet_handler;
 use ip::get_mut_ip_packet;
 use packet_handler::{PacketError, PacketHandler, SupplementalFields};
@@ -30,46 +32,121 @@ use std::time::Duration;
 const ASNDB_PATH: &str = "test_mmdbs/GeoLite2-ASN.mmdb";
 const CCDB_PATH: &str = "test_mmdbs/GeoLite2-Country.mmdb";
 
-/// Program to capture from multiple interfaces and anonymize client address information.
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(
+    author,
+    version,
+    about = "
+Program to capture from multiple interfaces and anonymize client address information.
+
+Examples:
+
+captool -t \"192.168.0.0/16\" -i \"ens15f0,ens15f1,en01\" -a \"$(cat ./asn_list.txt)\" -lpa 10000 -o \"$(date -u +\"%FT%H%MZ\").pcapng\"
+"
+)]
+
 struct Args {
-    /// Path to pcap file to read
+    /// Packets that include addresses in this subnet will be captured, the other (peer) address
+    /// will be anonymized.
     #[arg(short, long)]
     target_subnets: Option<String>,
 
-    /// Path to pcap file to read
-    #[arg(short, long)]
-    read: Option<String>,
+    /// Limits the total number of packets collected to N.
+    #[arg(short, long, conflicts_with = "lpc")]
+    limit: Option<u64>,
 
-    /// Path to directory containing PCAPs files to read
+    /// Comma separated list of ASNs from which to capture packets. Limits which packets are
+    /// captured even if the other (peer) address is in a target subnet.
     #[arg(short, long)]
-    pcap_dir: Option<String>,
+    asn_filter: Option<String>,
+
+    /// Limit packets per ASN (LPA) reads only N packets per ASN. Requires. `asn_filter` argument.
+    #[arg(long, requires = "asn_filter", conflicts_with = "limit")]
+    lpa: Option<u64>,
+
+    /// Comma separated list of CCs from which to capture packets. Limits which packets are
+    /// captured even if the other (peer) address is in a target subnet.
+    #[arg(short, long)]
+    cc_filter: Option<String>,
+
+    /// Limit packets per Country (LPC) reads only N packets per Country Code. Requires. `cc_filter` argument.
+    #[arg(long, requires = "cc_filter", conflicts_with = "lpa")]
+    lpc: Option<u64>,
 
     /// Comma separated interfaces on which to listen (mutually exclusive with `--pcap_dir`, and `--read` options).
-    #[arg(short, long, default_value_t = String::from("eno1"))]
+    #[arg(short, long, default_value_t = String::from("eno1"), conflicts_with = "pcap_dir")]
     interfaces: String,
 
-    /// Path to the Geolite CountryCode database (.mmdb) file
+    /// Path to directory containing PCAPs files to read
+    #[arg(short, long, conflicts_with = "read")]
+    pcap_dir: Option<String>,
+
+    /// Path to pcap file to read
+    #[arg(short, long, conflicts_with = "interfaces")]
+    read: Option<String>,
+
+    /// Path to the output PCAP_NG file.
     #[arg(short, long, default_value_t = String::from("./out.pcapng"))]
     out: String,
 
     /// Path to the Geolite ASN database (.mmdb) file
-    #[arg(short, long, default_value_t = String::from(ASNDB_PATH))]
+    #[arg(long, default_value_t = String::from(ASNDB_PATH))]
     asn_db: String,
 
     /// Path to the Geolite CountryCode database (.mmdb) file
-    #[arg(short, long, default_value_t = String::from(CCDB_PATH))]
+    #[arg(long, default_value_t = String::from(CCDB_PATH))]
     cc_db: String,
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let args = Args::parse();
+    let flag = Arc::new(AtomicBool::new(false));
+
+    let asn_list = args
+        .asn_filter
+        .map_or(vec![], |x| parse_asn_list(x).unwrap());
+    let cc_list = args.cc_filter.map_or(vec![], |x| parse_cc_list(x).unwrap());
+
+    let limiter = limit::build(
+        args.limit,
+        args.lpa,
+        args.lpc,
+        asn_list.clone(),
+        cc_list.clone(),
+        flag.clone(),
+    );
+
+    let handler = Arc::new(Mutex::new(PacketHandler::create(
+        &args.asn_db,
+        &args.cc_db,
+        limiter,
+        cc_list,
+        asn_list,
+    )?));
+
+    let file = File::create(args.out)?;
+    let mut writer = PcapNgWriter::new(file).expect("failed to build writer");
+    let interface = InterfaceDescriptionBlock {
+        linktype: DataLink::ETHERNET,
+        snaplen: 0xFFFF,
+        options: vec![],
+    };
+    writer.write_pcapng_block(interface)?;
+    let arc_writer = Arc::new(Mutex::new(writer));
+
+    match args.pcap_dir {
+        Some(pcap_dir) => read_pcap_dir(pcap_dir, handler, arc_writer, flag),
+        None => read_interfaces(args.interfaces, handler, arc_writer, flag),
+    }
 }
 
 fn read_interfaces<W: Write + std::marker::Send + 'static>(
     interfaces: String,
     handler: Arc<Mutex<PacketHandler>>,
     arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
+    term: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn Error>> {
     let pool = ThreadPool::new(interfaces.matches(',').count() + 1);
-    let term = Arc::new(AtomicBool::new(false));
     signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term))?;
 
     for (n, iface) in interfaces.split(',').enumerate() {
@@ -104,10 +181,10 @@ fn read_pcap_dir<W: Write + std::marker::Send + 'static>(
     pcap_dir: String,
     handler: Arc<Mutex<PacketHandler>>,
     arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
+    term: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn Error>> {
     let mut paths = fs::read_dir(pcap_dir.clone()).unwrap();
     let pool = ThreadPool::new(paths.count());
-    let term = Arc::new(AtomicBool::new(false));
     signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term))?;
 
     // refresh the path list and launch jobs
@@ -131,32 +208,6 @@ fn read_pcap_dir<W: Write + std::marker::Send + 'static>(
     pool.join(); // all threads must complete or the process will hang
 
     Ok(())
-}
-
-fn main() -> Result<(), Box<dyn Error>> {
-    let args = Args::parse();
-
-    let handler = Arc::new(Mutex::new(PacketHandler::create(
-        &args.asn_db,
-        &args.cc_db,
-    )?));
-
-    let file = File::create(args.out)?;
-    let mut writer = PcapNgWriter::new(file).expect("failed to build writer");
-    let interface = InterfaceDescriptionBlock {
-        linktype: DataLink::ETHERNET,
-        snaplen: 0xFFFF,
-        options: vec![],
-    };
-    writer.write_pcapng_block(interface)?;
-    let arc_writer = Arc::new(Mutex::new(writer));
-
-    match args.pcap_dir {
-        Some(pcap_dir) => read_pcap_dir(pcap_dir, handler, arc_writer),
-        None => read_interfaces(args.interfaces, handler, arc_writer),
-    }
-
-    //Ok(())
 }
 
 // abstracts over live captures (Capture<Active>) and file captures
@@ -186,7 +237,7 @@ fn read_packets<T: Activated, W: Write>(
         };
 
         let supplemental_fields: SupplementalFields = match {
-            let h = handler.lock().unwrap();
+            let mut h = handler.lock().unwrap();
             h.get_supplemental(ip_pkt.source(), ip_pkt.destination())
         } {
             Ok(s) => s,
@@ -224,6 +275,19 @@ fn read_packets<T: Activated, W: Write>(
     }
 }
 
+fn parse_asn_list(input: String) -> Result<Vec<u32>, Box<dyn Error>> {
+    let mut out = vec![];
+    for s in input.split(',') {
+        out.push(s.trim().parse().unwrap())
+    }
+    Ok(out)
+}
+
+fn parse_cc_list(input: String) -> Result<Vec<String>, Box<dyn Error>> {
+    let out: Vec<String> = input.split(',').map(|s| s.trim().to_string()).collect();
+    Ok(out)
+}
+
 // [X] read packets with pcap from interface / file and convert to usable type
 //
 // [X] anonymizing client address and port consistently
@@ -232,7 +296,11 @@ fn read_packets<T: Activated, W: Write>(
 //
 // [X] adding asn and cc as comments while writing as pcapng
 //
-// [ ] reading from multiple __interfaces__ simultaneously
+// [X] reading from multiple __interfaces__ simultaneously
+//
+// [ ] conditional limitations on the number of packets captured
+//
+// [ ] verbose / debug printing for runtime errors.
 
 #[cfg(test)]
 mod tests {
@@ -242,6 +310,22 @@ mod tests {
     use ipnet::IpNet;
     use maxminddb::geoip2;
     use std::net::IpAddr;
+
+    #[test]
+    fn test_parse() -> Result<(), Box<dyn Error>> {
+        let good_cases = String::from("aa,bb,cc , dd , ff");
+        let ss_cc = parse_cc_list(good_cases)?;
+        assert_eq!(ss_cc.len(), 5);
+        for a in ss_cc {
+            assert!(!a.contains(' '));
+        }
+
+        let good_cases = String::from("1,2,3, 4, 5 ,  6  ");
+        let ss_asn = parse_asn_list(good_cases)?;
+        assert_eq!(ss_asn.len(), 6);
+
+        Ok(())
+    }
 
     #[test]
     fn test_cc_and_asn_lookup() -> Result<(), String> {
