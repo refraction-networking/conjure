@@ -213,6 +213,8 @@ mod tests {
 
     use std::time::Duration;
 
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
     use pcap_file::pcapng::blocks::enhanced_packet::{EnhancedPacketBlock, EnhancedPacketOption};
     use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
     use pcap_file::pcapng::PcapNgWriter;
@@ -227,8 +229,9 @@ mod tests {
         let eth = MutableEthernetPacket::new(&mut packet_bytes).ok_or("failed to parse eth")?;
 
         let file = tempfile()?;
-        // let file = File::create("out.pcap").expect("Error creating file");
-        let mut pcapng_writer = PcapNgWriter::new(file)?;
+        // let file = File::create("out.pcapng.gz").expect("Error creating file");
+        let e = GzEncoder::new(file, Compression::default());
+        let mut pcapng_writer = PcapNgWriter::new(e)?;
 
         let data = eth.packet();
 

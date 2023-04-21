@@ -12,6 +12,8 @@ use packet_handler::{PacketError, PacketHandler, SupplementalFields};
 
 // use hex;
 use clap::Parser;
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use pcap::{Activated, Capture, Device};
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
@@ -20,6 +22,8 @@ use pcap_file::DataLink;
 use pnet::packet::ethernet::MutableEthernetPacket;
 use pnet::packet::Packet;
 use threadpool::ThreadPool;
+use signal_hook::consts::TERM_SIGNALS;
+use signal_hook::flag::register;
 
 use std::borrow::Cow;
 use std::error::Error;
@@ -41,7 +45,7 @@ Program to capture from multiple interfaces and anonymize client address informa
 
 Examples:
 
-captool -t \"192.168.0.0/16\" -i \"ens15f0,ens15f1,en01\" -a \"$(cat ./asn_list.txt)\" -lpa 10000 -o \"$(date -u +\"%FT%H%MZ\").pcapng\"
+captool -t \"192.168.0.0/16\" -i \"ens15f0,ens15f1,en01\" -a \"$(cat ./asn_list.txt)\" -lpa 10000 -o \"$(date -u +\"%FT%H%MZ\").pcapng.gz\"
 "
 )]
 
@@ -78,15 +82,15 @@ struct Args {
     interfaces: String,
 
     /// Path to directory containing PCAPs files to read
-    #[arg(short, long, conflicts_with = "read")]
+    #[arg(short, long, conflicts_with = "interfaces")]
     pcap_dir: Option<String>,
 
-    /// Path to pcap file to read
-    #[arg(short, long, conflicts_with = "interfaces")]
-    read: Option<String>,
+    // /// Path to pcap file to read
+    // #[arg(short, long, conflicts_with = "interfaces")]
+    // read: Option<String>,
 
     /// Path to the output PCAP_NG file.
-    #[arg(short, long, default_value_t = String::from("./out.pcapng"))]
+    #[arg(short, long, default_value_t = String::from("./out.pcapng.gz"))]
     out: String,
 
     /// Path to the Geolite ASN database (.mmdb) file
@@ -102,10 +106,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let flag = Arc::new(AtomicBool::new(false));
 
-    let asn_list = args
-        .asn_filter
-        .map_or(vec![], |x| parse_asn_list(x).unwrap());
-    let cc_list = args.cc_filter.map_or(vec![], |x| parse_cc_list(x).unwrap());
+    let asn_list = parse_asn_list(args.asn_filter);
+    let cc_list = parse_cc_list(args.cc_filter);
+
+    println!("{:?}\n{asn_list:#?} {:?}\n{cc_list:#?} {:?}", args.limit, args.lpa, args.lpc);
 
     let limiter = limit::build(
         args.limit,
@@ -125,7 +129,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?));
 
     let file = File::create(args.out)?;
-    let mut writer = PcapNgWriter::new(file).expect("failed to build writer");
+    let gzip_file = GzEncoder::new(file, Compression::default());
+    let mut writer = PcapNgWriter::new(gzip_file).expect("failed to build writer");
     let interface = InterfaceDescriptionBlock {
         linktype: DataLink::ETHERNET,
         snaplen: 0xFFFF,
@@ -147,7 +152,10 @@ fn read_interfaces<W: Write + std::marker::Send + 'static>(
     term: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn Error>> {
     let pool = ThreadPool::new(interfaces.matches(',').count() + 1);
-    signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term))?;
+
+    for sig in TERM_SIGNALS {
+        register(*sig, Arc::clone(&term))?;
+    }
 
     for (n, iface) in interfaces.split(',').enumerate() {
         match Device::list()
@@ -222,6 +230,7 @@ fn read_packets<T: Activated, W: Write>(
     let seed = { handler.lock().unwrap().seed };
 
     while !terminate.load(Ordering::Relaxed) {
+        // println!("_");
         let packet = match capture.next_packet() {
             Ok(p) => p,
             Err(_e) => continue,
@@ -233,7 +242,10 @@ fn read_packets<T: Activated, W: Write>(
 
         let mut ip_pkt = match get_mut_ip_packet(&mut eth) {
             Some(p) => p,
-            None => continue,
+            None => {
+                // print!("x");
+                continue
+            }
         };
 
         let supplemental_fields: SupplementalFields = match {
@@ -243,7 +255,7 @@ fn read_packets<T: Activated, W: Write>(
             Ok(s) => s,
             Err(e) => {
                 match e {
-                    PacketError::Skip => {}
+                    PacketError::Skip => {} // print!("."),
                     _ => println!("skip packet: {e}"),
                 }
                 continue;
@@ -269,23 +281,45 @@ fn read_packets<T: Activated, W: Write>(
         };
 
         match { writer.lock().unwrap().write_pcapng_block(eth_out) } {
-            Ok(_) => continue,
+            Ok(_) => {
+                // print!("o");
+                continue
+            }
             Err(e) => println!("thread {_id} failed to write packet: {e}"),
         }
     }
+    // println!("shutting down")
 }
 
-fn parse_asn_list(input: String) -> Result<Vec<u32>, Box<dyn Error>> {
-    let mut out = vec![];
-    for s in input.split(',') {
-        out.push(s.trim().parse().unwrap())
+fn parse_asn_list(input: Option<String>) -> Vec<u32> {
+    match input {
+        None => vec![],
+        Some(s) => {
+            if s.is_empty() {
+                vec![]
+            } else {
+                let mut out = vec![];
+                for s in s.split(',') {
+                    out.push(s.trim().parse().unwrap())
+                }
+                out
+            }
+        }
     }
-    Ok(out)
+
 }
 
-fn parse_cc_list(input: String) -> Result<Vec<String>, Box<dyn Error>> {
-    let out: Vec<String> = input.split(',').map(|s| s.trim().to_string()).collect();
-    Ok(out)
+fn parse_cc_list(input: Option<String>) -> Vec<String> {
+    match input {
+        None => vec![],
+        Some(s) => {
+            if s.is_empty() {
+                vec![]
+            } else {
+                s.split(',').map(|s| s.trim().to_string()).collect()
+            }
+        }
+    }
 }
 
 // [X] read packets with pcap from interface / file and convert to usable type
@@ -313,15 +347,22 @@ mod tests {
 
     #[test]
     fn test_parse() -> Result<(), Box<dyn Error>> {
+        let ss_cc = parse_cc_list(None);
+        assert_eq!(ss_cc.len(), 0);
+
+        let empty_case = String::from("");
+        let ss_cc = parse_cc_list(Some(empty_case));
+        assert_eq!(ss_cc.len(), 0);
+
         let good_cases = String::from("aa,bb,cc , dd , ff");
-        let ss_cc = parse_cc_list(good_cases)?;
+        let ss_cc = parse_cc_list(Some(good_cases));
         assert_eq!(ss_cc.len(), 5);
         for a in ss_cc {
             assert!(!a.contains(' '));
         }
 
-        let good_cases = String::from("1,2,3, 4, 5 ,  6  ");
-        let ss_asn = parse_asn_list(good_cases)?;
+        let good_cases = Some(String::from("1,2,3, 4, 5 ,  6  "));
+        let ss_asn = parse_asn_list(good_cases);
         assert_eq!(ss_asn.len(), 6);
 
         Ok(())
