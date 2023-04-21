@@ -109,7 +109,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let asn_list = parse_asn_list(args.asn_filter);
     let cc_list = parse_cc_list(args.cc_filter);
 
-    println!("{:?}\n{asn_list:#?} {:?}\n{cc_list:#?} {:?}", args.limit, args.lpa, args.lpc);
+    // println!("{:?}\n{asn_list:#?} {:?}\n{cc_list:#?} {:?}", args.limit, args.lpa, args.lpc);
 
     let limiter = limit::build(
         args.limit,
@@ -253,13 +253,13 @@ fn read_packets<T: Activated, W: Write>(
             h.get_supplemental(ip_pkt.source(), ip_pkt.destination())
         } {
             Ok(s) => s,
-            Err(e) => {
-                match e {
-                    PacketError::Skip => {} // print!("."),
-                    _ => println!("skip packet: {e}"),
-                }
-                continue;
-            }
+            Err(_e) => continue, // {
+            //     match e {
+            //         PacketError::Skip => {} // print!("."),
+            //         _ => println!("skip packet: {_e}"),
+            //     }
+            //     continue;
+            // }
         };
 
         match ip_pkt.anonymize(
