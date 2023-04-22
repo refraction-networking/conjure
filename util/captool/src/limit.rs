@@ -99,7 +99,7 @@ impl Limit for Limiter {
             return Err(LimitError::Flag)?;
         }
 
-        if self.count.load(Ordering::Relaxed) >= self.limit {
+        if self.count.load(Ordering::Relaxed) >= self.total {
             self.flag.store(true, Ordering::Relaxed);
             return Err(LimitError::Full(Hashable::Z))?;
         }

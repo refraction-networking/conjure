@@ -119,12 +119,12 @@ impl PacketHandler {
             AnonymizeTypes::Download => dst,
         };
 
-        let (asn, prefix) = self.get_asn(ip_of_interest).unwrap();
-        let subnet = IpNet::new(ip_of_interest, prefix.try_into().unwrap())
+        let (asn, prefix) = self.get_asn(ip_of_interest)?;
+        let subnet = IpNet::new(ip_of_interest, prefix.try_into().unwrap_or(32))
             .unwrap()
             .trunc();
 
-        let country = self.get_cc(ip_of_interest).unwrap();
+        let country = self.get_cc(ip_of_interest)?;
 
         if let Some(l) = self.limiter.as_deref_mut() {
             if let Err(e) = l.count_or_drop_many(vec![asn.into(), country.clone().into()]) {
@@ -172,7 +172,7 @@ impl PacketHandler {
                 Ok((a, p)) => (a,p),
                 Err(e) => Err(PacketError::OtherError(Box::new(e)))?
             };
-            let asn = asn_rec.autonomous_system_number.unwrap();
+            let asn = asn_rec.autonomous_system_number.unwrap_or(0);
             (asn, prefix)
         };
 

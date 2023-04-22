@@ -33,8 +33,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-const ASNDB_PATH: &str = "test_mmdbs/GeoLite2-ASN.mmdb";
-const CCDB_PATH: &str = "test_mmdbs/GeoLite2-Country.mmdb";
+const ASNDB_PATH: &str = "/usr/share/GeoIP/GeoLite2-ASN.mmdb";
+const CCDB_PATH: &str = "/usr/share/GeoIP/GeoLite2-Country.mmdb";
+
 
 #[derive(Parser, Debug)]
 #[command(
