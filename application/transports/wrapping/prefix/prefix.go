@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"regexp"
 
 	dd "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports"
@@ -22,19 +21,20 @@ const (
 	portRangeMax = 65535
 )
 
-const minTagLength = 32
+const minTagLength = 64
 
 // Prefix provides the elements required for independent prefixes to be usable as part of the
 // transport.
 type Prefix struct {
-	// Regular expression to match
-	*regexp.Regexp
-
-	// Raw regular expression to parse
-	Raw string
+	// // Regular expression to match
+	// *regexp.Regexp
+	fn func([]byte) bool
 
 	// Static string to match to rule out protocols without using a regex.
 	StaticMatch []byte
+
+	// Offset in a byte array where we expect the identifier to start.
+	Offset int
 
 	// Minimum length to guarantee we have received the whole identifier
 	// (i.e. return ErrTryAgain)
@@ -53,29 +53,33 @@ type Prefix struct {
 var DefaultPrefixes = []Prefix{}
 var defaultPrefixes = []Prefix{
 	//Min
-	{nil, `.*`, []byte{}, minTagLength, minTagLength, randomizeDstPortMinVersion},
+	{nil, []byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion},
 	// HTTP GET
-	{nil, `GET / HTTP/1.1\r\n`, []byte("GET / HTTP/1.1\r\n"), 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion},
+	{nil, []byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion},
 	// HTTP POST
-	{nil, `POST / HTTP/1.1\r\n`, []byte("POST / HTTP/1.1\r\n"), 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion},
+	{nil, []byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion},
 	// HTTP Response
-	{nil, `HTTP/1.1 200\r\n`, []byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, randomizeDstPortMinVersion},
+	{nil, []byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion},
 	// TLS Client Hello
-	{nil, `\u0016\u0003\u0001\u0040\u0000\u0001`, []byte("\u0016\u0003\u0001\u0040\u0000\u0001"), 6, 6 + minTagLength, randomizeDstPortMinVersion},
+	{nil, []byte("\x16\x03\x01\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion},
 	// TLS Server Hello
-	{nil, `\u0016\u0003\u0003\u0040\u0000\u0002`, []byte("\u0016\u0003\u0003\u0040\u0000\u0002\r\n"), 6, 6 + minTagLength, randomizeDstPortMinVersion},
+	{nil, []byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion},
 	// TLS Alert Warning
-	{nil, `\u0015\u0003\u0001\u0000\u0002`, []byte("\u0015\u0003\u0001\u0000\u0002"), 5, 5 + minTagLength, randomizeDstPortMinVersion},
+	{nil, []byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion},
 	// TLS Alert Fatal
-	{nil, `\u0015\u0003\u0002\u0000\u0002`, []byte("\u0015\u0003\u0002\u0000\u0002"), 5, 5 + minTagLength, randomizeDstPortMinVersion},
+	{nil, []byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion},
 	// DNS over TCP
-	{nil, `\u0005\u00DC\u005F\u00E0\u0001\u0020`, []byte("\u0005\u00DC\u005F\u00E0\u0001\u0020"), 6, 6 + minTagLength, randomizeDstPortMinVersion},
+	{nil, []byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion},
+	// SSH-2.0-OpenSSH_8.9p1
+	{nil, []byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion},
 }
 
 // Transport provides a struct implementing the Transport, WrappingTransport,
 // PortRandomizingTransport, and FixedPortTransport interfaces.
 type Transport struct {
 	SupportedPrefixes []Prefix
+	tagObfuscator     transports.Obfuscator
+	privkey           [32]byte
 }
 
 // Name returns the human-friendly name of the transport, implementing the
@@ -157,17 +161,9 @@ func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst ne
 		return nil, nil, transports.ErrTryAgain
 	}
 
-	hmacID, err := t.tryParsePrefix(data)
+	reg, err := t.tryFindReg(data, originalDst, regManager)
 	if err != nil {
 		return nil, nil, err
-	} else if hmacID == "" {
-		return nil, nil, transports.ErrNotTransport
-	}
-
-	// hmacID := data.String()[:minTagLength]
-	reg, ok := regManager.GetRegistrations(originalDst)[hmacID]
-	if !ok {
-		return nil, nil, transports.ErrNotTransport
 	}
 
 	// We don't want the first 32 bytes
@@ -176,20 +172,77 @@ func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst ne
 	return reg, transports.PrependToConn(c, data), nil
 }
 
-func (t Transport) tryParsePrefix(data *bytes.Buffer) (string, error) {
-	return "", transports.ErrTransportNotSupported
+func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, error) {
+	if data.Len() == 0 {
+		return nil, transports.ErrTryAgain
+	}
+
+	err := transports.ErrNotTransport
+	for _, prefix := range t.SupportedPrefixes {
+		if len(prefix.StaticMatch) > 0 {
+			matchLen := min(len(prefix.StaticMatch), data.Len())
+			if !bytes.Equal(prefix.StaticMatch[:matchLen], data.Bytes()[:matchLen]) {
+				continue
+			}
+		}
+
+		if data.Len() < prefix.MinLen {
+			// the data we have received matched at least one static prefix, but was not long
+			// enough to extract the tag - go back and read more, continue checking if any
+			// of the other prefixes match. If not we want to indicate to read more, not
+			// give up because we may receive the rest of the match.
+			err = transports.ErrTryAgain
+			continue
+		}
+
+		if data.Len() < prefix.Offset+minTagLength && data.Len() < prefix.MaxLen {
+			err = transports.ErrTryAgain
+			continue
+		} else if data.Len() < prefix.MaxLen {
+			continue
+		}
+
+		obfuscatedID := data.Bytes()[prefix.Offset : prefix.Offset+minTagLength]
+		// fmt.Printf("err: %s, id: %s\n", err, hex.EncodeToString(obfuscatedID))
+
+		hmacID, err := t.tagObfuscator.TryReveal(obfuscatedID, t.privkey)
+		if err != nil || hmacID == nil {
+			continue
+		}
+
+		reg, ok := regManager.GetRegistrations(originalDst)[string(hmacID)]
+		if !ok {
+			continue
+		}
+
+		return reg, nil
+	}
+
+	return nil, err
 }
 
 func init() {
-	for _, p := range defaultPrefixes {
-		out := Prefix{
-			Regexp:      regexp.MustCompile(p.Raw),
-			Raw:         p.Raw,
-			StaticMatch: p.StaticMatch,
-			MinLen:      p.MinLen,
-			MaxLen:      p.MaxLen,
-			MinVer:      p.MinVer,
-		}
-		DefaultPrefixes = append(DefaultPrefixes, out)
+	// if at any point we need to do init on the prefixes (i.e compiling regular expressions) it
+	// should happen here.
+	DefaultPrefixes = defaultPrefixes
+}
+
+// 	for _, p := range defaultPrefixes {
+// 		out := Prefix{
+// 			Regexp:      regexp.MustCompile(p.Raw),
+// 			Raw:         p.Raw,
+// 			StaticMatch: p.StaticMatch,
+// 			MinLen:      p.MinLen,
+// 			MaxLen:      p.MaxLen,
+// 			MinVer:      p.MinVer,
+// 		}
+// 		DefaultPrefixes = append(DefaultPrefixes, out)
+// 	}
+// }
+
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
+	return b
 }

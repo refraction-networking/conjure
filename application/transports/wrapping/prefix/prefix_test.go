@@ -2,6 +2,7 @@ package prefix
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -9,10 +10,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/curve25519"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/internal/tests"
+	"github.com/refraction-networking/gotapdance/ed25519"
+	"github.com/refraction-networking/gotapdance/ed25519/extra25519"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
@@ -20,7 +24,17 @@ func TestSuccessfulWrap(t *testing.T) {
 	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
-	var transport Transport
+	_, private, _ := ed25519.GenerateKey(rand.Reader)
+
+	var curve25519Public, curve25519Private [32]byte
+	extra25519.PrivateKeyToCurve25519(&curve25519Private, private)
+	curve25519.ScalarBaseMult(&curve25519Public, &curve25519Private)
+
+	var transport = Transport{
+		tagObfuscator:     transports.XORObfuscator{},
+		privkey:           curve25519Private,
+		SupportedPrefixes: defaultPrefixes,
+	}
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
 	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
 	defer c2p.Close()
@@ -29,8 +43,10 @@ func TestSuccessfulWrap(t *testing.T) {
 
 	hmacID := reg.Keys.ConjureHMAC("PrefixTransportHMACString")
 	message := []byte(`test message!`)
-
-	_, err := c2p.Write(append(hmacID, message...))
+	obfuscatedID, err := transport.tagObfuscator.Obfuscate(hmacID, curve25519Public[:])
+	require.Nil(t, err)
+	// t.Logf("hmacid - %s\nobfuscated id - %s", hex.EncodeToString(hmacID), hex.EncodeToString(obfuscatedID))
+	_, err = c2p.Write(append(obfuscatedID, message...))
 	require.Nil(t, err)
 
 	var buf [4096]byte
