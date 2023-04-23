@@ -37,7 +37,7 @@ func (GCMObfuscator) TryReveal(ciphertext []byte, privateKey [32]byte) ([]byte, 
 
 	var representative, clientPubkey [32]byte
 	copy(representative[:], ciphertext[:32])
-	representative[31] &= 0x7F
+	representative[31] &= 0x3F
 	extra25519.RepresentativeToPublicKey(&clientPubkey, &representative)
 
 	sharedSecret, err := curve25519.X25519(privateKey[:], clientPubkey[:])
@@ -76,7 +76,7 @@ func (GCMObfuscator) Obfuscate(plainText []byte, stationPubkey []byte) ([]byte, 
 	}
 	var clientPrivate, clientPublic, representative [32]byte
 	var sharedSecret []byte
-	for ok := false; ok != true; {
+	for ok := false; !ok; {
 		var sliceKeyPrivate []byte = clientPrivate[:]
 		_, err := rand.Read(sliceKeyPrivate)
 		if err != nil {
@@ -99,7 +99,7 @@ func (GCMObfuscator) Obfuscate(plainText []byte, stationPubkey []byte) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	representative[31] |= (0x80 & randByte[0])
+	representative[31] |= (0xC0 & randByte[0])
 
 	tagBuf := new(bytes.Buffer) // What we have to encrypt with the shared secret using AES
 	tagBuf.Write(representative[:])
@@ -132,7 +132,7 @@ func (CTRObfuscator) TryReveal(ciphertext []byte, privateKey [32]byte) ([]byte, 
 
 	var representative, clientPubkey [32]byte
 	copy(representative[:], ciphertext[:32])
-	representative[31] &= 0x7F
+	representative[31] &= 0x3F
 	extra25519.RepresentativeToPublicKey(&clientPubkey, &representative)
 
 	sharedSecret, err := curve25519.X25519(privateKey[:], clientPubkey[:])
@@ -161,7 +161,7 @@ func (CTRObfuscator) Obfuscate(plainText []byte, stationPubkey []byte) ([]byte, 
 	}
 	var clientPrivate, clientPublic, representative [32]byte
 	var sharedSecret []byte
-	for ok := false; ok != true; {
+	for ok := false; !ok; {
 		var sliceKeyPrivate []byte = clientPrivate[:]
 		_, err := rand.Read(sliceKeyPrivate)
 		if err != nil {
@@ -184,7 +184,7 @@ func (CTRObfuscator) Obfuscate(plainText []byte, stationPubkey []byte) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	representative[31] |= (0x80 & randByte[0])
+	representative[31] |= (0xC0 & randByte[0])
 
 	tagBuf := new(bytes.Buffer) // What we have to encrypt with the shared secret using AES
 	tagBuf.Write(representative[:])
