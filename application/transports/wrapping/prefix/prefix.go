@@ -23,6 +23,7 @@ const (
 )
 
 const minTagLength = 64
+const minTagLengthBase64 = 88
 
 // Prefix provides the elements required for independent prefixes to be usable as part of the
 // transport.
@@ -32,7 +33,7 @@ type Prefix struct {
 
 	// Function allowing decode / transformation of obfuscated ID bytes before attempting to
 	// de-obfuscate them. Example - base64 decode.
-	fn func([]byte) ([]byte, error)
+	fn func([]byte) ([]byte, int, error)
 
 	// Static string to match to rule out protocols without using a regex.
 	StaticMatch []byte
@@ -206,15 +207,16 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 		}
 
 		var obfuscatedID []byte
+		var errN error
+		var forwardBy = minTagLength
 		if prefix.fn != nil {
-			obfuscatedID, errN := prefix.fn(data.Bytes()[prefix.Offset:])
+			obfuscatedID, forwardBy, errN = prefix.fn(data.Bytes()[prefix.Offset:])
 			if errN != nil || len(obfuscatedID) != minTagLength {
 				continue
 			}
 		} else {
 			obfuscatedID = data.Bytes()[prefix.Offset : prefix.Offset+minTagLength]
 		}
-		// fmt.Printf("err: %s, id: %s\n", err, hex.EncodeToString(obfuscatedID))
 
 		hmacID, err := t.tagObfuscator.TryReveal(obfuscatedID, t.privkey)
 		if err != nil || hmacID == nil {
@@ -226,8 +228,9 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 			continue
 		}
 
-		// We don't want the first 32 bytes
-		data.Next(prefix.Offset + minTagLength)
+		// We don't want to forward the prefix or Tag bytes, but if any message
+		// remains we do want to forward it.
+		data.Next(prefix.Offset + forwardBy)
 
 		return reg, nil
 	}
@@ -248,15 +251,15 @@ func min(a, b int) int {
 	return b
 }
 
-func base64TagDecode(encoded []byte) ([]byte, error) {
-	if len(encoded) < 88 {
-		return nil, fmt.Errorf("not enough to decode")
+func base64TagDecode(encoded []byte) ([]byte, int, error) {
+	if len(encoded) < minTagLengthBase64 {
+		return nil, 0, fmt.Errorf("not enough to decode")
 	}
-	buf := make([]byte, len(encoded))
-	n, err := base64.StdEncoding.Decode(buf, encoded)
+	buf := make([]byte, minTagLengthBase64)
+	n, err := base64.StdEncoding.Decode(buf, encoded[:minTagLengthBase64])
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return buf[:n], nil
+	return buf[:n], minTagLengthBase64, nil
 }

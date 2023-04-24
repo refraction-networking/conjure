@@ -32,7 +32,7 @@ func TestSuccessfulWrap(t *testing.T) {
 	curve25519.ScalarBaseMult(&curve25519Public, &curve25519Private)
 
 	var transport = Transport{
-		tagObfuscator:     transports.XORObfuscator{},
+		tagObfuscator:     transports.CTRObfuscator{},
 		privkey:           curve25519Private,
 		SupportedPrefixes: defaultPrefixes,
 	}
@@ -74,7 +74,7 @@ func TestSuccessfulWrap(t *testing.T) {
 
 func TestUnsuccessfulWrap(t *testing.T) {
 	var transport = Transport{
-		tagObfuscator:     transports.XORObfuscator{},
+		tagObfuscator:     transports.CTRObfuscator{},
 		privkey:           [32]byte{},
 		SupportedPrefixes: defaultPrefixes,
 	}
@@ -104,7 +104,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 
 func TestTryAgain(t *testing.T) {
 	var transport = Transport{
-		tagObfuscator:     transports.XORObfuscator{},
+		tagObfuscator:     transports.CTRObfuscator{},
 		privkey:           [32]byte{},
 		SupportedPrefixes: defaultPrefixes,
 	}
@@ -181,7 +181,7 @@ func TestSuccessfulWrapBase64(t *testing.T) {
 	curve25519.ScalarBaseMult(&curve25519Public, &curve25519Private)
 
 	var transport = Transport{
-		tagObfuscator:     transports.XORObfuscator{},
+		tagObfuscator:     transports.CTRObfuscator{},
 		privkey:           curve25519Private,
 		SupportedPrefixes: defaultPrefixes,
 	}
@@ -200,7 +200,11 @@ func TestSuccessfulWrapBase64(t *testing.T) {
 	require.Nil(t, err)
 
 	encodedID := base64.StdEncoding.EncodeToString(obfuscatedID)
-	// t.Logf("hmacid - %s\nobfuscated id - %s", hex.EncodeToString(hmacID), hex.EncodeToString(obfuscatedID))
+
+	decodedID, _, err := prefix.fn([]byte(encodedID))
+	require.Nil(t, err)
+	require.True(t, bytes.Equal(decodedID, obfuscatedID))
+
 	_, err = c2p.Write(append(prefix.StaticMatch, append([]byte(encodedID), message...)...))
 	require.Nil(t, err)
 
