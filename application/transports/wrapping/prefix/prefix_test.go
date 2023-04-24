@@ -3,6 +3,7 @@ package prefix
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -45,6 +46,10 @@ func TestSuccessfulWrap(t *testing.T) {
 	message := []byte(`test message!`)
 
 	for _, prefix := range defaultPrefixes {
+		if prefix.fn != nil {
+			// skip prefixes that do a special decoding for this test
+			continue
+		}
 
 		obfuscatedID, err := transport.tagObfuscator.Obfuscate(hmacID, curve25519Public[:])
 		require.Nil(t, err)
@@ -163,4 +168,53 @@ func TestTryParamsToDstPort(t *testing.T) {
 		require.Nil(t, err)
 		require.Equal(t, testCase.p, port)
 	}
+}
+
+func TestSuccessfulWrapBase64(t *testing.T) {
+	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
+
+	_, private, _ := ed25519.GenerateKey(rand.Reader)
+
+	var curve25519Public, curve25519Private [32]byte
+	extra25519.PrivateKeyToCurve25519(&curve25519Private, private)
+	curve25519.ScalarBaseMult(&curve25519Public, &curve25519Private)
+
+	var transport = Transport{
+		tagObfuscator:     transports.XORObfuscator{},
+		privkey:           curve25519Private,
+		SupportedPrefixes: defaultPrefixes,
+	}
+	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
+	defer c2p.Close()
+	defer sfp.Close()
+	require.NotNil(t, reg)
+
+	hmacID := reg.Keys.ConjureHMAC("PrefixTransportHMACString")
+	message := []byte(`test message!`)
+
+	prefix := defaultPrefixes[0]
+
+	obfuscatedID, err := transport.tagObfuscator.Obfuscate(hmacID, curve25519Public[:])
+	require.Nil(t, err)
+
+	encodedID := base64.StdEncoding.EncodeToString(obfuscatedID)
+	// t.Logf("hmacid - %s\nobfuscated id - %s", hex.EncodeToString(hmacID), hex.EncodeToString(obfuscatedID))
+	_, err = c2p.Write(append(prefix.StaticMatch, append([]byte(encodedID), message...)...))
+	require.Nil(t, err)
+
+	var buf [4096]byte
+	var buffer bytes.Buffer
+	n, _ := sfp.Read(buf[:])
+	buffer.Write(buf[:n])
+
+	_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	require.Nil(t, err, "error getting wrapped connection")
+
+	received := make([]byte, len(message))
+	_, err = io.ReadFull(wrapped, received)
+	require.Nil(t, err, "failed reading from connection")
+	require.True(t, bytes.Equal(message, received), "%s\n%s\n%s", string(message), string(received), prefix.StaticMatch)
+
 }

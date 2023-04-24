@@ -2,6 +2,7 @@ package prefix
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"net"
 
@@ -55,6 +56,8 @@ type Prefix struct {
 // initializing the prefix transport.
 var DefaultPrefixes = []Prefix{}
 var defaultPrefixes = []Prefix{
+	// HTTP GET base64 in url min tag length 88 because 64 bytes base64 encoded should be length 88
+	{base64TagDecode, []byte("GET /"), 5, 5 + 88, 5 + 88, randomizeDstPortMinVersion},
 	// HTTP GET
 	{nil, []byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion},
 	// HTTP POST
@@ -204,8 +207,8 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 
 		var obfuscatedID []byte
 		if prefix.fn != nil {
-			obfuscatedID, err = prefix.fn(data.Bytes()[prefix.Offset:])
-			if err != nil || len(obfuscatedID) != minTagLength {
+			obfuscatedID, errN := prefix.fn(data.Bytes()[prefix.Offset:])
+			if errN != nil || len(obfuscatedID) != minTagLength {
 				continue
 			}
 		} else {
@@ -243,4 +246,17 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func base64TagDecode(encoded []byte) ([]byte, error) {
+	if len(encoded) < 88 {
+		return nil, fmt.Errorf("not enough to decode")
+	}
+	buf := make([]byte, len(encoded))
+	n, err := base64.StdEncoding.Decode(buf, encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf[:n], nil
 }
