@@ -28,7 +28,10 @@ const minTagLength = 64
 type Prefix struct {
 	// // Regular expression to match
 	// *regexp.Regexp
-	fn func([]byte) bool
+
+	// Function allowing decode / transformation of obfuscated ID bytes before attempting to
+	// de-obfuscate them. Example - base64 decode.
+	fn func([]byte) ([]byte, error)
 
 	// Static string to match to rule out protocols without using a regex.
 	StaticMatch []byte
@@ -52,8 +55,6 @@ type Prefix struct {
 // initializing the prefix transport.
 var DefaultPrefixes = []Prefix{}
 var defaultPrefixes = []Prefix{
-	//Min
-	{nil, []byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion},
 	// HTTP GET
 	{nil, []byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion},
 	// HTTP POST
@@ -72,6 +73,8 @@ var defaultPrefixes = []Prefix{
 	{nil, []byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion},
 	// SSH-2.0-OpenSSH_8.9p1
 	{nil, []byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion},
+	//Min - Empty prefix
+	{nil, []byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion},
 }
 
 // Transport provides a struct implementing the Transport, WrappingTransport,
@@ -166,9 +169,6 @@ func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst ne
 		return nil, nil, err
 	}
 
-	// We don't want the first 32 bytes
-	data.Next(minTagLength)
-
 	return reg, transports.PrependToConn(c, data), nil
 }
 
@@ -202,7 +202,15 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 			continue
 		}
 
-		obfuscatedID := data.Bytes()[prefix.Offset : prefix.Offset+minTagLength]
+		var obfuscatedID []byte
+		if prefix.fn != nil {
+			obfuscatedID, err = prefix.fn(data.Bytes()[prefix.Offset:])
+			if err != nil || len(obfuscatedID) != minTagLength {
+				continue
+			}
+		} else {
+			obfuscatedID = data.Bytes()[prefix.Offset : prefix.Offset+minTagLength]
+		}
 		// fmt.Printf("err: %s, id: %s\n", err, hex.EncodeToString(obfuscatedID))
 
 		hmacID, err := t.tagObfuscator.TryReveal(obfuscatedID, t.privkey)
@@ -215,6 +223,9 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 			continue
 		}
 
+		// We don't want the first 32 bytes
+		data.Next(prefix.Offset + minTagLength)
+
 		return reg, nil
 	}
 
@@ -226,19 +237,6 @@ func init() {
 	// should happen here.
 	DefaultPrefixes = defaultPrefixes
 }
-
-// 	for _, p := range defaultPrefixes {
-// 		out := Prefix{
-// 			Regexp:      regexp.MustCompile(p.Raw),
-// 			Raw:         p.Raw,
-// 			StaticMatch: p.StaticMatch,
-// 			MinLen:      p.MinLen,
-// 			MaxLen:      p.MaxLen,
-// 			MinVer:      p.MinVer,
-// 		}
-// 		DefaultPrefixes = append(DefaultPrefixes, out)
-// 	}
-// }
 
 func min(a, b int) int {
 	if a < b {

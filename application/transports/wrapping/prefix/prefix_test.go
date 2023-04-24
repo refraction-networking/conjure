@@ -43,41 +43,52 @@ func TestSuccessfulWrap(t *testing.T) {
 
 	hmacID := reg.Keys.ConjureHMAC("PrefixTransportHMACString")
 	message := []byte(`test message!`)
-	obfuscatedID, err := transport.tagObfuscator.Obfuscate(hmacID, curve25519Public[:])
-	require.Nil(t, err)
-	// t.Logf("hmacid - %s\nobfuscated id - %s", hex.EncodeToString(hmacID), hex.EncodeToString(obfuscatedID))
-	_, err = c2p.Write(append(obfuscatedID, message...))
-	require.Nil(t, err)
 
-	var buf [4096]byte
-	var buffer bytes.Buffer
-	n, _ := sfp.Read(buf[:])
-	buffer.Write(buf[:n])
+	for _, prefix := range defaultPrefixes {
 
-	_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
-	require.Nil(t, err, "error getting wrapped connection")
+		obfuscatedID, err := transport.tagObfuscator.Obfuscate(hmacID, curve25519Public[:])
+		require.Nil(t, err)
+		// t.Logf("hmacid - %s\nobfuscated id - %s", hex.EncodeToString(hmacID), hex.EncodeToString(obfuscatedID))
+		_, err = c2p.Write(append(prefix.StaticMatch, append(obfuscatedID, message...)...))
+		require.Nil(t, err)
 
-	received := make([]byte, len(message))
-	_, err = io.ReadFull(wrapped, received)
-	require.Nil(t, err, "failed reading from connection")
-	require.True(t, bytes.Equal(message, received))
+		var buf [4096]byte
+		var buffer bytes.Buffer
+		n, _ := sfp.Read(buf[:])
+		buffer.Write(buf[:n])
+
+		_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+		require.Nil(t, err, "error getting wrapped connection")
+
+		received := make([]byte, len(message))
+		_, err = io.ReadFull(wrapped, received)
+		require.Nil(t, err, "failed reading from connection")
+		require.True(t, bytes.Equal(message, received), "%s\n%s\n%s", string(message), string(received), prefix.StaticMatch)
+	}
 }
 
 func TestUnsuccessfulWrap(t *testing.T) {
-	var transport Transport
+	var transport = Transport{
+		tagObfuscator:     transports.XORObfuscator{},
+		privkey:           [32]byte{},
+		SupportedPrefixes: defaultPrefixes,
+	}
+
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
 	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
 	defer c2p.Close()
 	defer sfp.Close()
 
-	// No real reason for sending the shared secret; it's just 32 bytes
-	// (same length as HMAC ID) that should have no significance.
-	_, err := c2p.Write(tests.SharedSecret)
+	// Wire enough bytes that it the message is definitively not associated with any prefix
+	randMsg := make([]byte, 100)
+	n, _ := rand.Read(randMsg)
+	_, err := c2p.Write(randMsg[:n])
 	require.Nil(t, err)
 
-	var buf [32]byte
+	var buf [1500]byte
 	var buffer bytes.Buffer
-	n, _ := sfp.Read(buf[:])
+	n, _ = sfp.Read(buf[:])
+
 	buffer.Write(buf[:n])
 
 	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
@@ -87,16 +98,25 @@ func TestUnsuccessfulWrap(t *testing.T) {
 }
 
 func TestTryAgain(t *testing.T) {
-	var transport Transport
+	var transport = Transport{
+		tagObfuscator:     transports.XORObfuscator{},
+		privkey:           [32]byte{},
+		SupportedPrefixes: defaultPrefixes,
+	}
 	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
 	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
 	defer c2p.Close()
 	defer sfp.Close()
 
-	var buf [32]byte
+	msgBuf := make([]byte, 100)
+	// Start out matching an expected prefix
+	// Should match Min prefix until 64 bytes and GET prefix until 64+16 bytes
+	copy(msgBuf[:], []byte("GET / HTTP/1.1\r\n"))
+
+	var buf [100]byte
 	var buffer bytes.Buffer
-	for _, b := range tests.SharedSecret[:31] {
+	for _, b := range msgBuf[:minTagLength+16-1] {
 		_, err = c2p.Write([]byte{b})
 		require.Nil(t, err)
 
@@ -109,7 +129,7 @@ func TestTryAgain(t *testing.T) {
 		}
 	}
 
-	_, err = c2p.Write(tests.SharedSecret[31:])
+	_, err = c2p.Write(msgBuf[minTagLength+16-1:])
 	require.Nil(t, err)
 
 	n, _ := sfp.Read(buf[:])
