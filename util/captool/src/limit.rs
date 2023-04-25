@@ -265,7 +265,7 @@ mod tests {
     fn test_limit_cc() -> Result<(), Box<dyn Error>> {
         let flag = Arc::new(AtomicBool::new(false));
         let keys = Hashable::from(vec!["ru", "cn", "tm"]);
-        let asl = &mut Limiter::limit(keys, 3, flag.clone());
+        let asl = &mut Limiter::limit(keys, 3, Arc::clone(&flag));
         let mut i = 0;
 
         while asl.count_or_drop("cn".into()).is_ok() {
@@ -310,7 +310,7 @@ mod tests {
     fn test_limit_asn() -> Result<(), Box<dyn Error>> {
         let flag = Arc::new(AtomicBool::new(false));
         let keys = Hashable::from(vec![10, 11, 12]);
-        let asl = &mut Limiter::limit(keys, 3, flag.clone());
+        let asl = &mut Limiter::limit(keys, 3, Arc::clone(&flag));
         let mut i = 0;
 
         while asl.count_or_drop(10.into()).is_ok() {
@@ -354,7 +354,7 @@ mod tests {
     #[test]
     fn test_limit_total() -> Result<(), Box<dyn Error>> {
         let flag = Arc::new(AtomicBool::new(false));
-        let tol = &mut Limiter::limit::<()>(vec![], 10, flag.clone());
+        let tol = &mut Limiter::limit::<()>(vec![], 10, Arc::clone(&flag));
         let mut i = 0;
 
         while tol.count_or_drop(Hashable::Z).is_ok() {

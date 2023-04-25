@@ -197,18 +197,28 @@ impl<'p> MutableIpPacket<'p> {
         }
     }
 
+    pub fn packet(&self) -> *const [u8] {
+        match self {
+            MutableIpPacket::V4(v4) => v4.packet(),
+            MutableIpPacket::V6(v6) => v6.packet(),
+        }
+    }
+
     pub fn anonymize(
         &'p mut self,
         src_or_dst: bool,
         seed: [u8; 32],
         subnet: IpNet,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<&'p[u8], Box<dyn Error>> {
         let src = self.source();
         let dst = self.destination();
         let (src_port, dst_port) = self.to_immutable().ports()?;
 
+        debug!("{src}:{src_port} -> {dst}:{dst_port}");
         let s = format_str(src_or_dst, src, dst, src_port, dst_port);
         let hmac_bytes = get_hmac(seed, s.as_bytes());
+
+        let p = self.packet();
 
         if src_or_dst {
             let new_addr = substitute_addr(&src, subnet, hmac_bytes)?;
@@ -217,7 +227,10 @@ impl<'p> MutableIpPacket<'p> {
             let new_addr = substitute_addr(&dst, subnet, hmac_bytes)?;
             self.set_destination(new_addr)?;
         }
-        Ok(())
+
+        unsafe {
+            Ok(&*p)
+        }
     }
 }
 

@@ -19,7 +19,8 @@ pcap-file = "2.0.0"
 clap = { version = "4.2.2", features = ["derive"] }
 signal-hook = "0.3.15"
 flate2 = "1.0.25"
-
+log = "0.4.17"
+simple_logger = "4.1.0"
 
 [dev-dependencies]
 tempfile = "3.5.0"

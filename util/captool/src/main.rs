@@ -2,33 +2,36 @@
 #![feature(let_chains)]
 #![feature(associated_type_bounds)]
 
+#[macro_use]
+extern crate log;
 extern crate maxminddb;
 
 mod ip;
 mod limit;
 mod packet_handler;
-use ip::get_mut_ip_packet;
-use packet_handler::{PacketError, PacketHandler, SupplementalFields};
+use ip::{get_mut_ip_packet, MutableIpPacket};
+use packet_handler::{PacketHandler, SupplementalFields, PacketError};
 
-// use hex;
 use clap::Parser;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use pcap::{Activated, Capture, Device};
+use pcap::{Activated, Capture, Device, Linktype, Packet};
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
 use pcap_file::pcapng::PcapNgWriter;
 use pcap_file::DataLink;
 use pnet::packet::ethernet::MutableEthernetPacket;
-use pnet::packet::Packet;
+use pnet::packet::ipv4::MutableIpv4Packet;
+use pnet::packet::ipv6::MutableIpv6Packet;
 use threadpool::ThreadPool;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::flag::register;
+use simple_logger;
 
 use std::borrow::Cow;
 use std::error::Error;
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{Write, stdin};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -103,6 +106,18 @@ struct Args {
     cc_db: String,
 }
 
+#[cfg(debug_assertions)]
+fn debug_warn() {
+    println!("WARNING - running in debug mode. Press enter to continue:");
+    let mut input_text = String::new();
+    stdin()
+        .read_line(&mut input_text)
+        .expect("failed to read from stdin");
+
+    simple_logger::init_with_level(log::Level::Debug).unwrap();
+    debug!("Debug enabled")
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let flag = Arc::new(AtomicBool::new(false));
@@ -110,7 +125,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let asn_list = parse_asn_list(args.asn_filter);
     let cc_list = parse_cc_list(args.cc_filter);
 
-    // println!("{:?}\n{asn_list:#?} {:?}\n{cc_list:#?} {:?}", args.limit, args.lpa, args.lpc);
+    #[cfg(not(debug_assertions))]
+    simple_logger::init_with_level(log::Level::Error).unwrap();
+
+    #[cfg(debug_assertions)]
+    debug_warn();
+
+    trace!("{:?}\n{asn_list:#?} {:?}\n{cc_list:#?} {:?}", args.limit, args.lpa, args.lpc);
 
     let limiter = limit::build(
         args.limit,
@@ -118,7 +139,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         args.lpc,
         asn_list.clone(),
         cc_list.clone(),
-        flag.clone(),
+        Arc::clone(&flag),
     );
 
     let handler = Arc::new(Mutex::new(PacketHandler::create(
@@ -132,12 +153,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     let file = File::create(args.out)?;
     let gzip_file = GzEncoder::new(file, Compression::default());
     let mut writer = PcapNgWriter::new(gzip_file).expect("failed to build writer");
-    let interface = InterfaceDescriptionBlock {
-        linktype: DataLink::ETHERNET,
+    let ip4_iface = InterfaceDescriptionBlock {
+        linktype: DataLink::IPV4,
         snaplen: 0xFFFF,
         options: vec![],
     };
-    writer.write_pcapng_block(interface)?;
+    let ip6_iface = InterfaceDescriptionBlock {
+        linktype: DataLink::IPV6,
+        snaplen: 0xFFFF,
+        options: vec![],
+    };
+    writer.write_pcapng_block(ip4_iface)?;
+    writer.write_pcapng_block(ip6_iface)?;
     let arc_writer = Arc::new(Mutex::new(writer));
 
     match args.pcap_dir {
@@ -230,23 +257,50 @@ fn read_packets<T: Activated, W: Write>(
 ) {
     let seed = { handler.lock().unwrap().seed };
 
+    let link_type = capture.get_datalink();
+
     while !terminate.load(Ordering::Relaxed) {
         // println!("_");
         let packet = match capture.next_packet() {
             Ok(p) => p,
             Err(_e) => continue,
         };
+
+        if packet.is_empty() {
+            continue
+        }
+
+        let ts = Duration::from_micros(packet.header.ts.tv_usec as u64);
+
         // pcap::Packet doesn't implement DerefMut so we have to clone it as mutable -_-
         let data: &mut [u8] = &mut packet.data.to_owned();
 
         let mut eth = MutableEthernetPacket::new(data).unwrap();
-
-        let mut ip_pkt = match get_mut_ip_packet(&mut eth) {
-            Some(p) => p,
-            None => {
-                // print!("x");
-                continue
+        let mut ip_pkt = match link_type {
+            Linktype::ETHERNET => {
+                match get_mut_ip_packet(&mut eth) {
+                    Some(p) => p,
+                    None => {
+                        // print!("x");
+                        continue
+                    }
+                }
             }
+            Linktype::IPV4 => {
+                if let Some(pkt) = MutableIpv4Packet::new(data) {
+                    MutableIpPacket::V4(pkt)
+                } else {
+                    continue
+                }
+            }
+            Linktype::IPV6 => {
+                if let Some(pkt) = MutableIpv6Packet::new(data) {
+                    MutableIpPacket::V6(pkt)
+                } else {
+                    continue
+                }
+            }
+            _ => continue,
         };
 
         let supplemental_fields: SupplementalFields = match {
@@ -254,42 +308,53 @@ fn read_packets<T: Activated, W: Write>(
             h.get_supplemental(ip_pkt.source(), ip_pkt.destination())
         } {
             Ok(s) => s,
-            Err(_e) => continue, // {
-            //     match e {
-            //         PacketError::Skip => {} // print!("."),
-            //         _ => println!("skip packet: {_e}"),
-            //     }
-            //     continue;
+            Err(_e) =>  continue, // {
+                // match _e {
+                //     PacketError::Skip => {} // print!("."),
+                //     _ => println!("skip packet: {_e}"),
+                // }
+                // continue;
             // }
         };
 
-        match ip_pkt.anonymize(
+        let mut interface_id = 0;
+        if matches!(ip_pkt, MutableIpPacket::V6(_)) {
+            interface_id = 1;
+        }
+
+        let d_out = match ip_pkt.anonymize(
             supplemental_fields.direction,
             seed,
             supplemental_fields.subnet,
         ) {
-            Ok(_) => {}
+            Ok(p) => p,
             Err(_e) => continue,
         };
 
-        let data = eth.packet();
-        let eth_out = EnhancedPacketBlock {
-            interface_id: 0,
-            timestamp: Duration::from_micros(packet.header.ts.tv_usec as u64),
-            original_len: data.len() as u32,
-            data: Cow::Borrowed(data),
+        let l = d_out.len();
+        let out = EnhancedPacketBlock {
+            interface_id,
+            timestamp: ts,
+            original_len: d_out.len() as u32,
+            data: Cow::Borrowed(d_out),
             options: supplemental_fields.into(),
         };
 
-        match { writer.lock().unwrap().write_pcapng_block(eth_out) } {
+        match { writer.lock().unwrap().write_pcapng_block(out) } {
             Ok(_) => {
-                // print!("o");
+                debug!("{l}");
                 continue
             }
             Err(e) => println!("thread {_id} failed to write packet: {e}"),
         }
     }
-    // println!("shutting down")
+    debug!("thread {_id} shutting down")
+}
+
+
+fn handle_packet(p: Packet, seed: [u8;32], link_type: Linktype) -> Result<(), Box<dyn Error>> {
+
+    Ok(())
 }
 
 fn parse_asn_list(input: Option<String>) -> Vec<u32> {
@@ -333,9 +398,9 @@ fn parse_cc_list(input: Option<String>) -> Vec<String> {
 //
 // [X] reading from multiple __interfaces__ simultaneously
 //
-// [ ] conditional limitations on the number of packets captured
+// [X] conditional limitations on the number of packets captured
 //
-// [ ] verbose / debug printing for runtime errors.
+// [X] verbose / debug printing for runtime errors.
 
 #[cfg(test)]
 mod tests {

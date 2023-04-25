@@ -112,6 +112,7 @@ impl PacketHandler {
         src: IpAddr,
         dst: IpAddr,
     ) -> Result<SupplementalFields, PacketError> {
+        debug!("{src} -> {dst}");
         let direction = self.should_anonymize(src, dst);
         let ip_of_interest = match direction {
             AnonymizeTypes::None => Err(PacketError::Skip)?,
@@ -164,7 +165,7 @@ impl PacketHandler {
             (0, 7)
         } else if !addr.is_global() {
             match addr {
-                IpAddr::V4(_) => (0, 32),
+                IpAddr::V4(_) => (0, 24),
                 IpAddr::V6(_) => (0, 128),
             }
         } else {
@@ -258,4 +259,10 @@ mod tests {
 
         Ok(())
     }
+
+
+    fn test_ipv6() {
+        let x = hex::decode("600cdd3e002806401234000000000000000000000000000120010000000000000000000000000001ed34115cd1a5623100000000a002ffc4003000000204ffc40402080a05fb55260000000001030307");
+    }
+
 }
