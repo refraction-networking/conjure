@@ -260,7 +260,7 @@ fn read_packets<T: Activated, W: Write>(
 
     let link_type = capture.get_datalink();
 
-    if !vec![Linktype::ETHERNET, Linktype::IPV4, Linktype::IPV6].contains(&link_type) {
+    if !vec![Linktype::ETHERNET, Linktype::IPV4, Linktype::IPV6, Linktype::RAW].contains(&link_type) {
         error!("unsupported linktype: {}", link_type.get_name().unwrap());
         return;
     }

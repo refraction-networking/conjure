@@ -72,9 +72,19 @@ impl<'p> TryFrom<(&'p mut [u8], Linktype)> for MutableIpPacket<'p> {
 
     fn try_from(input: (&'p mut [u8], Linktype)) -> Result<Self, Self::Error> {
         let (data, link_type) = input;
+        if data.is_empty() {
+            Err(())?
+        }
         match link_type {
             Linktype::IPV4 => Ok(MutableIpv4Packet::new(data).ok_or(())?.into()),
             Linktype::IPV6 => Ok(MutableIpv6Packet::new(data).ok_or(())?.into()),
+            Linktype::RAW => {
+                match data[0] & 0xF0 {
+                    0x40 => Ok(MutableIpv4Packet::new(data).ok_or(())?.into()),
+                    0x60 => Ok(MutableIpv6Packet::new(data).ok_or(())?.into()),
+                    _ => Err(())?,
+                }
+            }
             Linktype::ETHERNET => {
                 if data.len() < 14 {
                     // println!("ETH SHORT");
@@ -104,7 +114,6 @@ impl<'p> TryFrom<(&'p mut [u8], Linktype)> for MutableIpPacket<'p> {
                     _ => Err(())?,
                 }
             }
-
             _ => Err(()),
         }
     }
@@ -500,11 +509,11 @@ mod tests {
         let eth = hex::decode("002688754a810cc47ac3674a08004500002c000040004006a70dc07abe005e4ab6f901bb4b0ee583bf75000000016012a56493dd0000020405b4")?;
         let ip6 = hex::decode("600cdd3e002806401234000000000000000000000000000120010000000000000000000000000001ed34115cd1a5623100000000a002ffc4003000000204ffc40402080a05fb55260000000001030307")?;
 
-        let packets = vec![ip4, ip6, eth];
-        let types = vec![Linktype::IPV4, Linktype::IPV6, Linktype::ETHERNET];
+        let packets = vec![ip4.clone(), ip6.clone(), eth, ip4, ip6];
+        let types = vec![Linktype::IPV4, Linktype::IPV6, Linktype::ETHERNET, Linktype::RAW, Linktype::RAW];
 
         for (mut data, link_type) in packets.into_iter().zip(types) {
-            println!("{} {}", link_type.get_name()?, hex::encode(data.clone()));
+            println!("{}", hex::encode(data.clone()));
             let input: (&mut [u8], Linktype) = (&mut data, link_type);
             let ip_pkt = MutableIpPacket::try_from(input).unwrap();
 
@@ -513,6 +522,9 @@ mod tests {
         }
 
         let other = (&mut [0u8; 32][..], Linktype::SCTP);
+        assert!(MutableIpPacket::try_from(other).is_err());
+
+        let other = (&mut [0u8; 32][..], Linktype::RAW);
         assert!(MutableIpPacket::try_from(other).is_err());
 
         Ok(())
