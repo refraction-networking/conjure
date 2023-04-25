@@ -141,7 +141,7 @@ pub fn build(
     flag: Arc<AtomicBool>,
 ) -> Option<Box<dyn Limit>> {
     if l.is_some_and(|x| x > 0) {
-        let len =l.unwrap();
+        let len = l.unwrap();
         // println!("building base limiter len: {len}");
         Some(Limiter::limit::<()>(vec![], len, flag))
     } else if let Some(l) = lpa {

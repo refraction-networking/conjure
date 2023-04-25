@@ -1,6 +1,6 @@
 use hmac::{Hmac, Mac};
 use ipnet::{IpBitAnd, IpBitOr, IpNet};
-use pnet::packet::ethernet::{EtherTypes, MutableEthernetPacket};
+use pcap::Linktype;
 use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
 use pnet::packet::ipv4::{Ipv4Packet, MutableIpv4Packet};
 use pnet::packet::ipv6::{Ipv6Packet, MutableIpv6Packet};
@@ -56,37 +56,57 @@ pub enum MutableIpPacket<'p> {
     V6(MutableIpv6Packet<'p>),
 }
 
-pub fn get_mut_ip_packet<'p>(
-    eth_pkt: &'p mut MutableEthernetPacket,
-) -> Option<MutableIpPacket<'p>> {
-    // Must happen first so we don't have an immutable borrow during a mutable borrow
-    let ethertype = eth_pkt.get_ethertype();
-
-    let payload = eth_pkt.payload_mut();
-
-    fn parse_v4(p: &mut [u8]) -> Option<MutableIpPacket> {
-        MutableIpv4Packet::new(p).map(MutableIpPacket::V4)
+impl<'p> From<MutableIpv4Packet<'p>> for MutableIpPacket<'p> {
+    fn from(value: MutableIpv4Packet<'p>) -> Self {
+        MutableIpPacket::V4(value)
     }
-
-    fn parse_v6(p: &mut [u8]) -> Option<MutableIpPacket> {
-        MutableIpv6Packet::new(p).map(MutableIpPacket::V6)
+}
+impl<'p> From<MutableIpv6Packet<'p>> for MutableIpPacket<'p> {
+    fn from(value: MutableIpv6Packet<'p>) -> Self {
+        MutableIpPacket::V6(value)
     }
+}
 
-    match ethertype {
-        EtherTypes::Vlan => {
-            if payload[2] == 0x08 && payload[3] == 0x00 {
-                //let vlan_id: u16 = (payload[0] as u16)*256
-                //                 + (payload[1] as u16);
-                parse_v4(&mut payload[4..])
-            } else if payload[2] == 0x86 && payload[3] == 0xdd {
-                parse_v6(&mut payload[4..])
-            } else {
-                None
+impl<'p> TryFrom<(&'p mut [u8], Linktype)> for MutableIpPacket<'p> {
+    type Error = ();
+
+    fn try_from(input: (&'p mut [u8], Linktype)) -> Result<Self, Self::Error> {
+        let (data, link_type) = input;
+        match link_type {
+            Linktype::IPV4 => Ok(MutableIpv4Packet::new(data).ok_or(())?.into()),
+            Linktype::IPV6 => Ok(MutableIpv6Packet::new(data).ok_or(())?.into()),
+            Linktype::ETHERNET => {
+                if data.len() < 14 {
+                    // println!("ETH SHORT");
+                    Err(())?
+                }
+                match u16::from_be_bytes([data[12], data[13]]) {
+                    0x0800 => Ok(MutableIpPacket::V4(
+                        MutableIpv4Packet::new(&mut data[14..]).ok_or(())?,
+                    )),
+                    0x86DD => Ok(MutableIpPacket::V6(
+                        MutableIpv6Packet::new(&mut data[14..]).ok_or(())?,
+                    )),
+                    0x8100 => {
+                        if data.len() < 18 {
+                            Err(())?
+                        }
+                        match u16::from_be_bytes([data[15], data[16]]) {
+                            0x0800 => Ok(MutableIpPacket::V4(
+                                MutableIpv4Packet::new(&mut data[17..]).ok_or(())?,
+                            )),
+                            0x86DD => Ok(MutableIpPacket::V6(
+                                MutableIpv6Packet::new(&mut data[17..]).ok_or(())?,
+                            )),
+                            _ => Err(())?,
+                        }
+                    }
+                    _ => Err(())?,
+                }
             }
+
+            _ => Err(()),
         }
-        EtherTypes::Ipv4 => parse_v4(&mut payload[0..]),
-        EtherTypes::Ipv6 => parse_v6(&mut payload[0..]),
-        _ => None,
     }
 }
 
@@ -209,7 +229,7 @@ impl<'p> MutableIpPacket<'p> {
         src_or_dst: bool,
         seed: [u8; 32],
         subnet: IpNet,
-    ) -> Result<&'p[u8], Box<dyn Error>> {
+    ) -> Result<&'p [u8], Box<dyn Error>> {
         let src = self.source();
         let dst = self.destination();
         let (src_port, dst_port) = self.to_immutable().ports()?;
@@ -228,9 +248,7 @@ impl<'p> MutableIpPacket<'p> {
             self.set_destination(new_addr)?;
         }
 
-        unsafe {
-            Ok(&*p)
-        }
+        unsafe { Ok(&*p) }
     }
 }
 
@@ -315,6 +333,7 @@ fn get_hmac(seed: [u8; 32], m: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pcap::Linktype;
     use pnet::packet::Packet;
 
     #[test]
@@ -324,16 +343,15 @@ mod tests {
         let net = IpNet::V4("94.74.182.249/21".parse()?);
 
         let mut packet_bytes = hex::decode("002688754a810cc47ac3674a08004500002c000040004006a70dc07abe005e4ab6f901bb4b0ee583bf75000000016012a56493dd0000020405b4")?;
-        let mut eth = MutableEthernetPacket::new(&mut packet_bytes).ok_or("failed to parse eth")?;
-        let mut ip = get_mut_ip_packet(&mut eth).unwrap();
+        let data: (&mut [u8], Linktype) = (&mut packet_bytes, Linktype::ETHERNET);
+        let mut ip = MutableIpPacket::try_from(data).unwrap();
 
         assert_eq!(ip.source(), "192.122.190.0".parse::<IpAddr>()?);
         assert_eq!(ip.destination(), "94.74.182.249".parse::<IpAddr>()?,);
 
-        ip.anonymize(is_upload, seed, net)?;
-        assert_eq!(eth.to_immutable().get_ethertype(), EtherTypes::Ipv4);
+        let ip_pkt_out = ip.anonymize(is_upload, seed, net)?;
 
-        let ip4 = Ipv4Packet::new(eth.payload()).ok_or("broken ip layer")?;
+        let ip4 = Ipv4Packet::new(ip_pkt_out).ok_or("broken ip layer")?;
         assert_eq!(ip4.get_next_level_protocol(), IpNextHeaderProtocols::Tcp);
         assert_eq!(ip4.get_source(), "192.122.190.0".parse::<Ipv4Addr>()?);
         assert!(
@@ -354,46 +372,28 @@ mod tests {
         let net = IpNet::V6("1234::1/64".parse()?);
 
         let mut packet_bytes = hex::decode("00000000000000000000000086dd600cdd3e002806401234000000000000000000000000000120010000000000000000000000000001ed34115cd1a5623100000000a002ffc4003000000204ffc40402080a05fb55260000000001030307")?;
-        let mut eth = MutableEthernetPacket::new(&mut packet_bytes).ok_or("failed to parse eth")?;
-        let mut ip = get_mut_ip_packet(&mut eth).unwrap();
+        let data: (&mut [u8], Linktype) = (&mut packet_bytes, Linktype::ETHERNET);
+        let mut ip = MutableIpPacket::try_from(data).unwrap();
 
         assert_eq!(ip.source(), "1234::1".parse::<IpAddr>()?);
         assert_eq!(ip.destination(), "2001::1".parse::<IpAddr>()?,);
 
-        ip.anonymize(is_upload, seed, net)?;
-        assert_eq!(eth.to_immutable().get_ethertype(), EtherTypes::Ipv6);
+        let d_out = ip.anonymize(is_upload, seed, net)?;
 
-        let ip6 = Ipv6Packet::new(eth.payload()).ok_or("broken ip layer")?;
-        assert_eq!(ip6.get_next_header(), IpNextHeaderProtocols::Tcp);
-        assert_eq!(ip6.get_destination(), "2001::1".parse::<Ipv6Addr>()?);
-        assert_ne!(ip6.get_source(), "1234::1".parse::<Ipv6Addr>()?);
+        let ip_pkt_out = Ipv6Packet::new(d_out).unwrap();
+
+        assert_eq!(ip_pkt_out.get_destination(), "2001::1".parse::<Ipv6Addr>()?);
+        assert_ne!(ip_pkt_out.get_source(), "1234::1".parse::<Ipv6Addr>()?);
         assert!(
-            net.contains(&IpAddr::V6(ip6.get_source())),
+            net.contains(&IpAddr::V6(ip_pkt_out.get_source())),
             "{:?} does not contain {:?}",
             net,
-            ip6.get_source()
+            ip_pkt_out.get_source()
         );
 
-        let tcp = TcpPacket::new(ip6.payload()).ok_or("broken udp packet")?;
+        let tcp = TcpPacket::new(ip_pkt_out.payload()).ok_or("broken tcp packet")?;
         assert_eq!(4444, tcp.get_destination());
         assert_ne!(60724, tcp.get_source()); // make sure the port was randomized.
-
-        let mut packet2_bytes =  hex::decode("00000000000000000000000086dd600cdd3e002806402001000000000000000000000000000112340000000000000000000000000001115ced34d1a5623100000000a002ffc4003000000204ffc40402080a05fb55260000000001030307")?;
-
-        let mut eth2 =
-            MutableEthernetPacket::new(&mut packet2_bytes).ok_or("failed to parse eth")?;
-        let mut ip2 = get_mut_ip_packet(&mut eth2).unwrap();
-        assert_eq!(ip2.destination(), "1234::1".parse::<IpAddr>()?);
-        assert_eq!(ip2.source(), "2001::1".parse::<IpAddr>()?,);
-        ip2.anonymize(!is_upload, seed, net)?;
-
-        let ip62 = Ipv6Packet::new(eth2.payload()).ok_or("broken ip layer")?;
-        assert_eq!(ip62.get_destination(), ip6.get_source());
-
-        let tcp2 = TcpPacket::new(ip62.payload()).ok_or("broken udp packet")?;
-        assert_eq!(tcp.get_destination(), tcp2.get_source());
-        assert_eq!(tcp.get_source(), tcp2.get_destination());
-
         Ok(())
     }
 
@@ -491,6 +491,30 @@ mod tests {
             hex::decode("afbe350e57b9b4d3932f4507e20284270002321ddf68e9fd61e1173978fec6b0")
                 .unwrap();
         assert_eq!(hm[..], expected_hm[..]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_ip() -> Result<(), Box<dyn Error>> {
+        let ip4 = hex::decode("4500002c000040004006a70dc07abe005e4ab6f901bb4b0ee583bf75000000016012a56493dd0000020405b4")?;
+        let eth = hex::decode("002688754a810cc47ac3674a08004500002c000040004006a70dc07abe005e4ab6f901bb4b0ee583bf75000000016012a56493dd0000020405b4")?;
+        let ip6 = hex::decode("600cdd3e002806401234000000000000000000000000000120010000000000000000000000000001ed34115cd1a5623100000000a002ffc4003000000204ffc40402080a05fb55260000000001030307")?;
+
+        let packets = vec![ip4, ip6, eth];
+        let types = vec![Linktype::IPV4, Linktype::IPV6, Linktype::ETHERNET];
+
+        for (mut data, link_type) in packets.into_iter().zip(types) {
+            println!("{} {}", link_type.get_name()?, hex::encode(data.clone()));
+            let input: (&mut [u8], Linktype) = (&mut data, link_type);
+            let ip_pkt = MutableIpPacket::try_from(input).unwrap();
+
+            println!("{}", ip_pkt.source());
+            println!("{}", ip_pkt.destination());
+        }
+
+        let other = (&mut [0u8; 32][..], Linktype::SCTP);
+        assert!(MutableIpPacket::try_from(other).is_err());
+
         Ok(())
     }
 }

@@ -9,36 +9,33 @@ extern crate maxminddb;
 mod ip;
 mod limit;
 mod packet_handler;
-use ip::{get_mut_ip_packet, MutableIpPacket};
-use packet_handler::{PacketHandler, SupplementalFields, PacketError};
+use ip::MutableIpPacket;
+use packet_handler::{PacketHandler, SupplementalFields};
 
 use clap::Parser;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use pcap::{Activated, Capture, Device, Linktype, Packet};
+use pcap::{Activated, Capture, Device, Linktype};
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
 use pcap_file::pcapng::PcapNgWriter;
 use pcap_file::DataLink;
-use pnet::packet::ethernet::MutableEthernetPacket;
-use pnet::packet::ipv4::MutableIpv4Packet;
-use pnet::packet::ipv6::MutableIpv6Packet;
-use threadpool::ThreadPool;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::flag::register;
-use simple_logger;
+use threadpool::ThreadPool;
 
 use std::borrow::Cow;
 use std::error::Error;
 use std::fs::{self, File};
-use std::io::{Write, stdin};
+#[cfg(debug_assertions)]
+use std::io::stdin;
+use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const ASNDB_PATH: &str = "/usr/share/GeoIP/GeoLite2-ASN.mmdb";
 const CCDB_PATH: &str = "/usr/share/GeoIP/GeoLite2-Country.mmdb";
-
 
 #[derive(Parser, Debug)]
 #[command(
@@ -92,7 +89,6 @@ struct Args {
     // /// Path to pcap file to read
     // #[arg(short, long, conflicts_with = "interfaces")]
     // read: Option<String>,
-
     /// Path to the output PCAP_NG file.
     #[arg(short, long, default_value_t = String::from("./out.pcapng.gz"))]
     out: String,
@@ -131,7 +127,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     #[cfg(debug_assertions)]
     debug_warn();
 
-    trace!("{:?}\n{asn_list:#?} {:?}\n{cc_list:#?} {:?}", args.limit, args.lpa, args.lpc);
+    trace!(
+        "{:?}\n{asn_list:#?} {:?}\n{cc_list:#?} {:?}",
+        args.limit,
+        args.lpa,
+        args.lpc
+    );
 
     let limiter = limit::build(
         args.limit,
@@ -259,62 +260,40 @@ fn read_packets<T: Activated, W: Write>(
 
     let link_type = capture.get_datalink();
 
+    if !vec![Linktype::ETHERNET, Linktype::IPV4, Linktype::IPV6].contains(&link_type) {
+        error!("unsupported linktype: {}", link_type.get_name().unwrap());
+        return;
+    }
+
     while !terminate.load(Ordering::Relaxed) {
-        // println!("_");
         let packet = match capture.next_packet() {
             Ok(p) => p,
             Err(_e) => continue,
         };
 
         if packet.is_empty() {
-            continue
+            continue;
         }
-
-        let ts = Duration::from_micros(packet.header.ts.tv_usec as u64);
 
         // pcap::Packet doesn't implement DerefMut so we have to clone it as mutable -_-
         let data: &mut [u8] = &mut packet.data.to_owned();
+        let ts = Duration::from_micros(packet.header.ts.tv_usec as u64);
 
-        let mut eth = MutableEthernetPacket::new(data).unwrap();
-        let mut ip_pkt = match link_type {
-            Linktype::ETHERNET => {
-                match get_mut_ip_packet(&mut eth) {
-                    Some(p) => p,
-                    None => {
-                        // print!("x");
-                        continue
-                    }
-                }
-            }
-            Linktype::IPV4 => {
-                if let Some(pkt) = MutableIpv4Packet::new(data) {
-                    MutableIpPacket::V4(pkt)
-                } else {
-                    continue
-                }
-            }
-            Linktype::IPV6 => {
-                if let Some(pkt) = MutableIpv6Packet::new(data) {
-                    MutableIpPacket::V6(pkt)
-                } else {
-                    continue
-                }
-            }
-            _ => continue,
+        let data: (&mut [u8], Linktype) = (data, Linktype::ETHERNET);
+        let mut ip_pkt = match MutableIpPacket::try_from(data) {
+            Ok(p) => p,
+            Err(_) => continue,
         };
 
         let supplemental_fields: SupplementalFields = match {
             let mut h = handler.lock().unwrap();
             h.get_supplemental(ip_pkt.source(), ip_pkt.destination())
         } {
-            Ok(s) => s,
-            Err(_e) =>  continue, // {
-                // match _e {
-                //     PacketError::Skip => {} // print!("."),
-                //     _ => println!("skip packet: {_e}"),
-                // }
-                // continue;
-            // }
+            Ok(sf) => sf,
+            Err(e) => {
+                debug!("supplemental info error {e}");
+                continue;
+            }
         };
 
         let mut interface_id = 0;
@@ -327,11 +306,13 @@ fn read_packets<T: Activated, W: Write>(
             seed,
             supplemental_fields.subnet,
         ) {
-            Ok(p) => p,
-            Err(_e) => continue,
+            Ok(d) => d,
+            Err(e) => {
+                debug!("anonymization error {e}");
+                continue;
+            }
         };
 
-        let l = d_out.len();
         let out = EnhancedPacketBlock {
             interface_id,
             timestamp: ts,
@@ -341,20 +322,11 @@ fn read_packets<T: Activated, W: Write>(
         };
 
         match { writer.lock().unwrap().write_pcapng_block(out) } {
-            Ok(_) => {
-                debug!("{l}");
-                continue
-            }
+            Ok(_) => continue,
             Err(e) => println!("thread {_id} failed to write packet: {e}"),
         }
     }
     debug!("thread {_id} shutting down")
-}
-
-
-fn handle_packet(p: Packet, seed: [u8;32], link_type: Linktype) -> Result<(), Box<dyn Error>> {
-
-    Ok(())
 }
 
 fn parse_asn_list(input: Option<String>) -> Vec<u32> {
@@ -372,7 +344,6 @@ fn parse_asn_list(input: Option<String>) -> Vec<u32> {
             }
         }
     }
-
 }
 
 fn parse_cc_list(input: Option<String>) -> Vec<String> {
@@ -436,6 +407,8 @@ mod tests {
 
     #[test]
     fn test_cc_and_asn_lookup() -> Result<(), String> {
+        const ASNDB_PATH: &str = "./test_mmdbs/GeoLite2-ASN.mmdb";
+        const CCDB_PATH: &str = "./test_mmdbs/GeoLite2-Country.mmdb";
         let asn_reader = maxminddb::Reader::open_readfile(String::from(ASNDB_PATH)).unwrap();
 
         let cc_reader = maxminddb::Reader::open_readfile(String::from(CCDB_PATH)).unwrap();
