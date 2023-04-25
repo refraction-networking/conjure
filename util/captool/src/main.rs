@@ -260,8 +260,8 @@ fn read_packets<T: Activated, W: Write>(
 
     let link_type = capture.get_datalink();
 
-    if !vec![Linktype::ETHERNET, Linktype::IPV4, Linktype::IPV6, Linktype::RAW].contains(&link_type) {
-        error!("unsupported linktype: {}", link_type.get_name().unwrap());
+    if !vec![Linktype::ETHERNET, Linktype::IPV4, Linktype::IPV6, Linktype::RAW].contains(&link_type) && ! link_type.0 == 12 {
+        error!("unsupported linktype: {:?} {}", link_type, link_type.get_name().unwrap_or(String::from("unknown")));
         return;
     }
 
@@ -279,7 +279,7 @@ fn read_packets<T: Activated, W: Write>(
         let data: &mut [u8] = &mut packet.data.to_owned();
         let ts = Duration::from_micros(packet.header.ts.tv_usec as u64);
 
-        let data: (&mut [u8], Linktype) = (data, Linktype::ETHERNET);
+        let data: (&mut [u8], Linktype) = (data, link_type);
         let mut ip_pkt = match MutableIpPacket::try_from(data) {
             Ok(p) => p,
             Err(_) => continue,
