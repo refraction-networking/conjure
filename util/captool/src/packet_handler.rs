@@ -25,6 +25,11 @@ pub struct PacketHandler {
     // asn_filter allows us to rule out packets we are not interested in capturing before processing them
     pub asn_filter: Vec<u32>,
 
+    // respect CLI options indicating capture of only one or the other IP version.
+    pub v4_only: bool,
+    pub v6_only: bool,
+
+
     pub seed: [u8; 32],
 }
 
@@ -93,6 +98,8 @@ impl PacketHandler {
         limiter: Option<Box<dyn Limit>>,
         cc_filter: Vec<String>,
         asn_filter: Vec<u32>,
+        v4_only: bool,
+        v6_only: bool,
     ) -> Result<Self, Box<dyn Error>> {
         let mut p = PacketHandler {
             asn_reader: maxminddb::Reader::open_readfile(String::from(asn_path))?,
@@ -102,6 +109,8 @@ impl PacketHandler {
             asn_filter,
             limiter,
             seed: [0u8; 32],
+            v4_only,
+            v6_only,
         };
         OsRng.fill_bytes(&mut p.seed);
         Ok(p)
@@ -113,6 +122,7 @@ impl PacketHandler {
         dst: IpAddr,
     ) -> Result<SupplementalFields, PacketError> {
         debug!("{src} -> {dst}");
+
         let direction = self.should_anonymize(src, dst);
         let ip_of_interest = match direction {
             AnonymizeTypes::None => Err(PacketError::Skip)?,
@@ -144,6 +154,12 @@ impl PacketHandler {
     }
 
     fn should_anonymize(&self, src: IpAddr, dst: IpAddr) -> AnonymizeTypes {
+        if self.v4_only && src.is_ipv6(){
+            return AnonymizeTypes::None
+        } else if self.v6_only && src.is_ipv4() {
+            return AnonymizeTypes::None
+        }
+
         for target_subnet in &self.target_subnets {
             if target_subnet.contains(&src) {
                 return AnonymizeTypes::Download;

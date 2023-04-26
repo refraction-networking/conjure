@@ -86,9 +86,14 @@ struct Args {
     #[arg(short, long, conflicts_with = "interfaces")]
     pcap_dir: Option<String>,
 
-    // /// Path to pcap file to read
-    // #[arg(short, long, conflicts_with = "interfaces")]
-    // read: Option<String>,
+    /// Path to directory containing PCAPs files to read
+    #[arg(long, default_value_t = false, conflicts_with = "v6")]
+    v4: bool,
+
+    /// Path to directory containing PCAPs files to read
+    #[arg(long, default_value_t = false, conflicts_with = "v4")]
+    v6: bool,
+
     /// Path to the output PCAP_NG file.
     #[arg(short, long, default_value_t = String::from("./out.pcapng.gz"))]
     out: String,
@@ -149,6 +154,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         limiter,
         cc_list,
         asn_list,
+        args.v4,
+        args.v6,
     )?));
 
     let file = File::create(args.out)?;

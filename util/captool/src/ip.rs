@@ -127,7 +127,7 @@ impl<'p> TryFrom<(&'p mut [u8], Linktype)> for MutableIpPacket<'p> {
 }
 
 impl<'p> MutableIpPacket<'p> {
-    pub fn set_source(&'p mut self, addr: SocketAddr) -> Result<(), Box<dyn Error>> {
+    pub fn set_source(&'p mut self, addr: SocketAddr, r: u32) -> Result<(), Box<dyn Error>> {
         let next_layer = self.next_layer();
         match self {
             MutableIpPacket::V4(v4) => {
@@ -148,7 +148,8 @@ impl<'p> MutableIpPacket<'p> {
             }
             MutableIpPacket::V6(v6) => {
                 if let IpAddr::V6(a6) = addr.ip() {
-                    v6.set_source(a6)
+                    v6.set_source(a6);
+                    v6.set_flow_label(r)
                 };
                 match next_layer {
                     IpNextHeaderProtocols::Tcp => {
@@ -166,7 +167,7 @@ impl<'p> MutableIpPacket<'p> {
         Ok(())
     }
 
-    pub fn set_destination(&mut self, addr: SocketAddr) -> Result<(), Box<dyn Error>> {
+    pub fn set_destination(&mut self, addr: SocketAddr, r: u32) -> Result<(), Box<dyn Error>> {
         let next_layer = self.next_layer();
         match self {
             MutableIpPacket::V4(v4) => {
@@ -187,7 +188,8 @@ impl<'p> MutableIpPacket<'p> {
             }
             MutableIpPacket::V6(v6) => {
                 if let IpAddr::V6(a6) = addr.ip() {
-                    v6.set_destination(a6)
+                    v6.set_destination(a6);
+                    v6.set_flow_label(r)
                 };
                 match next_layer {
                     IpNextHeaderProtocols::Tcp => {
@@ -256,12 +258,14 @@ impl<'p> MutableIpPacket<'p> {
 
         let p = self.packet();
 
+        // We ned to randomize the IPv6 flow label if the flow is ipv6.
+        let flow_label = u32::from_be_bytes([hmac_bytes[18], hmac_bytes[19], hmac_bytes[20],  hmac_bytes[21]]);
         if src_or_dst {
             let new_addr = substitute_addr(&src, subnet, hmac_bytes)?;
-            self.set_source(new_addr)?;
+            self.set_source(new_addr, flow_label)?;
         } else {
             let new_addr = substitute_addr(&dst, subnet, hmac_bytes)?;
-            self.set_destination(new_addr)?;
+            self.set_destination(new_addr, flow_label)?;
         }
 
         unsafe { Ok(&*p) }
