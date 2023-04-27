@@ -12,6 +12,7 @@ import (
 
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/refraction-networking/conjure/application/liveness"
 	"github.com/refraction-networking/conjure/application/log"
@@ -22,6 +23,11 @@ const (
 	// Job buffer 1/10th the number of workers to make sure it doesn't back up,
 	// invalidating registrations.
 	jobBufferDivisor = 10
+)
+
+const (
+	// Earliest client library version ID that supports destination port randomization
+	randomizeDstPortMinVersion uint = 3
 )
 
 // HandleRegUpdates is responsible for launching and managing registration
@@ -181,9 +187,9 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 
 	// Perform liveness test IFF not done by other station or v6 (v6 should
 	// never be live)
-	if !reg.PreScanned() && reg.DarkDecoy.To4() != nil {
+	if !reg.PreScanned() && reg.PhantomIp.To4() != nil {
 		// New registration received over channel that requires liveness scan for the phantom
-		live, response := rm.PhantomIsLive(reg.DarkDecoy.String(), 443)
+		live, response := rm.PhantomIsLive(reg.PhantomIp.String(), reg.PhantomPort)
 
 		// TODO JMWAMPLE REMOVE
 		if live {
@@ -203,14 +209,14 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 			go tryShareRegistrationOverAPI(reg, rm.PreshareEndpoint, rm.Logger)
 		}
 
-		if rm.IsBlocklistedPhantom(reg.DarkDecoy) {
+		if rm.IsBlocklistedPhantom(reg.PhantomIp) {
 			// Note: Phantom blocklist is applied for registrations using the
 			// decoy registrar at this stage because the phantom may only be
 			// blocked on this station. We may want other stations to be
 			// informed about the registration, but prevent this station
 			// specifically from handling / interfering in any subsequent
 			// connection. See PR #75
-			logger.Warnf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.DarkDecoy)
+			logger.Warnf("ignoring registration with blocklisted phantom: %s %v", reg.IDString(), reg.PhantomIp)
 			Stat().AddErrReg()
 			rm.AddBlocklistedPhantomReg()
 			return
@@ -273,7 +279,7 @@ func (rm *RegistrationManager) parseRegMessage(msg []byte) ([]*DecoyRegistration
 		return nil, err
 	}
 
-	// if either addres is not provided (reg came over api / client ip
+	// if either address is not provided (reg came over api / client ip
 	// logging disabled) fill with zeros to avoid nil dereference.
 	if parsed.GetRegistrationAddress() == nil {
 		parsed.RegistrationAddress = make([]byte, 16)
@@ -319,6 +325,61 @@ func (rm *RegistrationManager) parseRegMessage(msg []byte) ([]*DecoyRegistration
 	return newRegs, nil
 }
 
+// NewRegistration creates a new registration from details provided. Adds the registration
+// to tracking map, But marks it as not valid. This is a utility function, it its not
+// used in the ingest pipeline
+func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
+	gen := uint(c2s.GetDecoyListGeneration())
+	clientLibVer := uint(c2s.GetClientLibVersion())
+	phantomAddr, err := rm.PhantomSelector.Select(
+		conjureKeys.ConjureSeed, gen, clientLibVer, includeV6)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed phantom select: gen %d libv %d v6 %t err: %v",
+			gen,
+			clientLibVer,
+			includeV6,
+			err)
+	}
+
+	transportParams, err := rm.getTransportParams(c2s.GetTransport(), c2s.GetTransportParams(), clientLibVer)
+	if err != nil {
+		return nil, fmt.Errorf("error handling transport params: %s", err)
+	}
+
+	phantomPort, err := rm.getPhantomDstPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer)
+	if err != nil {
+		return nil, fmt.Errorf("error selecting phantom dst port: %s", err)
+	}
+
+	phantomProto, err := rm.getTransportProto(c2s.GetTransport(), transportParams, clientLibVer)
+	if err != nil {
+		return nil, fmt.Errorf("error determining phantom connection proto: %s", err)
+	}
+
+	reg := DecoyRegistration{
+		DecoyListVersion: c2s.GetDecoyListGeneration(),
+		Keys:             conjureKeys,
+		Covert:           c2s.GetCovertAddress(),
+		Transport:        c2s.GetTransport(),
+		TransportParams:  transportParams,
+		Flags:            c2s.Flags,
+
+		PhantomIp:    phantomAddr,
+		PhantomPort:  phantomPort,
+		PhantomProto: phantomProto,
+
+		Mask: c2s.GetMaskedDecoyServerName(),
+
+		RegistrationSource: registrationSource,
+		RegistrationTime:   time.Now(),
+		regCount:           0,
+		tunnelCount:        0,
+	}
+
+	return &reg, nil
+}
+
 // NewRegistrationC2SWrapper creates a new registration from details provided. Adds the registration
 // to tracking map, But marks it as not valid.
 func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, includeV6 bool) (*DecoyRegistration, error) {
@@ -330,41 +391,71 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 		return nil, fmt.Errorf("failed to generate keys: %v", err)
 	}
 
-	gen := uint(c2s.GetDecoyListGeneration())
-	clientLibVer := uint(c2s.GetClientLibVersion())
-	phantomAddr, err := rm.PhantomSelector.Select(
-		conjureKeys.DarkDecoySeed, gen, clientLibVer, includeV6)
+	regSrc := c2sw.GetRegistrationSource()
 
-	if err != nil {
-		return nil, fmt.Errorf("failed phantom select: gen %d libv %d v6 %t err: %v",
-			gen,
-			clientLibVer,
-			includeV6,
-			err)
+	reg, err := rm.NewRegistration(c2s, &conjureKeys, includeV6, &regSrc)
+	if err != nil || reg == nil {
+		return nil, fmt.Errorf("failed to build registration: %s", err)
 	}
 
 	clientAddr := net.IP(c2sw.GetRegistrationAddress())
 
-	if phantomAddr.To4() != nil && clientAddr.To4() == nil {
+	if reg.PhantomIp.To4() != nil && clientAddr.To4() == nil {
 		// This can happen if the client chooses from a set that contains no
 		// ipv6 options even if include ipv6 is enabled they will get ipv4.
 		return nil, fmt.Errorf("failed because IPv6 client chose IPv4 phantom")
 	}
 
-	regSrc := c2sw.GetRegistrationSource()
-	reg := DecoyRegistration{
-		DarkDecoy:          phantomAddr,
-		registrationAddr:   net.IP(c2sw.GetRegistrationAddress()),
-		Keys:               &conjureKeys,
-		Covert:             c2s.GetCovertAddress(),
-		Mask:               c2s.GetMaskedDecoyServerName(),
-		Flags:              c2s.Flags,
-		Transport:          c2s.GetTransport(),
-		DecoyListVersion:   c2s.GetDecoyListGeneration(),
-		RegistrationTime:   time.Now(),
-		RegistrationSource: &regSrc,
-		regCount:           0,
+	reg.registrationAddr = clientAddr
+	reg.regCC, err = rm.GeoIP.CC(reg.registrationAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed geoip cc lookup: %w", err)
+	}
+	reg.regASN, err = rm.GeoIP.ASN(reg.registrationAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed geoip asn lookup: %w", err)
 	}
 
-	return &reg, nil
+	return reg, nil
+}
+
+func (rm *RegistrationManager) getTransportParams(t pb.TransportType, data *anypb.Any, libVer uint) (any, error) {
+	var transport, ok = rm.registeredDecoys.transports[t]
+	if !ok {
+		return 0, fmt.Errorf("unknown transport")
+	}
+
+	return transport.ParseParams(libVer, data)
+}
+
+// getTransportProto returns the IP next layer protocol that this session will use to connect.
+// For transport this could potentially depend on library version, params, etc.
+func (rm *RegistrationManager) getTransportProto(t pb.TransportType, params any, libVer uint) (pb.IPProto, error) {
+	var transport, ok = rm.registeredDecoys.transports[t]
+	if !ok {
+		return 0, fmt.Errorf("unknown transport")
+	}
+
+	return transport.GetProto(), nil
+}
+
+// getPhantomDstPort returns the proper phantom port based on registration type, transport
+// parameters provided by the client and session details (also provided by the client).
+func (rm *RegistrationManager) getPhantomDstPort(t pb.TransportType, params any, seed []byte, libVer uint) (uint16, error) {
+	var transport, ok = rm.registeredDecoys.transports[t]
+	if !ok {
+		return 0, fmt.Errorf("unknown transport")
+	}
+
+	if libVer < randomizeDstPortMinVersion {
+		// Before randomizeDstPortMinVersion all transport (min and obfs4) exclusively used 443 as
+		// their destination port.
+		return 443, nil
+	}
+
+	// GetDstPort Given the library version, a seed, and a generic object containing parameters the
+	// transport should be able to return the destination port that a clients phantom connection
+	// will attempt to reach. The libVersion is provided incase of version dependent changes in the
+	// transport selection algorithms themselves.
+	return transport.GetDstPort(libVer, seed, params)
 }

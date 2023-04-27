@@ -99,6 +99,12 @@ detector_filter_list = [
 # Log level, one of the following: info, error, warn, debug, trace
 log_level = "error"
 
+# MaxMind Database files - if empty then the Empty Geoip lookup will be used (effictvely disaling
+# lookup). The default path used by the maxmind geoiupdate tool is `/usr/local/share/GeoIP`.
+# repo - https://github.com/maxmind/geoipupdate/blob/main/pkg/geoipupdate/defaults_notwin.go#L15
+geoip_cc_db_path = ""
+geoip_asn_db_path = ""
+
 ### ZMQ sockets to connect to and subscribe
 
 ## Registration API

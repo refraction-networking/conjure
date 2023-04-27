@@ -2,12 +2,14 @@ package obfs4
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log"
 	"math/rand"
 	"net"
 	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -15,9 +17,12 @@ import (
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/internal/tests"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
 	"github.com/stretchr/testify/require"
+	"gitlab.com/yawning/obfs4.git/common/drbg"
+	"gitlab.com/yawning/obfs4.git/common/ntor"
 	"gitlab.com/yawning/obfs4.git/transports/obfs4"
 )
 
@@ -62,7 +67,7 @@ func TestSuccessfulWrap(t *testing.T) {
 	defer sfp.Close()
 
 	wrappedc2p := make(chan net.Conn)
-	stateDir := t.TempDir()
+	stateDir := ""
 	go wrapConnection(c2p, reg.Keys.Obfs4Keys.NodeID.Hex(), reg.Keys.Obfs4Keys.PublicKey.Hex(), wrappedc2p, stateDir)
 
 	var buf [4096]byte
@@ -72,7 +77,7 @@ func TestSuccessfulWrap(t *testing.T) {
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])
 
-		_, wrappedsfp, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+		_, wrappedsfp, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 		if errors.Is(err, transports.ErrTryAgain) {
 			continue
 		} else if err != nil {
@@ -140,7 +145,7 @@ func TestSuccessfulWrapMulti(t *testing.T) {
 	defer sfp.Close()
 
 	wrappedc2p := make(chan net.Conn)
-	stateDir := t.TempDir()
+	stateDir := ""
 	go wrapConnection(c2p, reg.Keys.Obfs4Keys.NodeID.Hex(), reg.Keys.Obfs4Keys.PublicKey.Hex(), wrappedc2p, stateDir)
 
 	var buf [4096]byte
@@ -150,7 +155,7 @@ func TestSuccessfulWrapMulti(t *testing.T) {
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])
 
-		_, wrappedsfp, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+		_, wrappedsfp, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 		if errors.Is(err, transports.ErrTryAgain) {
 			continue
 		} else if err != nil {
@@ -197,7 +202,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	n, _ := io.ReadFull(sfp, buf[:])
 	buffer.Write(buf[:n])
 
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}
@@ -223,7 +228,7 @@ func TestTryAgain(t *testing.T) {
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])
 
-		_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+		_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 		if !errors.Is(err, transports.ErrTryAgain) {
 			t.Fatalf("expected ErrTryAgain, got %v", err)
 		}
@@ -234,8 +239,68 @@ func TestTryAgain(t *testing.T) {
 
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
+	}
+}
+
+func TestObfs4StateDir(t *testing.T) {
+	nodeID, _ := ntor.NewNodeID([]byte("\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13"))
+	serverKeypair, err := ntor.NewKeypair(true)
+	if err != nil {
+		t.Fatalf("server: ntor.NewKeypair failed: %s", err)
+	}
+
+	// We found the mark in the client handshake! We found our registration!
+	args := pt.Args{}
+	args.Add("node-id", nodeID.Hex())
+	args.Add("private-key", serverKeypair.Private().Hex())
+	seed, err := drbg.NewSeed()
+	require.Nil(t, err, "failed to create DRBG seed" )
+
+	args.Add("drbg-seed", seed.Hex())
+
+	obfs4Transport := &obfs4.Transport{}
+	server, err := obfs4Transport.ServerFactory("", &args)
+	require.Nil(t, err, "server factory failed")
+	require.NotNil(t, server)
+
+	require.NoFileExists(t, "./obfs4_state.json")
+	require.NoFileExists(t, "./obfs4_bridgeline.txt")
+
+
+	stateDir, err := os.MkdirTemp("", "")
+	require.Nil(t, err)
+	server, err = obfs4Transport.ServerFactory(stateDir, &args)
+	require.Nil(t, err, "server factory failed")
+	require.NotNil(t, server)
+
+	require.FileExists(t, path.Join(stateDir,  "./obfs4_state.json"))
+	require.FileExists(t, path.Join(stateDir, "./obfs4_bridgeline.txt"))
+}
+
+func TestTryParamsToDstPort(t *testing.T) {
+	clv := randomizeDstPortMinVersion
+	seed, _ := hex.DecodeString("0000000000000000000000000000000000")
+
+	cases := []struct{
+		r bool
+		p uint16
+	}{{true, 57045}, {false, 443}}
+
+	for _, testCase := range cases {
+		ct := ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &testCase.r}}
+		var transport Transport
+
+		rawParams, err := anypb.New(ct.GetParams())
+		require.Nil(t, err)
+
+		params, err := transport.ParseParams(clv, rawParams)
+		require.Nil(t, err)
+
+		port, err := transport.GetDstPort(clv, seed, params)
+		require.Nil(t, err)
+		require.Equal(t, testCase.p, port)
 	}
 }

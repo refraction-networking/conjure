@@ -11,6 +11,9 @@ EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
 
 ExecStart=/opt/conjure/cmd/registration-server/registration-server --config /opt/conjure/cmd/registration-server/config.toml
 
+# send SIGHUP to the registration server process
+ExecReload=/bin/kill -HUP $MAINPID
+
 # on stop processes will get SIGTERM, and after 10 secs - SIGKILL (default 90)
 TimeoutStopSec=10
 

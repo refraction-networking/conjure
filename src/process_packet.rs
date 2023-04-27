@@ -76,8 +76,8 @@ pub unsafe extern "C" fn rust_process_packet(
     #[allow(unused_mut)]
     let mut global = &mut *ptr;
 
-    let mut rust_view_len = frame_len as usize;
-    let rust_view = slice::from_raw_parts_mut(raw_ethframe as *mut u8, frame_len as usize);
+    let mut rust_view_len = frame_len;
+    let rust_view = slice::from_raw_parts_mut(raw_ethframe as *mut u8, frame_len);
 
     // If this is a GRE, we want to ignore the GRE overhead in our packets
     rust_view_len -= global.gre_offset;
@@ -90,10 +90,33 @@ pub unsafe extern "C" fn rust_process_packet(
         None => return,
     };
 
-    match get_ip_packet(&eth_pkt) {
-        Some(IpPacket::V4(pkt)) => global.process_ipv4_packet(pkt, rust_view_len),
-        Some(IpPacket::V6(pkt)) => global.process_ipv6_packet(pkt, rust_view_len),
-        None => {}
+    let ip_pkt = match get_ip_packet(&eth_pkt) {
+        Some(pkt) => pkt,
+        None => return, // Ignore packet types other than IPv4 and IPv6
+    };
+
+    match ip_pkt.ethertype() {
+        EtherTypes::Ipv4 => global.stats.ipv4_packets_this_period += 1,
+        EtherTypes::Ipv6 => global.stats.ipv6_packets_this_period += 1,
+        _ => {}
+    };
+
+    match ip_pkt.next_layer() {
+        IpNextHeaderProtocols::Tcp => {
+            let tcp_pkt = match ip_pkt.tcp() {
+                Some(pkt) => pkt,
+                None => return,
+            };
+            global.handle_tcp_pkt(tcp_pkt, &ip_pkt, frame_len);
+        }
+        IpNextHeaderProtocols::Udp => {
+            let udp_pkt = match ip_pkt.udp() {
+                Some(pkt) => pkt,
+                None => return,
+            };
+            global.handle_udp_pkt(udp_pkt, &ip_pkt, frame_len);
+        }
+        _ => {} // ignore any protocols other than UDP and TCP
     }
 }
 
@@ -103,109 +126,84 @@ fn is_tls_app_pkt(tcp_pkt: &TcpPacket) -> bool {
 }
 
 impl PerCoreGlobal {
-    // frame_len is supposed to be the length of the whole Ethernet frame. We're
-    // only passing it here for plumbing reasons, and just for stat reporting.
-    fn process_ipv4_packet(&mut self, ip_pkt: Ipv4Packet, frame_len: usize) {
-        self.stats.ipv4_packets_this_period += 1;
+    // // frame_len is supposed to be the length of the whole Ethernet frame. We're
+    // // only passing it here for plumbing reasons, and just for stat reporting.
+    fn handle_tcp_pkt(&mut self, tcp_pkt: TcpPacket, ip_pkt: &IpPacket, frame_len: usize) {
+        self.stats.tcp_packets_this_period += 1;
 
-        // If the packet isn't TCP, first check for a UDP special payload, then return
-        if ip_pkt.get_next_level_protocol() != IpNextHeaderProtocols::Tcp {
-            let ip = IpPacket::V4(ip_pkt);
-            match ip.udp() {
-                Some(pkt) => {
-                    // Special payloads are only sent as DNS on port 53
-                    if pkt.get_destination() != 53 {
-                        return;
-                    }
-
-                    let flow = Flow::new_udp(&ip, &pkt);
-                    self.check_udp_test_str(&flow, &pkt);
-                }
-                None => return,
-            }
+        let flow = Flow::new(ip_pkt, &tcp_pkt);
+        if self.check_for_tagged_flow(&flow, ip_pkt).is_some() {
             return;
         }
-        let ip = IpPacket::V4(ip_pkt);
 
-        {
-            // Check TCP/443
-            let tcp_pkt = match ip.tcp() {
-                Some(pkt) => pkt,
-                None => return,
-            };
-            self.stats.tcp_packets_this_period += 1;
+        if tcp_pkt.get_destination() == 443 {
+            self.stats.tls_packets_this_period += 1;
+            self.stats.tls_bytes_this_period += frame_len as u64;
 
-            // Ignore packets that aren't -> 443.
-            // libpnet getters all return host order. Ignore the "u16be" in their
-            // docs; interactions with pnet are purely host order.
-            if tcp_pkt.get_destination() != 443 {
-                return;
-            }
+            //debug!("v6 -> {} {} bytes", ip_pkt.get_destination(), ip_pkt.get_payload_length());
+            self.process_tls_pkt(ip_pkt);
         }
-        self.stats.tls_packets_this_period += 1; // (HTTPS, really)
-        self.stats.tls_bytes_this_period += frame_len as u64;
-        self.process_tls_pkt(ip);
     }
 
-    fn process_ipv6_packet(&mut self, ip_pkt: Ipv6Packet, frame_len: usize) {
-        self.stats.ipv6_packets_this_period += 1;
+    fn handle_udp_pkt(&mut self, udp_pkt: UdpPacket, ip_pkt: &IpPacket, frame_len: usize) {
+        // TODO - this is not necessarily what we want to track.
+        // We might add more verbose logging from `debug/not-src-443`
+        if udp_pkt.get_destination() == 443 {
+            self.stats.tls_packets_this_period += 1;
+            self.stats.tls_bytes_this_period += frame_len as u64;
+        }
 
-        // If the packet isn't TCP, first check for a UDP special payload, then return
-        if ip_pkt.get_next_header() != IpNextHeaderProtocols::Tcp {
-            let ip = IpPacket::V6(ip_pkt);
-            match ip.udp() {
-                Some(pkt) => {
-                    // Special payloads are only sent as DNS on port 53
-                    if pkt.get_destination() != 53 {
-                        return;
-                    }
-
-                    let flow = Flow::new_udp(&ip, &pkt);
-                    self.check_udp_test_str(&flow, &pkt);
-                }
-                None => return,
-            }
+        let flow = Flow::new_udp(ip_pkt, &udp_pkt);
+        if self.check_for_tagged_flow(&flow, ip_pkt).is_some() {
             return;
         }
-        let ip = IpPacket::V6(ip_pkt);
 
-        {
-            let tcp_pkt = match ip.tcp() {
-                Some(pkt) => pkt,
-                None => return,
-            };
-            self.stats.tcp_packets_this_period += 1;
-
-            if tcp_pkt.get_destination() != 443 {
-                return;
-            }
+        if udp_pkt.get_destination() == 53 {
+            let flow = Flow::new_udp(ip_pkt, &udp_pkt);
+            self.check_udp_test_str(&flow, &udp_pkt);
         }
-        self.stats.tls_packets_this_period += 1;
-        self.stats.tls_bytes_this_period += frame_len as u64;
-
-        //debug!("v6 -> {} {} bytes", ip_pkt.get_destination(), ip_pkt.get_payload_length());
-        self.process_tls_pkt(ip);
     }
 
-    // Takes an IPv4 packet
-    // Assumes (for now) that TLS records are in a single TCP packet
-    // (no fragmentation).
-    // Fragments could be stored in the flow_tracker if needed.
-    pub fn process_tls_pkt(&mut self, ip_pkt: IpPacket) {
+    fn check_for_tagged_flow(&mut self, flow: &Flow, ip_pkt: &IpPacket) -> Option<()> {
+        let cj_flow = FlowNoSrcPort::from_flow(flow);
+        if self.flow_tracker.is_phantom_session(&cj_flow) {
+            // Handle packet destined for registered IP
+            match self.filter_station_traffic(flow.src_ip.to_string()) {
+                // traffic was sent by another station, likely liveness testing.
+                None => {}
+
+                // Non station traffic, forward to application to handle
+                Some(_) => {
+                    // Update expire time if necessary
+                    self.flow_tracker.update_phantom_flow(&cj_flow);
+                    // Forward packet...
+                    self.forward_pkt(ip_pkt);
+                    // TODO: if it was RST or FIN, close things
+                    return Some(());
+                }
+            }
+        }
+        None
+    }
+
+    // Takes an IPv4 packet Assumes (for now) that TLS records are in a single
+    // TCP packet (no fragmentation). Fragments could be stored in the
+    // flow_tracker if needed.
+    pub fn process_tls_pkt(&mut self, ip_pkt: &IpPacket) {
         let tcp_pkt = match ip_pkt.tcp() {
             Some(pkt) => pkt,
             None => return,
         };
 
-        let flow = Flow::new(&ip_pkt, &tcp_pkt);
+        let flow = Flow::new(ip_pkt, &tcp_pkt);
         let tcp_flags = tcp_pkt.get_flags();
 
         if panic::catch_unwind(|| tcp_pkt.payload()).is_err() {
             return;
         }
 
-        let dd_flow = FlowNoSrcPort::from_flow(&flow);
-        if self.flow_tracker.is_phantom_session(&dd_flow) {
+        let cj_flow = FlowNoSrcPort::from_flow(&flow);
+        if self.flow_tracker.is_phantom_session(&cj_flow) {
             // Handle packet destined for registered IP
             match self.filter_station_traffic(flow.src_ip.to_string()) {
                 // traffic was sent by another station, likely liveness testing.
@@ -217,9 +215,9 @@ impl PerCoreGlobal {
                         // debug!("Connection for registered Phantom {}", flow);
                     }
                     // Update expire time if necessary
-                    self.flow_tracker.update_phantom_flow(&dd_flow);
+                    self.flow_tracker.update_phantom_flow(&cj_flow);
                     // Forward packet...
-                    self.forward_pkt(&ip_pkt);
+                    self.forward_pkt(ip_pkt);
                     // TODO: if it was RST or FIN, close things
                     return;
                 }
@@ -244,7 +242,7 @@ impl PerCoreGlobal {
             match self.check_dark_decoy_tag(&flow, &tcp_pkt) {
                 true => {
                     // debug!("New Conjure registration detected in {},", flow);
-                    // self.flow_tracker.mark_dark_decoy(&dd_flow);
+                    // self.flow_tracker.mark_dark_decoy(&cj_flow);
                     // not removing flow from stale_tracked_flows for optimization reasons:
                     // it will be removed later
                 }
@@ -363,6 +361,7 @@ impl PerCoreGlobal {
     /// assert_eq!(None, station);
     /// assert_eq!(Some(()), client);
     /// ```
+    ///
     fn filter_station_traffic(&mut self, src: String) -> Option<()> {
         for addr in self.filter_list.iter() {
             if src == *addr {
@@ -397,7 +396,7 @@ mod tests {
         let nets = value.detector_filter_list;
 
         for net in nets.iter() {
-            println!("{}", net);
+            println!("{net}");
         }
     }
 }

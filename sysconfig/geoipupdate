@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# MaxMind Geoipupdate for conjure
+# install in /etc/cron.weekly/ for weekly 0-downtime geoip db reloads
+
+
+if ! type "$geoipupdate" > /dev/null; then
+  exit 0
+fi
+
+geoipupdate
+
+systemctl reload conjure-app

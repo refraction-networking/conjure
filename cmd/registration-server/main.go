@@ -4,12 +4,17 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	zmq "github.com/pebbe/zmq4"
+	"github.com/refraction-networking/conjure/application/lib"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/apiregserver"
 	"github.com/refraction-networking/conjure/pkg/dnsregserver"
 	"github.com/refraction-networking/conjure/pkg/metrics"
@@ -36,8 +41,15 @@ type config struct {
 	ZMQPrivateKeyPath  string   `toml:"zmq_privkey_path"`
 	StationPublicKeys  []string `toml:"station_pubkeys"`
 	ClientConfPath     string   `toml:"clientconf_path"`
-	LogLevel           string   `toml:"log_level"`
-	LogMetricsInterval uint16   `toml:"log_metrics_interval"`
+	latestClientConf   *pb.ClientConf
+	LogLevel           string `toml:"log_level"`
+	LogMetricsInterval uint16 `toml:"log_metrics_interval"`
+}
+
+var defaultTransports = map[pb.TransportType]lib.Transport{
+	pb.TransportType_Min:   min.Transport{},
+	pb.TransportType_Obfs4: obfs4.Transport{},
+	// [transports:enable]
 }
 
 // parseClientConf parse the latest ClientConf based on path file
@@ -108,10 +120,34 @@ func readKeyAndEncode(path string) (string, error) {
 	return privkey, nil
 }
 
+// loadConfig is intended to re-parse portions of the config in conjunction with
+// setupReloadHandler. This is specifically for settings where we do not want to
+// restart the station. This is not intended to be a full re-build of the
+// station (i.e. auth, workers, and loglevel are not changed), Mostly this
+// should allow us to dynamically reload when there is an update to the latest
+// client configuration or the phantom subnets that we select from.
+func loadConfig(configPath string) (*config, error) {
+	conf := &config{}
+	_, err := toml.DecodeFile(configPath, conf)
+	if err != nil {
+		return nil, err
+	}
+
+	conf.latestClientConf, err = parseClientConf(conf.ClientConfPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return conf, nil
+}
+
 func main() {
 	var configPath string
+	var apiOnly, dnsOnly bool
 
 	flag.StringVar(&configPath, "config", "", "configuration file path, alternative to CJ_REGISTRAR_CONFIG env var")
+	flag.BoolVar(&apiOnly, "api-only", false, "run only the API registrar")
+	flag.BoolVar(&dnsOnly, "dns-only", false, "run only the DNS registrar")
 	flag.Parse()
 
 	if configPath == "" {
@@ -130,10 +166,9 @@ func main() {
 
 	log.SetFormatter(logFormatter)
 
-	var conf config
-	_, err := toml.DecodeFile(configPath, &conf)
+	conf, err := loadConfig(configPath)
 	if err != nil {
-		log.Fatalf("Error in reading config file: %v", err)
+		log.Fatalf("error occurred while parsing config: %v", err)
 	}
 
 	logClientIP, err := strconv.ParseBool(os.Getenv("LOG_CLIENT_IP"))
@@ -170,27 +205,72 @@ func main() {
 		log.Fatal(err)
 	}
 
-	latestClientConf, err := parseClientConf(conf.ClientConfPath)
-	if err != nil {
-		log.Fatal(err)
+	for transportType, t := range defaultTransports {
+		err := processor.AddTransport(transportType, t)
+		if err != nil {
+			log.Fatalf("failed to add transport: %s - %d", t.Name(), transportType)
+		}
 	}
 
-	dnsPrivKey, err := readKey(conf.DNSPrivkeyPath)
-	if err != nil {
-		log.Fatal(err)
+	regServers := []regServer{}
+	var dnsRegServer *dnsregserver.DNSRegServer
+	var apiRegServer *apiregserver.APIRegServer
+
+	if !apiOnly {
+		dnsPrivKey, err := readKey(conf.DNSPrivkeyPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		dnsRegServer, err = dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey, processor, conf.latestClientConf.GetGeneration(), log.WithField("registrar", "DNS"), metrics)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		regServers = append(regServers, dnsRegServer)
 	}
 
-	dnsRegServer, err := dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey, processor, latestClientConf.GetGeneration(), log.WithField("registrar", "DNS"), metrics)
-	if err != nil {
-		log.Fatal(err)
+	if !dnsOnly {
+		apiRegServer, err = apiregserver.NewAPIRegServer(conf.APIPort, processor, conf.latestClientConf, log.WithField("registrar", "API"), logClientIP, metrics)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		regServers = append(regServers, apiRegServer)
 	}
 
-	apiRegServer, err := apiregserver.NewAPIRegServer(conf.APIPort, processor, latestClientConf, log.WithField("registrar", "API"), logClientIP, metrics)
-	if err != nil {
-		log.Fatal(err)
-	}
+	signalChan := make(chan os.Signal, 1)
 
-	regServers := []regServer{dnsRegServer, apiRegServer}
+	signal.Notify(
+		signalChan,
+		syscall.SIGHUP, // listen for SIGHUP as reload signal
+	)
+
+	// spawn a goroutine to handle os signals continuously
+	go func() {
+		for {
+			sig := <-signalChan
+
+			if sig == syscall.SIGHUP {
+				conf, err = loadConfig(configPath)
+				if err != nil {
+					log.Errorf("error occurred while reloading config -- aborting reload: %v", err)
+				} else {
+					err := processor.ReloadSubnets()
+					if err != nil {
+						log.Errorf("failed to reload phantom subnets - aborting reload: %v", err)
+					}
+					if !dnsOnly && apiRegServer != nil {
+						apiRegServer.NewClientConf(conf.latestClientConf)
+					}
+
+					if !apiOnly && dnsRegServer != nil {
+						dnsRegServer.UpdateLatestCCGen(conf.latestClientConf.GetGeneration())
+					}
+				}
+			}
+		}
+	}()
 
 	run(regServers)
 }

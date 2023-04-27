@@ -66,11 +66,9 @@ pub fn extract_payloads(
         //  of the 92 byte magic number here.
         let mut stego_repr_and_fsp: [u8; REPRESENTATIVE_AND_FSP_LEN] =
             [0; REPRESENTATIVE_AND_FSP_LEN];
-        let mut in_offset: usize = tls_payload.len() as usize - 92;
+        let mut in_offset: usize = tls_payload.len() - 92;
         let mut out_offset: usize = 0;
-        while in_offset < (tls_payload.len() - 3) as usize
-            && out_offset < (REPRESENTATIVE_AND_FSP_LEN - 2) as usize
-        {
+        while in_offset < (tls_payload.len() - 3) && out_offset < (REPRESENTATIVE_AND_FSP_LEN - 2) {
             extract_stego_bytes(
                 &tls_payload[in_offset..in_offset + 4],
                 &mut stego_repr_and_fsp[out_offset..out_offset + 3],
@@ -109,8 +107,7 @@ pub fn extract_payloads(
         let fixed_size_payload_bytes = match cipher.decrypt(nonce, &stego_repr_and_fsp[32..54]) {
             Ok(fspb) => fspb,
             Err(err) => {
-                let err: Box<dyn Error> =
-                    From::from(format!("fsp_aes_gcm.decrypt failed: {}", err));
+                let err: Box<dyn Error> = From::from(format!("fsp_aes_gcm.decrypt failed: {err}"));
                 return Err(err);
             }
         };
@@ -119,17 +116,14 @@ pub fn extract_payloads(
 
         let vsp_size = fixed_size_payload.vsp_size; // includes aes gcm tag
         if vsp_size <= 16 {
-            let err: Box<dyn Error> = From::from(format!(
-                "Variable Stego Payload Size {} too small",
-                vsp_size
-            ));
+            let err: Box<dyn Error> =
+                From::from(format!("Variable Stego Payload Size {vsp_size} too small"));
             return Err(err);
             //  return Ok((keys, fixed_size_payload, vec![]));
         }
         if vsp_size % 3 != 0 {
             let err: Box<dyn Error> = From::from(format!(
-                "Variable Stego Payload Size {} non-divisible by 3",
-                vsp_size
+                "Variable Stego Payload Size {vsp_size} non-divisible by 3"
             ));
             return Err(err);
         }
@@ -143,9 +137,9 @@ pub fn extract_payloads(
             ));
             return Err(err);
         }
-        in_offset = tls_payload.len() as usize - 92 - vsp_stego_size as usize;
+        in_offset = tls_payload.len() - 92 - vsp_stego_size as usize;
         out_offset = 0;
-        while in_offset < (tls_payload.len() - 3) as usize && out_offset < (vsp_size - 2) as usize {
+        while in_offset < (tls_payload.len() - 3) && out_offset < (vsp_size - 2) as usize {
             extract_stego_bytes(
                 &tls_payload[in_offset..in_offset + 4],
                 &mut encrypted_variable_size_payload[out_offset..out_offset + 3],
@@ -166,7 +160,7 @@ pub fn extract_payloads(
         ) {
             Ok(vsp) => vsp,
             Err(err) => {
-                let err: Box<dyn Error> = From::from(format!("failed to decrypt vsp: {}", err));
+                let err: Box<dyn Error> = From::from(format!("failed to decrypt vsp: {err}"));
                 return Err(err);
             }
         };
@@ -180,7 +174,7 @@ pub fn extract_payloads(
     match result {
         Ok(res) => res,
         Err(e) => {
-            let err: Box<dyn Error> = From::from(format!("{:?}", e));
+            let err: Box<dyn Error> = From::from(format!("{e:?}"));
             Err(err)
         }
     }

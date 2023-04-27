@@ -45,21 +45,21 @@ func generateObfs4Keys(rand io.Reader) (Obfs4Keys, error) {
 }
 
 type ConjureSharedKeys struct {
-	SharedSecret                                              []byte
-	FspKey, FspIv, VspKey, VspIv, MasterSecret, DarkDecoySeed []byte
-	Obfs4Keys                                                 Obfs4Keys
+	SharedSecret                                            []byte
+	FspKey, FspIv, VspKey, VspIv, MasterSecret, ConjureSeed []byte
+	Obfs4Keys                                               Obfs4Keys
 }
 
 func GenSharedKeys(sharedSecret []byte, tt pb.TransportType) (ConjureSharedKeys, error) {
 	tdHkdf := hkdf.New(sha256.New, sharedSecret, []byte("conjureconjureconjureconjure"), nil)
 	keys := ConjureSharedKeys{
-		SharedSecret:  sharedSecret,
-		FspKey:        make([]byte, 16),
-		FspIv:         make([]byte, 12),
-		VspKey:        make([]byte, 16),
-		VspIv:         make([]byte, 12),
-		MasterSecret:  make([]byte, 48),
-		DarkDecoySeed: make([]byte, 16),
+		SharedSecret: sharedSecret,
+		FspKey:       make([]byte, 16),
+		FspIv:        make([]byte, 12),
+		VspKey:       make([]byte, 16),
+		VspIv:        make([]byte, 12),
+		MasterSecret: make([]byte, 48),
+		ConjureSeed:  make([]byte, 16),
 	}
 
 	if _, err := tdHkdf.Read(keys.FspKey); err != nil {
@@ -77,7 +77,7 @@ func GenSharedKeys(sharedSecret []byte, tt pb.TransportType) (ConjureSharedKeys,
 	if _, err := tdHkdf.Read(keys.MasterSecret); err != nil {
 		return keys, err
 	}
-	if _, err := tdHkdf.Read(keys.DarkDecoySeed); err != nil {
+	if _, err := tdHkdf.Read(keys.ConjureSeed); err != nil {
 		return keys, err
 	}
 

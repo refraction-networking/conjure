@@ -18,13 +18,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ubuntu-latest is another name for ubuntu-20.04
-          # - { rust: stable,           os: ubuntu-latest }
-          - { rust: stable,           os: ubuntu-18.04 }
+          # ubuntu-latest is another name for ubuntu-22.04
           - { rust: stable,           os: ubuntu-20.04 }
+          - { rust: stable,           os: ubuntu-22.04 }
           - { rust: nightly,          os: ubuntu-latest }
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: install deps
         run: |
@@ -46,7 +45,7 @@ jobs:
     env:
       RUSTFLAGS: -Dwarnings
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: install deps
         run: |
           sudo apt-get update
@@ -63,7 +62,7 @@ jobs:
     name: Verify code formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: hecrj/setup-rust-action@v1
         with:
           components: rustfmt

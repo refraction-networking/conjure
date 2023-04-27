@@ -2,12 +2,14 @@ package min
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/internal/tests"
@@ -23,6 +25,7 @@ func TestSuccessfulWrap(t *testing.T) {
 	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min)
 	defer c2p.Close()
 	defer sfp.Close()
+	require.NotNil(t, reg)
 
 	hmacID := reg.Keys.ConjureHMAC("MinTrasportHMACString")
 	message := []byte(`test message!`)
@@ -35,20 +38,13 @@ func TestSuccessfulWrap(t *testing.T) {
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
 
-	_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
-	if err != nil {
-		t.Fatalf("expected nil, got %v", err)
-	}
+	_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	require.Nil(t, err, "error getting wrapped connection")
 
 	received := make([]byte, len(message))
 	_, err = io.ReadFull(wrapped, received)
-	if err != nil {
-		t.Fatalf("failed reading from connection: %v", err)
-	}
-
-	if !bytes.Equal(message, received) {
-		t.Fatalf("expected %v, got %v", message, received)
-	}
+	require.Nil(t, err, "failed reading from connection")
+	require.True(t, bytes.Equal(message, received))
 }
 
 func TestUnsuccessfulWrap(t *testing.T) {
@@ -68,7 +64,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
 
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}
@@ -91,7 +87,7 @@ func TestTryAgain(t *testing.T) {
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])
 
-		_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+		_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 		if !errors.Is(err, transports.ErrTryAgain) {
 			t.Fatalf("expected ErrTryAgain, got %v", err)
 		}
@@ -102,8 +98,33 @@ func TestTryAgain(t *testing.T) {
 
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.DarkDecoy, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
+	}
+}
+
+func TestTryParamsToDstPort(t *testing.T) {
+	clv := randomizeDstPortMinVersion
+	seed, _ := hex.DecodeString("0000000000000000000000000000000000")
+
+	cases := []struct{
+		r bool
+		p uint16
+	}{{true, 58047}, {false, 443}}
+
+	for _, testCase := range cases {
+		ct := ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &testCase.r}}
+		var transport Transport
+
+		rawParams, err := anypb.New(ct.GetParams())
+		require.Nil(t, err)
+
+		params, err := transport.ParseParams(clv, rawParams)
+		require.Nil(t, err)
+
+		port, err := transport.GetDstPort(clv, seed, params)
+		require.Nil(t, err)
+		require.Equal(t, testCase.p, port)
 	}
 }

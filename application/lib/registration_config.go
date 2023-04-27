@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/refraction-networking/conjure/application/geoip"
 	"github.com/refraction-networking/conjure/application/liveness"
 )
 
@@ -12,6 +13,7 @@ import (
 // registrations lifecycle (ingest, validity, and eviction).
 type RegConfig struct {
 	*liveness.Config
+	*geoip.DBConfig
 
 	// number of worker threads for ingesting incoming registrations.
 	IngestWorkerCount int `toml:"ingest_worker_count"`

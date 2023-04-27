@@ -95,8 +95,8 @@ func (s *RegistrationStats) Reset() {
 	}()
 
 	func() {
-		s.genMutex.Lock()
-		defer s.genMutex.Unlock()
+		s.lvMutex.Lock()
+		defer s.lvMutex.Unlock()
 		s.lvStats = map[uint32]*libverStats{}
 	}()
 
@@ -331,7 +331,7 @@ func (s *RegistrationStats) AddRegStats(reg *DecoyRegistration) {
 		atomic.AddInt64(&s.newUnknownRegistrations, 1)
 	}
 
-	if reg.DarkDecoy.To4() == nil {
+	if reg.PhantomIp.To4() == nil {
 		atomic.AddInt64(&s.newRegistrationsV6, 1)
 	} else {
 		atomic.AddInt64(&s.newRegistrationsV4, 1)
