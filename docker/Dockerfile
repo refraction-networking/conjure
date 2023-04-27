@@ -38,7 +38,7 @@ RUN make libtd
 
 # run cargo build to allow for dependencies to cached
 RUN PATH="$HOME/.cargo/bin:$PATH" cargo init --lib .
-COPY Cargo.lock Cargo.toml build.rs /opt/conjure/
+COPY Cargo.toml build.rs /opt/conjure/
 RUN --mount=type=cache,target=/usr/local/cargo/registry PATH="$HOME/.cargo/bin:$PATH" cargo build --release
 
 COPY src/ /opt/conjure/src
