@@ -44,6 +44,7 @@ func TestWrongType(t *testing.T) {
 
 func TestGarbage(t *testing.T) {
 	src, err := anypb.New(&pb.GenericTransportParams{RandomizeDstPort: proto.Bool(true)})
+	require.Nil(t, err)
 	garbagebytes, err := proto.Marshal(src)
 	require.Nil(t, err)
 	_, err = rand.Read(garbagebytes)
