@@ -3,7 +3,6 @@ package transports_test
 import (
 	"math/rand"
 	"testing"
-	"unsafe"
 
 	"github.com/refraction-networking/conjure/application/transports"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
@@ -40,23 +39,18 @@ func TestWrongType(t *testing.T) {
 
 	dst := &pb.GenericTransportParams{}
 	err = transports.UnmarshalAnypbTo(src, dst)
-	require.Nil(t, err)
-
-	require.False(t, dst.GetRandomizeDstPort())
+	require.NotNil(t, err)
 }
 
 func TestGarbage(t *testing.T) {
-	src, err := anypb.New(&pb.ClientToStation{Padding: []byte{0, 1}})
+	src, err := anypb.New(&pb.GenericTransportParams{RandomizeDstPort: proto.Bool(true)})
+	garbagebytes, err := proto.Marshal(src)
 	require.Nil(t, err)
-	ptr := unsafe.Pointer(src)
-
-	for i := 0; i < int(unsafe.Sizeof(*src)); i++ {
-		*(*int)(ptr) = rand.Int()
-	}
-
-	dst := &pb.GenericTransportParams{}
-	err = transports.UnmarshalAnypbTo(src, dst)
+	_, err = rand.Read(garbagebytes)
 	require.Nil(t, err)
 
-	require.False(t, dst.GetRandomizeDstPort())
+	dstAnypb := &anypb.Any{}
+
+	err = proto.Unmarshal(garbagebytes, dstAnypb)
+	require.NotNil(t, err)
 }

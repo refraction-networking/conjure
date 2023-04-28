@@ -17,6 +17,10 @@ func UnmarshalAnypbTo(src *anypb.Any, dst protoreflect.ProtoMessage) error {
 		return fmt.Errorf("error reading src type: %v", err)
 	}
 
+	if src.TypeUrl != "" && src.TypeUrl != expected.TypeUrl {
+		return fmt.Errorf("incorrect non-empty TypeUrl: %v != %v", src.TypeUrl, expected.TypeUrl)
+	}
+
 	src.TypeUrl = expected.TypeUrl
 	return anypb.UnmarshalTo(src, dst, proto.UnmarshalOptions{})
 }
