@@ -63,6 +63,11 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 	zmq.AuthSetVerbose(authVerbose)
 	zmq.AuthAllow("*")
 	zmq.AuthCurveAdd("*", stationPublicKeys...)
+	err = zmq.AuthStart()
+	if err != nil {
+		return nil, ErrZmqAuthFail
+	}
+
 	err = sock.ServerAuthCurve("*", privkey)
 	if err != nil {
 		return nil, ErrZmqAuthFail
