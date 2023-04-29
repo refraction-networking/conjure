@@ -1,5 +1,10 @@
 package regprocessor
 
+/*
+#include <zmq.h>
+*/
+import "C"
+
 import (
 	"encoding/binary"
 	"errors"
@@ -16,18 +21,26 @@ import (
 
 var (
 	ErrNoC2SBody = errors.New("no C2S body")
+
 	// ErrNilC2S       = errors.New("C2S is nil")
+
 	ErrSharedSecret = errors.New("shared secret undefined or insufficient length")
+
 	// ErrSelectIP     = errors.New("failed to select IP")
 	// ErrGenSharedKey = errors.New("failed to generate shared key")
+
 	ErrZmqSocket   = errors.New("failed to create zmq socket")
 	ErrZmqAuthFail = errors.New("failed to set up auth on zmq socket")
 	// ErrRegPubFailed = errors.New("failed to publish to registration")
+
 	ErrRegProcessFailed = errors.New("failed to process registration")
+
+	ErrZmqFault = zmq.Errno(C.EINVAL)
+	// ErrZmqAccess        = zmq.Errno(C.EACCES)
 )
 
 const (
-	// The length of the shared secret sent by the client in bytes.
+	// RegIDLen The length of the shared secret sent by the client in bytes.
 	RegIDLen = 16
 
 	// SecretLength gives the length of a secret (used for minimum registration body len)
@@ -36,6 +49,7 @@ const (
 
 type zmqSender interface {
 	SendBytes([]byte, zmq.Flag) (int, error)
+	Close() error
 }
 
 type ipSelector interface {
@@ -49,12 +63,32 @@ type RegProcessor struct {
 	ipSelector    ipSelector
 	sock          zmqSender
 	metrics       *metrics.Metrics
+	authenticated bool
 
 	transports map[pb.TransportType]lib.Transport
 }
 
 // NewRegProcessor initialize a new RegProcessor
 func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics) (*RegProcessor, error) {
+
+	phantomSelector, err := lib.GetPhantomSubnetSelector()
+	if err != nil {
+		return nil, err
+	}
+
+	regProcessor, err := newRegProcessor(zmqBindAddr, zmqPort, privkey, authVerbose, stationPublicKeys)
+	if err != nil {
+		return nil, err
+	}
+	regProcessor.ipSelector = phantomSelector
+	regProcessor.metrics = metrics
+
+	return regProcessor, nil
+}
+
+// initializes the registration processor without the phantom selector which can be added by a
+// wrapping function before it is returned. This function is required for testing.
+func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVerbose bool, stationPublicKeys []string) (*RegProcessor, error) {
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, ErrZmqSocket
@@ -63,6 +97,9 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 	zmq.AuthSetVerbose(authVerbose)
 	zmq.AuthAllow("*")
 	zmq.AuthCurveAdd("*", stationPublicKeys...)
+
+	// DO NOT REMOVE THIS LINE, this enables authentication for the zmq tunnels. If this requires
+	// a change be sure to re-test that the keyed validation works how you expect it to.
 	err = zmq.AuthStart()
 	if err != nil {
 		return nil, ErrZmqAuthFail
@@ -78,18 +115,12 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 		return nil, ErrZmqSocket
 	}
 
-	phantomSelector, err := lib.GetPhantomSubnetSelector()
-	if err != nil {
-		return nil, err
-	}
-
 	return &RegProcessor{
 		zmqMutex:      sync.Mutex{},
 		selectorMutex: sync.RWMutex{},
-		ipSelector:    phantomSelector,
 		sock:          sock,
-		metrics:       metrics,
 		transports:    make(map[pb.TransportType]lib.Transport),
+		authenticated: true,
 	}, nil
 }
 
@@ -117,7 +148,17 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 		sock:          sock,
 		metrics:       metrics,
 		transports:    make(map[pb.TransportType]lib.Transport),
+		authenticated: false,
 	}, nil
+}
+
+// Close cleans up the (ZMQ) servers running in the background supporting registration.
+func (p *RegProcessor) Close() error {
+	if p.authenticated {
+		zmq.AuthStop()
+	}
+	p.sock.Close()
+	return nil
 }
 
 // AddTransport initializes a transport so that it can be tracked by the manager when
@@ -159,7 +200,7 @@ func (p *RegProcessor) RegisterUnidirectional(c2sPayload *pb.C2SWrapper, regMeth
 	return nil
 }
 
-// RegisterUnidirectional process a bidirectional registration request, publish it to zmq, and returns a response
+// RegisterBidirectional process a bidirectional registration request, publish it to zmq, and returns a response
 func (p *RegProcessor) RegisterBidirectional(c2sPayload *pb.C2SWrapper, regMethod pb.RegistrationSource, clientAddr []byte) (*pb.RegistrationResponse, error) {
 	regResp, err := p.processBdReq(c2sPayload)
 	if err != nil {
