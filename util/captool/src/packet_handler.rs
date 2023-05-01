@@ -4,6 +4,7 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
 use std::net::IpAddr;
+use std::ops::Deref;
 
 use ipnet::IpNet;
 use maxminddb::{geoip2, Reader};
@@ -11,10 +12,10 @@ use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketOption;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
-pub struct PacketHandler {
+pub struct PacketHandler<T: Limit> {
     pub asn_reader: Reader<Vec<u8>>,
     pub cc_reader: Reader<Vec<u8>>,
-    pub limiter: Option<Box<dyn Limit>>,
+    pub limiter: Option<T>,
 
     // target_subnets is used to determine whether source or destination is the address we need
     // to anonymize.
@@ -90,20 +91,22 @@ enum AnonymizeTypes {
     None,
 }
 
-impl PacketHandler {
-    pub fn create(
+impl<'p,T> PacketHandler<T> {
+    pub fn create (
         asn_path: &str,
         ccdb_path: &str,
-        limiter: Option<Box<dyn Limit>>,
+        target_subnets: Vec<IpNet>,
+        limiter: Option<T>,
         cc_filter: Vec<String>,
         asn_filter: Vec<u32>,
         v4_only: bool,
         v6_only: bool,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self, Box<dyn Error>>
+    where &'p mut T:Limit {
         let mut p = PacketHandler {
             asn_reader: maxminddb::Reader::open_readfile(String::from(asn_path))?,
             cc_reader: maxminddb::Reader::open_readfile(String::from(ccdb_path))?,
-            target_subnets: vec!["192.122.190.0/24".parse()?],
+            target_subnets,
             cc_filter,
             asn_filter,
             limiter,
@@ -136,8 +139,8 @@ impl PacketHandler {
 
         let country = self.get_cc(ip_of_interest)?;
 
-        if let Some(l) = self.limiter.as_deref_mut() {
-            if let Err(e) = l.count_or_drop_many(vec![asn.into(), country.clone().into()], String::from(""), PacketType::Any) {
+        if let Some(l) = &mut self.limiter {
+            if let Err(e) = (&mut l as &mut dyn Limit).count_or_drop_many(vec![asn.into(), country.clone().into()], String::from(""), PacketType::Any) {
                 // if we fail to count for some reason (full for one of the fields or term flag
                 // return err). The error value is available if we want more in debug print / return
                 Err(e)?

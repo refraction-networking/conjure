@@ -12,10 +12,12 @@ mod limit;
 mod packet_handler;
 use ip::MutableIpPacket;
 use packet_handler::{PacketHandler, SupplementalFields};
+use limit::Limit;
 
 use clap::Parser;
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use ipnet::IpNet;
 use pcap::{Activated, Capture, Device, Linktype};
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
@@ -31,6 +33,7 @@ use std::fs::{self, File};
 #[cfg(debug_assertions)]
 use std::io::stdin;
 use std::io::Write;
+use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -55,29 +58,45 @@ struct Args {
     /// Packets that include addresses in this subnet will be captured, the other (peer) address
     /// will be anonymized.
     #[arg(short, long)]
-    target_subnets: Option<String>,
+    target_subnets: String,
 
     /// Limits the total number of packets collected to N.
-    #[arg(short, long, conflicts_with = "lpc")]
-    limit: Option<u64>,
+    #[arg(long)]
+    lp: Option<u64>,
+
+    /// Limits the total number of Flows collected to N.
+    #[arg(long)]
+    lf: Option<u64>,
+
+    /// This limits the number of packets captured in any given flow.
+    #[arg(long)]
+    ppf: Option<u64>,
 
     /// Comma separated list of ASNs from which to capture packets. Limits which packets are
     /// captured even if the other (peer) address is in a target subnet.
     #[arg(short, long)]
     asn_filter: Option<String>,
 
-    /// Limit packets per ASN (LPA) reads only N packets per ASN. Requires. `asn_filter` argument.
-    #[arg(long, requires = "asn_filter", conflicts_with = "limit")]
+    /// Limit Packets per ASN (LPA) reads only N packets per ASN. Requires. `asn_filter` argument.
+    #[arg(long, requires = "asn_filter", conflicts_with_all=["lpc", "lfc"])]
     lpa: Option<u64>,
+
+    /// Limit Flows per ASN (LPA) reads only N packets per ASN. Requires. `asn_filter` argument.
+    #[arg(long, requires = "asn_filter", conflicts_with_all=["lpc", "lfc"])]
+    lfa: Option<u64>,
 
     /// Comma separated list of CCs from which to capture packets. Limits which packets are
     /// captured even if the other (peer) address is in a target subnet.
     #[arg(short, long)]
     cc_filter: Option<String>,
 
-    /// Limit packets per Country (LPC) reads only N packets per Country Code. Requires. `cc_filter` argument.
+    /// Limit Packets per Country (LPC) reads only N packets per Country Code. Requires. `cc_filter` argument.
     #[arg(long, requires = "cc_filter", conflicts_with = "lpa")]
     lpc: Option<u64>,
+
+    /// Limit Flows per Country (LPC) reads only N packets per Country Code. Requires. `cc_filter` argument.
+    #[arg(long, requires = "cc_filter", conflicts_with_all=["lpa", "lfa"])]
+    lfc: Option<u64>,
 
     /// Comma separated interfaces on which to listen (mutually exclusive with `--pcap_dir`, and `--read` options).
     #[arg(short, long, default_value_t = String::from("eno1"), conflicts_with = "pcap_dir")]
@@ -135,23 +154,32 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     trace!(
         "{:?}\n{asn_list:#?} {:?}\n{cc_list:#?} {:?}",
-        args.limit,
+        args.lp,
         args.lpa,
         args.lpc
     );
 
-    let limiter = limit::build(
-        args.limit,
-        args.lpa,
-        args.lpc,
-        asn_list.clone(),
-        cc_list.clone(),
-        Arc::clone(&flag),
-    );
+    let key_list: Vec<limit::Hashable> = if args.lpa.is_some() || args.lfa.is_some() {
+        asn_list.clone().iter().map(|x| limit::Hashable::from(x)).collect()
+    } else if  args.lpc.is_some() || args.lfc.is_some() {
+        cc_list.clone().iter().map(|x| limit::Hashable::from(x)).collect()
+    } else {
+        vec![]
+    };
+
+    // let limiter = limit::build(
+    let limiter = flows::Limits{
+        lpk: args.lpa.unwrap_or(args.lpc.unwrap_or(0)),
+        lfk: args.lfa.unwrap_or(args.lfc.unwrap_or(0)),
+        lp: args.lp.unwrap_or(0),
+        lf: args.lf.unwrap_or(0),
+        lppf: args.ppf.unwrap_or(0),
+    }.to_limiter( key_list.clone(), Arc::clone(&flag),);
 
     let handler = Arc::new(Mutex::new(PacketHandler::create(
         &args.asn_db,
         &args.cc_db,
+        parse_targets(args.target_subnets),
         limiter,
         cc_list,
         asn_list,
@@ -182,12 +210,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn read_interfaces<W: Write + std::marker::Send + 'static>(
+fn read_interfaces<W, L>(
     interfaces: String,
-    handler: Arc<Mutex<PacketHandler>>,
+    handler: Arc<Mutex<PacketHandler<L>>>,
     arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
     term: Arc<AtomicBool>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn Error>> 
+where W: Write + std::marker::Send + 'static, L:Limit+Deref,
+{
     let pool = ThreadPool::new(interfaces.matches(',').count() + 1);
 
     for sig in TERM_SIGNALS {
@@ -222,12 +252,14 @@ fn read_interfaces<W: Write + std::marker::Send + 'static>(
     Ok(())
 }
 
-fn read_pcap_dir<W: Write + std::marker::Send + 'static>(
+fn read_pcap_dir<W, L>(
     pcap_dir: String,
-    handler: Arc<Mutex<PacketHandler>>,
+    handler: Arc<Mutex<PacketHandler<L>>>,
     arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
     term: Arc<AtomicBool>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn Error>>
+where W: Write + std::marker::Send + 'static, L:Limit+Deref,
+{
     let mut paths = fs::read_dir(pcap_dir.clone()).unwrap();
     let pool = ThreadPool::new(paths.count());
     signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term))?;
@@ -257,13 +289,13 @@ fn read_pcap_dir<W: Write + std::marker::Send + 'static>(
 
 // abstracts over live captures (Capture<Active>) and file captures
 // (Capture<Offline>) using generics and the Activated trait,
-fn read_packets<T: Activated, W: Write>(
+fn read_packets<T, W, L>(
     _id: u32,
     mut capture: Capture<T>,
-    handler: Arc<Mutex<PacketHandler>>,
+    handler: Arc<Mutex<PacketHandler<L>>>,
     writer: Arc<Mutex<PcapNgWriter<W>>>,
     terminate: Arc<AtomicBool>,
-) {
+) where T: Activated, W: Write, L: Limit+Deref{
     let seed = { handler.lock().unwrap().seed };
 
     let link_type = capture.get_datalink();
@@ -349,6 +381,21 @@ fn read_packets<T: Activated, W: Write>(
     debug!("thread {_id} shutting down")
 }
 
+fn parse_targets(input: String) -> Vec<IpNet> {
+    // vec!["192.122.190.0/24".parse()?]
+    if input.is_empty() {
+        return vec![]
+    }
+
+    let mut out = vec![];
+    for s in input.split(',') {
+        if let Ok(subnet) = s.trim().parse() {
+            out.push(subnet);
+        }
+    }
+    out
+}
+
 fn parse_asn_list(input: Option<String>) -> Vec<u32> {
     match input {
         None => vec![],
@@ -358,7 +405,7 @@ fn parse_asn_list(input: Option<String>) -> Vec<u32> {
             } else {
                 let mut out = vec![];
                 for s in s.split(',') {
-                    out.push(s.trim().parse().unwrap())
+                    out.push(s.trim().parse().unwrap());
                 }
                 out
             }

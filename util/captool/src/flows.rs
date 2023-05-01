@@ -6,7 +6,7 @@ use std::error::Error;
 use std::fmt::{self, Display};
 use std::hash::Hash;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, Arc};
 
 
 
@@ -34,27 +34,29 @@ impl Limits {
         Limits { lpk: 0, lfk: 0, lp: 0, lf: 0, lppf: 0 }
     }
 
-    // pub fn limit(self) -> Option<Box<dyn Limit>> {
+    pub fn to_limiter<'p, H:Into<Hashable>>(self, keys: Vec<H>, flag: Arc<AtomicBool>) -> Option<&'p mut LimiterState> {
 
-    //     let ls = LimiterState{
-    //         packets_per_flow: HashMap::new(),
-    //         counts_per_key: HashMap::new(),
-    //         total_flow_count: AtomicU64::new(0),
-    //         total_packet_count: AtomicU64::new(0),
-    //         limits: self,
-    //         m: Mutex::new(0_u32),
-    //     };
-    //     Some(ls)
-    // }
+        let ls = &mut LimiterState{
+            packets_per_flow: HashMap::new(),
+            counts_per_key: HashMap::new(),
+            total_flow_count: AtomicU64::new(0),
+            total_packet_count: AtomicU64::new(0),
+            limits: self,
+            flag,
+            m: Mutex::new(0_u32),
+        };
+        Some(ls)
+    }
 }
 
-pub struct LimiterState<T> {
-    m: Mutex<T>,
+pub struct LimiterState {
+    m: Mutex<u32>,
     packets_per_flow: HashMap<String, AtomicU64>,
     counts_per_key: HashMap<Hashable, KeyCount>,
     total_flow_count: AtomicU64,
     total_packet_count: AtomicU64,
     limits: Limits,
+    flag: Arc<AtomicBool>,
 }
 
 /// LimiterState tracks the current state of packet counts under a variety of situations.
@@ -68,12 +70,12 @@ pub struct LimiterState<T> {
 /// lf   - limit flows
 ///
 /// ppf  - limit packets per flow (requires one of the above limits)
-impl<T> LimiterState<T> {
-    pub fn reset(&mut self) {
+impl Limit for LimiterState {
+    fn reset(&mut self) {
 
     }
 
-    pub fn count_or_drop(
+    fn count_or_drop(
         &mut self,
         key: Hashable,
         afi: String,
@@ -83,7 +85,32 @@ impl<T> LimiterState<T> {
         Ok(())
     }
 
-    pub fn count_or_drop_many(
+    fn count_or_drop_many(
+        &mut self,
+        keys: Vec<Hashable>,
+        afi: String,
+        t: PacketType,
+    ) -> Result<Hashable, Box<dyn Error>> {
+        Err("not implemented")?
+    }
+}
+
+impl Limit for &mut LimiterState {
+    fn reset(&mut self) {
+
+    }
+
+    fn count_or_drop(
+        &mut self,
+        key: Hashable,
+        afi: String,
+        t: PacketType,
+    ) -> Result<(), Box<dyn Error>> {
+        self.count_or_drop_many(vec![key], afi, t).unwrap();
+        Ok(())
+    }
+
+    fn count_or_drop_many(
         &mut self,
         keys: Vec<Hashable>,
         afi: String,
@@ -108,6 +135,7 @@ mod tests {
             total_packet_count: AtomicU64::new(0),
             limits: Limits { lpk: 0, lfk: 10, lp: 0, lf: 0, lppf: 10 },
             m: Mutex::new(0_u32),
+            flag: Arc::new(AtomicBool::new(false)),
         };
         Ok(())
     }

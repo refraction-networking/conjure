@@ -19,3 +19,9 @@ client-identifying information.
 
 The Key for the HMAC is generated at runtime from the system CSPRNG and never
 written to disk, only being stored in memory during the capture.
+
+---
+
+## Capture Parameters
+
+Flows are captured from first SYN for TCP and from first seen for UDP.
