@@ -1,4 +1,4 @@
-#!/bin/hash
+#!/bin/bash
 
 # Run Conjure application process using configs in environment variables.
 
@@ -8,7 +8,9 @@ if [ $(id -u) -ne 0 ]; then
 fi
 
 # load config. will access config in /var/lib/conjure for overrides
+set -a
 source /opt/conjure/sysconfig/conjure.conf
+set +a
 
 if [ ! -f $CJ_STATION_CONFIG ]; then
     echo "Failed to open \$CJ_STATION_CONFIG=$CJ_STATION_CONFIG."
@@ -16,5 +18,6 @@ if [ ! -f $CJ_STATION_CONFIG ]; then
     exit 1
 fi
 
+echo "station_config path: $CJ_STATION_CONFIG"
 
 /opt/conjure/bin/application

@@ -8,7 +8,9 @@ if [ $(id -u) -ne 0 ]; then
 fi
 
 # load config. will access config in /var/lib/conjure for overrides
+set -a
 source /opt/conjure/sysconfig/conjure.conf
+set +a
 
 if [ ! -f $CJ_REGISTRAR_CONFIG ]; then
     echo "Failed to open \$CJ_REGISTRAR_CONFIG=$CJ_REGISTRAR_CONFIG."

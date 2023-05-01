@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-if [ $(sysctl -b vm.nr_hugepages) -lt 512 ]
+if [ $(sysctl -b vm.nr_hugepages) -lt 512 ]; then
 	echo 'Please set number of hugepages to at least 512.'
 	echo ''
 	echo 'To check current value run:'

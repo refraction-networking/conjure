@@ -75,7 +75,7 @@ covert_blocklist_subnets = [
 
 # Automatically add all addresses and subnets associated with local devices to
 # the blocklist.
-covert_blocklist_public_addrs = false
+covert_blocklist_public_addrs = true
 
 # Override the blocklist providing a more restrictive allowlist. Any addresses
 # not explicitly included in an allowlisted subnet will be considered

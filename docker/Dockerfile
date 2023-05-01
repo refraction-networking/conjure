@@ -103,6 +103,7 @@ FROM ubuntu:20.04 as conjure_app
 # Add default configs and launch scripts
 COPY sysconfig/ /opt/conjure/sysconfig
 COPY scripts/ /opt/conjure/bin
+COPY application/ /opt/conjure/application
 
 RUN apt update && apt install -yq libzmq3-dev
 COPY --from=dev_img /opt/conjure/application/application /opt/conjure/bin/
@@ -141,6 +142,7 @@ FROM base_pfring as conjure
 # Add default configs and launch scripts
 COPY sysconfig/ /opt/conjure/sysconfig
 COPY scripts/ /opt/conjure/bin
+COPY application/ /opt/conjure/application
 
 RUN apt update && apt install -yq libzmq3-dev
 COPY --from=dev_img /opt/conjure/application/application /opt/conjure/bin/
