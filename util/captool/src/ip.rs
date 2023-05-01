@@ -107,14 +107,13 @@ impl<'p> TryFrom<(&'p mut [u8], Linktype)> for MutableIpPacket<'p> {
                     _ => Err(())?,
                 }
             }
-            Linktype::RAW => {
-                match data[0] & 0xF0 {
-                    0x40 => Ok(MutableIpv4Packet::new(data).ok_or(())?.into()),
-                    0x60 => Ok(MutableIpv6Packet::new(data).ok_or(())?.into()),
-                    _ => Err(())?,
-                }
-            }
-            _ if link_type.0 == 12 => { // For some reason tun interfaces say "RAW" type, but use id 12 which isn't a real value.
+            Linktype::RAW => match data[0] & 0xF0 {
+                0x40 => Ok(MutableIpv4Packet::new(data).ok_or(())?.into()),
+                0x60 => Ok(MutableIpv6Packet::new(data).ok_or(())?.into()),
+                _ => Err(())?,
+            },
+            _ if link_type.0 == 12 => {
+                // For some reason tun interfaces say "RAW" type, but use id 12 which isn't a real value.
                 match data[0] & 0xF0 {
                     0x40 => Ok(MutableIpv4Packet::new(data).ok_or(())?.into()),
                     0x60 => Ok(MutableIpv6Packet::new(data).ok_or(())?.into()),
@@ -259,7 +258,12 @@ impl<'p> MutableIpPacket<'p> {
         let p = self.packet();
 
         // We ned to randomize the IPv6 flow label if the flow is ipv6.
-        let flow_label = u32::from_be_bytes([hmac_bytes[18], hmac_bytes[19], hmac_bytes[20],  hmac_bytes[21]]);
+        let flow_label = u32::from_be_bytes([
+            hmac_bytes[18],
+            hmac_bytes[19],
+            hmac_bytes[20],
+            hmac_bytes[21],
+        ]);
         if src_or_dst {
             let new_addr = substitute_addr(&src, subnet, hmac_bytes)?;
             self.set_source(new_addr, flow_label)?;
@@ -521,7 +525,13 @@ mod tests {
         let ip6 = hex::decode("600cdd3e002806401234000000000000000000000000000120010000000000000000000000000001ed34115cd1a5623100000000a002ffc4003000000204ffc40402080a05fb55260000000001030307")?;
 
         let packets = vec![ip4.clone(), ip6.clone(), eth, ip4, ip6];
-        let types = vec![Linktype::IPV4, Linktype::IPV6, Linktype::ETHERNET, Linktype(12), Linktype::RAW];
+        let types = vec![
+            Linktype::IPV4,
+            Linktype::IPV6,
+            Linktype::ETHERNET,
+            Linktype(12),
+            Linktype::RAW,
+        ];
 
         for (mut data, link_type) in packets.into_iter().zip(types) {
             println!("{}", hex::encode(data.clone()));

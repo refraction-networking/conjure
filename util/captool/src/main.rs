@@ -6,6 +6,7 @@
 extern crate log;
 extern crate maxminddb;
 
+mod flows;
 mod ip;
 mod limit;
 mod packet_handler;
@@ -267,8 +268,20 @@ fn read_packets<T: Activated, W: Write>(
 
     let link_type = capture.get_datalink();
 
-    if !vec![Linktype::ETHERNET, Linktype::IPV4, Linktype::IPV6, Linktype::RAW].contains(&link_type) && ! link_type.0 == 12 {
-        error!("unsupported linktype: {:?} {}", link_type, link_type.get_name().unwrap_or(String::from("unknown")));
+    if !vec![
+        Linktype::ETHERNET,
+        Linktype::IPV4,
+        Linktype::IPV6,
+        Linktype::RAW,
+    ]
+    .contains(&link_type)
+        && !link_type.0 == 12
+    {
+        error!(
+            "unsupported linktype: {:?} {}",
+            link_type,
+            link_type.get_name().unwrap_or(String::from("unknown"))
+        );
         return;
     }
 

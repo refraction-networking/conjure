@@ -1,4 +1,4 @@
-use crate::limit::Limit;
+use crate::limit::{Limit, PacketType};
 
 use std::borrow::Cow;
 use std::error::Error;
@@ -28,7 +28,6 @@ pub struct PacketHandler {
     // respect CLI options indicating capture of only one or the other IP version.
     pub v4_only: bool,
     pub v6_only: bool,
-
 
     pub seed: [u8; 32],
 }
@@ -138,7 +137,7 @@ impl PacketHandler {
         let country = self.get_cc(ip_of_interest)?;
 
         if let Some(l) = self.limiter.as_deref_mut() {
-            if let Err(e) = l.count_or_drop_many(vec![asn.into(), country.clone().into()]) {
+            if let Err(e) = l.count_or_drop_many(vec![asn.into(), country.clone().into()], String::from(""), PacketType::Any) {
                 // if we fail to count for some reason (full for one of the fields or term flag
                 // return err). The error value is available if we want more in debug print / return
                 Err(e)?
@@ -154,10 +153,10 @@ impl PacketHandler {
     }
 
     fn should_anonymize(&self, src: IpAddr, dst: IpAddr) -> AnonymizeTypes {
-        if self.v4_only && src.is_ipv6(){
-            return AnonymizeTypes::None
+        if self.v4_only && src.is_ipv6() {
+            return AnonymizeTypes::None;
         } else if self.v6_only && src.is_ipv4() {
-            return AnonymizeTypes::None
+            return AnonymizeTypes::None;
         }
 
         for target_subnet in &self.target_subnets {
