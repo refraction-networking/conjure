@@ -12,6 +12,8 @@ use std::convert::TryInto;
 use std::error::Error;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
+use crate::limit::Limit;
+
 type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug)]
@@ -241,12 +243,16 @@ impl<'p> MutableIpPacket<'p> {
         }
     }
 
-    pub fn anonymize(
+    pub fn anonymize<'l, L>(
         &'p mut self,
         src_or_dst: bool,
         seed: [u8; 32],
         subnet: IpNet,
-    ) -> Result<&'p [u8], Box<dyn Error>> {
+        limiter: Option<L>,
+    ) -> Result<&'p [u8], Box<dyn Error>>
+    where
+        &'l mut L: Limit + 'l,
+    {
         let src = self.source();
         let dst = self.destination();
         let (src_port, dst_port) = self.to_immutable().ports()?;
@@ -373,7 +379,7 @@ mod tests {
         assert_eq!(ip.source(), "192.122.190.0".parse::<IpAddr>()?);
         assert_eq!(ip.destination(), "94.74.182.249".parse::<IpAddr>()?,);
 
-        let ip_pkt_out = ip.anonymize(is_upload, seed, net)?;
+        let ip_pkt_out = ip.anonymize(is_upload, seed, net, None)?;
 
         let ip4 = Ipv4Packet::new(ip_pkt_out).ok_or("broken ip layer")?;
         assert_eq!(ip4.get_next_level_protocol(), IpNextHeaderProtocols::Tcp);
@@ -402,7 +408,7 @@ mod tests {
         assert_eq!(ip.source(), "1234::1".parse::<IpAddr>()?);
         assert_eq!(ip.destination(), "2001::1".parse::<IpAddr>()?,);
 
-        let d_out = ip.anonymize(is_upload, seed, net)?;
+        let d_out = ip.anonymize(is_upload, seed, net, None)?;
 
         let ip_pkt_out = Ipv6Packet::new(d_out).unwrap();
 

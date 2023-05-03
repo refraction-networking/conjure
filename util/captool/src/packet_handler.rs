@@ -1,10 +1,10 @@
-use crate::limit::{Limit, PacketType};
+use crate::flows::LimiterState;
+use crate::limit::{Limit, LimitError, PacketType};
 
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
 use std::net::IpAddr;
-use std::ops::Deref;
 
 use ipnet::IpNet;
 use maxminddb::{geoip2, Reader};
@@ -12,10 +12,10 @@ use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketOption;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
-pub struct PacketHandler<T: Limit> {
+pub struct PacketHandler {
     pub asn_reader: Reader<Vec<u8>>,
     pub cc_reader: Reader<Vec<u8>>,
-    pub limiter: Option<T>,
+    pub limiter: Option<LimiterState>,
 
     // target_subnets is used to determine whether source or destination is the address we need
     // to anonymize.
@@ -45,6 +45,7 @@ pub enum PacketError {
     Skip,
     SkipCC,
     SkipASN,
+    SkipLimit(LimitError),
     OtherError(Box<dyn Error>),
 }
 
@@ -56,8 +57,15 @@ impl fmt::Display for PacketError {
             PacketError::Skip => write!(f, "irrelevant addr"),
             PacketError::SkipCC => write!(f, "irrelevant or missing cc"),
             PacketError::SkipASN => write!(f, "irrelevant or missing asn"),
+            PacketError::SkipLimit(e) => write!(f, "skip limiter {e}"),
             PacketError::OtherError(e) => write!(f, "{e}"),
         }
+    }
+}
+
+impl From<LimitError> for PacketError {
+    fn from(value: LimitError) -> Self {
+        PacketError::SkipLimit(value)
     }
 }
 
@@ -91,18 +99,17 @@ enum AnonymizeTypes {
     None,
 }
 
-impl<'p,T> PacketHandler<T> {
-    pub fn create (
+impl PacketHandler {
+    pub fn create(
         asn_path: &str,
         ccdb_path: &str,
         target_subnets: Vec<IpNet>,
-        limiter: Option<T>,
+        limiter: Option<LimiterState>,
         cc_filter: Vec<String>,
         asn_filter: Vec<u32>,
         v4_only: bool,
         v6_only: bool,
-    ) -> Result<Self, Box<dyn Error>>
-    where &'p mut T:Limit {
+    ) -> Result<Self, Box<dyn Error>> {
         let mut p = PacketHandler {
             asn_reader: maxminddb::Reader::open_readfile(String::from(asn_path))?,
             cc_reader: maxminddb::Reader::open_readfile(String::from(ccdb_path))?,
@@ -139,8 +146,12 @@ impl<'p,T> PacketHandler<T> {
 
         let country = self.get_cc(ip_of_interest)?;
 
-        if let Some(l) = &mut self.limiter {
-            if let Err(e) = (&mut l as &mut dyn Limit).count_or_drop_many(vec![asn.into(), country.clone().into()], String::from(""), PacketType::Any) {
+        if let Some(ref mut l) = &mut self.limiter.as_mut() {
+            if let Err(e) = l.count_or_drop_many(
+                vec![asn.into(), country.clone().into()],
+                String::from(""),
+                PacketType::Any,
+            ) {
                 // if we fail to count for some reason (full for one of the fields or term flag
                 // return err). The error value is available if we want more in debug print / return
                 Err(e)?
