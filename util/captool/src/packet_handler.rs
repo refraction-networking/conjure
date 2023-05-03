@@ -1,5 +1,5 @@
 use crate::flows::LimiterState;
-use crate::limit::{Limit, LimitError, PacketType};
+use crate::limit::LimitError;
 
 use std::borrow::Cow;
 use std::error::Error;
@@ -33,6 +33,7 @@ pub struct PacketHandler {
     pub seed: [u8; 32],
 }
 
+#[derive(Clone)]
 pub struct SupplementalFields {
     pub cc: String,
     pub asn: u32,
@@ -145,18 +146,6 @@ impl PacketHandler {
             .trunc();
 
         let country = self.get_cc(ip_of_interest)?;
-
-        if let Some(ref mut l) = &mut self.limiter.as_mut() {
-            if let Err(e) = l.count_or_drop_many(
-                vec![asn.into(), country.clone().into()],
-                String::from(""),
-                PacketType::Any,
-            ) {
-                // if we fail to count for some reason (full for one of the fields or term flag
-                // return err). The error value is available if we want more in debug print / return
-                Err(e)?
-            }
-        }
 
         Ok(SupplementalFields {
             cc: country,

@@ -10,11 +10,33 @@ use pnet::packet::{MutablePacket, Packet};
 use sha2::Sha256;
 use std::convert::TryInto;
 use std::error::Error;
+use std::fmt::{self, Display};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use crate::limit::Limit;
+use crate::packet_handler::SupplementalFields;
 
 type HmacSha256 = Hmac<Sha256>;
+
+#[allow(dead_code)]
+#[derive(Debug, PartialEq)]
+pub enum PacketType {
+    TCPSYN,
+    TCPOther,
+    UDP,
+    Any, // for when packet type doesn't matter
+}
+
+impl Display for PacketType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TCPSYN => write!(f, "tcp-syn"),
+            Self::TCPOther => write!(f, "tcp"),
+            Self::UDP => write!(f, "udp"),
+            Self::Any => write!(f, "any"),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum IpPacket<'p> {
@@ -128,6 +150,10 @@ impl<'p> TryFrom<(&'p mut [u8], Linktype)> for MutableIpPacket<'p> {
 }
 
 impl<'p> MutableIpPacket<'p> {
+    pub fn get_packet_type(&self) -> PacketType {
+        PacketType::TCPSYN
+    }
+
     pub fn set_source(&'p mut self, addr: SocketAddr, r: u32) -> Result<(), Box<dyn Error>> {
         let next_layer = self.next_layer();
         match self {
@@ -245,20 +271,35 @@ impl<'p> MutableIpPacket<'p> {
 
     pub fn anonymize<'l, L>(
         &'p mut self,
-        src_or_dst: bool,
         seed: [u8; 32],
-        subnet: IpNet,
-        limiter: Option<L>,
+        info: SupplementalFields,
+        limiter: &'l mut Option<L>,
     ) -> Result<&'p [u8], Box<dyn Error>>
     where
         &'l mut L: Limit + 'l,
     {
+        let src_or_dst = info.direction;
+
         let src = self.source();
         let dst = self.destination();
         let (src_port, dst_port) = self.to_immutable().ports()?;
+        let packet_type = self.get_packet_type();
 
         debug!("{src}:{src_port} -> {dst}:{dst_port}");
         let s = format_str(src_or_dst, src, dst, src_port, dst_port);
+
+        if let Some(ref mut l) = &mut limiter.as_mut() {
+            if let Err(e) = l.count_or_drop_many(
+                vec![info.asn.into(), info.cc.clone().into()],
+                s.clone(),
+                packet_type,
+            ) {
+                // if we fail to count for some reason (full for one of the fields or term flag
+                // return err). The error value is available if we want more in debug print / return
+                Err(e)?
+            }
+        }
+
         let hmac_bytes = get_hmac(seed, s.as_bytes());
 
         let p = self.packet();
@@ -271,10 +312,10 @@ impl<'p> MutableIpPacket<'p> {
             hmac_bytes[21],
         ]);
         if src_or_dst {
-            let new_addr = substitute_addr(&src, subnet, hmac_bytes)?;
+            let new_addr = substitute_addr(&src, info.subnet, hmac_bytes)?;
             self.set_source(new_addr, flow_label)?;
         } else {
-            let new_addr = substitute_addr(&dst, subnet, hmac_bytes)?;
+            let new_addr = substitute_addr(&dst, info.subnet, hmac_bytes)?;
             self.set_destination(new_addr, flow_label)?;
         }
 
@@ -379,7 +420,14 @@ mod tests {
         assert_eq!(ip.source(), "192.122.190.0".parse::<IpAddr>()?);
         assert_eq!(ip.destination(), "94.74.182.249".parse::<IpAddr>()?,);
 
-        let ip_pkt_out = ip.anonymize(is_upload, seed, net, None)?;
+        let extra = SupplementalFields {
+            subnet: net,
+            cc: String::from("ir"),
+            asn: 12345,
+            direction: is_upload,
+        };
+
+        let ip_pkt_out = ip.anonymize(seed, extra, &mut None)?;
 
         let ip4 = Ipv4Packet::new(ip_pkt_out).ok_or("broken ip layer")?;
         assert_eq!(ip4.get_next_level_protocol(), IpNextHeaderProtocols::Tcp);
@@ -408,7 +456,14 @@ mod tests {
         assert_eq!(ip.source(), "1234::1".parse::<IpAddr>()?);
         assert_eq!(ip.destination(), "2001::1".parse::<IpAddr>()?,);
 
-        let d_out = ip.anonymize(is_upload, seed, net, None)?;
+        let extra = SupplementalFields {
+            subnet: net,
+            cc: String::from("ir"),
+            asn: 12345,
+            direction: is_upload,
+        };
+
+        let d_out = ip.anonymize(seed, extra, &mut None)?;
 
         let ip_pkt_out = Ipv6Packet::new(d_out).unwrap();
 

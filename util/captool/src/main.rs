@@ -366,10 +366,9 @@ fn read_packets<T, W>(
         let d_out = match {
             let mut h = handler.lock().unwrap();
             ip_pkt.anonymize(
-                supplemental_fields.direction,
                 seed,
-                supplemental_fields.subnet,
-                &mut handler.limiter,
+                supplemental_fields.clone(),
+                &mut h.limiter,
             )
         } {
             Ok(d) => d,

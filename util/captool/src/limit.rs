@@ -1,25 +1,7 @@
+use crate::ip::PacketType;
+
 use std::fmt::{self, Display};
 use std::hash::Hash;
-
-#[allow(dead_code)]
-#[derive(Debug, PartialEq)]
-pub enum PacketType {
-    TCPSYN,
-    TCPOther,
-    UDP,
-    Any, // for when packet type doesn't matter
-}
-
-impl Display for PacketType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::TCPSYN => write!(f, "tcp-syn"),
-            Self::TCPOther => write!(f, "tcp"),
-            Self::UDP => write!(f, "udp"),
-            Self::Any => write!(f, "any"),
-        }
-    }
-}
 
 pub trait Limit: Send + Sync {
     fn reset(&mut self);

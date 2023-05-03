@@ -1,4 +1,5 @@
-use crate::limit::{Hashable, Limit, LimitError, PacketType};
+use crate::ip::PacketType;
+use crate::limit::{Hashable, Limit, LimitError};
 
 use std::cmp::min;
 use std::collections::HashMap;
