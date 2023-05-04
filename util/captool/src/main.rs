@@ -39,6 +39,14 @@ use std::time::Duration;
 const ASNDB_PATH: &str = "/usr/share/GeoIP/GeoLite2-ASN.mmdb";
 const CCDB_PATH: &str = "/usr/share/GeoIP/GeoLite2-Country.mmdb";
 
+const HELP: &str = "
+Examples:
+
+$ captool -t \"192.168.0.0/16\" -i \"en01\"
+
+$ captool -t \"192.168.0.0/16,2001:abcd::/64\" -i \"ens15f0,ens15f1,en01\" -a \"$(cat ./asn_list.txt)\" -lpa 10000 -o \"$(date -u +\"%FT%H%MZ\").pcapng.gz\"
+";
+
 #[derive(Parser, Debug)]
 #[command(
     author,
@@ -48,7 +56,7 @@ Program to capture from multiple interfaces and anonymize client address informa
 
 Examples:
 
-captool -t \"192.168.0.0/16\" -i \"ens15f0,ens15f1,en01\" -a \"$(cat ./asn_list.txt)\" -lpa 10000 -o \"$(date -u +\"%FT%H%MZ\").pcapng.gz\"
+captool -t \"192.168.0.0/16,2001:abcd::/64\" -i \"ens15f0,ens15f1,en01\" -a \"$(cat ./asn_list.txt)\" -lpa 10000 -o \"$(date -u +\"%FT%H%MZ\").pcapng.gz\"
 "
 )]
 
@@ -151,7 +159,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cc_list = parse_cc_list(args.cc_filter);
 
     #[cfg(not(debug_assertions))]
-    simple_logger::init_with_level(log::Level::Error).unwrap();
+    simple_logger::init_with_level(log::Level::Warn).unwrap();
 
     #[cfg(debug_assertions)]
     debug_warn();
@@ -183,11 +191,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     let limit_state = limits.into_limiter(key_list, Arc::clone(&flag));
 
     let limiter = if unlimited { None } else { Some(limit_state) };
+    let target_subnets = parse_targets(args.t);
+    if target_subnets.is_empty() {
+        error!("no valid target subnets provided{HELP}");
+        Err("no valid target subnets provided")?;
+    }
 
     let handler = Arc::new(Mutex::new(PacketHandler::create(
         &args.asn_db,
         &args.cc_db,
-        parse_targets(args.t),
+        target_subnets,
         limiter,
         cc_list,
         asn_list,
@@ -399,6 +412,9 @@ fn parse_targets(input: String) -> Vec<IpNet> {
     for s in input.split(',') {
         if let Ok(subnet) = s.trim().parse() {
             out.push(subnet);
+            debug!("adding target: {subnet}");
+        } else {
+            warn!("failed to parse subnet: \"{s}\" continuing");
         }
     }
     out
