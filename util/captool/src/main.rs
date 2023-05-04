@@ -62,7 +62,8 @@ struct Args {
     #[arg(long)]
     lp: Option<u64>,
 
-    /// Limits the total number of Flows collected to N.
+    /// Limits the total number of Flows collected to N. If no PPF or Packet Limit is specified this
+    /// will read until Ctrl-C as flow termination is not tracked.
     #[arg(long)]
     lf: Option<u64>,
 
@@ -79,7 +80,8 @@ struct Args {
     #[arg(long, requires = "asn_filter", conflicts_with_all=["lpc", "lfc"])]
     lpa: Option<u64>,
 
-    /// Limit Flows per ASN (LPA) reads only N packets per ASN. Requires. `asn_filter` argument.
+    /// Limit Flows per ASN (LFA) reads N Flows  per ASN. Requires. `asn_filter` argument. If no PPF
+    /// or Packet Limit is specified this will read until Ctrl-C as flow termination is not tracked.
     #[arg(long, requires = "asn_filter", conflicts_with_all=["lpc", "lfc"])]
     lfa: Option<u64>,
 
@@ -92,7 +94,9 @@ struct Args {
     #[arg(long, requires = "cc_filter", conflicts_with = "lpa")]
     lpc: Option<u64>,
 
-    /// Limit Flows per Country (LPC) reads only N packets per Country Code. Requires. `cc_filter` argument.
+    /// Limit Flows per Country (LFC) reads N flows per Country Code. Requires. `cc_filter`
+    /// argument. If no PPF or Packet Limit is specified this will read until Ctrl-C as flow
+    /// termination is not tracked.
     #[arg(long, requires = "cc_filter", conflicts_with_all=["lpa", "lfa"])]
     lfc: Option<u64>,
 
@@ -104,11 +108,13 @@ struct Args {
     #[arg(short, long, conflicts_with = "interfaces")]
     pcap_dir: Option<String>,
 
-    /// Path to directory containing PCAPs files to read
+    /// Enable capture for IPv4 Packets ONLY. Requires at least one IPv4 subnet in target-subnets or
+    /// this will read nothing.
     #[arg(long, default_value_t = false, conflicts_with = "v6")]
     v4: bool,
 
-    /// Path to directory containing PCAPs files to read
+    /// Enable capture for IPv6 Packets ONLY. Requires at least one IPv6 subnet in target-subnets or
+    /// this will read nothing.
     #[arg(long, default_value_t = false, conflicts_with = "v4")]
     v6: bool,
 
