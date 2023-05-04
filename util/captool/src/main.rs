@@ -53,10 +53,10 @@ captool -t \"192.168.0.0/16\" -i \"ens15f0,ens15f1,en01\" -a \"$(cat ./asn_list.
 )]
 
 struct Args {
-    /// Packets that include addresses in this subnet will be captured, the other (peer) address
+    /// (Required) Target Subnets -- packets that include addresses in this subnet will be captured, the other (peer) address
     /// will be anonymized.
     #[arg(short, long)]
-    target_subnets: String,
+    t: String,
 
     /// Limits the total number of packets collected to N.
     #[arg(long)]
@@ -187,7 +187,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let handler = Arc::new(Mutex::new(PacketHandler::create(
         &args.asn_db,
         &args.cc_db,
-        parse_targets(args.target_subnets),
+        parse_targets(args.t),
         limiter,
         cc_list,
         asn_list,
