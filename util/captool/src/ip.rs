@@ -18,13 +18,13 @@ use crate::packet_handler::SupplementalFields;
 
 type HmacSha256 = Hmac<Sha256>;
 
-#[allow(dead_code)]
+#[allow(dead_code, clippy::upper_case_acronyms)]
 #[derive(Debug, PartialEq)]
 pub enum PacketType {
     TCPSYN,
     TCPOther,
     UDP,
-    Any, // for when packet type doesn't matter
+    Other, // Anything other than the useful ones.
 }
 
 impl Display for PacketType {
@@ -33,7 +33,7 @@ impl Display for PacketType {
             Self::TCPSYN => write!(f, "tcp-syn"),
             Self::TCPOther => write!(f, "tcp"),
             Self::UDP => write!(f, "udp"),
-            Self::Any => write!(f, "any"),
+            Self::Other => write!(f, "other"),
         }
     }
 }
@@ -151,7 +151,39 @@ impl<'p> TryFrom<(&'p mut [u8], Linktype)> for MutableIpPacket<'p> {
 
 impl<'p> MutableIpPacket<'p> {
     pub fn get_packet_type(&self) -> PacketType {
-        PacketType::TCPSYN
+        let next_layer = self.next_layer();
+        match self {
+            MutableIpPacket::V4(v4) => match next_layer {
+                IpNextHeaderProtocols::Udp => PacketType::UDP,
+                IpNextHeaderProtocols::Tcp => {
+                    let t4 = match TcpPacket::new(v4.payload()) {
+                        Some(t) => t,
+                        None => return PacketType::Other,
+                    };
+                    if t4.get_flags() == 0x02 {
+                        PacketType::TCPSYN
+                    } else {
+                        PacketType::TCPOther
+                    }
+                }
+                _ => PacketType::Other,
+            },
+            MutableIpPacket::V6(v6) => match next_layer {
+                IpNextHeaderProtocols::Udp => PacketType::UDP,
+                IpNextHeaderProtocols::Tcp => {
+                    let t6 = match TcpPacket::new(v6.payload()) {
+                        Some(t) => t,
+                        None => return PacketType::Other,
+                    };
+                    if t6.get_flags() == 0x02 {
+                        PacketType::TCPSYN
+                    } else {
+                        PacketType::TCPOther
+                    }
+                }
+                _ => PacketType::Other,
+            },
+        }
     }
 
     pub fn set_source(&'p mut self, addr: SocketAddr, r: u32) -> Result<(), Box<dyn Error>> {

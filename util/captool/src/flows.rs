@@ -13,10 +13,10 @@ struct KeyCount {
 
 impl KeyCount {
     fn new() -> Self {
-        return KeyCount {
+        KeyCount {
             packets: AtomicU64::new(0),
             flows: AtomicU64::new(0),
-        };
+        }
     }
 
     fn load(&self) -> (u64, u64) {
@@ -61,7 +61,7 @@ pub struct Limits {
 }
 
 impl Limits {
-    pub fn to_limiter<'p, H: Into<Hashable>>(
+    pub fn into_limiter<H: Into<Hashable>>(
         mut self,
         keys: Vec<H>,
         flag: Arc<AtomicBool>,
@@ -104,20 +104,12 @@ impl Limits {
     }
 
     pub fn is_unlimited(&self) -> bool {
-        if self.lpk == 0 && self.lp == 0 && self.lppf == 0 && self.lf == 0 && self.lfk == 0 {
-            true
-        } else {
-            false
-        }
+        self.lpk == 0 && self.lp == 0 && self.lppf == 0 && self.lf == 0 && self.lfk == 0
     }
 
     pub fn no_packet_limit(&self) -> bool {
         if self.lpk == 0 && self.lp == 0 {
-            if self.lppf == 0 || (self.lf == 0 && self.lfk == 0) {
-                true
-            } else {
-                false
-            }
+            self.lppf == 0 || (self.lf == 0 && self.lfk == 0)
         } else {
             false
         }
@@ -300,8 +292,8 @@ impl Limit for &mut LimiterState {
     fn reset(&mut self) {
         self.counts_per_key = self
             .counts_per_key
-            .iter()
-            .map(|(h, _)| (h.clone().into(), KeyCount::new()))
+            .keys()
+            .map(|h| (h.clone(), KeyCount::new()))
             .collect();
 
         self.packets_per_flow = HashMap::new();
@@ -399,12 +391,10 @@ mod tests {
             (Ok(h), Ok(eh)) => {
                 if h != eh {
                     Err(format!("expected: {eh}\nreceived: {h}\n").into())
+                } else if limiter.check_flag() == packet.erfs {
+                    Ok(Hashable::Z)
                 } else {
-                    if limiter.check_flag() == packet.erfs {
-                        Ok(Hashable::Z)
-                    } else {
-                        Err(format!("incorrect flag state: {}", packet.erfs).into())
-                    }
+                    Err(format!("incorrect flag state: {}", packet.erfs).into())
                 }
             }
             (Err(e), Err(ee)) => {
@@ -453,7 +443,7 @@ mod tests {
             expected: Err(LimitError::UnknownFlow),
         };
         let flag = Arc::new(AtomicBool::new(false));
-        let mut limiter = &mut limits.to_limiter(keys, flag);
+        let mut limiter = &mut limits.into_limiter(keys, flag);
 
         let result =
             (&mut limiter as &mut dyn Limit).count_or_drop_many(packet.keys, packet.afi, packet.t);
@@ -543,9 +533,9 @@ mod tests {
 
         assert!(limits.no_packet_limit());
         let flag = Arc::new(AtomicBool::new(false));
-        let mut limiter = limits.to_limiter(keys, flag);
+        let mut limiter = limits.into_limiter(keys, flag);
 
-        assert_eq!(run_test(&mut limiter, packets).unwrap(), ());
+        run_test(&mut limiter, packets).unwrap();
         Ok(())
     }
 
@@ -560,7 +550,7 @@ mod tests {
             lppf: 2,
         };
         assert!(limits.no_packet_limit());
-        let mut limiter = limits.to_limiter::<()>(vec![], Arc::new(AtomicBool::new(false)));
+        let mut limiter = limits.into_limiter::<()>(vec![], Arc::new(AtomicBool::new(false)));
 
         let packets = vec![
             MP {
@@ -613,7 +603,7 @@ mod tests {
             },
         ];
 
-        assert_eq!(run_test(&mut limiter, packets).unwrap(), ());
+        run_test(&mut limiter, packets).unwrap();
         Ok(())
     }
 
@@ -628,7 +618,7 @@ mod tests {
         };
         assert!(limits.no_packet_limit());
         let mut limiter =
-            limits.to_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
+            limits.into_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
         let packets = vec![
             MP {
                 // Rejected because part of a known flow and not the start of a flow
@@ -680,7 +670,7 @@ mod tests {
             },
         ];
 
-        assert_eq!(run_test(&mut limiter, packets).unwrap(), ());
+        run_test(&mut limiter, packets).unwrap();
         Ok(())
     }
 
@@ -695,7 +685,7 @@ mod tests {
         };
         assert!(!limits.no_packet_limit());
         let mut limiter =
-            limits.to_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
+            limits.into_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
         let packets = vec![
             MP {
                 // rejected, not part of a flow despite no flow limit
@@ -739,7 +729,7 @@ mod tests {
             },
         ];
 
-        assert_eq!(run_test(&mut limiter, packets).unwrap(), ());
+        run_test(&mut limiter, packets).unwrap();
         Ok(())
     }
 
@@ -756,7 +746,7 @@ mod tests {
         };
         assert!(!limits.no_packet_limit());
         let mut limiter =
-            limits.to_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
+            limits.into_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
         let packets = vec![
             MP {
                 // rejected, not part of a flow despite no flow limit
@@ -800,7 +790,7 @@ mod tests {
             },
         ];
 
-        assert_eq!(run_test(&mut limiter, packets).unwrap(), ());
+        run_test(&mut limiter, packets).unwrap();
         Ok(())
     }
 
@@ -817,7 +807,7 @@ mod tests {
         };
         assert!(!limits.no_packet_limit());
         let mut limiter =
-            limits.to_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
+            limits.into_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
         let packets = vec![
             MP {
                 // rejected, not part of a flow despite no flow limit
@@ -877,7 +867,7 @@ mod tests {
             },
         ];
 
-        assert_eq!(run_test(&mut limiter, packets).unwrap(), ());
+        run_test(&mut limiter, packets).unwrap();
         Ok(())
     }
 
@@ -892,7 +882,7 @@ mod tests {
         };
         assert!(limits.no_packet_limit());
         let mut limiter =
-            limits.to_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
+            limits.into_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
         let packets = vec![
             MP {
                 // rejected, not part of a flow despite no flow limit
@@ -952,7 +942,7 @@ mod tests {
             },
         ];
 
-        assert_eq!(run_test(&mut limiter, packets).unwrap(), ());
+        run_test(&mut limiter, packets).unwrap();
         Ok(())
     }
 
@@ -967,7 +957,7 @@ mod tests {
         };
         assert!(!limits.no_packet_limit());
         let mut limiter =
-            limits.to_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
+            limits.into_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
         let packets = vec![
             MP {
                 // rejected, not part of a flow despite no flow limit
@@ -1043,7 +1033,7 @@ mod tests {
             },
         ];
 
-        assert_eq!(run_test(&mut limiter, packets).unwrap(), ());
+        run_test(&mut limiter, packets).unwrap();
         Ok(())
     }
 }

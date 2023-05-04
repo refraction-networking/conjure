@@ -158,17 +158,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
 
     let key_list: Vec<limit::Hashable> = if args.lpa.is_some() || args.lfa.is_some() {
-        asn_list
-            .clone()
-            .iter()
-            .map(|x| limit::Hashable::from(x))
-            .collect()
+        asn_list.iter().map(limit::Hashable::from).collect()
     } else if args.lpc.is_some() || args.lfc.is_some() {
-        cc_list
-            .clone()
-            .iter()
-            .map(|x| limit::Hashable::from(x))
-            .collect()
+        cc_list.iter().map(limit::Hashable::from).collect()
     } else {
         vec![]
     };
@@ -182,7 +174,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         lppf: args.ppf.unwrap_or(0),
     };
     let unlimited = limits.is_unlimited();
-    let limit_state = limits.to_limiter(key_list.clone(), Arc::clone(&flag));
+    let limit_state = limits.into_limiter(key_list, Arc::clone(&flag));
 
     let limiter = if unlimited { None } else { Some(limit_state) };
 
@@ -339,7 +331,8 @@ fn read_packets<T, W>(
 
         // pcap::Packet doesn't implement DerefMut so we have to clone it as mutable -_-
         let data: &mut [u8] = &mut packet.data.to_owned();
-        let ts = Duration::from_micros(packet.header.ts.tv_usec as u64);
+        let ts = Duration::from_micros(packet.header.ts.tv_usec as u64)
+            + Duration::from_secs(packet.header.ts.tv_sec as u64);
 
         let data: (&mut [u8], Linktype) = (data, link_type);
         let mut ip_pkt = match MutableIpPacket::try_from(data) {
@@ -365,11 +358,7 @@ fn read_packets<T, W>(
 
         let d_out = match {
             let mut h = handler.lock().unwrap();
-            ip_pkt.anonymize(
-                seed,
-                supplemental_fields.clone(),
-                &mut h.limiter,
-            )
+            ip_pkt.anonymize(seed, supplemental_fields.clone(), &mut h.limiter)
         } {
             Ok(d) => d,
             Err(e) => {

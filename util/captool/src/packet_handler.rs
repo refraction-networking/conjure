@@ -101,6 +101,7 @@ enum AnonymizeTypes {
 }
 
 impl PacketHandler {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         asn_path: &str,
         ccdb_path: &str,
@@ -156,9 +157,7 @@ impl PacketHandler {
     }
 
     fn should_anonymize(&self, src: IpAddr, dst: IpAddr) -> AnonymizeTypes {
-        if self.v4_only && src.is_ipv6() {
-            return AnonymizeTypes::None;
-        } else if self.v6_only && src.is_ipv4() {
+        if (self.v4_only && src.is_ipv6()) || (self.v6_only && src.is_ipv4()) {
             return AnonymizeTypes::None;
         }
 
