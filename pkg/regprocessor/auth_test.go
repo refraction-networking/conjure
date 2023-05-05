@@ -137,7 +137,13 @@ func TestZMQAuth(t *testing.T) {
 		regProcessor, err := newRegProcessor(zmqBindAddr, zmqPort, serverPrivkeyZ85, true, stationPublicKeys)
 		require.Nil(t, err)
 		defer regProcessor.Close()
-		defer regProcessor.AddTransport(pb.TransportType_Min, min.Transport{})
+		errStation := regProcessor.AddTransport(pb.TransportType_Min, min.Transport{})
+		if errStation != nil {
+			t.Failed()
+			done <- struct{}{}
+			exit <- struct{}{}
+			return
+		}
 		ready <- struct{}{}
 		for j := 0; j < len(connectSockets); j++ {
 			time.Sleep(1 * time.Second)
@@ -159,7 +165,7 @@ func TestZMQAuth(t *testing.T) {
 		exit <- struct{}{}
 	}()
 
-	_ = <-ready
+	<-ready
 	for i, peerCase := range connectSockets {
 		// t.Log("STARTING ", i)
 		connectSocket := peerCase.s
@@ -221,7 +227,7 @@ func TestZMQAuth(t *testing.T) {
 	L:
 		for {
 			select {
-			case _ = <-c:
+			case <-c:
 				j++
 				// t.Logf("%s\n", string(msg))
 			case <-next:
@@ -274,7 +280,7 @@ func TestZmqMonitor(t *testing.T) {
 	go repSocketMonitor("inproc://monitor.rep")
 
 	// Generate an event
-	rep.Bind("tcp://*:5555")
+	err = rep.Bind("tcp://*:5555")
 	if err != nil {
 		log.Fatalln(err)
 	}
