@@ -22,7 +22,7 @@ var (
 	secret    []byte
 )
 
-func newRegProcessor() RegProcessor {
+func mockRegProcessor() RegProcessor {
 	return RegProcessor{
 		metrics: metrics.NewMetrics(log.NewEntry(log.StandardLogger()), 5*time.Second),
 	}
@@ -47,7 +47,7 @@ func generateC2SWrapperPayload() (c2sPayload *pb.C2SWrapper, c2sPayloadBytes []b
 	t := pb.TransportType_Min
 
 	c2s := pb.ClientToStation{
-		Transport: &t,
+		Transport:           &t,
 		DecoyListGeneration: &generation,
 		CovertAddress:       &covert,
 		V4Support:           &trueBool,
@@ -73,7 +73,7 @@ func generateC2SWrapperPayload() (c2sPayload *pb.C2SWrapper, c2sPayloadBytes []b
 func TestC2SWrapperProcessing(t *testing.T) {
 	c2sPayload, _ := generateC2SWrapperPayload()
 
-	p := newRegProcessor()
+	p := mockRegProcessor()
 
 	zmqPayload, err := p.processC2SWrapper(c2sPayload, []byte(net.ParseIP("127.0.0.1").To16()), pb.RegistrationSource_API)
 	if err != nil {
@@ -139,7 +139,7 @@ func BenchmarkRegistration(b *testing.B) {
 		log.Fatalln("failed to bind ZMQ socket:", err)
 	}
 
-	s := newRegProcessor()
+	s := mockRegProcessor()
 	s.sock = sock
 
 	body, _ := generateC2SWrapperPayload()
@@ -161,6 +161,10 @@ type fakeZmqSender struct {
 
 func (z fakeZmqSender) SendBytes(data []byte, flag zmq.Flag) (int, error) {
 	return z.fakeSend(data, flag)
+}
+
+func (z fakeZmqSender) Close() error {
+	return nil
 }
 
 func TestRegisterUnidirectional(t *testing.T) {
@@ -197,7 +201,7 @@ func TestRegisterUnidirectional(t *testing.T) {
 		fakeSend: fakeSendFunc,
 	}
 
-	s := newRegProcessor()
+	s := mockRegProcessor()
 	s.sock = fakeSender
 
 	err := s.RegisterUnidirectional(c2sPayload, regSrc, net.ParseIP(updatedIP))
@@ -243,7 +247,7 @@ func TestUnspecifiedReg(t *testing.T) {
 		fakeSend: fakeSendFunc,
 	}
 
-	s := newRegProcessor()
+	s := mockRegProcessor()
 	s.sock = fakeSender
 
 	err := s.RegisterUnidirectional(c2sPayload, realRegSrc, net.ParseIP(updatedIP))
@@ -285,7 +289,7 @@ func TestUpdateIP(t *testing.T) {
 		fakeSend: fakeSendFunc,
 	}
 
-	s := newRegProcessor()
+	s := mockRegProcessor()
 	s.sock = fakeSender
 
 	err := s.RegisterUnidirectional(c2sPayload, usedRegSrc, net.ParseIP(updatedIP))
@@ -346,7 +350,7 @@ func TestRegisterBidirectional(t *testing.T) {
 		v6Addr: net.ParseIP(fakeV6Phantom),
 	}
 
-	s := newRegProcessor()
+	s := mockRegProcessor()
 	s.sock = fakeSender
 	s.ipSelector = fakeSelector
 	err := s.AddTransport(pb.TransportType_Min, min.Transport{})
