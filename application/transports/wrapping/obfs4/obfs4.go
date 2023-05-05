@@ -12,7 +12,6 @@ import (
 	"gitlab.com/yawning/obfs4.git/common/drbg"
 	"gitlab.com/yawning/obfs4.git/common/ntor"
 	"gitlab.com/yawning/obfs4.git/transports/obfs4"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -62,7 +61,7 @@ func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 	}
 
 	var m = &pb.GenericTransportParams{}
-	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
+	err := transports.UnmarshalAnypbTo(data, m)
 	return m, err
 }
 
