@@ -132,8 +132,6 @@ impl PacketHandler {
         src: IpAddr,
         dst: IpAddr,
     ) -> Result<SupplementalFields, PacketError> {
-        debug!("{src} -> {dst}");
-
         let direction = self.should_anonymize(src, dst);
         let ip_of_interest = match direction {
             AnonymizeTypes::None => Err(PacketError::Skip)?,
@@ -147,6 +145,7 @@ impl PacketHandler {
             .trunc();
 
         let country = self.get_cc(ip_of_interest)?;
+        debug!("{src} -> {dst}");
 
         Ok(SupplementalFields {
             cc: country,
