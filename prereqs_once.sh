@@ -22,6 +22,20 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+isDocker(){
+    local cgroup=/proc/1/cgroup
+    test -f $cgroup && [[ "$(<$cgroup)" = *:cpuset:/docker/* ]]
+}
+
+isDockerBuildkit(){
+    local cgroup=/proc/1/cgroup
+    test -f $cgroup && [[ "$(<$cgroup)" = *:cpuset:/docker/buildkit/* ]]
+}
+
+isDockerContainer(){
+    [ -e /.dockerenv ]
+}
+
 install_deps() {
     echo "INSTALLING DEPENDENCIES..."
 
@@ -30,9 +44,14 @@ install_deps() {
 	    libnuma-dev libargtable2-dev lunzip \
 	    python python-protobuf protobuf-compiler \
 	    libprotobuf-dev golang-protobuf-extensions-dev \
-	    linux-headers-$(uname -r) daemontools \
-	    libzmq3-dev pkg-config \
-	    curl
+	    daemontools libzmq3-dev pkg-config curl
+
+    if [ -z ${is_docker_build+x} ]; then 
+        sudo apt-get install -yf linux-virtual
+    else
+        sudo apt-get install -yf linux-headers-$(uname -r)
+    fi
+
 
     if [ $? -ne 0 ]; then
 	echo "$0: installing packages failed"

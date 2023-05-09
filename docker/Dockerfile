@@ -28,6 +28,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tz
 COPY prereqs_once.sh /opt/conjure/
 
 WORKDIR /opt/conjure
+ENV is_docker_build YES
 RUN /usr/bin/sudo ./prereqs_once.sh
 
 WORKDIR /opt/conjure
