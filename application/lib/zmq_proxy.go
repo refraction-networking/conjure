@@ -145,6 +145,11 @@ func (zi *ZMQIngester) PrintAndReset(logger *log.Logger) {
 // location of the config file with the CJ_PROXY_CONFIG environment variable.
 func (zi *ZMQIngester) proxyZMQ() {
 
+	privkeyPath := zi.PrivateKeyPath
+	if privkeyPath == "" {
+		os.Getenv("CJ_PRIVKEY")
+	}
+
 	privkey, err := os.ReadFile(zi.PrivateKeyPath)
 	if err != nil {
 		zi.logger.Fatalln("failed to load private key:", err)
