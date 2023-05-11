@@ -147,10 +147,10 @@ func (zi *ZMQIngester) proxyZMQ() {
 
 	privkeyPath := zi.PrivateKeyPath
 	if privkeyPath == "" {
-		os.Getenv("CJ_PRIVKEY")
+		privkeyPath = os.Getenv("CJ_PRIVKEY")
 	}
 
-	privkey, err := os.ReadFile(zi.PrivateKeyPath)
+	privkey, err := os.ReadFile(privkeyPath)
 	if err != nil {
 		zi.logger.Fatalln("failed to load private key:", err)
 	}
