@@ -100,45 +100,11 @@ fetch_file() {
 
 install_go() {
     # INSTALL GOLANG
-    local GOVER="go1.19.3.linux-amd64"
-    local GOVERNUM="go1.19.3"
-    local GOTARBALL="${GOVER}.tar.gz"
-    local GOURL="https://storage.googleapis.com/golang/${GOTARBALL}"
 
-    # NOTE: GOROOT is where we are installing GO.
-    # There is no "default" for this.
-
-    local GOROOT="/usr/local/go"
-    export GOPATH="${HOME}/go"
-
-    # If /usr/local/go/VERSION exists and contains "go1.19" then skip this
-    if [ -r "${GOROOT}/VERSION" ]; then
-	CURVER=`cat ${GOROOT}/VERSION`
-	if [ "${CURVER}" = "${GOVERNUM}" ]; then
-	    echo "${GOVER} already installed"
-	    return
-	fi
+    if ! command -v go &> /dev/null; then
+	echo "unable to find golang, installing latest." 
+	curl -LO https://get.golang.org/$(uname)/go_installer && chmod +x go_installer && ./go_installer && rm go_installer
     fi
-
-    echo "INSTALLING ${GOVER}"
-
-    fetch_file "${GOURL}" "${GOTARBALL}"
-
-    cd "${TMPDIR}"
-    tar zxf "${GOTARBALL}"
-    if [ $? -ne 0 ]; then
-	echo "$0: failed to untar $GOTARBALL"
-	exit 1
-    fi
-
-    if [ -d "${GOROOT}" ]; then
-	sudo rm -rf "${GOROOT}"
-    fi
-
-    sudo mv go "${GOROOT}"
-
-    echo "Installed GO in $GOROOT"
-    echo "Add $GOROOT/bin to your PATH"
 }
 
 install_rust() {

@@ -38,13 +38,14 @@ registration-server:
 
 PARAMS := det app reg zbalance sim
 target := unk
+pfring_ver := latest
 container:
 ifeq (unk,$(target))
-	DOCKER_BUILDKIT=1 docker build -t conjure -f  docker/Dockerfile .
-#	@printf "DOCKER_BUILDKIT=1 docker build -t conjure -f  docker/Dockerfile .\n"
+	DOCKER_BUILDKIT=1 docker build -t conjure -t pf-$(pfring_ver) -f  docker/Dockerfile --build-arg pfring_ver=$(pfring_ver) . 
+#	@printf "DOCKER_BUILDKIT=1 docker build -t conjure -f  docker/Dockerfile --build-arg pfring_ver=$(pfring_ver) .\n"
 else ifneq  (,$(findstring $(target), $(PARAMS)))
-	DOCKER_BUILDKIT=1 docker build --target conjure_$(target) -t conjure_$(target) -f docker/Dockerfile .
-#	@printf "DOCKER_BUILDKIT=1 docker build --target conjure_$(target) -t conjure_$(target) -f docker/Dockerfile .\n"
+	DOCKER_BUILDKIT=1 docker build --target conjure_$(target) -t conjure_$(target) -t pf-$(pfring_ver) -f docker/Dockerfile --build-arg pfring_ver=$(pfring_ver) .
+#	@printf "DOCKER_BUILDKIT=1 docker build --target conjure_$(target) -t conjure_$(target) -f docker/Dockerfile --build-arg pfring_ver=$(pfring_ver) .\n"
 else
 	@printf "unrecognized container target $(target) - please use one of [ $(PARAMS) ]\n"
 endif

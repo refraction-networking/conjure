@@ -10,11 +10,10 @@ RUN useradd -m -u $UID -g $GID -o -s /bin/bash $UNAME
 RUN apt-get update && apt-get install -yq sudo apt-utils software-properties-common
 
 # install pf_ring deps
-RUN apt-get update && apt-get install -yq wget lsb-release gnupg \
-  && wget https://packages.ntop.org/apt-stable/20.04/all/apt-ntop-stable.deb \
-  && apt-get install -yq ./apt-ntop-stable.deb
 
-RUN apt-get update && sudo apt-get install -yq pfring pfring-dkms
+COPY scripts/install_pfring.sh /
+ARG pfring_ver="latest"
+RUN /usr/bin/sudo pfring_ver="${pfring_ver}" /install_pfring.sh
 
 # ------------------------------------------------------------------------------
 # Development image
@@ -63,8 +62,8 @@ COPY cmd/ /opt/conjure/cmd
 COPY application/ /opt/conjure/application
 COPY pkg/ /opt/conjure/pkg
 
-RUN PATH="/usr/local/go/bin/:$PATH" make app
-RUN PATH="/usr/local/go/bin/:$PATH" make registration-server
+RUN PATH="$HOME/.go/bin/:$PATH" make app
+RUN PATH="$HOME/.go/bin/:$PATH" make registration-server
 
 # Add default configs and launch scripts
 COPY sysconfig/ /opt/conjure/sysconfig

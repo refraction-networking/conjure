@@ -16,7 +16,6 @@ services:
     logging:
       driver: "journald"
     restart: "always"
-    # command: ["bash", "-c", "zbalance_ipc -c 99 -n 4 -m1 -g 1 -i zc:enp5s0f0,zc:enp5s0f1"]
     command: ["/opt/conjure/bin/start_zbalance_ipc.sh"]
 
 # # DEBUG PF_RING / zbalance
@@ -45,4 +44,5 @@ services:
     - /dev/net/tun:/dev/net/tun #tun driver interface
     - /dev/hugepages:/dev/hugepages # zbalance_ipc
     - /var/lib/conjure:/var/lib/conjure # config
+    - /usr/share/GeoIP:/usr/share/GeoIP # geoip database
     command: ["bash", "-c", "sleep 10 && /opt/conjure/bin/start_application.sh"]
