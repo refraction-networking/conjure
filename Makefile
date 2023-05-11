@@ -38,10 +38,15 @@ registration-server:
 
 PARAMS := det app reg zbalance sim
 target := unk
-pfring_ver := latest
+ifdef PFRING_VER
+	pfring_ver := latest
+else
+	pfring_ver := ${PFRING_VER}
+endif
+
 container:
 ifeq (unk,$(target))
-	DOCKER_BUILDKIT=1 docker build -t conjure -t pf-$(pfring_ver) -f  docker/Dockerfile --build-arg pfring_ver=$(pfring_ver) . 
+	DOCKER_BUILDKIT=1 docker build -t conjure -t pf-$(pfring_ver) -f  docker/Dockerfile --build-arg pfring_ver=$(pfring_ver) .
 #	@printf "DOCKER_BUILDKIT=1 docker build -t conjure -f  docker/Dockerfile --build-arg pfring_ver=$(pfring_ver) .\n"
 else ifneq  (,$(findstring $(target), $(PARAMS)))
 	DOCKER_BUILDKIT=1 docker build --target conjure_$(target) -t conjure_$(target) -t pf-$(pfring_ver) -f docker/Dockerfile --build-arg pfring_ver=$(pfring_ver) .

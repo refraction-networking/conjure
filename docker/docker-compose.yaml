@@ -2,47 +2,62 @@ version: '3'
 services:
   zbalance:
     &config
+    build:
+      context: conjure
+      dockerfile: /opt/conjure/docker/Dockerfile
+      args:
+        pfring_ver: $PFRING_VER
     image: conjure:latest
     # image: conjure_zbalance:latest # for smaller image when running separate
     privileged: true
     network_mode: "host"
     ipc: "host"
     cap_add:
-    - ipc_lock
+      - ipc_lock
     volumes:
-    - /dev/hugepages:/dev/hugepages # zbalance_ipc
-    - /etc/pf_ring:/etc/pf_ring # pf_ring licenses
-    - /var/lib/conjure:/var/lib/conjure # config
+      - /dev/hugepages:/dev/hugepages # zbalance_ipc
+      - /etc/pf_ring:/etc/pf_ring # pf_ring licenses
+      - /var/lib/conjure:/var/lib/conjure # config
     logging:
       driver: "journald"
     restart: "always"
-    command: ["/opt/conjure/bin/start_zbalance_ipc.sh"]
+    command: [ "/opt/conjure/bin/start_zbalance_ipc.sh" ]
 
-# # DEBUG PF_RING / zbalance
-#  zcount:
-#    << : *config
-#    privileged: false
-#    command: ["bash", "-c", "sleep 10 && zcount_ipc -c 99 -i 0"]
-#    depends_on:
-#    - zbalance
+  # # DEBUG PF_RING / zbalance
+  #  zcount:
+  #    << : *config
+  #    privileged: false
+  #    command: ["bash", "-c", "sleep 10 && zcount_ipc -c 99 -i 0"]
+  #    depends_on:
+  #    - zbalance
 
   conjure-det:
-    << : *config
+    <<: *config
     # image: conjure_det:latest # for smaller image when running separate
     privileged: true
     volumes:
-    - /dev/net/tun:/dev/net/tun #tun driver interface
-    - /dev/hugepages:/dev/hugepages # zbalance_ipc
-    - /var/lib/conjure:/var/lib/conjure # config
-    command: ["bash", "-c", "sleep 10 && /opt/conjure/bin/start_detector.sh"]
+      - /dev/net/tun:/dev/net/tun #tun driver interface
+      - /dev/hugepages:/dev/hugepages # zbalance_ipc
+      - /var/lib/conjure:/var/lib/conjure # config
+    command:
+      [
+        "bash",
+        "-c",
+        "sleep 10 && /opt/conjure/bin/start_detector.sh"
+      ]
 
   conjure-app:
-    << : *config
+    <<: *config
     # image: conjure_app:latest # for smaller image when running separate
     privileged: true
     volumes:
-    - /dev/net/tun:/dev/net/tun #tun driver interface
-    - /dev/hugepages:/dev/hugepages # zbalance_ipc
-    - /var/lib/conjure:/var/lib/conjure # config
-    - /usr/share/GeoIP:/usr/share/GeoIP # geoip database
-    command: ["bash", "-c", "sleep 10 && /opt/conjure/bin/start_application.sh"]
+      - /dev/net/tun:/dev/net/tun #tun driver interface
+      - /dev/hugepages:/dev/hugepages # zbalance_ipc
+      - /var/lib/conjure:/var/lib/conjure # config
+      - /usr/share/GeoIP:/usr/share/GeoIP # geoip database
+    command:
+      [
+        "bash",
+        "-c",
+        "sleep 10 && /opt/conjure/bin/start_application.sh"
+      ]

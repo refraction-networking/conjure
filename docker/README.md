@@ -92,8 +92,9 @@ interface. The driver version can be found using
     └── # pubkey (optional)
     ```
 
+    Bring services up
+
     ```bash
-    # Bring services up
     docker-compose -f docker/docker-compose.yaml up
     ```
 
@@ -101,6 +102,16 @@ interface. The driver version can be found using
 
     ```sh
     docker-compose -f docker/docker-compose.yaml down
+    ```
+
+    To enable startup on reboot copy `sysconfig/conjure-docker.service` to `/etc/systemd/system` and
+    enable the service. This should run `on-reboot when the station boots, and launch the docker
+    services based on the docker-compose file`/opt/conjure/docker/docker-compose.yaml`. If the
+    containers do not exist they will (in theory) be built a new
+
+    ```sh
+    sudo cp sysconfig/conjure-docker.service /etc/systemd/system/
+    sudo systemctl enable conjure-docker
     ```
 
 ---
