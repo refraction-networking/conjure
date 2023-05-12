@@ -1,0 +1,34 @@
+version: '3'
+services:
+  conjure-reg:
+    image: conjure:latest
+    # image: conjure_reg:latest # for smaller image
+    privileged: true
+    logging:
+    driver: "journald"
+    restart: "unless-stopped"
+    ports:
+      - "53:53/udp"
+      - "8080:8080"
+      - "5591:5591"
+    volumes:
+    - /var/lib/conjure:/var/lib/conjure # config
+    command: ["/opt/conjure/bin/registration-server"]
+
+  caddy:
+    image: caddy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+      - "8080:8080"
+    volumes:
+      - /etc/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+    external: true
+  caddy_config:

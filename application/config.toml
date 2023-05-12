@@ -10,8 +10,10 @@ socket_name = "zmq-proxy"
 
 # Absolute path to private key to use when authenticating with servers.
 # Can be either privkey or privkey || pubkey; only first 32 bytes will
-# be used.
-privkey_path = "/opt/conjure/sysconfig/privkey"
+# be used. If this is blank then the environment variable CJ_PRIVKEY
+# which is defined in conjure.conf will be used (if that fails to parse
+# the station will shutdown).
+privkey_path = ""
 
 # Time in milliseconds to wait between sending heartbeats.
 # Heartbeats are only sent when other traffic doesn't come through;
@@ -75,7 +77,7 @@ covert_blocklist_subnets = [
 
 # Automatically add all addresses and subnets associated with local devices to
 # the blocklist.
-covert_blocklist_public_addrs = false
+covert_blocklist_public_addrs = true
 
 # Override the blocklist providing a more restrictive allowlist. Any addresses
 # not explicitly included in an allowlisted subnet will be considered

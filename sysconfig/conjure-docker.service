@@ -1,0 +1,22 @@
+[Unit]
+Description=Containerized Conjure system
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=exec
+
+WorkingDirectory=/opt/conjure/
+
+SyslogIdentifier=conjure
+
+ExecStartPre=/opt/conjure/on-reboot.sh
+ExecStart=/bin/bash -c 'set -a && source /opt/conjure/sysconfig/conjure.conf && /usr/local/bin/docker-compose -f /opt/conjure/docker/docker-compose.yaml up'
+ExecStop=/bin/bash -c 'set -a && source /opt/conjure/sysconfig/conjure.conf && /usr/local/bin/docker-compose -f /opt/conjure/docker/docker-compose.yaml down'
+StandardOutput=syslog
+
+# on stop processes will get SIGTERM, and after 30 secs - SIGKILL (default 90)
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

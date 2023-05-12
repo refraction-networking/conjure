@@ -36,10 +36,28 @@ conjure-sim: detect.c loadkey.c rust_util.c rust libtapdance
 registration-server:
 	cd ./cmd/registration-server/ && make
 
-# Note this copies in the whole current directory as context and results in
-# overly large context. should not be used to build release/production images.
-custom-build:
-	docker build --build-arg CUSTOM_BUILD=1 -f docker/Dockerfile .
+PARAMS := det app reg zbalance sim
+target := unk
+# makefile arguments take preference, if one is not provided we check the environment variable.
+# If that is also missing then we use "latest" and install pfring from pkg in the docker build.
+ifndef pfring_ver
+	ifdef PFRING_VER
+		pfring_ver := ${PFRING_VER}
+	else
+		pfring_ver := latest
+	endif
+endif
+
+container:
+ifeq (unk,$(target))
+	DOCKER_BUILDKIT=1 docker build -t conjure -t pf-$(pfring_ver) -f  docker/Dockerfile --build-arg pfring_ver=$(pfring_ver) .
+#	@printf "DOCKER_BUILDKIT=1 docker build -t conjure -f  docker/Dockerfile --build-arg pfring_ver=$(pfring_ver) .\n"
+else ifneq  (,$(findstring $(target), $(PARAMS)))
+	DOCKER_BUILDKIT=1 docker build --target conjure_$(target) -t conjure_$(target) -t pf-$(pfring_ver) -f docker/Dockerfile --build-arg pfring_ver=$(pfring_ver) .
+#	@printf "DOCKER_BUILDKIT=1 docker build --target conjure_$(target) -t conjure_$(target) -f docker/Dockerfile --build-arg pfring_ver=$(pfring_ver) .\n"
+else
+	@printf "unrecognized container target $(target) - please use one of [ $(PARAMS) ]\n"
+endif
 
 
 backup-config:

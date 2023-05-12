@@ -23,7 +23,7 @@ func ParseConfig() (*Config, error) {
 	var envPath = os.Getenv("CJ_STATION_CONFIG")
 	_, err := toml.DecodeFile(envPath, &c)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config(%s): %v", envPath, err)
+		return nil, fmt.Errorf("failed to load config (%s): %v", envPath, err)
 	}
 
 	c.ParseBlocklists()
