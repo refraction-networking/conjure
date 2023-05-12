@@ -24,8 +24,10 @@ make target=app container
 ```
 
 The `pfring_ver` option allows you to control the version of pfring used in the build. The pfring
-version inside the container <ins>**MUST**</ins> match the pfring version of the host. If left
-empty the latest version of pfring is installed from package.
+version inside the container <ins>**MUST**</ins> match the pfring version of the host. If left empty
+the latest version of pfring is installed from package. This can also be set in the environment
+variable `PFRING_VER` (in `conjure.conf`), though make file arguments take precedence. The
+environment variable is used for automatic builds.
 
 ```sh
 make target=zbalance pfring_ver="tags/7.8.0" container
@@ -131,6 +133,8 @@ files to be overridden.
 
 ```conf
 # zbalance
+PFRING_VER=latest
+PF_DRIVER=""
 CJ_IFACE=lo
 CJ_CLUSTER_ID=98
 CJ_CORECOUNT=1
@@ -157,31 +161,52 @@ PHANTOM_SUBNET_LOCATION=/var/lib/conjure/phantom_subnets.toml
 CJ_REGISTRAR_CONFIG=/var/lib/conjure/registration_config.toml
 ```
 
+**PFRING_VER**: indicates the version of pf_ring to be installed while building docker containers,
+or while using `scripts/install_pfring.sh`. By default `scripts/install_pfring.sh` installs from
+package, if altered the script checkout `PFRING_VER` as a branch / tag name (e.g. `dev`,
+`tags/7.8.0`, `8.4.0-stable`, etc.) and builds from source.
+
+**CJ_IFACE**: comma separated list of interfaces for pf_ring to use.
+
+**PF_DRIVER**: driver used for the pfring network interface(s) defined in CJ_IFACE (used by
+`on-reboot.sh`). If both CJ_IFACE and PF_DRIVER are undefined, `on-reboot.sh` will attempt to detect
+an interface with either an i40e or ixgbe driver.
+
 **CJ_CLUSTER_ID**: just a label for zbalance cluster
 
-**CJ_CORECOUNT**: number of (threaded) cores to use for tapdance. Usually you want at most 1 less than the number available, particularly during development. Be sure to set this appropriately for production usage. A maximum of 16 cores is supported.
+**CJ_CORECOUNT**: number of (threaded) cores to use for tapdance. Usually you want at most 1 less
+than the number available, particularly during development. Be sure to set this appropriately for
+production usage. A maximum of 16 cores is supported.
 
 **CJ_COREBASE**: based core number to start with.
 
-**CJ_SKIP_CORE**: based core number to have detector skip running on. Default=-1 (none). EG if COREBASE=0, CORECOUNT=4, and SKIP_CORE=1 then tapdance will use cores 0, 2, 3, 4. Only a single integer core number is allowed.
+**CJ_SKIP_CORE**: based core number to have detector skip running on. Default=-1 (none). EG if
+COREBASE=0, CORECOUNT=4, and SKIP_CORE=1 then tapdance will use cores 0, 2, 3, 4. Only a single
+integer core number is allowed.
 
-**CJ_QUEUE_OFFSET**: should be 0 if Tapdance is not running on the same machine. If tapdance is running this should be equal to the amount of threads that tapdance is using. ('tun' interfaces are numbered sequentially and if tadance is running 'offset' will solve the naming collision)
+**CJ_QUEUE_OFFSET**: should be 0 if Tapdance is not running on the same machine. If tapdance is
+running this should be equal to the amount of threads that tapdance is using. ('tun' interfaces are
+numbered sequentially and if tadance is running 'offset' will solve the naming collision)
 
 **CJ_PRIVKEY**: path to private key inside the docker container. Keep to default unless necessary
 
-**CJ_STATION_CONFIG**: path to conjure configuration inside the docker container. Keep to default unless necessary
+**CJ_STATION_CONFIG**: path to conjure configuration inside the docker container. Keep to default
+unless necessary
 
-**CJ_IP4_ADDR**: Conjure station IP. Localhost works just fine. If Conjure application server located somewhere else this should be the remote IP (Central proxy mode)
+**CJ_IP4_ADDR**: Conjure station IP. Localhost works just fine. If Conjure application server
+located somewhere else this should be the remote IP (Central proxy mode)
 
 **CJ_IP6_ADDR**: Same but IPv6
 
-**PHANTOM_SUBNET_LOCATION**: Path to phantom subnets file inside the docker container. Keep to default unless necessary
+**PHANTOM_SUBNET_LOCATION**: Path to phantom subnets file inside the docker container. Keep to
+default unless necessary
 
 **N_QUEUE_SETS**: Indicates to start_zbalance_ipc.sh to create two sets of queues. Used for
 running two conjure stations or a conjure station together with tapdance.
 Only options right now are 1 and anything else (which runs 2 queue sets).
 
-**CJ_REGISTRAR_CONFIG**: Path to the configuration file for the registration api. Used by the conjure-reg service
+**CJ_REGISTRAR_CONFIG**: Path to the configuration file for the registration api. Used by the
+conjure-reg service
 
 ## Troubleshooting
 
