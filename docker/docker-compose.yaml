@@ -2,13 +2,13 @@ version: '3'
 services:
   zbalance:
     &config
+    image: conjure:latest
+    # image: conjure_zbalance:latest # for smaller image when running separate
     build:
-      context: conjure
+      context: /opt/conjure
       dockerfile: /opt/conjure/docker/Dockerfile
       args:
         pfring_ver: $PFRING_VER
-    image: conjure:latest
-    # image: conjure_zbalance:latest # for smaller image when running separate
     privileged: true
     network_mode: "host"
     ipc: "host"

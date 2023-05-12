@@ -38,10 +38,14 @@ registration-server:
 
 PARAMS := det app reg zbalance sim
 target := unk
-ifdef PFRING_VER
-	pfring_ver := latest
-else
-	pfring_ver := ${PFRING_VER}
+# makefile arguments take preference, if one is not provided we check the environment variable.
+# If that is also missing then we use "latest" and install pfring from pkg in the docker build.
+ifndef pfring_ver
+	ifdef PFRING_VER
+		pfring_ver := ${PFRING_VER}
+	else
+		pfring_ver := latest
+	endif
 endif
 
 container:

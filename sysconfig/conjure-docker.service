@@ -1,24 +1,22 @@
-
 [Unit]
-Description=Conjure Detector
+Description=Containerized Conjure system
+Requires=docker.service
+After=docker.service
 
 [Service]
-Type=simple
+Type=exec
 
 WorkingDirectory=/opt/conjure/
 
 SyslogIdentifier=conjure
-EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
 
-# # makes if binary doesn't exist
-# Ensure zbalance finished starting (else pfring_zc_ipc_attach can give Invalid argument)
-ExecStartPre=/bin/sleep 5
 ExecStartPre=/opt/conjure/on-reboot.sh
-ExecStart=/usr/local/bin/docker-compose -f /opt/conjure/docker/docker-compose.yaml up -d
-ExecStop=/usr/local/bin/docker-compose -f /opt/conjure/docker/docker-compose.yaml down
+ExecStart=/bin/bash -c 'set -a && source /opt/conjure/sysconfig/conjure.conf && /usr/local/bin/docker-compose -f /opt/conjure/docker/docker-compose.yaml up'
+ExecStop=/bin/bash -c 'set -a && source /opt/conjure/sysconfig/conjure.conf && /usr/local/bin/docker-compose -f /opt/conjure/docker/docker-compose.yaml down'
+StandardOutput=syslog
 
-# on stop processes will get SIGTERM, and after 10 secs - SIGKILL (default 90)
-TimeoutStopSec=5
+# on stop processes will get SIGTERM, and after 30 secs - SIGKILL (default 90)
+TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
