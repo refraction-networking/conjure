@@ -1,62 +1,63 @@
-version: '3.4'
+version: '3'
 services:
-    # zbalance needs access to the monitored interface and to systems hugepages.
-    # hugepages are shared between containers
-    # `network_mode: host` and `privileged: true` make it possible
-    # but it might be possible to achieve with 'docker capabilities'
+  zbalance:
+    &config
+    image: conjure:latest
+    # image: conjure_zbalance:latest # for smaller image when running separate
+    build:
+      context: /opt/conjure
+      dockerfile: /opt/conjure/docker/Dockerfile
+      args:
+        pfring_ver: $PFRING_VER
+    privileged: true
+    network_mode: "host"
+    ipc: "host"
+    cap_add:
+      - ipc_lock
+    volumes:
+      - /dev/hugepages:/dev/hugepages # zbalance_ipc
+      - /etc/pf_ring:/etc/pf_ring # pf_ring licenses
+      - /var/lib/conjure:/var/lib/conjure # config
+    logging:
+      driver: "journald"
+    restart: "always"
+    command: [ "/opt/conjure/bin/start_zbalance_ipc.sh" ]
 
-    zbalance:
-        image: zbalance:latest
-        build:
-                context: ../
-                dockerfile: ./docker/Dockerfile
-                target: zbalance
-        privileged: true
-        env_file: /etc/conjure/conjure.conf
-        volumes:
-                - /dev/hugepages:/dev/hugepages
-                - /etc/pf_ring:/etc/pf_ring
-        restart: unless-stopped
-        network_mode: "host"
-    redis:
-        image: redis:alpine
-        restart: unless-stopped
-        depends_on:
-                - zbalance
-        # Redis has to be exposed on localhost. Check 'detector' service for details
-        network_mode: "host"
-    detector:
-        image: detector:latest
-        build:
-                context: ../
-                dockerfile: ./docker/Dockerfile
-                target: detector
-        # For hugepages to work
-        privileged: true
-        env_file: /etc/conjure/conjure.conf
-        volumes:
-                - /etc/conjure/app-config.toml:/opt/conjure/application/config.toml
-                - /etc/conjure/privkey:/opt/conjure/sysconfig/privkey
-                - /etc/conjure/phantom_subnets.toml:/opt/conjure/sysconfig/phantom_subnets.toml
-                - /dev/hugepages:/dev/hugepages
-        depends_on:
-                - zbalance
-                - redis
-        restart: unless-stopped
-        # To connect to reddis. See line 200 in src/flow_tracker.rs
-        network_mode: "host"
-    application:
-        image: application:latest
-        build:
-                context: ../
-                dockerfile: ./docker/Dockerfile
-                target: application
-        env_file: /etc/conjure/conjure.conf
-        volumes:
-                - /etc/conjure/app-config.toml:/opt/conjure/application/config.toml
-                - /etc/conjure/privkey:/opt/conjure/sysconfig/privkey
-                - /etc/conjure/phantom_subnets.toml:/opt/conjure/sysconfig/phantom_subnets.toml
-        depends_on:
-                - zbalance
-                - detector
-        network_mode: "host"
+  # # DEBUG PF_RING / zbalance
+  #  zcount:
+  #    << : *config
+  #    privileged: false
+  #    command: ["bash", "-c", "sleep 10 && zcount_ipc -c 99 -i 0"]
+  #    depends_on:
+  #    - zbalance
+
+  conjure-det:
+    <<: *config
+    # image: conjure_det:latest # for smaller image when running separate
+    privileged: true
+    volumes:
+      - /dev/net/tun:/dev/net/tun #tun driver interface
+      - /dev/hugepages:/dev/hugepages # zbalance_ipc
+      - /var/lib/conjure:/var/lib/conjure # config
+    command:
+      [
+        "bash",
+        "-c",
+        "sleep 10 && /opt/conjure/bin/start_detector.sh"
+      ]
+
+  conjure-app:
+    <<: *config
+    # image: conjure_app:latest # for smaller image when running separate
+    privileged: true
+    volumes:
+      - /dev/net/tun:/dev/net/tun #tun driver interface
+      - /dev/hugepages:/dev/hugepages # zbalance_ipc
+      - /var/lib/conjure:/var/lib/conjure # config
+      - /usr/share/GeoIP:/usr/share/GeoIP # geoip database
+    command:
+      [
+        "bash",
+        "-c",
+        "sleep 10 && /opt/conjure/bin/start_application.sh"
+      ]

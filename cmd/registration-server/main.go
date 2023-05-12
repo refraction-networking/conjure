@@ -145,15 +145,19 @@ func main() {
 	var configPath string
 	var apiOnly, dnsOnly bool
 
-	flag.StringVar(&configPath, "config", "", "configuration file path")
+	flag.StringVar(&configPath, "config", "", "configuration file path, alternative to CJ_REGISTRAR_CONFIG env var")
 	flag.BoolVar(&apiOnly, "api-only", false, "run only the API registrar")
 	flag.BoolVar(&dnsOnly, "dns-only", false, "run only the DNS registrar")
 	flag.Parse()
 
 	if configPath == "" {
-		fmt.Fprintf(os.Stderr, "-config is a required flag")
-		flag.Usage()
-		os.Exit(2)
+		configPath = os.Getenv("CJ_REGISTRAR_CONFIG")
+
+		if configPath == "" {
+			fmt.Fprintf(os.Stderr, "configuration path is a required flag")
+			flag.Usage()
+			os.Exit(2)
+		}
 	}
 
 	logFormatter := &log.TextFormatter{
