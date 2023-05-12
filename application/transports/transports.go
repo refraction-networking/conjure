@@ -26,6 +26,10 @@ var (
 	// required functions because the clientLibVersion is to old and the transport is not backward
 	// compatible to that version.
 	ErrTransportNotSupported = errors.New("Transport not supported ")
+
+	// ErrPublicKeyLen is returned when the length of the provided public key is incorrect for
+	// ed25519.
+	ErrPublicKeyLen = errors.New("Unexpected station pubkey length. Expected: 32B")
 )
 
 // PrefixConn allows arbitrary readers to serve as the data source of a net.Conn. This allows us to

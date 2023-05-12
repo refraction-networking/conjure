@@ -1,7 +1,14 @@
 #!/bin/bash
+#
+# Use this script once after reboot, and on configuration changes
+# that affect variables in the config file.
+# See README.md
+# Run as sud
 
-
-
+# if conjure path is unset (not empty -- unset) use the default.
+if [ -z "${CJ_PATH+x}" ]; then
+    CJ_PATH="/opt/conjure/"
+fi
 
 source $CJ_PATH/sysconfig/conjure.conf
 
@@ -16,6 +23,20 @@ exit_msg() {
     cd ${LAST_DIR}
     exit 1
 }
+
+# Otherwise, this section will require constant updating.
+if [ "x$PF_DRIVER" = "xe1000e" ]; then
+    pf_ringcfg --configure-driver e1000e --rss-queues 1
+    pf_ringcfg --list-interfaces
+elif [ "x$PF_DRIVER" = "xi40e" ]; then
+    pf_ringcfg --configure-driver i40e --rss-queues 1
+    pf_ringcfg --list-interfaces
+elif [ "x$PF_DRIVER" = "xixgbe" ]; then
+    pf_ringcfg --configure-driver ixgbe --rss-queues 1
+    pf_ringcfg --list-interfaces
+else
+    exit_msg "Unknown driver $PF_DRIVER"
+fi
 
 # Create a tunnel for each core.
 # The tunnel numbers do not match the core index per the OS,
@@ -45,14 +66,14 @@ done
 
 
 echo "Setting up hugepages"
-if [ ! -d "/mnt/huge" ]; then
-    echo "Creating /mnt/huge"
-    mkdir -p /mnt/huge || exit_msg "Failed to create /mnt/huge"
+if [ ! -d "/mnt/hugepages" ]; then
+    echo "Creating /mnt/hugepages"
+    mkdir -p /mnt/hugepages || exit_msg "Failed to create /mnt/hugepages"
 fi
-grep -s '/mnt/huge' /proc/mounts > /dev/null
+grep -s '/mnt/hugepages' /proc/mounts > /dev/null
 if [ $? -ne 0 ] ; then
-    echo "Mounting /mnt/huge"
-    mount -t hugetlbfs nodev /mnt/huge || exit_msg "Failed to mount /mnt/huge as hugetlbfs"
+    echo "Mounting /mnt/hugepages"
+    mount -t hugetlbfs nodev /mnt/hugepages || exit_msg "Failed to mount /mnt/hugepages as hugetlbfs"
 fi
 echo 2048 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages
 if [ "$?" -ne 0 ]

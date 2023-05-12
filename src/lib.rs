@@ -122,7 +122,7 @@ impl PerCoreGlobal {
         // Parse toml station config to get filter list
         let conf_path = env::var(STATION_CONF_PATH).unwrap();
         let contents = fs::read_to_string(conf_path)
-            .expect("Something went wrong reading the station config file");
+            .expect("Something went wrong reading the station config file ({conf_path})");
         let value: StationConfig =
             toml::from_str(&contents).expect("Failed to parse toml station config");
 

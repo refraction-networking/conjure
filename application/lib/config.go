@@ -20,9 +20,10 @@ type Config struct {
 // variable.
 func ParseConfig() (*Config, error) {
 	var c Config
-	_, err := toml.DecodeFile(os.Getenv("CJ_STATION_CONFIG"), &c)
+	var envPath = os.Getenv("CJ_STATION_CONFIG")
+	_, err := toml.DecodeFile(envPath, &c)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %v", err)
+		return nil, fmt.Errorf("failed to load config (%s): %v", envPath, err)
 	}
 
 	c.ParseBlocklists()
