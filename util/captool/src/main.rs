@@ -1,6 +1,7 @@
 #![feature(ip)]
 #![feature(let_chains)]
 #![feature(associated_type_bounds)]
+#![feature(path_file_prefix)]
 
 #[macro_use]
 extern crate log;
@@ -23,6 +24,7 @@ use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
 use pcap_file::pcapng::PcapNgWriter;
 use pcap_file::DataLink;
+use serde::Serialize;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::flag::register;
 use threadpool::ThreadPool;
@@ -31,8 +33,8 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fs::{self, File};
 #[cfg(debug_assertions)]
-use std::io::stdin;
-use std::io::Write;
+use std::io::{stdin, Write};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -49,7 +51,7 @@ $ captool -t \"192.168.0.0/16\" -i \"en01\"
 $ captool -t \"192.168.0.0/16,2001:abcd::/64\" -i \"ens15f0,ens15f1,en01\" -a \"$(cat ./asn_list.txt)\" -lpa 10000 -o \"$(date -u +\"%FT%H%MZ\").pcapng.gz\"
 ";
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Serialize)]
 #[command(
     author,
     version,
@@ -161,6 +163,15 @@ fn debug_warn() {
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let flag = Arc::new(AtomicBool::new(false));
+
+    let toml_conf = toml::to_string(&args).unwrap();
+    let out_path = Path::new(&args.out);
+    let config_path = out_path.with_file_name(format!(
+        "{}.cfg",
+        out_path.file_prefix().unwrap().to_str().unwrap().replace("\"", "")
+    ));
+    let mut file = File::create(&config_path)?;
+    file.write_all(&toml_conf.into_bytes())?;
 
     let asn_list = parse_asn_list(args.asn_filter);
     let cc_list = parse_cc_list(args.cc_filter);

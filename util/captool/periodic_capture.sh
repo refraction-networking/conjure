@@ -15,9 +15,11 @@ concatenate_paths() {
 
 # Parameters - all here are examples
 
-DATA_DIR="./"
-TARGET_SUBNET="192.168.0.0/24"
-output_fpath="$(concatenate_paths $data_dir "$(date -u +%FT%H%MZ").pcapng.gz)"
+data_dir="./"
+target_subnet="192.168.0.0/24"
+out_fname="ir-$(date -u +%FT%H%MZ")"
+output_fpath="$(concatenate_paths $data_dir "${out_fname}.pcapng.gz")"
+output_config="$(concatenate_paths $data_dir "${out_fname}.cfg")"
 interfaces="eno1"
 asn_file="./asn_list.txt"
 asn_list="$([ -f $asn_file ] && cat $asn_file)"
@@ -26,9 +28,9 @@ timeout="4h"
 
 # Run the capture tool
 if [[ -z "$asn_list" ]]; then
-    RUST_BACKTRACE=1 ./captool -t "$TARGET_SUBNET" -i "$interfaces" --lpa "$limit_per_asn" -o "$output_fpath" -t "$timeout"
+    RUST_BACKTRACE=1 ./captool -t "$target_subnet" -i "$interfaces" --lpa "$limit_per_asn" -o "$output_fpath" -t "$timeout"
 else
-    RUST_BACKTRACE=1 ./captool -t "$TARGET_SUBNET" -i "$interfaces" -a "$asn_list" --lpa "$limit_per_asn" -o "$output_fpath" -t "$timeout"
+    RUST_BACKTRACE=1 ./captool -t "$target_subnet" -i "$interfaces" -a "$asn_list" --lpa "$limit_per_asn" -o "$output_fpath" -t "$timeout"
 fi
 
 unset should_sync
@@ -41,6 +43,6 @@ ifdef should_sync; then
     identity_file="$HOME/.ssh/sync_ed25519"
     remote_data_dir="~/"
 
-    # Sync the Captured File to the analysis VM
-    scp -i ${identity_file} $output_fpath ${remote_user}@${analysis_server}:${remote_data_dir}
+    # Sync the Captured File and the dumped config for the capture to the analysis VM
+    scp -i ${identity_file} $output_fpath $output_config ${remote_user}@${analysis_server}:${remote_data_dir}
 fi
