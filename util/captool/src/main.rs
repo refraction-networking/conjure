@@ -92,12 +92,12 @@ struct Args {
     asn_filter: Option<String>,
 
     /// Limit Packets per ASN (LPA) reads only N packets per ASN. Requires. `asn_filter` argument.
-    #[arg(long, requires = "asn_filter", conflicts_with_all=["lpc", "lfc"])]
+    #[arg(long, conflicts_with_all=["lpc", "lfc"])]
     lpa: Option<u64>,
 
     /// Limit Flows per ASN (LFA) reads N Flows  per ASN. Requires. `asn_filter` argument. If no PPF
     /// or Packet Limit is specified this will read until Ctrl-C as flow termination is not tracked.
-    #[arg(long, requires = "asn_filter", conflicts_with_all=["lpc", "lfc"])]
+    #[arg(long, conflicts_with_all=["lpc", "lfc"])]
     lfa: Option<u64>,
 
     /// Comma separated list of CCs from which to capture packets. Limits which packets are
@@ -105,14 +105,14 @@ struct Args {
     #[arg(short, long)]
     cc_filter: Option<String>,
 
-    /// Limit Packets per Country (LPC) reads only N packets per Country Code. Requires. `cc_filter` argument.
-    #[arg(long, requires = "cc_filter", conflicts_with = "lpa")]
+    /// (WARNING - Disabled) Limit Packets per Country (LPC) reads only N packets per Country Code. Requires. `cc_filter` argument.
+    #[arg(long, conflicts_with = "lpa")]
     lpc: Option<u64>,
 
-    /// Limit Flows per Country (LFC) reads N flows per Country Code. Requires. `cc_filter`
+    /// (WARNING - Disabled) Limit Flows per Country (LFC) reads N flows per Country Code. Requires. `cc_filter`
     /// argument. If no PPF or Packet Limit is specified this will read until Ctrl-C as flow
     /// termination is not tracked.
-    #[arg(long, requires = "cc_filter", conflicts_with_all=["lpa", "lfa"])]
+    #[arg(long, conflicts_with_all=["lpa", "lfa"])]
     lfc: Option<u64>,
 
     /// Comma separated interfaces on which to listen (mutually exclusive with `--pcap_dir`, and `--read` options).
@@ -575,11 +575,11 @@ mod tests {
 
     #[test]
     fn test_cc_and_asn_lookup() -> Result<(), String> {
-        const ASNDB_PATH: &str = "./test_mmdbs/GeoLite2-ASN.mmdb";
-        const CCDB_PATH: &str = "./test_mmdbs/GeoLite2-Country.mmdb";
-        let asn_reader = maxminddb::Reader::open_readfile(String::from(ASNDB_PATH)).unwrap();
+        const ASNDB_PATH_TEST: &str = "./test_mmdbs/GeoLite2-ASN.mmdb";
+        const CCDB_PATH_TEST: &str = "./test_mmdbs/GeoLite2-Country.mmdb";
+        let asn_reader = maxminddb::Reader::open_readfile(String::from(ASNDB_PATH_TEST)).unwrap();
 
-        let cc_reader = maxminddb::Reader::open_readfile(String::from(CCDB_PATH)).unwrap();
+        let cc_reader = maxminddb::Reader::open_readfile(String::from(CCDB_PATH_TEST)).unwrap();
 
         let ip: IpAddr = "192.122.190.123".parse().unwrap();
 

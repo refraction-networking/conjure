@@ -322,7 +322,8 @@ impl<'p> MutableIpPacket<'p> {
 
         if let Some(ref mut l) = &mut limiter.as_mut() {
             if let Err(e) = l.count_or_drop_many(
-                vec![info.asn.into(), info.cc.clone().into()],
+                // vec![info.asn.into(), info.cc.clone().into()],
+                vec![info.asn.into()],
                 s.clone(),
                 packet_type,
             ) {

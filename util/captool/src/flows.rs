@@ -1,7 +1,8 @@
 use crate::ip::PacketType;
 use crate::limit::{Hashable, Limit, LimitError};
 
-use std::cmp::min;
+use std::cmp::max;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -67,30 +68,34 @@ impl Limits {
         flag: Arc<AtomicBool>,
     ) -> LimiterState {
         let n_keys = keys.len() as u64;
+
+        // In order for there to be a packet limit, one of the following must have all elements non-zero
+        // - limit packets
+        let a = self.lp;
+        // - limit packets per key and fixed num keys
+        let b = self.lpk * n_keys;
+        // - limit flows and limit packets per flow
+        let c = self.lf * self.lppf;
+        // - limit flows per key, limit packets per flow, and fixed num keys
+        let d = self.lfk * self.lppf * n_keys;
+        let no_packet_limit = max(max(max(a, b), c), d) == 0;
+
+        // If there is a packet limit, find the lowest non-zero limit
+        if !no_packet_limit {
+            self.lp = vec![a, b, c, d]
+                .into_iter()
+                .filter(|x| *x != 0_u64)
+                .min()
+                .unwrap();
+        }
+
+        // If we have a limit but flows per key or packets per key, but no fixed set of keys, then
+        // the keys will be dynamic.
+        let dynamic_keys = n_keys == 0 && (self.lfk != 0_u64 || self.lpk != 0_u64);
         let counts_per_key = keys
             .into_iter()
             .map(|h| (h.into(), KeyCount::new()))
             .collect();
-
-        if self.lfk != 0 {
-            if self.lf == 0 {
-                self.lf = self.lfk * n_keys;
-            } else {
-                self.lf = min(self.lfk * n_keys, self.lf);
-            }
-        }
-
-        if self.lppf != 0 && self.lf != 0 {
-            self.lp = self.lppf * self.lf;
-        }
-
-        if self.lpk != 0 {
-            if self.lp == 0 {
-                self.lp = self.lpk * n_keys;
-            } else {
-                self.lp = min(self.lpk * n_keys, self.lp);
-            }
-        }
 
         LimiterState {
             packets_per_flow: HashMap::new(),
@@ -100,19 +105,13 @@ impl Limits {
             limits: self,
             flag,
             m: Mutex::new(0_u32),
+            no_packet_limit,
+            dynamic_keys,
         }
     }
 
     pub fn is_unlimited(&self) -> bool {
         self.lpk == 0 && self.lp == 0 && self.lppf == 0 && self.lf == 0 && self.lfk == 0
-    }
-
-    pub fn no_packet_limit(&self) -> bool {
-        if self.lpk == 0 && self.lp == 0 {
-            self.lppf == 0 || (self.lf == 0 && self.lfk == 0)
-        } else {
-            false
-        }
     }
 }
 
@@ -124,9 +123,14 @@ pub struct LimiterState {
     total_packet_count: AtomicU64,
     limits: Limits,
     flag: Arc<AtomicBool>,
+    no_packet_limit: bool,
+
+    /// should this limiter allow dynamically added keys?
+    dynamic_keys: bool,
 }
 
 impl LimiterState {
+    #[allow(clippy::if_same_then_else)]
     fn count_or_drop_many_no_packet_limit(
         &mut self,
         keys: Vec<Hashable>,
@@ -135,28 +139,33 @@ impl LimiterState {
         flow_packet_count: u64,
         total_flows: u64,
     ) -> Result<Hashable, LimitError> {
-        if known_flow {
-            // known flow (so doesn't change total or key flow counts) and ppf already checked.
-            self.packets_per_flow
-                .get(&afi)
-                .unwrap()
-                .store(flow_packet_count, Ordering::Relaxed);
-            return Ok(Hashable::Z);
-        }
-        if self.limits.lf != 0 && self.limits.lppf == 0 && total_flows >= self.limits.lf {
-            // We have no packet limit, check if adding a new flow pushes us over the flow count
-            Err(LimitError::Full(Hashable::Z))?;
-        }
+        let mut known_keys = HashMap::new();
         let mut result = Hashable::Z;
-        if self.limits.lfk != 0 && self.limits.lppf == 0 {
+
+        // Do we need to track by keys?
+        // If we have keys or a limit in which we add keys dynamically, yes
+        if !self.counts_per_key.is_empty() || self.dynamic_keys {
             // check to see if we have reached any flow limits by key
-            let mut known_keys = HashMap::new();
             for key in keys {
-                if self.counts_per_key.contains_key(&key) {
+                if let Entry::Vacant(e) = self.counts_per_key.entry(key.clone()) {
+                    if self.dynamic_keys {
+                        // If we are allowed to dynamically add keys and we do not recognize this key,
+                        // add it. The initial counts will be handled by the store loop.
+                        known_keys.insert(key.clone(), (0, 0));
+                        e.insert(KeyCount {
+                            packets: 0.into(),
+                            flows: 0.into(),
+                        });
+                    }
+                } else {
                     let (packets_for_key, flows_for_key) =
                         self.counts_per_key.get(&key).unwrap().load();
-                    // println!("{key} -> {flows_for_key}");
-                    if flows_for_key >= self.limits.lfk {
+                    println!("\nnew {key} -> {packets_for_key} {flows_for_key}");
+                    if !known_flow && self.limits.lfk != 0 && flows_for_key >= self.limits.lfk {
+                        //  Is there a key with a full flow count, and is this a new flow?
+                        return Err(LimitError::Full(key));
+                    } else if self.limits.lpk != 0 && packets_for_key >= self.limits.lpk {
+                        // Is there a key that is at the packet limit where we should deny this packet?
                         return Err(LimitError::Full(key));
                     }
                     known_keys.insert(key, (packets_for_key, flows_for_key));
@@ -169,13 +178,33 @@ impl LimiterState {
                 Err(LimitError::NoRelevantKeys)?;
             }
 
+            let new_flow = if known_flow { 0 } else { 1 };
             for (key, (p, f)) in known_keys {
                 result = key.clone();
-                self.counts_per_key
-                    .get_mut(&key)
-                    .unwrap()
-                    .store(p, f + 1, Ordering::Relaxed);
+                self.counts_per_key.get_mut(&key).unwrap().store(
+                    p + 1,
+                    f + new_flow,
+                    Ordering::Relaxed,
+                );
             }
+        }
+
+        // If we are not limited by key, and this is a known flow there is no other limit, return Ok
+        if known_flow {
+            // known flow (so doesn't change total) and ppf already checked.
+            self.packets_per_flow
+                .get(&afi)
+                .unwrap()
+                .store(flow_packet_count, Ordering::Relaxed);
+            return Ok(Hashable::Z);
+            // return Ok(result);
+        }
+
+        // ---- From here on the packet must be a new flow ----
+
+        if self.limits.lf != 0 && self.limits.lppf == 0 && total_flows >= self.limits.lf {
+            // We have no packet limit, check if adding a new flow pushes us over the flow count
+            Err(LimitError::Full(Hashable::Z))?;
         }
 
         self.packets_per_flow.insert(afi, AtomicU64::new(1));
@@ -196,11 +225,23 @@ impl LimiterState {
         let mut result = Hashable::Z;
         let mut known_keys = HashMap::new();
 
-        // If we have keys and a key based limit to apply
-        if !self.counts_per_key.is_empty() && (self.limits.lpk != 0 || self.limits.lfk != 0) {
+        // If we have keys or a limit in which we add keys dynamically
+        if !self.counts_per_key.is_empty()
+            && (self.limits.lfk != 0 || self.limits.lpk != 0 || self.dynamic_keys)
+        {
             for key in keys {
                 //Find any of the keys that we know about.
-                if self.counts_per_key.contains_key(&key) {
+                if let std::collections::hash_map::Entry::Vacant(e) =
+                    self.counts_per_key.entry(key.clone())
+                {
+                    if self.dynamic_keys {
+                        known_keys.insert(key.clone(), (1, 0));
+                        e.insert(KeyCount {
+                            packets: 1.into(),
+                            flows: 0.into(),
+                        });
+                    }
+                } else {
                     // for all known keys fetch and increment the counters. Note that the flow counter
                     // is only incremented if we have made it to this point and this is an unknown flow
                     // indicating that this is a SYN or a UDP flow we have not seen before.
@@ -210,6 +251,7 @@ impl LimiterState {
                     );
                 }
             }
+
             // If we expect to limit by either packets or flows per key and we did not recognize any key
             // associated with this packet then we are not interested in this packet and we should return
             // without committing increments to counts.
@@ -349,7 +391,7 @@ impl Limit for &mut LimiterState {
             Err(LimitError::FullPPF)?;
         }
 
-        match self.limits.no_packet_limit() {
+        match self.no_packet_limit {
             true => self.count_or_drop_many_no_packet_limit(
                 keys,
                 afi,
@@ -531,9 +573,9 @@ mod tests {
             },
         ];
 
-        assert!(limits.no_packet_limit());
         let flag = Arc::new(AtomicBool::new(false));
         let mut limiter = limits.into_limiter(keys, flag);
+        assert!(limiter.no_packet_limit);
 
         run_test(&mut limiter, packets).unwrap();
         Ok(())
@@ -549,8 +591,8 @@ mod tests {
             lf: 0,
             lppf: 2,
         };
-        assert!(limits.no_packet_limit());
         let mut limiter = limits.into_limiter::<()>(vec![], Arc::new(AtomicBool::new(false)));
+        assert!(limiter.no_packet_limit);
 
         let packets = vec![
             MP {
@@ -608,7 +650,7 @@ mod tests {
     }
 
     #[test]
-    fn flows_per_key_only() -> Result<(), Box<dyn Error>> {
+    fn fixed_keys_flows_per_key_only() -> Result<(), Box<dyn Error>> {
         let limits = Limits {
             lpk: 0,
             lfk: 2,
@@ -616,9 +658,9 @@ mod tests {
             lf: 0,
             lppf: 0,
         };
-        assert!(limits.no_packet_limit());
         let mut limiter =
             limits.into_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
+        assert!(limiter.no_packet_limit);
         let packets = vec![
             MP {
                 // Rejected because part of a known flow and not the start of a flow
@@ -683,9 +725,9 @@ mod tests {
             lf: 0,
             lppf: 0,
         };
-        assert!(!limits.no_packet_limit());
         let mut limiter =
             limits.into_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
+        assert!(!limiter.no_packet_limit);
         let packets = vec![
             MP {
                 // rejected, not part of a flow despite no flow limit
@@ -744,9 +786,9 @@ mod tests {
             lf: 0,
             lppf: 0,
         };
-        assert!(!limits.no_packet_limit());
         let mut limiter =
             limits.into_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
+        assert!(!limiter.no_packet_limit);
         let packets = vec![
             MP {
                 // rejected, not part of a flow despite no flow limit
@@ -805,9 +847,9 @@ mod tests {
             lf: 0,
             lppf: 0,
         };
-        assert!(!limits.no_packet_limit());
         let mut limiter =
             limits.into_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
+        assert!(!limiter.no_packet_limit);
         let packets = vec![
             MP {
                 // rejected, not part of a flow despite no flow limit
@@ -880,9 +922,9 @@ mod tests {
             lf: 2,
             lppf: 0,
         };
-        assert!(limits.no_packet_limit());
         let mut limiter =
             limits.into_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
+        assert!(limiter.no_packet_limit);
         let packets = vec![
             MP {
                 // rejected, not part of a flow despite no flow limit
@@ -955,9 +997,9 @@ mod tests {
             lf: 0,
             lppf: 2,
         };
-        assert!(!limits.no_packet_limit());
         let mut limiter =
             limits.into_limiter::<&str>(vec!["ir", "cn"], Arc::new(AtomicBool::new(false)));
+        assert!(!limiter.no_packet_limit);
         let packets = vec![
             MP {
                 // rejected, not part of a flow despite no flow limit
@@ -1030,6 +1072,195 @@ mod tests {
                 t: PacketType::TCPOther,
                 erfs: true,
                 expected: Ok("cn".into()),
+            },
+        ];
+
+        run_test(&mut limiter, packets).unwrap();
+        Ok(())
+    }
+
+    #[test]
+    fn packet_limit_lpk_no_keys() -> Result<(), Box<dyn Error>> {
+        let limits = Limits {
+            lpk: 3,
+            lfk: 0,
+            lp: 0,
+            lf: 0,
+            lppf: 0,
+        };
+        simple_logger::init_with_level(log::Level::Debug).unwrap();
+        let mut limiter = limits.into_limiter::<&str>(vec![], Arc::new(AtomicBool::new(false)));
+        assert!(limiter.no_packet_limit);
+        let packets = vec![
+            MP {
+                // rejected, not part of a flow despite no flow limit
+                afi: String::from("2"),
+                keys: vec!["ir".into()],
+                t: PacketType::TCPOther,
+                erfs: false,
+                expected: Err(LimitError::UnknownFlow),
+            },
+            MP {
+                // new key 1, packet 1 for key 1
+                afi: String::from("1"),
+                keys: vec!["ir".into()],
+                t: PacketType::TCPSYN,
+                erfs: false,
+                expected: Ok("ir".into()),
+            },
+            MP {
+                // packet 2 key 1
+                afi: String::from("1"),
+                keys: vec!["ir".into()],
+                t: PacketType::TCPOther,
+                erfs: false,
+                expected: Ok(Hashable::Z),
+            },
+            MP {
+                // new key 2, packet 1 for key 2
+                afi: String::from("5"),
+                keys: vec!["ru".into()],
+                t: PacketType::TCPSYN,
+                erfs: false,
+                expected: Ok("ru".into()),
+            },
+            MP {
+                // packet 3 key 1
+                afi: String::from("1"),
+                keys: vec!["ir".into()],
+                t: PacketType::TCPOther,
+                erfs: false,
+                expected: Ok(Hashable::Z),
+            },
+            MP {
+                // new key 3, packet 1 for key 3
+                afi: String::from("2"),
+                keys: vec!["cn".into()],
+                t: PacketType::TCPSYN,
+                erfs: false,
+                expected: Ok("cn".into()),
+            },
+            MP {
+                // denied, packet count key 1
+                afi: String::from("1"),
+                keys: vec!["ir".into()],
+                t: PacketType::TCPOther,
+                erfs: false,
+                expected: Err(LimitError::Full("ir".into())),
+            },
+            MP {
+                // allowed, packet 2 for key 3
+                afi: String::from("3"),
+                keys: vec!["cn".into()],
+                t: PacketType::TCPSYN,
+                erfs: false,
+                expected: Ok("cn".into()),
+            },
+            MP {
+                // denied, packet count key 1
+                afi: String::from("9"),
+                keys: vec!["ir".into()],
+                t: PacketType::TCPSYN,
+                erfs: false,
+                expected: Err(LimitError::Full("ir".into())),
+            },
+        ];
+
+        run_test(&mut limiter, packets).unwrap();
+        Ok(())
+    }
+
+    #[test]
+    fn flow_limit_lfk_no_keys() -> Result<(), Box<dyn Error>> {
+        let limits = Limits {
+            lpk: 0,
+            lfk: 2,
+            lp: 0,
+            lf: 0,
+            lppf: 0,
+        };
+        let mut limiter = limits.into_limiter::<&str>(vec![], Arc::new(AtomicBool::new(false)));
+        assert!(limiter.no_packet_limit);
+        let packets = vec![
+            MP {
+                // rejected, not part of a flow despite no flow limit
+                afi: String::from("2"),
+                keys: vec!["ir".into()],
+                t: PacketType::TCPOther,
+                erfs: false,
+                expected: Err(LimitError::UnknownFlow),
+            },
+            MP {
+                // new flow 1, new key 1, new flow 1 for key 1
+                afi: String::from("5"),
+                keys: vec!["ir".into()],
+                t: PacketType::TCPSYN,
+                erfs: false,
+                expected: Ok("ir".into()),
+            },
+            MP {
+                // new flow 2, new flow 2 for key 1
+                afi: String::from("1"),
+                keys: vec!["ir".into()],
+                t: PacketType::TCPSYN,
+                erfs: false,
+                expected: Ok("ir".into()),
+            },
+            MP {
+                // accepted as part of known flow 1
+                afi: String::from("5"),
+                keys: vec!["ir".into()],
+                t: PacketType::TCPOther,
+                erfs: false,
+                expected: Ok(Hashable::Z),
+            },
+            MP {
+                // new flow 3, new key 2, new flow 1 for key 2
+                afi: String::from("2"),
+                keys: vec!["cn".into()],
+                t: PacketType::TCPSYN,
+                erfs: false,
+                expected: Ok("cn".into()),
+            },
+            MP {
+                // denied since we are over flow count for key 1
+                afi: String::from("3"),
+                keys: vec!["ir".into()],
+                t: PacketType::TCPSYN,
+                erfs: false,
+                expected: Err(LimitError::Full("ir".into())),
+            },
+            MP {
+                // accepted as part of known flow 1
+                afi: String::from("5"),
+                keys: vec!["ir".into()],
+                t: PacketType::TCPOther,
+                erfs: false,
+                expected: Ok(Hashable::Z),
+            },
+            MP {
+                // new flow 4, new flow 2 for key 2
+                afi: String::from("8"),
+                keys: vec!["cn".into()],
+                t: PacketType::TCPSYN,
+                erfs: false,
+                expected: Ok("cn".into()),
+            },
+            MP {
+                // new flow 5, new key 3, new flow 1 for key 3
+                afi: String::from("7"),
+                keys: vec!["ru".into()],
+                t: PacketType::TCPSYN,
+                erfs: false,
+                expected: Ok("ru".into()),
+            },
+            MP {
+                // denied since we are over flow count for key 1
+                afi: String::from("9"),
+                keys: vec!["cn".into()],
+                t: PacketType::TCPSYN,
+                erfs: false,
+                expected: Err(LimitError::Full("cn".into())),
             },
         ];
 
