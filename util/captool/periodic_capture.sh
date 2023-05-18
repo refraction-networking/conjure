@@ -15,11 +15,15 @@ concatenate_paths() {
 
 # Parameters - all here are examples
 
+bin_dir="./"
+captool=$(concatenate_paths $bin_dir "/captool")
+
 data_dir="./"
-target_subnet="192.168.0.0/24,2001::/64"
 out_fname="ir-$(date -u +%FT%H%MZ")"
 output_fpath="$(concatenate_paths $data_dir "${out_fname}.pcapng.gz")"
 output_config="$(concatenate_paths $data_dir "${out_fname}.cfg")"
+
+target_subnet="192.168.0.0/24,2001::/64"
 interfaces="eno1"
 asn_file="./asn_list.txt"
 asn_list="$([ -f $asn_file ] && cat $asn_file)"
@@ -31,10 +35,10 @@ timeout="3h"
 # the capture tool
 if [[ -z "$asn_list" ]]; then
     # echo "no asn list"
-    RUST_BACKTRACE=1 ./captool -t "$target_subnet" -i "$interfaces" --lfa "$flows_per_asn" --ppf "$packets_per_flow" --lp "$packet_total" -o "$output_fpath" --timeout "$timeout"
+    RUST_BACKTRACE=1 $captool -t "$target_subnet" -i "$interfaces" --lfa "$flows_per_asn" --ppf "$packets_per_flow" --lp "$packet_total" -o "$output_fpath" --timeout "$timeout"
 else
     # echo "no asn list"
-    RUST_BACKTRACE=1 ./captool -t "$target_subnet" -i "$interfaces" --lfa "$flows_per_asn" --ppf "$packets_per_flow" --lp "$packet_total" -o "$output_fpath" --timeout "$timeout" -a  "$asn_list"
+    RUST_BACKTRACE=1 $captool -t "$target_subnet" -i "$interfaces" --lfa "$flows_per_asn" --ppf "$packets_per_flow" --lp "$packet_total" -o "$output_fpath" --timeout "$timeout" -a  "$asn_list"
 fi
 
 unset should_sync
