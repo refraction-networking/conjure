@@ -181,7 +181,7 @@ pub struct HKDFKeys {
 impl HKDFKeys {
     pub fn new(shared_secret: &[u8]) -> Result<HKDFKeys, Box<hkdf::InvalidLength>> {
         let salt = "conjureconjureconjureconjure".as_bytes();
-        let kdf = hkdf::Hkdf::<sha2::Sha256>::extract(Some(salt), shared_secret);
+        let kdf = hkdf::Hkdf::<sha2::Sha256>::new(Some(salt), shared_secret);
         let info = [0u8; 0];
 
         let mut output = [0u8; 120];
