@@ -160,7 +160,7 @@ impl LimiterState {
                 } else {
                     let (packets_for_key, flows_for_key) =
                         self.counts_per_key.get(&key).unwrap().load();
-                    println!("\nnew {key} -> {packets_for_key} {flows_for_key}");
+                    trace!("\nnew {key} -> {packets_for_key} {flows_for_key}");
                     if !known_flow && self.limits.lfk != 0 && flows_for_key >= self.limits.lfk {
                         //  Is there a key with a full flow count, and is this a new flow?
                         return Err(LimitError::Full(key));

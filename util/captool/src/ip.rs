@@ -160,7 +160,7 @@ impl<'p> MutableIpPacket<'p> {
                         Some(t) => t,
                         None => return PacketType::Other,
                     };
-                    if t4.get_flags() == 0x02 {
+                    if t4.get_flags() & 0x02 != 0 {
                         PacketType::TCPSYN
                     } else {
                         PacketType::TCPOther
@@ -175,7 +175,7 @@ impl<'p> MutableIpPacket<'p> {
                         Some(t) => t,
                         None => return PacketType::Other,
                     };
-                    if t6.get_flags() == 0x02 {
+                    if t6.get_flags() & 0x02 != 0 {
                         PacketType::TCPSYN
                     } else {
                         PacketType::TCPOther

@@ -33,7 +33,8 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fs::{self, File};
 #[cfg(debug_assertions)]
-use std::io::{stdin, Write};
+use std::io::stdin;
+use std::io::Write;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -93,7 +94,8 @@ struct Args {
     #[arg(short, long)]
     asn_filter: Option<String>,
 
-    /// Limit Packets per ASN (LPA) reads only N packets per ASN. Requires. `asn_filter` argument.
+    /// Limit Packets per ASN (LPA) reads only N packets per ASN. If `asn_filter` argument is empty
+    /// ASNs will be added and tracked dynamically.
     #[arg(long, conflicts_with_all=["lpc", "lfc"])]
     lpa: Option<u64>,
 
