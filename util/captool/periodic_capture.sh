@@ -43,7 +43,7 @@ fi
 
 unset should_sync
 # should_sync="true"
-if [[ -z "$should_sync" ]]; then
+if ! [[ -z "$should_sync" ]]; then
     # Remote Copy params
     local_user="${USER}"
     remote_user="ubuntu"
@@ -53,5 +53,5 @@ if [[ -z "$should_sync" ]]; then
 
     # Sync the Captured File and the dumped config for the capture to the analysis VM
     scp -i ${identity_file} $output_fpath $output_config ${remote_user}@${analysis_server}:${remote_data_dir}
-    runuser - ${local_user} -c 'scp -i ${identity_file} $output_fpath $output_config ${remote_user}@${analysis_server}:${remote_data_dir}'
+    runuser - ${local_user} -c "scp -i ${identity_file} $output_fpath $output_config ${remote_user}@${analysis_server}:${remote_data_dir}"
 fi
