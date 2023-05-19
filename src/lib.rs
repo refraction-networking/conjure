@@ -269,7 +269,7 @@ pub unsafe extern "C" fn rust_detect_init(
     ckey: *const u8,
     workers_socket_addr: *const c_char,
 ) -> RustGlobalsStruct {
-    logging::init(log::LogLevel::Debug, lcore_id);
+    logging::init(log::Level::Debug, lcore_id);
 
     let key = *array_ref![std::slice::from_raw_parts(ckey, 32_usize), 0, 32];
 

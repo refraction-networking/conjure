@@ -2,23 +2,23 @@ extern crate chrono;
 extern crate log;
 
 use chrono::Local;
-use log::{LogLevel, LogMetadata, LogRecord};
+use log::{Level, Metadata, Record};
 
 pub struct SimpleLogger {
-    log_level: LogLevel,
+    log_level: Level,
     lcore_id: i32,
 }
 
 impl log::Log for SimpleLogger {
-    fn enabled(&self, metadata: &LogMetadata) -> bool {
+    fn enabled(&self, metadata: &Metadata) -> bool {
         metadata.level() <= self.log_level
     }
 
-    fn log(&self, record: &LogRecord) {
+    fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
             let s = format!("{}", record.args());
             // Filter out mio events
-            if record.level() != LogLevel::Trace
+            if record.level() != Level::Trace
                 || (!s.starts_with("event loop")
                     && !s.starts_with("tick_to")
                     && !s.starts_with("ticking"))
@@ -31,19 +31,24 @@ impl log::Log for SimpleLogger {
             }
         }
     }
+
+    fn flush(&self) {}
 }
 
-pub fn init(log_level: LogLevel, core_id: i32) {
-    log::set_logger(|max_log_level| {
-        max_log_level.set(log_level.to_log_level_filter());
-        Box::new(SimpleLogger {
-            log_level,
-            lcore_id: core_id,
-        })
-    })
-    .unwrap_or_else(|e| {
-        error!("failed to init logging: {}", e);
-    });
+static mut LOGGER: SimpleLogger = SimpleLogger {
+    log_level: Level::Error,
+    lcore_id: 0,
+};
+
+pub fn init(log_level: Level, core_id: i32) {
+    unsafe {
+        LOGGER.lcore_id = core_id;
+        LOGGER.log_level = log_level;
+        log::set_logger(&LOGGER).unwrap_or_else(|e| {
+            error!("failed to init logging: {}", e);
+        });
+    }
+    log::set_max_level(log_level.to_level_filter());
 }
 
 //HACKY_CFG_NO_TEST_BEGIN

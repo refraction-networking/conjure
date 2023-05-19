@@ -172,11 +172,11 @@ impl SessionDetails {
 
 impl From<&StationToDetector> for SessionResult {
     fn from(s2d: &StationToDetector) -> Self {
-        let source = s2d.get_client_ip();
-        let phantom = s2d.get_phantom_ip();
-        let src_port = s2d.get_src_port() as u16;
-        let dst_port = s2d.get_dst_port() as u16;
-        let proto = match s2d.get_proto() {
+        let source = s2d.client_ip();
+        let phantom = s2d.phantom_ip();
+        let src_port = s2d.src_port() as u16;
+        let dst_port = s2d.dst_port() as u16;
+        let proto = match s2d.proto() {
             IPProto::Tcp => IpNextHeaderProtocols::Tcp,
             IPProto::Udp => IpNextHeaderProtocols::Udp,
             _ => return Err(SessionError::UnrecognizedProto),
@@ -184,7 +184,7 @@ impl From<&StationToDetector> for SessionResult {
         SessionDetails::new(
             source,
             phantom,
-            u128::from(s2d.get_timeout_ns()),
+            u128::from(s2d.timeout_ns()),
             src_port,
             dst_port,
             proto,
@@ -411,7 +411,7 @@ fn pubsub_handle_s2d(map: &Arc<RwLock<HashMap<String, u128>>>, s2d: &StationToDe
         }
     };
 
-    match s2d.get_operation() {
+    match s2d.operation() {
         StationOperations::New => pubsub_add_or_update_session(map, sd),
         StationOperations::Update => pubsub_add_or_update_session(map, sd),
         StationOperations::Clear => pubsub_clear(map),
@@ -571,11 +571,11 @@ mod tests {
 
             let msg: Vec<u8> = s2d.write_to_bytes().unwrap();
 
-            let redis_conn = get_redis_conn();
+            let mut redis_conn = get_redis_conn();
             redis::cmd("PUBLISH")
                 .arg("dark_decoy_map")
                 .arg(msg)
-                .execute(&redis_conn);
+                .execute(&mut redis_conn);
         }
 
         thread::sleep(dur);
@@ -695,7 +695,7 @@ mod tests {
                     panic!(
                         "Failed to parse StationToDetector: {}, {}",
                         e,
-                        s2d.get_client_ip()
+                        s2d.client_ip()
                     );
                 }
             };

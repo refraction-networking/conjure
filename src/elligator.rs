@@ -2,8 +2,8 @@ use std::panic;
 
 use c_api;
 
-use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
-use aes_gcm::Aes128Gcm;
+use aes_gcm::aead::{generic_array::GenericArray, Aead};
+use aes_gcm::{Aes128Gcm, KeyInit};
 use protobuf::Message;
 use signalling::ClientToStation;
 use std::error::Error;

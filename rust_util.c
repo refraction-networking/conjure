@@ -43,7 +43,7 @@ uint64_t get_global_cli_download_count()
 }
 
 int REPORTER_FD = -1;
-char REPORTER_FNAME[128];
+char REPORTER_FNAME[129];
 
 int try_open_reporter()
 {
@@ -53,7 +53,7 @@ int try_open_reporter()
 
 void open_reporter(const char *fname)
 {
-    strncpy(REPORTER_FNAME, fname, 128);
+    strncpy(REPORTER_FNAME, fname, sizeof(REPORTER_FNAME)-1);
     try_open_reporter();
 }
 
