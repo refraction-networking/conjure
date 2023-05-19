@@ -52,6 +52,6 @@ if ! [[ -z "$should_sync" ]]; then
     remote_data_dir="~/"
 
     # Sync the Captured File and the dumped config for the capture to the analysis VM
-    scp -i ${identity_file} $output_fpath $output_config ${remote_user}@${analysis_server}:${remote_data_dir}
-    runuser - ${local_user} -c "scp -i ${identity_file} $output_fpath $output_config ${remote_user}@${analysis_server}:${remote_data_dir}"
+    /sbin/runuser - refraction-worker -c "/usr/bin/scp -i ${identity_file} $output_fpath $output_config ${remote_user}@${analysis_server}:${remote_data_dir}"
+
 fi
