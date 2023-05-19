@@ -1,6 +1,7 @@
 #![feature(ip)]
 #![feature(let_chains)]
 #![feature(associated_type_bounds)]
+#![feature(path_file_prefix)]
 
 #[macro_use]
 extern crate log;
@@ -23,6 +24,7 @@ use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
 use pcap_file::pcapng::PcapNgWriter;
 use pcap_file::DataLink;
+use serde::Serialize;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::flag::register;
 use threadpool::ThreadPool;
@@ -33,6 +35,7 @@ use std::fs::{self, File};
 #[cfg(debug_assertions)]
 use std::io::stdin;
 use std::io::Write;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -49,7 +52,7 @@ $ captool -t \"192.168.0.0/16\" -i \"en01\"
 $ captool -t \"192.168.0.0/16,2001:abcd::/64\" -i \"ens15f0,ens15f1,en01\" -a \"$(cat ./asn_list.txt)\" -lpa 10000 -o \"$(date -u +\"%FT%H%MZ\").pcapng.gz\"
 ";
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Serialize)]
 #[command(
     author,
     version,
@@ -91,13 +94,14 @@ struct Args {
     #[arg(short, long)]
     asn_filter: Option<String>,
 
-    /// Limit Packets per ASN (LPA) reads only N packets per ASN. Requires. `asn_filter` argument.
-    #[arg(long, requires = "asn_filter", conflicts_with_all=["lpc", "lfc"])]
+    /// Limit Packets per ASN (LPA) reads only N packets per ASN. If `asn_filter` argument is empty
+    /// ASNs will be added and tracked dynamically.
+    #[arg(long, conflicts_with_all=["lpc", "lfc"])]
     lpa: Option<u64>,
 
     /// Limit Flows per ASN (LFA) reads N Flows  per ASN. Requires. `asn_filter` argument. If no PPF
     /// or Packet Limit is specified this will read until Ctrl-C as flow termination is not tracked.
-    #[arg(long, requires = "asn_filter", conflicts_with_all=["lpc", "lfc"])]
+    #[arg(long, conflicts_with_all=["lpc", "lfc"])]
     lfa: Option<u64>,
 
     /// Comma separated list of CCs from which to capture packets. Limits which packets are
@@ -105,14 +109,14 @@ struct Args {
     #[arg(short, long)]
     cc_filter: Option<String>,
 
-    /// Limit Packets per Country (LPC) reads only N packets per Country Code. Requires. `cc_filter` argument.
-    #[arg(long, requires = "cc_filter", conflicts_with = "lpa")]
+    /// (WARNING - Disabled) Limit Packets per Country (LPC) reads only N packets per Country Code. Requires. `cc_filter` argument.
+    #[arg(long, conflicts_with = "lpa")]
     lpc: Option<u64>,
 
-    /// Limit Flows per Country (LFC) reads N flows per Country Code. Requires. `cc_filter`
+    /// (WARNING - Disabled) Limit Flows per Country (LFC) reads N flows per Country Code. Requires. `cc_filter`
     /// argument. If no PPF or Packet Limit is specified this will read until Ctrl-C as flow
     /// termination is not tracked.
-    #[arg(long, requires = "cc_filter", conflicts_with_all=["lpa", "lfa"])]
+    #[arg(long, conflicts_with_all=["lpa", "lfa"])]
     lfc: Option<u64>,
 
     /// Comma separated interfaces on which to listen (mutually exclusive with `--pcap_dir`, and `--read` options).
@@ -161,6 +165,15 @@ fn debug_warn() {
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let flag = Arc::new(AtomicBool::new(false));
+
+    let toml_conf = toml::to_string(&args).unwrap();
+    let out_path = Path::new(&args.out);
+    let config_path = out_path.with_file_name(format!(
+        "{}.cfg",
+        out_path.file_prefix().unwrap().to_str().unwrap().replace("\"", "")
+    ));
+    let mut file = File::create(&config_path)?;
+    file.write_all(&toml_conf.into_bytes())?;
 
     let asn_list = parse_asn_list(args.asn_filter);
     let cc_list = parse_cc_list(args.cc_filter);
@@ -575,11 +588,11 @@ mod tests {
 
     #[test]
     fn test_cc_and_asn_lookup() -> Result<(), String> {
-        const ASNDB_PATH: &str = "./test_mmdbs/GeoLite2-ASN.mmdb";
-        const CCDB_PATH: &str = "./test_mmdbs/GeoLite2-Country.mmdb";
-        let asn_reader = maxminddb::Reader::open_readfile(String::from(ASNDB_PATH)).unwrap();
+        const ASNDB_PATH_TEST: &str = "./test_mmdbs/GeoLite2-ASN.mmdb";
+        const CCDB_PATH_TEST: &str = "./test_mmdbs/GeoLite2-Country.mmdb";
+        let asn_reader = maxminddb::Reader::open_readfile(String::from(ASNDB_PATH_TEST)).unwrap();
 
-        let cc_reader = maxminddb::Reader::open_readfile(String::from(CCDB_PATH)).unwrap();
+        let cc_reader = maxminddb::Reader::open_readfile(String::from(CCDB_PATH_TEST)).unwrap();
 
         let ip: IpAddr = "192.122.190.123".parse().unwrap();
 
