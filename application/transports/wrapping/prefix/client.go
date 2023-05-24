@@ -18,17 +18,39 @@ type ClientTransport struct {
 	// // state tracks fields internal to the registrar that survive for the lifetime
 	// // of the transport session without being shared - i.e. local derived keys.
 	// state any
+
+	Prefix           Prefix
+	TagObfuscator    transports.Obfuscator
+	StationPublicKey [32]byte
 }
 
-// Name returns the human-friendly name of the transport, implementing the
-// Transport interface.
-func (*ClientTransport) Name() string {
-	return "prefix"
+// Prefix struct used selected by, or given to the client.
+type Prefix struct {
+	Bytes []byte
+	ID    PrefixID
+
+	// // Function allowing encoding / transformation of obfuscated ID bytes after they have been
+	// // obfuscated. Examples - base64 encode, padding
+	// [FUTURE WORK]
+	// tagEncode() func([]byte) ([]byte, int, error)
+
+	// // Function allowing encoding / transformation of stream bytes after they have been. Examples
+	// // - base64 encode, padding
+	// [FUTURE WORK]
+	// streamEncode() func([]byte) ([]byte, int, error)
+}
+
+// DefaultPrefixes provides the prefixes supported by default for use when by the client.
+var DefaultPrefixes = []Prefix{}
+
+// Name returns the human-friendly name of the transport, implementing the Transport interface.
+func (t *ClientTransport) Name() string {
+	return "prefix_" + t.Prefix.ID.Name()
 }
 
 // String returns a string identifier for the Transport for logging (including string formatters)
-func (*ClientTransport) String() string {
-	return "prefix"
+func (t *ClientTransport) String() string {
+	return "prefix_" + t.Prefix.ID.Name()
 }
 
 // ID provides an identifier that will be sent to the conjure station during the registration so

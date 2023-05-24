@@ -20,7 +20,6 @@ import (
 type ZMQConfig struct {
 	SocketName        string         `toml:"socket_name"`
 	ConnectSockets    []socketConfig `toml:"connect_sockets"`
-	PrivateKeyPath    string         `toml:"privkey_path"`
 	HeartbeatInterval int            `toml:"heartbeat_interval"`
 	HeartbeatTimeout  int            `toml:"heartbeat_timeout"`
 }
@@ -40,6 +39,9 @@ type ZMQIngester struct {
 	regChan     chan<- interface{}
 	connectAddr string
 
+	privkeyZ85 string
+	pubkeyZ85  string
+
 	// stats
 	epochStart              time.Time
 	droppedZMQMessages      int64 // if the ingest channel ends up blocking how many registrations were dropped this epoch
@@ -48,16 +50,26 @@ type ZMQIngester struct {
 }
 
 // NewZMQIngest returns a struct that manages registration ingest over ZMQ.
-func NewZMQIngest(connectAddr string, regchan chan<- interface{}, conf *ZMQConfig) *ZMQIngester {
+func NewZMQIngest(connectAddr string, regchan chan<- interface{}, privkey [32]byte, conf *ZMQConfig) (*ZMQIngester, error) {
 	logger := log.New(os.Stdout, "[ZMQ_PROXY] ", golog.Ldate|golog.Lmicroseconds)
+
+	// Only use first 32 bytes of key (some keys store
+	// public key after private key)
+	privkeyZ85 := zmq.Z85encode(string(privkey[:]))
+	pubkeyZ85, err := zmq.AuthCurvePublic(privkeyZ85)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate client public key from private key: %w", err)
+	}
 
 	return &ZMQIngester{
 		conf,
 		logger,
 		regchan,
 		connectAddr,
+		privkeyZ85,
+		pubkeyZ85,
 		time.Now(),
-		0, 0, 0}
+		0, 0, 0}, nil
 }
 
 // RunZMQ start the receive loop that writes into the provided message receive channel
@@ -145,24 +157,6 @@ func (zi *ZMQIngester) PrintAndReset(logger *log.Logger) {
 // location of the config file with the CJ_PROXY_CONFIG environment variable.
 func (zi *ZMQIngester) proxyZMQ() {
 
-	privkeyPath := zi.PrivateKeyPath
-	if privkeyPath == "" {
-		privkeyPath = os.Getenv("CJ_PRIVKEY")
-	}
-
-	privkey, err := os.ReadFile(privkeyPath)
-	if err != nil {
-		zi.logger.Fatalln("failed to load private key:", err)
-	}
-
-	// Only use first 32 bytes of key (some keys store
-	// public key after private key)
-	privkeyZ85 := zmq.Z85encode(string(privkey[:32]))
-	pubkeyZ85, err := zmq.AuthCurvePublic(privkeyZ85)
-	if err != nil {
-		zi.logger.Fatalln("failed to generate client public key from private key:", err)
-	}
-
 	pubSock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		zi.logger.Fatalln("failed to create binding zmq socket:", err)
@@ -197,7 +191,7 @@ func (zi *ZMQIngester) proxyZMQ() {
 		}
 
 		if connectSocket.AuthenticationType == "CURVE" {
-			err = sock.ClientAuthCurve(connectSocket.PublicKey, pubkeyZ85, privkeyZ85)
+			err = sock.ClientAuthCurve(connectSocket.PublicKey, zi.pubkeyZ85, zi.privkeyZ85)
 			if err != nil {
 				zi.logger.Errorf("failed to set up CURVE authentication for %s: %v\n", connectSocket.Address, err)
 				continue

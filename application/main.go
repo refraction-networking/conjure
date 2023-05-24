@@ -15,6 +15,7 @@ import (
 	"github.com/refraction-networking/conjure/application/log"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/prefix"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
@@ -65,6 +66,18 @@ func main() {
 		logClientIP = false
 	}
 
+	privkey, err := conf.ParsePrivateKey()
+	if err != nil {
+		logger.Fatalf("error parseing private key: %s", err)
+	}
+
+	prefixTransport, err := prefix.Default(privkey)
+	if err != nil {
+		logger.Errorf("Failed to parse provided custom prefix transport file: %s", err)
+	} else {
+		enabledTransports[pb.TransportType_Prefix] = prefixTransport
+	}
+
 	// Add supported transport options for registration validation
 	for transportType, transport := range enabledTransports {
 		err = regManager.AddTransport(transportType, transport)
@@ -76,7 +89,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := new(sync.WaitGroup)
 	regChan := make(chan interface{}, 10000)
-	zmqIngester := cj.NewZMQIngest(zmqAddress, regChan, conf.ZMQConfig)
+	zmqIngester, err := cj.NewZMQIngest(zmqAddress, regChan, privkey, conf.ZMQConfig)
+	if err != nil {
+		logger.Fatal("error creating ZMQ Ingest: %w", err)
+	}
 
 	connManager := newConnManager(nil)
 

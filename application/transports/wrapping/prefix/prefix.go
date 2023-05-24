@@ -25,15 +25,21 @@ const (
 const minTagLength = 64
 const minTagLengthBase64 = 88
 
-// Prefix provides the elements required for independent prefixes to be usable as part of the
-// transport.
-type Prefix struct {
+// prefix provides the elements required for independent prefixes to be usable as part of the
+// transport used by the server specifically.
+type prefix struct {
 	// // Regular expression to match
 	// *regexp.Regexp
 
-	// Function allowing decode / transformation of obfuscated ID bytes before attempting to
-	// de-obfuscate them. Example - base64 decode.
-	fn func([]byte) ([]byte, int, error)
+	// // Function allowing decode / transformation of obfuscated ID bytes before attempting to
+	// // de-obfuscate them. Example - base64 decode.
+	// // [FUTURE WORK]
+	// tagDecode func([]byte) ([]byte, int, error)
+
+	// // Function allowing decode / transformation stream bytes before attempting to forward them.
+	// // Example - base64 decode.
+	// // [FUTURE WORK]
+	// streamDecode func([]byte) ([]byte, int, error)
 
 	// Static string to match to rule out protocols without using a regex.
 	StaticMatch []byte
@@ -53,40 +59,88 @@ type Prefix struct {
 	MinVer uint
 }
 
-// DefaultPrefixes provides the prefixes supported by default for use when
+// PrefixID provide an integer Identifier for each individual prefixes allowing clients to indicate
+// to the station the prefix they intend to connect with.
+type PrefixID int
+
+const (
+	Min PrefixID = iota
+	GetLong
+	PostLong
+	HTTPResp
+	TLSClientHello
+	TLSServerHello
+	TLSAlertWarning
+	TLSAlertFatal
+	DNSOverTCP
+	OpenSSH2
+	// GetShort
+)
+
+// Name returns the human-friendly name of the prefix.
+func (id PrefixID) Name() string {
+	switch id {
+	case Min:
+		return "Min"
+
+	case GetLong:
+		return "GetLong"
+	case PostLong:
+		return "PostLong"
+	case HTTPResp:
+		return "HTTPResp"
+	case TLSClientHello:
+		return "TLSClientHello"
+	case TLSServerHello:
+		return "TLSServerHello"
+	case TLSAlertWarning:
+		return "TLSAlertWarning"
+	case TLSAlertFatal:
+		return "TLSAlertFatal"
+	case DNSOverTCP:
+		return "DNSOverTCP"
+	case OpenSSH2:
+		return "OpenSSH2"
+	// case GetShort:
+	// 	return "GetShort"
+	default:
+		return "other"
+	}
+}
+
+// defaultPrefixes provides the prefixes supported by default for use when
 // initializing the prefix transport.
-var DefaultPrefixes = []Prefix{}
-var defaultPrefixes = []Prefix{
-	// HTTP GET base64 in url min tag length 88 because 64 bytes base64 encoded should be length 88
-	{base64TagDecode, []byte("GET /"), 5, 5 + 88, 5 + 88, randomizeDstPortMinVersion},
+var defaultPrefixes = map[PrefixID]prefix{
+	// // HTTP GET base64 in url min tag length 88 because 64 bytes base64 encoded should be length 88
+	// GetShort: {base64TagDecode, []byte("GET /"), 5, 5 + 88, 5 + 88, randomizeDstPortMinVersion},
 	// HTTP GET
-	{nil, []byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion},
+	GetLong: {[]byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion},
 	// HTTP POST
-	{nil, []byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion},
+	PostLong: {[]byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion},
 	// HTTP Response
-	{nil, []byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion},
+	HTTPResp: {[]byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion},
 	// TLS Client Hello
-	{nil, []byte("\x16\x03\x01\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion},
+	TLSClientHello: {[]byte("\x16\x03\x01\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion},
 	// TLS Server Hello
-	{nil, []byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion},
+	TLSServerHello: {[]byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion},
 	// TLS Alert Warning
-	{nil, []byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion},
+	TLSAlertWarning: {[]byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion},
 	// TLS Alert Fatal
-	{nil, []byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion},
+	TLSAlertFatal: {[]byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion},
 	// DNS over TCP
-	{nil, []byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion},
+	DNSOverTCP: {[]byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion},
 	// SSH-2.0-OpenSSH_8.9p1
-	{nil, []byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion},
+	OpenSSH2: {[]byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion},
 	//Min - Empty prefix
-	{nil, []byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion},
+	Min: {[]byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion},
 }
 
 // Transport provides a struct implementing the Transport, WrappingTransport,
 // PortRandomizingTransport, and FixedPortTransport interfaces.
 type Transport struct {
-	SupportedPrefixes []Prefix
-	tagObfuscator     transports.Obfuscator
-	privkey           [32]byte
+	SupportedPrefixes map[PrefixID]prefix
+	TagObfuscator     transports.Obfuscator
+	Privkey           [32]byte
 }
 
 // Name returns the human-friendly name of the transport, implementing the
@@ -207,18 +261,18 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 		}
 
 		var obfuscatedID []byte
-		var errN error
 		var forwardBy = minTagLength
-		if prefix.fn != nil {
-			obfuscatedID, forwardBy, errN = prefix.fn(data.Bytes()[prefix.Offset:])
-			if errN != nil || len(obfuscatedID) != minTagLength {
-				continue
-			}
-		} else {
-			obfuscatedID = data.Bytes()[prefix.Offset : prefix.Offset+minTagLength]
-		}
+		// var errN error
+		// if prefix.fn != nil {
+		// 	obfuscatedID, forwardBy, errN = prefix.tagDecode(data.Bytes()[prefix.Offset:])
+		// 	if errN != nil || len(obfuscatedID) != minTagLength {
+		// 		continue
+		// 	}
+		// } else {
+		obfuscatedID = data.Bytes()[prefix.Offset : prefix.Offset+minTagLength]
+		// }
 
-		hmacID, err := t.tagObfuscator.TryReveal(obfuscatedID, t.privkey)
+		hmacID, err := t.TagObfuscator.TryReveal(obfuscatedID, t.Privkey)
 		if err != nil || hmacID == nil {
 			continue
 		}
@@ -238,10 +292,57 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 	return nil, err
 }
 
+// Default Given a private key this builds the server side transport with the default set of supported
+// prefixes. The optional filepath specified a file from which to read extra prefixes.
+// If provided only the first variadic string will be used to attempt to parse prefixes. There can
+// be no colliding PrefixIDs - file defined prefixes take precedent over defaults, and within the
+// file first defined takes precedence.
+func Default(privkey [32]byte, filepath ...string) (*Transport, error) {
+	var prefixes map[PrefixID]prefix
+	var err error
+	if len(filepath) > 0 {
+		prefixes, err = tryParsePrefixes(filepath[0])
+		if err != nil {
+			return nil, err
+		}
+
+		for k, v := range defaultPrefixes {
+			if _, ok := prefixes[k]; !ok {
+				prefixes[k] = v
+			}
+		}
+	}
+	return &Transport{
+		Privkey:           privkey,
+		SupportedPrefixes: prefixes,
+		TagObfuscator:     transports.CTRObfuscator{},
+	}, nil
+}
+
+// TryFromFile Given a private key this builds the server side transport with the set of
+// prefixes specified in the provided filepath.
+func TryFromFile(privkey [32]byte, filepath string) (*Transport, error) {
+	prefixes, err := tryParsePrefixes(filepath)
+	if err != nil {
+		return nil, err
+	}
+	return &Transport{
+		Privkey:           privkey,
+		SupportedPrefixes: prefixes,
+		TagObfuscator:     transports.CTRObfuscator{},
+	}, nil
+}
+
+func tryParsePrefixes(filepath string) (map[PrefixID]prefix, error) {
+	return nil, nil
+}
+
 func init() {
 	// if at any point we need to do init on the prefixes (i.e compiling regular expressions) it
 	// should happen here.
-	DefaultPrefixes = defaultPrefixes
+	for ID, p := range defaultPrefixes {
+		DefaultPrefixes = append(DefaultPrefixes, Prefix{p.StaticMatch, ID})
+	}
 }
 
 func min(a, b int) int {

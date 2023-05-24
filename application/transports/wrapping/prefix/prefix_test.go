@@ -3,7 +3,6 @@ package prefix
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -32,8 +31,8 @@ func TestSuccessfulWrap(t *testing.T) {
 	curve25519.ScalarBaseMult(&curve25519Public, &curve25519Private)
 
 	var transport = Transport{
-		tagObfuscator:     transports.CTRObfuscator{},
-		privkey:           curve25519Private,
+		TagObfuscator:     transports.CTRObfuscator{},
+		Privkey:           curve25519Private,
 		SupportedPrefixes: defaultPrefixes,
 	}
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
@@ -46,12 +45,12 @@ func TestSuccessfulWrap(t *testing.T) {
 	message := []byte(`test message!`)
 
 	for _, prefix := range defaultPrefixes {
-		if prefix.fn != nil {
-			// skip prefixes that do a special decoding for this test
-			continue
-		}
+		// if prefix.fn != nil {
+		// 	// skip prefixes that do a special decoding for this test
+		// 	continue
+		// }
 
-		obfuscatedID, err := transport.tagObfuscator.Obfuscate(hmacID, curve25519Public[:])
+		obfuscatedID, err := transport.TagObfuscator.Obfuscate(hmacID, curve25519Public[:])
 		require.Nil(t, err)
 		// t.Logf("hmacid - %s\nobfuscated id - %s", hex.EncodeToString(hmacID), hex.EncodeToString(obfuscatedID))
 		_, err = c2p.Write(append(prefix.StaticMatch, append(obfuscatedID, message...)...))
@@ -74,8 +73,8 @@ func TestSuccessfulWrap(t *testing.T) {
 
 func TestUnsuccessfulWrap(t *testing.T) {
 	var transport = Transport{
-		tagObfuscator:     transports.CTRObfuscator{},
-		privkey:           [32]byte{},
+		TagObfuscator:     transports.CTRObfuscator{},
+		Privkey:           [32]byte{},
 		SupportedPrefixes: defaultPrefixes,
 	}
 
@@ -104,8 +103,8 @@ func TestUnsuccessfulWrap(t *testing.T) {
 
 func TestTryAgain(t *testing.T) {
 	var transport = Transport{
-		tagObfuscator:     transports.CTRObfuscator{},
-		privkey:           [32]byte{},
+		TagObfuscator:     transports.CTRObfuscator{},
+		Privkey:           [32]byte{},
 		SupportedPrefixes: defaultPrefixes,
 	}
 	var err error
@@ -170,6 +169,7 @@ func TestTryParamsToDstPort(t *testing.T) {
 	}
 }
 
+/*
 func TestSuccessfulWrapBase64(t *testing.T) {
 	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
@@ -181,8 +181,8 @@ func TestSuccessfulWrapBase64(t *testing.T) {
 	curve25519.ScalarBaseMult(&curve25519Public, &curve25519Private)
 
 	var transport = Transport{
-		tagObfuscator:     transports.CTRObfuscator{},
-		privkey:           curve25519Private,
+		TagObfuscator:     transports.CTRObfuscator{},
+		Privkey:           curve25519Private,
 		SupportedPrefixes: defaultPrefixes,
 	}
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
@@ -196,7 +196,7 @@ func TestSuccessfulWrapBase64(t *testing.T) {
 
 	prefix := defaultPrefixes[0]
 
-	obfuscatedID, err := transport.tagObfuscator.Obfuscate(hmacID, curve25519Public[:])
+	obfuscatedID, err := transport.TagObfuscator.Obfuscate(hmacID, curve25519Public[:])
 	require.Nil(t, err)
 
 	encodedID := base64.StdEncoding.EncodeToString(obfuscatedID)
@@ -222,3 +222,4 @@ func TestSuccessfulWrapBase64(t *testing.T) {
 	require.True(t, bytes.Equal(message, received), "%s\n%s\n%s", string(message), string(received), prefix.StaticMatch)
 
 }
+*/
