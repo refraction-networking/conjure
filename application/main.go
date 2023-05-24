@@ -71,7 +71,12 @@ func main() {
 		logger.Fatalf("error parseing private key: %s", err)
 	}
 
-	prefixTransport, err := prefix.Default(privkey)
+	var prefixTransport cj.Transport
+	if conf.DisableDefaultPrefixes {
+		prefixTransport, err = prefix.New(privkey, conf.PrefixFilePath)
+	} else {
+		prefixTransport, err = prefix.Default(privkey, conf.PrefixFilePath)
+	}
 	if err != nil {
 		logger.Errorf("Failed to parse provided custom prefix transport file: %s", err)
 	} else {

@@ -17,6 +17,12 @@ type Config struct {
 
 	// Path to private key file
 	PrivateKeyPath string `toml:"privkey_path"`
+
+	// PrefixFilePath provides a path to a file containing supported prefix specifications for the
+	// prefix transport.
+	// [TODO] refactor into a more general transport config object
+	PrefixFilePath         string `toml:"supplemental_prefix_path"`
+	DisableDefaultPrefixes bool   `toml:"disable_default_prefixes"`
 }
 
 // ParseConfig parses the config from the CJ_STATION_CONFIG environment

@@ -3,6 +3,7 @@ package prefix
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 
@@ -75,6 +76,11 @@ const (
 	DNSOverTCP
 	OpenSSH2
 	// GetShort
+)
+
+var (
+	// ErrUnknownPrefix indicates that the provided Prefix ID is unknown to the transport object.
+	ErrUnknownPrefix = errors.New("unknown / unsupported prefix")
 )
 
 // Name returns the human-friendly name of the prefix.
@@ -166,7 +172,7 @@ func (Transport) GetProto() pb.IPProto {
 
 // ParseParams gives the specific transport an option to parse a generic object
 // into parameters provided by the client during registration.
-func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
+func (t Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 	if data == nil {
 		return nil, nil
 	}
@@ -175,13 +181,20 @@ func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 	// for transports that existed before the transportParams fields existed.
 	if libVersion < randomizeDstPortMinVersion {
 		f := false
-		return &pb.GenericTransportParams{
+		return &pb.PrefixTransportParams{
 			RandomizeDstPort: &f,
 		}, nil
 	}
 
-	var m = &pb.GenericTransportParams{}
+	var m = &pb.PrefixTransportParams{}
 	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
+
+	// Check if this is a prefix that we know how to parse, if not, drop the registration because
+	// we will be unable to pick up.
+	if _, ok := t.SupportedPrefixes[PrefixID(m.GetPrefixId())]; !ok {
+		return nil, fmt.Errorf("%w: %d", ErrUnknownPrefix, m.GetPrefixId())
+	}
+
 	return m, err
 }
 
@@ -198,7 +211,7 @@ func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, e
 		return 443, nil
 	}
 
-	parameters, ok := params.(*pb.GenericTransportParams)
+	parameters, ok := params.(*pb.PrefixTransportParams)
 	if !ok {
 		return 0, fmt.Errorf("bad parameters provided")
 	}
@@ -292,24 +305,17 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 	return nil, err
 }
 
-// Default Given a private key this builds the server side transport with the default set of supported
-// prefixes. The optional filepath specified a file from which to read extra prefixes.
-// If provided only the first variadic string will be used to attempt to parse prefixes. There can
-// be no colliding PrefixIDs - file defined prefixes take precedent over defaults, and within the
-// file first defined takes precedence.
-func Default(privkey [32]byte, filepath ...string) (*Transport, error) {
-	var prefixes map[PrefixID]prefix
+// New Given a private key this builds the server side transport with an EMPTY set of supported
+// prefixes. The optional filepath specifies a file from which to read extra prefixes. If provided
+// only the first variadic string will be used to attempt to parse prefixes. There can be no
+// colliding PrefixIDs - within the file first defined takes precedence.
+func New(privkey [32]byte, filepath ...string) (*Transport, error) {
+	var prefixes map[PrefixID]prefix = make(map[PrefixID]prefix)
 	var err error
-	if len(filepath) > 0 {
+	if len(filepath) > 0 && filepath[0] != "" {
 		prefixes, err = tryParsePrefixes(filepath[0])
 		if err != nil {
 			return nil, err
-		}
-
-		for k, v := range defaultPrefixes {
-			if _, ok := prefixes[k]; !ok {
-				prefixes[k] = v
-			}
 		}
 	}
 	return &Transport{
@@ -319,18 +325,23 @@ func Default(privkey [32]byte, filepath ...string) (*Transport, error) {
 	}, nil
 }
 
-// TryFromFile Given a private key this builds the server side transport with the set of
-// prefixes specified in the provided filepath.
-func TryFromFile(privkey [32]byte, filepath string) (*Transport, error) {
-	prefixes, err := tryParsePrefixes(filepath)
+// Default Given a private key this builds the server side transport with the DEFAULT set of supported
+// prefixes. The optional filepath specifies a file from which to read extra prefixes.
+// If provided only the first variadic string will be used to attempt to parse prefixes. There can
+// be no colliding PrefixIDs - file defined prefixes take precedent over defaults, and within the
+// file first defined takes precedence.
+func Default(privkey [32]byte, filepath ...string) (*Transport, error) {
+	t, err := New(privkey, filepath...)
 	if err != nil {
 		return nil, err
 	}
-	return &Transport{
-		Privkey:           privkey,
-		SupportedPrefixes: prefixes,
-		TagObfuscator:     transports.CTRObfuscator{},
-	}, nil
+
+	for k, v := range defaultPrefixes {
+		if _, ok := t.SupportedPrefixes[k]; !ok {
+			t.SupportedPrefixes[k] = v
+		}
+	}
+	return t, nil
 }
 
 func tryParsePrefixes(filepath string) (map[PrefixID]prefix, error) {

@@ -13,7 +13,7 @@ import (
 // the station side Transport struct has one instance to be re-used for all sessions.
 type ClientTransport struct {
 	// Parameters are fields that will be shared with the station in the registration
-	Parameters *pb.GenericTransportParams
+	Parameters *pb.PrefixTransportParams
 
 	// // state tracks fields internal to the registrar that survive for the lifetime
 	// // of the transport session without being shared - i.e. local derived keys.
@@ -68,7 +68,7 @@ func (t *ClientTransport) GetParams() proto.Message {
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible.
 func (t *ClientTransport) SetParams(p any) error {
-	params, ok := p.(*pb.GenericTransportParams)
+	params, ok := p.(*pb.PrefixTransportParams)
 	if !ok {
 		return fmt.Errorf("unable to parse params")
 	}

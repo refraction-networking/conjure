@@ -153,9 +153,15 @@ func TestTryParamsToDstPort(t *testing.T) {
 		p uint16
 	}{{true, 58047}, {false, 443}}
 
+	transport, err := Default([32]byte{})
+	require.Nil(t, err)
+
+	// for id, _ := range transport.SupportedPrefixes {
+	// 	t.Log(id.Name())
+	// }
+
 	for _, testCase := range cases {
-		ct := ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &testCase.r}}
-		var transport Transport
+		ct := ClientTransport{Parameters: &pb.PrefixTransportParams{RandomizeDstPort: &testCase.r}}
 
 		rawParams, err := anypb.New(ct.GetParams())
 		require.Nil(t, err)
@@ -167,6 +173,23 @@ func TestTryParamsToDstPort(t *testing.T) {
 		require.Nil(t, err)
 		require.Equal(t, testCase.p, port)
 	}
+}
+
+func TestTryParseParamsBadPrefixID(t *testing.T) {
+	clv := randomizeDstPortMinVersion
+
+	// Dont Add anything to supported Transports
+	transport, err := New([32]byte{})
+	require.Nil(t, err)
+
+	ct := ClientTransport{Parameters: &pb.PrefixTransportParams{}}
+
+	rawParams, err := anypb.New(ct.GetParams())
+	require.Nil(t, err)
+
+	// Any transport Id will be unknown
+	_, err = transport.ParseParams(clv, rawParams)
+	require.ErrorIs(t, err, ErrUnknownPrefix)
 }
 
 /*
