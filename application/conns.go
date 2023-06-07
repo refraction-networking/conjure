@@ -120,10 +120,13 @@ func (cm *connManager) handleNewConn(regManager *cj.RegistrationManager, clientC
 	flowDescription := fmt.Sprintf("%s -> %s ", originalSrc, originalDst)
 	logger = log.New(os.Stdout, "[CONN] "+flowDescription, golog.Ldate|golog.Lmicroseconds)
 
+	asn, err := regManager.GeoIP.ASN(net.ParseIP(originalSrc))
+	cc, err := regManager.GeoIP.CC(net.ParseIP(originalSrc))
+
 	count := regManager.CountRegistrations(originalDstIP)
 	logger.Debugf("new connection (%d potential registrations)\n", count)
 	cj.Stat().AddConn()
-	cm.addCreated()
+	cm.addCreated(asn, cc)
 
 	// Pick random timeout between 5 and 10 seconds, down to millisecond precision
 	ms := rand.Int63n(5000) + 5000
@@ -152,7 +155,7 @@ func (cm *connManager) handleNewConn(regManager *cj.RegistrationManager, clientC
 		logger.Debugf("no possible registrations, reading for %v then dropping connection\n", timeout)
 		cj.Stat().AddMissedReg()
 		cj.Stat().CloseConn()
-		cm.createdToDiscard()
+		cm.createdToDiscard(asn, cc)
 
 		// Copy into io.Discard to keep ACKing until the deadline.
 		// This should help prevent fingerprinting; if we let the read
@@ -162,16 +165,16 @@ func (cm *connManager) handleNewConn(regManager *cj.RegistrationManager, clientC
 		if errors.Is(err, syscall.ECONNRESET) {
 			// log reset error without client ip
 			logger.Errorln("error occurred discarding data (read 0 B): rst")
-			cm.discardToReset()
+			cm.discardToReset(asn, cc)
 		} else if et, ok := err.(net.Error); ok && et.Timeout() {
 			logger.Errorln("error occurred discarding data (read 0 B): timeout")
-			cm.discardToTimeout()
+			cm.discardToTimeout(asn, cc)
 		} else if err != nil {
 			//Log any other error
 			logger.Errorln("error occurred discarding data (read 0 B):", err)
-			cm.discardToError()
+			cm.discardToError(asn, cc)
 		} else {
-			cm.discardToClose()
+			cm.discardToClose(asn, cc)
 		}
 
 		return
@@ -194,16 +197,16 @@ readLoop:
 			if errors.Is(err, syscall.ECONNRESET) {
 				// log reset error without client ip
 				logger.Errorf("error occurred discarding data (read %d B): rst\n", received.Len())
-				cm.discardToReset()
+				cm.discardToReset(asn, cc)
 			} else if et, ok := err.(net.Error); ok && et.Timeout() {
 				logger.Errorf("error occurred discarding data (read %d B): timeout\n", received.Len())
-				cm.discardToTimeout()
+				cm.discardToTimeout(asn, cc)
 			} else if err != nil {
 				//Log any other error
 				logger.Errorf("error occurred discarding data (read %d B): %v\n", received.Len(), err)
-				cm.discardToError()
+				cm.discardToError(asn, cc)
 			} else {
-				cm.discardToClose()
+				cm.discardToClose(asn, cc)
 			}
 
 			return
@@ -214,23 +217,23 @@ readLoop:
 			if errors.Is(err, syscall.ECONNRESET) {
 				logger.Errorf("got error while reading from connection, giving up after %d bytes: rst\n", received.Len()+n)
 				if received.Len() == 0 {
-					cm.createdToReset()
+					cm.createdToReset(asn, cc)
 				} else {
-					cm.readToReset()
+					cm.readToReset(asn, cc)
 				}
 			} else if et, ok := err.(net.Error); ok && et.Timeout() {
 				logger.Errorf("got error while reading from connection, giving up after %d bytes: timeout\n", received.Len()+n)
 				if received.Len() == 0 {
-					cm.createdToTimeout()
+					cm.createdToTimeout(asn, cc)
 				} else {
-					cm.readToTimeout()
+					cm.readToTimeout(asn, cc)
 				}
 			} else {
 				logger.Errorf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len()+n, err)
 				if received.Len() == 0 {
-					cm.createdToError()
+					cm.createdToError(asn, cc)
 				} else {
-					cm.readToError()
+					cm.readToError(asn, cc)
 				}
 			}
 			cj.Stat().ConnErr()
@@ -238,9 +241,9 @@ readLoop:
 		}
 
 		if received.Len() == 0 {
-			cm.createdToCheck()
+			cm.createdToCheck(asn, cc)
 		} else {
-			cm.readToCheck()
+			cm.readToCheck(asn, cc)
 		}
 
 		received.Write(buf[:n])
@@ -262,7 +265,7 @@ readLoop:
 				d := time.Until(deadline)
 				logger.Warnf("got unexpected error from transport %s, sleeping %v then giving up: %v\n", t.Name(), d, err)
 				cj.Stat().ConnErr()
-				cm.checkToError()
+				cm.checkToError(asn, cc)
 				time.Sleep(d)
 				return
 			}
@@ -278,16 +281,16 @@ readLoop:
 
 			regManager.MarkActive(reg)
 
-			cm.checkToFound()
+			cm.checkToFound(asn, cc)
 			break readLoop
 		}
 
 		if len(possibleTransports) < 1 {
-			cm.checkToDiscard()
+			cm.checkToDiscard(asn, cc)
 		} else if received.Len() == 0 {
-			cm.checkToCreated()
+			cm.checkToCreated(asn, cc)
 		} else {
-			cm.checkToRead()
+			cm.checkToRead(asn, cc)
 		}
 	}
 
@@ -295,9 +298,7 @@ readLoop:
 	cj.Stat().CloseConn()
 }
 
-type connStats struct {
-	epochStart time.Time
-
+type statCounts struct {
 	// States
 	numCreated      int64 // Number of connections that have read 0 bytes so far
 	numReading      int64 // Number of connections in the read / read more state trying to find reg that have read at least 1 byte
@@ -310,6 +311,40 @@ type connStats struct {
 	numTimeout int64 // Number of connections that timed out while attempting to find registration
 	numClosed  int64 // Number of connections that closed before finding the associated registration
 	numErr     int64 // Number of connections that received an unexpected error
+
+	// Transitions
+	numCreatedToDiscard int64 // Number of times connections have moved from Created to Discard
+	numCreatedToCheck   int64 // Number of times connections have moved from Created to Check
+	numCreatedToReset   int64 // Number of times connections have moved from Created to Reset
+	numCreatedToTimeout int64 // Number of times connections have moved from Created to Timeout
+	numCreatedToError   int64 // Number of times connections have moved from Created to Error
+
+	numReadToCheck   int64 // Number of times connections have moved from Read to Check
+	numReadToTimeout int64 // Number of times connections have moved from Read to Timeout
+	numReadToReset   int64 // Number of times connections have moved from Read to Reset
+	numReadToError   int64 // Number of times connections have moved from Read to Error
+
+	numCheckToCreated int64 // Number of times connections have moved from Check to Created
+	numCheckToRead    int64 // Number of times connections have moved from Check to Read
+	numCheckToFound   int64 // Number of times connections have moved from Check to Found
+	numCheckToError   int64 // Number of times connections have moved from Check to Error
+	numCheckToDiscard int64 // Number of times connections have moved from Check to Discard
+
+	numDiscardToReset   int64 // Number of times connections have moved from Discard to Reset
+	numDiscardToTimeout int64 // Number of times connections have moved from Discard to Timeout
+	numDiscardToError   int64 // Number of times connections have moved from Discard to Error
+	numDiscardToClose   int64 // Number of times connections have moved from Discard to Close
+}
+
+type asnCounts struct {
+	cc string
+	statCounts
+}
+
+type connStats struct {
+	epochStart time.Time
+	statCounts
+	geoIPMap map[uint]*asnCounts
 }
 
 func (c *connStats) PrintAndReset(logger *log.Logger) {
@@ -346,96 +381,321 @@ func (c *connStats) Reset() {
 	c.epochStart = time.Now()
 }
 
-func (c *connStats) addCreated() {
+func (c *connStats) addCreated(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numCreated, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numCreated, 1)
 }
 
-func (c *connStats) createdToDiscard() {
+func (c *connStats) createdToDiscard(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numCreated, -1)
 	atomic.AddInt64(&c.numIODiscarding, 1)
+	atomic.AddInt64(&c.numCreatedToDiscard, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numCreatedToDiscard, 1)
 }
 
-func (c *connStats) createdToCheck() {
+func (c *connStats) createdToCheck(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numCreated, -1)
 	atomic.AddInt64(&c.numChecking, 1)
+	atomic.AddInt64(&c.numCreatedToCheck, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numChecking, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numCreatedToCheck, 1)
 }
 
-func (c *connStats) createdToReset() {
+func (c *connStats) createdToReset(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numCreated, -1)
 	atomic.AddInt64(&c.numReset, 1)
+	atomic.AddInt64(&c.numCreatedToReset, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numCreatedToReset, 1)
 }
 
-func (c *connStats) createdToTimeout() {
+func (c *connStats) createdToTimeout(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numCreated, -1)
 	atomic.AddInt64(&c.numTimeout, 1)
+	atomic.AddInt64(&c.numCreatedToTimeout, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numCreatedToTimeout, 1)
 }
 
-func (c *connStats) createdToError() {
+func (c *connStats) createdToError(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numCreated, -1)
 	atomic.AddInt64(&c.numErr, 1)
+	atomic.AddInt64(&c.numCreatedToError, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numCreatedToError, 1)
 }
 
-func (c *connStats) readToCheck() {
+func (c *connStats) readToCheck(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numReading, -1)
 	atomic.AddInt64(&c.numChecking, 1)
+	atomic.AddInt64(&c.numReadToCheck, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numChecking, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numReadToCheck, 1)
 }
 
-func (c *connStats) readToTimeout() {
+func (c *connStats) readToTimeout(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numReading, -1)
 	atomic.AddInt64(&c.numTimeout, 1)
+	atomic.AddInt64(&c.numReadToTimeout, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numReadToTimeout, 1)
 }
 
-func (c *connStats) readToReset() {
+func (c *connStats) readToReset(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numReading, -1)
 	atomic.AddInt64(&c.numReset, 1)
+	atomic.AddInt64(&c.numReadToReset, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numReadToReset, 1)
 }
 
-func (c *connStats) readToError() {
+func (c *connStats) readToError(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numReading, -1)
 	atomic.AddInt64(&c.numErr, 1)
+	atomic.AddInt64(&c.numReadToError, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numReadToError, 1)
 }
 
-func (c *connStats) checkToCreated() {
+func (c *connStats) checkToCreated(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numChecking, -1)
 	atomic.AddInt64(&c.numCreated, 1)
+	atomic.AddInt64(&c.numCheckToCreated, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numCreated, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numCheckToCreated, 1)
 }
 
-func (c *connStats) checkToRead() {
+func (c *connStats) checkToRead(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numChecking, -1)
 	atomic.AddInt64(&c.numReading, 1)
+	atomic.AddInt64(&c.numCheckToRead, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numReading, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numCheckToRead, 1)
 }
 
-func (c *connStats) checkToFound() {
+func (c *connStats) checkToFound(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numChecking, -1)
 	atomic.AddInt64(&c.numFound, 1)
+	atomic.AddInt64(&c.numCheckToFound, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numFound, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numCheckToFound, 1)
 }
 
-func (c *connStats) checkToError() {
+func (c *connStats) checkToError(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numChecking, -1)
 	atomic.AddInt64(&c.numErr, 1)
+	atomic.AddInt64(&c.numCheckToError, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numCheckToError, 1)
 }
 
-func (c *connStats) checkToDiscard() {
+func (c *connStats) checkToDiscard(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numChecking, -1)
 	atomic.AddInt64(&c.numIODiscarding, 1)
+	atomic.AddInt64(&c.numCheckToDiscard, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numCheckToDiscard, 1)
 }
 
-func (c *connStats) discardToReset() {
+func (c *connStats) discardToReset(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numIODiscarding, -1)
 	atomic.AddInt64(&c.numReset, 1)
+	atomic.AddInt64(&c.numDiscardToReset, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numDiscardToReset, 1)
 }
 
-func (c *connStats) discardToTimeout() {
+func (c *connStats) discardToTimeout(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numIODiscarding, -1)
 	atomic.AddInt64(&c.numTimeout, 1)
+	atomic.AddInt64(&c.numDiscardToTimeout, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numDiscardToTimeout, 1)
 }
 
-func (c *connStats) discardToError() {
+func (c *connStats) discardToError(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numIODiscarding, -1)
 	atomic.AddInt64(&c.numErr, 1)
+	atomic.AddInt64(&c.numDiscardToError, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numDiscardToError, 1)
 }
 
-func (c *connStats) discardToClose() {
+func (c *connStats) discardToClose(asn uint, cc string) {
+	// Overall tracking
 	atomic.AddInt64(&c.numIODiscarding, -1)
 	atomic.AddInt64(&c.numClosed, 1)
+	atomic.AddInt64(&c.numDiscardToClose, 1)
+
+	// GeoIP tracking
+	if _, ok := c.geoIPMap[asn]; !ok {
+		// We haven't seen asn before, so add it to the map
+		c.geoIPMap[asn] = &asnCounts{}
+		c.geoIPMap[asn].cc = cc
+	}
+	atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
+	atomic.AddInt64(&c.geoIPMap[asn].numClosed, 1)
+	atomic.AddInt64(&c.geoIPMap[asn].numDiscardToClose, 1)
 }
