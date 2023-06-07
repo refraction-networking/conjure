@@ -120,8 +120,8 @@ func (cm *connManager) handleNewConn(regManager *cj.RegistrationManager, clientC
 	flowDescription := fmt.Sprintf("%s -> %s ", originalSrc, originalDst)
 	logger = log.New(os.Stdout, "[CONN] "+flowDescription, golog.Ldate|golog.Lmicroseconds)
 
-	asn, err := regManager.GeoIP.ASN(net.ParseIP(originalSrc))
-	cc, err := regManager.GeoIP.CC(net.ParseIP(originalSrc))
+	asn, err := regManager.GeoIP.ASN(net.ParseIP(clientConn.RemoteAddr().String()))
+	cc, err := regManager.GeoIP.CC(net.ParseIP(clientConn.RemoteAddr().String()))
 
 	count := regManager.CountRegistrations(originalDstIP)
 	logger.Debugf("new connection (%d potential registrations)\n", count)
