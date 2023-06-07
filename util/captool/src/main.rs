@@ -40,6 +40,8 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{self, Duration};
+use pnet::packet::tcp::TcpPacket;
+
 
 const ASNDB_PATH: &str = "/usr/share/GeoIP/GeoLite2-ASN.mmdb";
 const CCDB_PATH: &str = "/usr/share/GeoIP/GeoLite2-Country.mmdb";
@@ -51,6 +53,8 @@ $ captool -t \"192.168.0.0/16\" -i \"en01\"
 
 $ captool -t \"192.168.0.0/16,2001:abcd::/64\" -i \"ens15f0,ens15f1,en01\" -a \"$(cat ./asn_list.txt)\" -lpa 10000 -o \"$(date -u +\"%FT%H%MZ\").pcapng.gz\"
 ";
+
+// captool -t "152.136.0.0/16" --pcap-dir "pcaps/server.pcap"
 
 #[derive(Parser, Debug, Serialize)]
 #[command(
@@ -487,6 +491,14 @@ fn read_packets<T, W>(
                 continue;
             }
         };
+
+        match TcpPacket::new(ip_pkt.to_immutable().payload()){
+            Some(x) => {
+                let y = ip_pkt.to_immutable();
+                handler.lock().unwrap().append_to_stats(&y, &x);
+            }
+            None => {}
+        }
 
         let mut interface_id = 0;
         if matches!(ip_pkt, MutableIpPacket::V6(_)) {

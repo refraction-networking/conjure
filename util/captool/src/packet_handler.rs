@@ -2,13 +2,17 @@ use crate::flows::LimiterState;
 use crate::limit::LimitError;
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::net::IpAddr;
 
+use crate::ip::IpPacket;
 use ipnet::IpNet;
-use maxminddb::{geoip2, Reader, MaxMindDBError};
+use maxminddb::{geoip2, MaxMindDBError, Reader};
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketOption;
+use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
+use pnet::packet::tcp::TcpPacket;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
@@ -30,8 +34,105 @@ pub struct PacketHandler {
     pub v4_only: bool,
     pub v6_only: bool,
 
+    pub stats: HashMap<Flow, FlowStats>,
+
     pub seed: [u8; 32],
 }
+
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
+pub struct Flow {
+    pub src_ip: IpAddr,
+    pub dst_ip: IpAddr,
+    pub src_port: u16,
+    pub dst_port: u16,
+    pub proto: IpNextHeaderProtocol,
+}
+
+impl Flow {
+    pub fn new(ip_pkt: &IpPacket, tcp_pkt: &TcpPacket) -> Flow {
+        match ip_pkt {
+            IpPacket::V4(pkt) => Flow {
+                src_ip: IpAddr::V4(pkt.get_source()),
+                dst_ip: IpAddr::V4(pkt.get_destination()),
+                src_port: tcp_pkt.get_source(),
+                dst_port: tcp_pkt.get_destination(),
+                proto: IpNextHeaderProtocols::Tcp,
+            },
+            IpPacket::V6(pkt) => Flow {
+                src_ip: IpAddr::V6(pkt.get_source()),
+                dst_ip: IpAddr::V6(pkt.get_destination()),
+                src_port: tcp_pkt.get_source(),
+                dst_port: tcp_pkt.get_destination(),
+                proto: IpNextHeaderProtocols::Tcp,
+            },
+        }
+    }
+}
+
+impl fmt::Display for Flow {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{si}:{sp} -> {di}:{dp}", si = self.src_ip, sp = self.src_port, di = self.dst_ip, dp = self.dst_port)
+    }
+}
+
+/// Statistics for a given Flow
+pub struct FlowStats {
+    pub packet_count: u32,
+    // ipv4
+    pub ipids: Option<Vec<u16>>,
+    pub ttl_range: Option<Vec<u8>>,
+
+    // ipv6
+    pub flow_label: Option<u32>,
+    pub hop_limit_range: Option<Vec<u8>>,
+    // tcp
+    // pub TCPOptions: bool,
+}
+
+impl FlowStats {
+    pub fn new(ip_pkt: &IpPacket, _tcp_pkt: &TcpPacket) -> FlowStats {
+        match ip_pkt {
+            IpPacket::V4(pkt) => FlowStats {
+                packet_count: 1,
+                ipids: Some(vec![pkt.get_identification()]),
+                ttl_range: Some(vec![pkt.get_ttl()]),
+                flow_label: None,
+                hop_limit_range: None,
+                // TCPOptions: ,
+            },
+            IpPacket::V6(pkt) => FlowStats {
+                packet_count: 1,
+                ipids: None,
+                ttl_range: None,
+                flow_label: Some(pkt.get_flow_label()),
+                hop_limit_range: Some(vec![pkt.get_hop_limit()]),
+                // TCPOptions: ,
+            },
+        }
+    }
+
+    pub fn append(&mut self, ip_pkt: &IpPacket, _tcp_pkt: &TcpPacket) {
+        match ip_pkt {
+            IpPacket::V4(pkt) =>
+            {
+                self.packet_count += 1;
+                self.ipids.as_mut().expect("identification of ipv4 packet not initialized").push(pkt.get_identification());
+                self.ttl_range.as_mut().expect("ttl of ipv4 packet not initialized").push(pkt.get_ttl());
+            },
+            IpPacket::V6(pkt) => {
+                self.packet_count += 1;
+                self.hop_limit_range.as_mut().expect("hop limit of ipv6 packet not initialized").push(pkt.get_hop_limit());
+            },
+        }
+    }
+}
+
+impl fmt::Display for FlowStats {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} packets in flow", self.packet_count)
+    }
+}
+
 
 #[derive(Clone)]
 pub struct SupplementalFields {
@@ -78,7 +179,6 @@ impl From<MaxMindDBError> for PacketError {
     fn from(value: MaxMindDBError) -> Self {
         PacketError::SkipGeoip(value)
     }
-
 }
 
 impl From<Box<dyn Error>> for PacketError {
@@ -133,9 +233,24 @@ impl PacketHandler {
             seed: [0u8; 32],
             v4_only,
             v6_only,
+            stats: HashMap::new(),
         };
         OsRng.fill_bytes(&mut p.seed);
         Ok(p)
+    }
+
+    pub fn append_to_stats(&mut self, ip_pkt: &IpPacket, tcp_pkt: &TcpPacket) {
+        let curr_flow = Flow::new(ip_pkt, tcp_pkt);
+        if !self.stats.contains_key(&curr_flow) {
+            let curr_stats = FlowStats::new(ip_pkt, tcp_pkt);
+            self.stats.insert(curr_flow, curr_stats);
+            debug!("new flow! {}\n{}", curr_flow, self.stats[&curr_flow]);
+        }
+        else {
+            if let Some(x) = self.stats.get_mut(&curr_flow) {
+                x.append(ip_pkt, tcp_pkt); debug!("{}\n{}", curr_flow, self.stats[&curr_flow]);
+            }
+        }
     }
 
     pub fn get_supplemental(
