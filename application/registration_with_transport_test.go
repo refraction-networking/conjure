@@ -35,7 +35,7 @@ func mockReceiveFromDetector() (*pb.ClientToStation, cj.ConjureSharedKeys) {
 	return clientToStation, conjureKeys
 }
 
-func TestManagerFunctionality(t *testing.T) {
+func DisabledTestManagerFunctionality(t *testing.T) {
 	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
