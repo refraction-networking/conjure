@@ -13,7 +13,6 @@ extern crate rand;
 extern crate protobuf;
 extern crate redis;
 extern crate serde;
-extern crate serde_derive;
 extern crate toml;
 extern crate tuntap; // https://github.com/ewust/tuntap.rs
 extern crate zmq;
@@ -21,7 +20,7 @@ extern crate zmq;
 use std::mem::transmute;
 use util::precise_time_ns;
 
-use serde_derive::Deserialize;
+use serde::Deserialize;
 use std::env;
 use std::fs;
 
