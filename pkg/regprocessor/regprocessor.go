@@ -233,7 +233,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	clientLibVer := uint(c2sPayload.GetRegistrationPayload().GetClientLibVersion())
 
 	// Generate seed and phantom address
-	cjkeys, err := lib.GenSharedKeys(c2sPayload.SharedSecret, c2sPayload.RegistrationPayload.GetTransport())
+	cjkeys, err := lib.GenSharedKeys(clientLibVer, c2sPayload.SharedSecret, c2sPayload.RegistrationPayload.GetTransport())
 
 	if err != nil {
 		// p.logger.Println("Failed to generate the shared key using SharedSecret:", err)
