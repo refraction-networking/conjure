@@ -160,7 +160,7 @@ impl<'p> MutableIpPacket<'p> {
                         Some(t) => t,
                         None => return PacketType::Other,
                     };
-                    if t4.get_flags() == 0x02 {
+                    if t4.get_flags() & 0x02 != 0 {
                         PacketType::TCPSYN
                     } else {
                         PacketType::TCPOther
@@ -175,7 +175,7 @@ impl<'p> MutableIpPacket<'p> {
                         Some(t) => t,
                         None => return PacketType::Other,
                     };
-                    if t6.get_flags() == 0x02 {
+                    if t6.get_flags() & 0x02 != 0 {
                         PacketType::TCPSYN
                     } else {
                         PacketType::TCPOther
@@ -322,7 +322,8 @@ impl<'p> MutableIpPacket<'p> {
 
         if let Some(ref mut l) = &mut limiter.as_mut() {
             if let Err(e) = l.count_or_drop_many(
-                vec![info.asn.into(), info.cc.clone().into()],
+                // vec![info.asn.into(), info.cc.clone().into()],
+                vec![info.asn.into()],
                 s.clone(),
                 packet_type,
             ) {

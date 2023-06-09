@@ -38,6 +38,15 @@ else
     exit_msg "Unknown driver $PF_DRIVER"
 fi
 
+# this allows the conntrack table to keep track of connections where the client dissapears and
+# the station retransmits fins longer than the kernel will keep track of the connection. This
+# works for default timeout values on linux for ubuntu 20.04 and 22.04 (others untested).
+required_timeout=90
+nf_conntrack_tcp_timeout_last_ack=$(sysctl --values net.netfilter.nf_conntrack_tcp_timeout_last_ack)
+if [ "$nf_conntrack_tcp_timeout_last_ack" -lt "$required_timeout" ];then
+        sysctl -w net.netfilter.nf_conntrack_tcp_timeout_last_ack=90
+fi
+
 # Create a tunnel for each core.
 # The tunnel numbers do not match the core index per the OS,
 # but instead match the count of cores being used by conjure.

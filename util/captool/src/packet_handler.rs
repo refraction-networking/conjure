@@ -7,7 +7,7 @@ use std::fmt;
 use std::net::IpAddr;
 
 use ipnet::IpNet;
-use maxminddb::{geoip2, Reader};
+use maxminddb::{geoip2, Reader, MaxMindDBError};
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketOption;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -46,6 +46,8 @@ pub enum PacketError {
     Skip,
     SkipCC,
     SkipASN,
+    SkipMissingGeoIP,
+    SkipGeoip(MaxMindDBError),
     SkipLimit(LimitError),
     OtherError(Box<dyn Error>),
 }
@@ -58,6 +60,8 @@ impl fmt::Display for PacketError {
             PacketError::Skip => write!(f, "irrelevant addr"),
             PacketError::SkipCC => write!(f, "irrelevant or missing cc"),
             PacketError::SkipASN => write!(f, "irrelevant or missing asn"),
+            PacketError::SkipMissingGeoIP => write!(f, "no geoip entry for address"),
+            PacketError::SkipGeoip(e) => write!(f, "encountered geoip lookup error {e}"),
             PacketError::SkipLimit(e) => write!(f, "skip limiter {e}"),
             PacketError::OtherError(e) => write!(f, "{e}"),
         }
@@ -68,6 +72,13 @@ impl From<LimitError> for PacketError {
     fn from(value: LimitError) -> Self {
         PacketError::SkipLimit(value)
     }
+}
+
+impl From<MaxMindDBError> for PacketError {
+    fn from(value: MaxMindDBError) -> Self {
+        PacketError::SkipGeoip(value)
+    }
+
 }
 
 impl From<Box<dyn Error>> for PacketError {
@@ -211,8 +222,8 @@ impl PacketHandler {
         } else if !addr.is_global() {
             String::from("pv")
         } else {
-            let country_rec: geoip2::Country = self.cc_reader.lookup(addr).unwrap();
-            String::from(country_rec.country.unwrap().iso_code.unwrap())
+            let country_rec: geoip2::Country = self.cc_reader.lookup(addr)?;
+            String::from(country_rec.country.ok_or(PacketError::SkipMissingGeoIP)?.iso_code.ok_or(PacketError::SkipMissingGeoIP)?)
         };
 
         // if the Country Code filter list is empty or if the provided cc in question
