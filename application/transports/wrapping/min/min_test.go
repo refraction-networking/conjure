@@ -13,6 +13,7 @@ import (
 
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/internal/tests"
+	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
@@ -22,12 +23,12 @@ func TestSuccessfulWrap(t *testing.T) {
 
 	var transport Transport
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Min, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min, 0)
 	defer c2p.Close()
 	defer sfp.Close()
 	require.NotNil(t, reg)
 
-	hmacID := reg.Keys.ConjureHMAC("MinTrasportHMACString")
+	hmacID := core.ConjureHMAC(reg.Keys.SharedSecret, "MinTrasportHMACString")
 	message := []byte(`test message!`)
 
 	_, err := c2p.Write(append(hmacID, message...))
@@ -50,7 +51,7 @@ func TestSuccessfulWrap(t *testing.T) {
 func TestUnsuccessfulWrap(t *testing.T) {
 	var transport Transport
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Min, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min, 0)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -74,7 +75,7 @@ func TestTryAgain(t *testing.T) {
 	var transport Transport
 	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Min, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min, 0)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -108,7 +109,7 @@ func TestTryParamsToDstPort(t *testing.T) {
 	clv := randomizeDstPortMinVersion
 	seed, _ := hex.DecodeString("0000000000000000000000000000000000")
 
-	cases := []struct{
+	cases := []struct {
 		r bool
 		p uint16
 	}{{true, 58047}, {false, 443}}

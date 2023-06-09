@@ -62,7 +62,7 @@ func TestSuccessfulWrap(t *testing.T) {
 
 	var transport Transport
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Obfs4, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4, 0)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -138,7 +138,7 @@ func TestSuccessfulWrapMulti(t *testing.T) {
 
 	// register 5 sessions guaranteeing collisions on phantom IP addresses
 	for _, secret := range sharedSecrets {
-		c2p, sfp, reg = tests.SetupPhantomConnectionsSecret(manager, pb.TransportType_Obfs4, secret, testSubnetPath)
+		c2p, sfp, reg = tests.SetupPhantomConnectionsSecret(manager, pb.TransportType_Obfs4, secret, 2, testSubnetPath)
 	}
 
 	defer c2p.Close()
@@ -190,7 +190,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	var transport Transport
 	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Obfs4, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4, 2)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -212,7 +212,7 @@ func TestTryAgain(t *testing.T) {
 	var transport Transport
 	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Obfs4, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4, 0)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -257,7 +257,7 @@ func TestObfs4StateDir(t *testing.T) {
 	args.Add("node-id", nodeID.Hex())
 	args.Add("private-key", serverKeypair.Private().Hex())
 	seed, err := drbg.NewSeed()
-	require.Nil(t, err, "failed to create DRBG seed" )
+	require.Nil(t, err, "failed to create DRBG seed")
 
 	args.Add("drbg-seed", seed.Hex())
 
@@ -269,14 +269,13 @@ func TestObfs4StateDir(t *testing.T) {
 	require.NoFileExists(t, "./obfs4_state.json")
 	require.NoFileExists(t, "./obfs4_bridgeline.txt")
 
-
 	stateDir, err := os.MkdirTemp("", "")
 	require.Nil(t, err)
 	server, err = obfs4Transport.ServerFactory(stateDir, &args)
 	require.Nil(t, err, "server factory failed")
 	require.NotNil(t, server)
 
-	require.FileExists(t, path.Join(stateDir,  "./obfs4_state.json"))
+	require.FileExists(t, path.Join(stateDir, "./obfs4_state.json"))
 	require.FileExists(t, path.Join(stateDir, "./obfs4_bridgeline.txt"))
 }
 
@@ -284,7 +283,7 @@ func TestTryParamsToDstPort(t *testing.T) {
 	clv := randomizeDstPortMinVersion
 	seed, _ := hex.DecodeString("0000000000000000000000000000000000")
 
-	cases := []struct{
+	cases := []struct {
 		r bool
 		p uint16
 	}{{true, 57045}, {false, 443}}

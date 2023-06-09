@@ -2,8 +2,11 @@ package prefix
 
 import (
 	"fmt"
+	"io"
+	"net"
 
 	"github.com/refraction-networking/conjure/application/transports"
+	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -19,9 +22,11 @@ type ClientTransport struct {
 	// // of the transport session without being shared - i.e. local derived keys.
 	// state any
 
-	Prefix           Prefix
-	TagObfuscator    transports.Obfuscator
-	StationPublicKey [32]byte
+	Prefix        Prefix
+	TagObfuscator transports.Obfuscator
+
+	connectTag       []byte
+	stationPublicKey [32]byte
 }
 
 // Prefix struct used selected by, or given to the client.
@@ -59,6 +64,15 @@ func (*ClientTransport) ID() pb.TransportType {
 	return pb.TransportType_Prefix
 }
 
+// Prepare provides an opportunity for the transport to integrate the station public key
+// as well as bytes from the deterministic random generator associated with the registration
+// that this ClientTransport is attached to.
+func (t *ClientTransport) Prepare(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+	t.connectTag = core.ConjureHMAC(sharedSecret, "PrefixTransportHMACString")
+	t.stationPublicKey = pubkey
+	return nil
+}
+
 // GetParams returns a generic protobuf with any parameters from both the registration and the
 // transport.
 func (t *ClientTransport) GetParams() proto.Message {
@@ -86,17 +100,35 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
 
-// // Connect creates the connection to the phantom address negotiated in the registration phase of
-// // Conjure connection establishment.
-// func (t *ClientTransport) Connect(ctx context.Context, reg *cj.ConjureReg) (net.Conn, error) {
-// 	// conn, err := reg.getFirstConnection(ctx, reg.TcpDialer, phantoms)
-// 	// if err != nil {
-// 	// 	return nil, err
-// 	// }
+// Build is specific to the Prefix transport, providing a utility function for building the
+// prefix that the client should write to the wire before sending any client bytes.
+func (t *ClientTransport) Build() ([]byte, error) {
+	// Send hmac(seed, str) bytes to indicate to station (min transport)
+	prefix := t.Prefix.Bytes
 
-// 	// // Send hmac(seed, str) bytes to indicate to station (min transport)
-// 	// connectTag := conjureHMAC(reg.keys.SharedSecret, "MinTrasportHMACString")
-// 	// conn.Write(connectTag)
-// 	// return conn, nil
-// 	return nil, nil
-// }
+	obfuscatedID, err := t.TagObfuscator.Obfuscate(t.connectTag, t.stationPublicKey[:])
+	if err != nil {
+		return nil, err
+	}
+	return append(prefix, obfuscatedID...), nil
+}
+
+// WrapConn gives the transport the opportunity to perform a handshake and wrap / transform the
+// incoming and outgoing bytes send by the implementing client.
+func (t ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
+	// Send hmac(seed, str) bytes to indicate to station (min transport) generated during Prepare(...)
+
+	// // Send hmac(seed, str) bytes to indicate to station (min transport)
+	// connectTag := core.ConjureHMAC(reg.keys.SharedSecret, "PrefixTransportHMACString")
+
+	prefix, err := t.Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build prefix: %w", err)
+	}
+
+	_, err = conn.Write(prefix)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}

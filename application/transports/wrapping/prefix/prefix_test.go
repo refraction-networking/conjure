@@ -15,6 +15,7 @@ import (
 
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/internal/tests"
+	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/gotapdance/ed25519"
 	"github.com/refraction-networking/gotapdance/ed25519/extra25519"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
@@ -36,12 +37,12 @@ func TestSuccessfulWrap(t *testing.T) {
 		SupportedPrefixes: defaultPrefixes,
 	}
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, randomizeDstPortMinVersion)
 	defer c2p.Close()
 	defer sfp.Close()
 	require.NotNil(t, reg)
 
-	hmacID := reg.Keys.ConjureHMAC("PrefixTransportHMACString")
+	hmacID := core.ConjureHMAC(reg.Keys.SharedSecret, "PrefixTransportHMACString")
 	message := []byte(`test message!`)
 
 	for _, prefix := range defaultPrefixes {
@@ -79,7 +80,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	}
 
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, randomizeDstPortMinVersion)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -109,7 +110,7 @@ func TestTryAgain(t *testing.T) {
 	}
 	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, randomizeDstPortMinVersion)
 	defer c2p.Close()
 	defer sfp.Close()
 

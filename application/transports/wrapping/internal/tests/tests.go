@@ -20,12 +20,12 @@ var SharedSecret = []byte(`6a328b8ec2024dd92dd64332164cc0425ddbde40cb7b81e055bf7
 
 // SetupPhantomConnections registers one session with the provided transport and
 // registration manager using a pre-determined kay and phantom subnet file.
-func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.TransportType) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
+func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.TransportType, libver uint) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
 	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
-	return SetupPhantomConnectionsSecret(manager, transport, SharedSecret, testSubnetPath)
+	return SetupPhantomConnectionsSecret(manager, transport, SharedSecret, libver, testSubnetPath)
 }
 
-func SetupPhantomConnectionsSecret(manager *dd.RegistrationManager, transport pb.TransportType, sharedSecret []byte, testSubnetPath string) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
+func SetupPhantomConnectionsSecret(manager *dd.RegistrationManager, transport pb.TransportType, sharedSecret []byte, libver uint, testSubnetPath string) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	phantom := bufconn.Listen(65535)
@@ -50,20 +50,20 @@ func SetupPhantomConnectionsSecret(manager *dd.RegistrationManager, transport pb
 
 	wg.Wait()
 
-	keys, err := dd.GenSharedKeys(sharedSecret, transport)
+	keys, err := dd.GenSharedKeys(libver, sharedSecret, transport)
 	if err != nil {
 		log.Fatalln("failed to generate shared keys:", err)
 	}
 
-	v := uint32(1)
+	v := uint32(libver)
 	covert := "1.2.3.4:56789"
 	regType := pb.RegistrationSource_API
 	gen := uint32(1)
 	c2s := &pb.ClientToStation{
+		ClientLibVersion:    &v,
 		Transport:           &transport,
 		CovertAddress:       &covert,
 		DecoyListGeneration: &gen,
-		ClientLibVersion:    &v,
 	}
 	reg, err = manager.NewRegistration(c2s, &keys, false, &regType)
 	if err != nil {

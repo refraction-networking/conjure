@@ -2,9 +2,12 @@ package obfs4
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/refraction-networking/conjure/application/transports"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"gitlab.com/yawning/obfs4.git/common/ntor"
+	"golang.org/x/crypto/curve25519"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -14,6 +17,8 @@ import (
 // the station side Transport struct has one instance to be re-used for all sessions.
 type ClientTransport struct {
 	Parameters *pb.GenericTransportParams
+
+	keys obfs4Keys
 }
 
 // Name returns a string identifier for the Transport for logging
@@ -64,3 +69,44 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 // func (*ClientTransport) Connect(ctx context.Context, reg *cj.ConjureReg) (net.Conn, error) {
 // 	return nil, nil
 // }
+
+// Prepare provides an opportunity for the transport to integrate the station public key
+// as well as bytes from the deterministic random generator associated with the registration
+// that this ClientTransport is attached to.
+func (t *ClientTransport) Prepare(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+	var err error
+	t.keys, err = generateObfs4Keys(dRand)
+	return err
+}
+
+type obfs4Keys struct {
+	PrivateKey *ntor.PrivateKey
+	PublicKey  *ntor.PublicKey
+	NodeID     *ntor.NodeID
+}
+
+func generateObfs4Keys(rand io.Reader) (obfs4Keys, error) {
+	keys := obfs4Keys{
+		PrivateKey: new(ntor.PrivateKey),
+		PublicKey:  new(ntor.PublicKey),
+		NodeID:     new(ntor.NodeID),
+	}
+
+	_, err := rand.Read(keys.PrivateKey[:])
+	if err != nil {
+		return keys, err
+	}
+
+	keys.PrivateKey[0] &= 248
+	keys.PrivateKey[31] &= 127
+	keys.PrivateKey[31] |= 64
+
+	pub, err := curve25519.X25519(keys.PrivateKey[:], curve25519.Basepoint)
+	if err != nil {
+		return keys, err
+	}
+	copy(keys.PublicKey[:], pub)
+
+	_, err = rand.Read(keys.NodeID[:])
+	return keys, err
+}

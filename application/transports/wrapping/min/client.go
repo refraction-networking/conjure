@@ -2,8 +2,10 @@ package min
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/refraction-networking/conjure/application/transports"
+	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -18,6 +20,8 @@ type ClientTransport struct {
 	// // state tracks fields internal to the registrar that survive for the lifetime
 	// // of the transport session without being shared - i.e. local derived keys.
 	// state any
+
+	connectTag []byte
 }
 
 // Name returns a string identifier for the Transport for logging
@@ -63,17 +67,10 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
 
-// // Connect creates the connection to the phantom address negotiated in the registration phase of
-// // Conjure connection establishment.
-// func (t *ClientTransport) Connect(ctx context.Context, reg *cj.ConjureReg) (net.Conn, error) {
-// 	// conn, err := reg.getFirstConnection(ctx, reg.TcpDialer, phantoms)
-// 	// if err != nil {
-// 	// 	return nil, err
-// 	// }
-
-// 	// // Send hmac(seed, str) bytes to indicate to station (min transport)
-// 	// connectTag := conjureHMAC(reg.keys.SharedSecret, "MinTrasportHMACString")
-// 	// conn.Write(connectTag)
-// 	// return conn, nil
-// 	return nil, nil
-// }
+// Prepare provides an opportunity for the transport to integrate the station public key
+// as well as bytes from the deterministic random generator associated with the registration
+// that this ClientTransport is attached to.
+func (t *ClientTransport) Prepare(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+	t.connectTag = core.ConjureHMAC(sharedSecret, "PrefixTransportHMACString")
+	return nil
+}

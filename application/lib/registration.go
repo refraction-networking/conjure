@@ -635,7 +635,6 @@ func (r *RegisteredDecoys) RegistrationExists(d *DecoyRegistration) *DecoyRegist
 	defer r.m.RUnlock()
 
 	return r.registrationExists(d)
-
 }
 
 // For use inside of this struct (so no deadlocks on struct mutex)
@@ -647,7 +646,6 @@ func (r *RegisteredDecoys) registrationExists(d *DecoyRegistration) *DecoyRegist
 	}
 
 	identifier := t.GetIdentifier(d)
-
 	phantomAddr := d.PhantomIp.String()
 
 	_, exists := r.decoys[phantomAddr]

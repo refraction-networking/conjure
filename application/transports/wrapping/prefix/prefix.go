@@ -9,6 +9,7 @@ import (
 
 	dd "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports"
+	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -161,7 +162,7 @@ func (Transport) LogPrefix() string { return "PREF" }
 // identifier should be unique for each registration on a given phantom;
 // registrations on different phantoms can have the same identifier.
 func (Transport) GetIdentifier(d *dd.DecoyRegistration) string {
-	return string(d.Keys.ConjureHMAC("PrefixTransportHMACString"))
+	return string(core.ConjureHMAC(d.Keys.SharedSecret, "PrefixTransportHMACString"))
 }
 
 // GetProto returns the next layer protocol that the transport uses. Implements

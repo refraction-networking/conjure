@@ -386,7 +386,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	c2s := c2sw.GetRegistrationPayload()
 
 	// Generate keys from shared secret using HKDF
-	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret(), c2s.GetTransport())
+	conjureKeys, err := GenSharedKeys(uint(c2s.GetClientLibVersion()), c2sw.GetSharedSecret(), c2s.GetTransport())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate keys: %v", err)
 	}
