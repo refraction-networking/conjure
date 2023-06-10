@@ -3,11 +3,13 @@ package obfs4
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net"
 
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
 	dd "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports"
+	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"gitlab.com/yawning/obfs4.git/common/drbg"
 	"gitlab.com/yawning/obfs4.git/common/ntor"
@@ -154,4 +156,38 @@ func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, e
 	}
 
 	return 443, nil
+}
+
+// Connect creates the connection to the phantom address negotiated in the registration phase of
+// Conjure connection establishment.
+func (t ClientTransport) Connect(conn net.Conn) (net.Conn, error) {
+	obfsTransport := obfs4.Transport{}
+	args := pt.Args{}
+
+	args.Add("node-id", obfsTransport.Obfs4Keys.NodeID.Hex())
+	args.Add("public-key", obfsTransport.Obfs4Keys.PublicKey.Hex())
+	args.Add("iat-mode", "1")
+
+	c, err := obfsTransport.ClientFactory("")
+	if err != nil {
+		fmt.Errorf("failed to create client factory")
+		return nil, err
+	}
+
+	parsedArgs, err := c.ParseArgs(&args)
+	if err != nil {
+		fmt.Errorf("failed to parse obfs4 args")
+		return nil, err
+	}
+
+	d := func(network, address string) (net.Conn, error) {
+		return conn, nil
+	}
+
+	return c.Dial("tcp", "", d, parsedArgs)
+}
+
+func (t *ClientTransport) Prepare(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+	t.connectTag = core.ConjureHMAC(sharedSecret, "obfs4TransportHMACString")
+	return nil
 }
