@@ -2,8 +2,11 @@ package min
 
 import (
 	"fmt"
+	"io"
+	"net"
 
 	"github.com/refraction-networking/conjure/application/transports"
+	core "github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -14,7 +17,7 @@ import (
 type ClientTransport struct {
 	// Parameters are fields that will be shared with the station in the registration
 	Parameters *pb.GenericTransportParams
-
+	connectTag []byte
 	// // state tracks fields internal to the registrar that survive for the lifetime
 	// // of the transport session without being shared - i.e. local derived keys.
 	// state any
@@ -63,17 +66,15 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
 
-// // Connect creates the connection to the phantom address negotiated in the registration phase of
-// // Conjure connection establishment.
-// func (t *ClientTransport) Connect(ctx context.Context, reg *cj.ConjureReg) (net.Conn, error) {
-// 	// conn, err := reg.getFirstConnection(ctx, reg.TcpDialer, phantoms)
-// 	// if err != nil {
-// 	// 	return nil, err
-// 	// }
+// Connect creates the connection to the phantom address negotiated in the registration phase of
+// Conjure connection establishment.
+func (t *ClientTransport) Connect(conn net.Conn) (net.Conn, error) {
+	// Send hmac(seed, str) bytes to indicate to station (min transport) generated during Prepare(...)
+	conn.Write(t.connectTag)
+	return conn, nil
+}
 
-// 	// // Send hmac(seed, str) bytes to indicate to station (min transport)
-// 	// connectTag := conjureHMAC(reg.keys.SharedSecret, "MinTrasportHMACString")
-// 	// conn.Write(connectTag)
-// 	// return conn, nil
-// 	return nil, nil
-// }
+func (t *ClientTransport) Prepare(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+	t.connectTag = core.ConjureHMAC(sharedSecret, "MinTransportHMACString")
+	return nil
+}
