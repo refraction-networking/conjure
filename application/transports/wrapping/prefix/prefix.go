@@ -2,7 +2,6 @@ package prefix
 
 import (
 	"bytes"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -25,7 +24,8 @@ const (
 )
 
 const minTagLength = 64
-const minTagLengthBase64 = 88
+
+// const minTagLengthBase64 = 88
 
 // prefix provides the elements required for independent prefixes to be usable as part of the
 // transport used by the server specifically.
@@ -364,15 +364,15 @@ func min(a, b int) int {
 	return b
 }
 
-func base64TagDecode(encoded []byte) ([]byte, int, error) {
-	if len(encoded) < minTagLengthBase64 {
-		return nil, 0, fmt.Errorf("not enough to decode")
-	}
-	buf := make([]byte, minTagLengthBase64)
-	n, err := base64.StdEncoding.Decode(buf, encoded[:minTagLengthBase64])
-	if err != nil {
-		return nil, 0, err
-	}
+// func base64TagDecode(encoded []byte) ([]byte, int, error) {
+// 	if len(encoded) < minTagLengthBase64 {
+// 		return nil, 0, fmt.Errorf("not enough to decode")
+// 	}
+// 	buf := make([]byte, minTagLengthBase64)
+// 	n, err := base64.StdEncoding.Decode(buf, encoded[:minTagLengthBase64])
+// 	if err != nil {
+// 		return nil, 0, err
+// 	}
 
-	return buf[:n], minTagLengthBase64, nil
-}
+// 	return buf[:n], minTagLengthBase64, nil
+// }

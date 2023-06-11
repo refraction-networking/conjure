@@ -84,7 +84,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 
-	// Wire enough bytes that it the message is definitively not associated with any prefix
+	// Write enough bytes that it can tell the message is definitively not associated with any prefix
 	randMsg := make([]byte, 100)
 	n, _ := rand.Read(randMsg)
 	_, err := c2p.Write(randMsg[:n])

@@ -15,6 +15,7 @@ import (
 	"github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/prefix"
 	"github.com/refraction-networking/conjure/pkg/apiregserver"
 	"github.com/refraction-networking/conjure/pkg/dnsregserver"
 	"github.com/refraction-networking/conjure/pkg/metrics"
@@ -47,8 +48,9 @@ type config struct {
 }
 
 var defaultTransports = map[pb.TransportType]lib.Transport{
-	pb.TransportType_Min:   min.Transport{},
-	pb.TransportType_Obfs4: obfs4.Transport{},
+	pb.TransportType_Min:    min.Transport{},
+	pb.TransportType_Obfs4:  obfs4.Transport{},
+	pb.TransportType_Prefix: prefix.Transport{},
 	// [transports:enable]
 }
 

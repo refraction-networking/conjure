@@ -23,8 +23,9 @@ var sharedLogger *log.Logger
 var logClientIP = false
 
 var enabledTransports = map[pb.TransportType]cj.Transport{
-	pb.TransportType_Min:   min.Transport{},
-	pb.TransportType_Obfs4: obfs4.Transport{},
+	pb.TransportType_Min:    min.Transport{},
+	pb.TransportType_Obfs4:  obfs4.Transport{},
+	pb.TransportType_Prefix: prefix.Transport{},
 }
 
 func main() {
