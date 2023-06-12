@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"math/rand"
 	"os"
 	"os/signal"
 	"strconv"
@@ -29,7 +28,6 @@ var enabledTransports = map[pb.TransportType]cj.Transport{
 }
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
 	var err error
 	var zmqAddress string
 	flag.StringVar(&zmqAddress, "zmq-address", "ipc://@zmq-proxy", "Address of ZMQ proxy")

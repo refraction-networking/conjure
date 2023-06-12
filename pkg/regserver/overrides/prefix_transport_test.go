@@ -6,10 +6,12 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"reflect"
 	"strings"
 	"syscall"
 	"testing"
 
+	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,7 +49,8 @@ func TestOverrideNewPrefix(t *testing.T) {
 
 	err = os.Truncate(path, 0)
 	require.Nil(t, err)
-	f.Seek(0, 0)
+	_, err = f.Seek(0, 0)
+	require.Nil(t, err)
 
 	// file exists and is properly formatted.
 	_, err = f.Write([]byte("100 10 0x21 80 HTT\n1000 10 0x22 22 SSH"))
@@ -102,6 +105,40 @@ func TestOverrideSelectPrefix(t *testing.T) {
 			require.Equal(t, tt.exPref, string(p.prefix))
 			require.Equal(t, tt.exPort, p.port)
 		})
-		rr.Seek(0, io.SeekStart)
+		_, err := rr.Seek(0, io.SeekStart)
+		require.Nil(t, err)
+	}
+}
+
+func TestPrefixOverride_Override(t *testing.T) {
+	type fields struct {
+		prefixes *prefixes
+	}
+	type args struct {
+		r *pb.ClientToStation
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    *pb.ClientToStation
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			po := &PrefixOverride{
+				prefixes: tt.fields.prefixes,
+			}
+			got, err := po.Override(tt.args.r)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("PrefixOverride.Override() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("PrefixOverride.Override() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
