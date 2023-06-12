@@ -1,6 +1,9 @@
 package overrides
 
 import (
+	"bytes"
+	"encoding/hex"
+	"io"
 	"strings"
 	"testing"
 
@@ -14,7 +17,7 @@ func TestOverrideParsePrefix(t *testing.T) {
 	1000 10 0x22 -1 "amweoafimdoifavwe"
 	`
 	r := strings.NewReader(text)
-	prefs, err := parsePrefixes(r)
+	prefs, err := ParsePrefixes(r)
 	require.Nil(t, err)
 
 	require.NotNil(t, prefs)
@@ -28,13 +31,42 @@ func TestOverrideNewPrefix(t *testing.T) {
 
 func TestOverrideSelectPrefix(t *testing.T) {
 
-	text := `1000 10 0x21 80 "HTT"`
-	r := strings.NewReader(text)
-	prefs, err := parsePrefixes(r)
-	require.Nil(t, err)
+	d := func(s string) []byte {
+		x, _ := hex.DecodeString(s)
+		return x
+	}
 
-	require.NotNil(t, prefs)
+	notRand := d("000000")
+	rr := bytes.NewReader(notRand)
 
-	_, ok := prefs.selectPrefix(nil, nil)
-	require.True(t, ok)
+	var tests = []struct {
+		descr  string
+		input  string
+		exPref string
+		exOk   bool
+		rr     io.Reader
+	}{
+		{"single prefix", "1000 10 0x21 80 HTT", "HTT", true, rr},
+		{"no port override", "1000 10 0x22 -1 Foo", "Foo", true, rr},
+		{"guaranteed selection equal", "1 1 0x22 -1 Foo", "Foo", true, rr},
+		{"guaranteed selection over", "1 3 0x22 -1 Foo", "Foo", true, rr},
+		{"guaranteed non-selection", "1 0 0x22 -1 Foo", "", false, rr},
+		{"two prefixes select first", "1000 10 0x21 80 HTT\n1000 10 0x22 80 SSH", "HTT", true, rr},
+		{"two prefixes select second", "1000 10 0x21 80 HTT\n1000 10 0x22 80 SSH", "SSH", true, bytes.NewReader(d("0100000"))},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.descr, func(t *testing.T) {
+			r := strings.NewReader(tt.input)
+			prefs, err := ParsePrefixes(r)
+			require.Nil(t, err)
+
+			require.NotNil(t, prefs)
+
+			p, ok := prefs.selectPrefix(tt.rr, nil)
+			require.Equal(t, tt.exOk, ok)
+			require.Equal(t, tt.exPref, string(p))
+		})
+		rr.Seek(0, io.SeekStart)
+	}
 }
