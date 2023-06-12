@@ -4,16 +4,57 @@ import (
 	"bytes"
 	"encoding/hex"
 	"io"
+	"io/fs"
+	"os"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestOverrideNewPrefix(t *testing.T) {
+	// no path provided
 	np, err := NewPrefixTransportOverride("")
 	require.Nil(t, err)
 	require.Nil(t, np)
+
+	tmpdir := t.TempDir()
+	path := tmpdir + "/prefix_tspt.dat"
+
+	// path provided, but file not exist
+	np, err = NewPrefixTransportOverride(path)
+	require.Nil(t, np)
+	e, ok := err.(*fs.PathError)
+	if ok && e.Err != syscall.ENOENT {
+		t.Fatalf("errno: %d, expected: %d", e.Err, syscall.ENOENT)
+	}
+
+	f, err := os.Create(path)
+	require.Nil(t, err)
+
+	// file exists, but is empty
+	np, err = NewPrefixTransportOverride(path)
+	require.Equal(t, np, &PrefixOverride{(*prefixes)(&[]prefixIface{})})
+	require.Nil(t, err)
+
+	// file exists, but incorrect format
+	_, err = f.Write([]byte("100"))
+	require.Nil(t, err)
+	np, err = NewPrefixTransportOverride(path)
+	require.Nil(t, np)
+	require.ErrorContains(t, err, "malformed line:")
+
+	err = os.Truncate(path, 0)
+	require.Nil(t, err)
+	f.Seek(0, 0)
+
+	// file exists and is properly formatted.
+	_, err = f.Write([]byte("100 10 0x21 80 HTT\n1000 10 0x22 22 SSH"))
+	require.Nil(t, err)
+	np, err = NewPrefixTransportOverride(path)
+	require.Nil(t, err)
+	require.Equal(t, 2, len(([]prefixIface)(*(np.(*PrefixOverride).prefixes))))
 }
 
 func TestOverrideSelectPrefix(t *testing.T) {
@@ -39,6 +80,7 @@ func TestOverrideSelectPrefix(t *testing.T) {
 		{"guaranteed selection equal", "1 1 0x22 -1 Foo", "Foo", true, -1, rr},
 		{"guaranteed selection over", "1 3 0x22 -1 Foo", "Foo", true, -1, rr},
 		{"guaranteed non-selection", "1 0 0x22 -1 Foo", "", false, -1, rr},
+		{"two prefixes first ignored", "0 0 0x21 80 HTT\n1000 10 0x22 22 SSH", "SSH", true, 22, rr},
 		{"two prefixes select first", "1000 10 0x21 80 HTT\n1000 10 0x22 22 SSH", "HTT", true, 80, rr},
 		{"two prefixes select second", "1000 10 0x21 80 HTT\n1000 10 0x22 22 SSH", "SSH", true, 22, bytes.NewReader(d("0100000"))},
 	}

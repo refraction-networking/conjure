@@ -108,14 +108,17 @@ func ParsePrefixes(r io.Reader) (*PrefixOverride, error) {
 
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		items := strings.Fields(scanner.Text())
+		line := scanner.Text()
+		items := strings.Fields(line)
 		if len(items) != 5 {
-			// Bad line
-			continue
+			return nil, fmt.Errorf("malformed line: %s", line)
 		}
 
 		max, err0 := strconv.ParseInt(items[0], 0, 0)
 		bar, err1 := strconv.ParseInt(items[1], 0, 0)
+		if max == 0 && bar == 0 {
+			continue
+		}
 		id, err2 := strconv.ParseInt(items[2], 0, 0)
 		port, err3 := strconv.ParseInt(items[3], 0, 0)
 		for i, err := range []error{err0, err1, err2, err3} {
