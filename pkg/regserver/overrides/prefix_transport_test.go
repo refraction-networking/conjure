@@ -10,19 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestOverrideParsePrefix(t *testing.T) {
-
-	text := `100 67 0x01 80 "GET / HTTP/1.1\r\n"
-	1000 10 0x21 80 "HTT"
-	1000 10 0x22 -1 "amweoafimdoifavwe"
-	`
-	r := strings.NewReader(text)
-	prefs, err := ParsePrefixes(r)
-	require.Nil(t, err)
-
-	require.NotNil(t, prefs)
-}
-
 func TestOverrideNewPrefix(t *testing.T) {
 	np, err := NewPrefixTransportOverride("")
 	require.Nil(t, err)
@@ -44,15 +31,16 @@ func TestOverrideSelectPrefix(t *testing.T) {
 		input  string
 		exPref string
 		exOk   bool
+		exPort int
 		rr     io.Reader
 	}{
-		{"single prefix", "1000 10 0x21 80 HTT", "HTT", true, rr},
-		{"no port override", "1000 10 0x22 -1 Foo", "Foo", true, rr},
-		{"guaranteed selection equal", "1 1 0x22 -1 Foo", "Foo", true, rr},
-		{"guaranteed selection over", "1 3 0x22 -1 Foo", "Foo", true, rr},
-		{"guaranteed non-selection", "1 0 0x22 -1 Foo", "", false, rr},
-		{"two prefixes select first", "1000 10 0x21 80 HTT\n1000 10 0x22 80 SSH", "HTT", true, rr},
-		{"two prefixes select second", "1000 10 0x21 80 HTT\n1000 10 0x22 80 SSH", "SSH", true, bytes.NewReader(d("0100000"))},
+		{"single prefix", "1000 10 0x21 80 HTT", "HTT", true, 80, rr},
+		{"no port override", "1000 10 0x22 -1 Foo", "Foo", true, -1, rr},
+		{"guaranteed selection equal", "1 1 0x22 -1 Foo", "Foo", true, -1, rr},
+		{"guaranteed selection over", "1 3 0x22 -1 Foo", "Foo", true, -1, rr},
+		{"guaranteed non-selection", "1 0 0x22 -1 Foo", "", false, -1, rr},
+		{"two prefixes select first", "1000 10 0x21 80 HTT\n1000 10 0x22 22 SSH", "HTT", true, 80, rr},
+		{"two prefixes select second", "1000 10 0x21 80 HTT\n1000 10 0x22 22 SSH", "SSH", true, 22, bytes.NewReader(d("0100000"))},
 	}
 
 	for _, tt := range tests {
@@ -63,9 +51,14 @@ func TestOverrideSelectPrefix(t *testing.T) {
 
 			require.NotNil(t, prefs)
 
-			p, ok := prefs.selectPrefix(tt.rr, nil)
+			p, ok := prefs.prefixes.selectPrefix(tt.rr, nil)
 			require.Equal(t, tt.exOk, ok)
-			require.Equal(t, tt.exPref, string(p))
+			if !ok {
+				require.Nil(t, p)
+				return
+			}
+			require.Equal(t, tt.exPref, string(p.prefix))
+			require.Equal(t, tt.exPort, p.port)
 		})
 		rr.Seek(0, io.SeekStart)
 	}

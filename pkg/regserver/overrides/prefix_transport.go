@@ -20,19 +20,18 @@ import (
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
-// PrefixOverride allows the registration server to override the prefix chosen by the client when
-// they register using the Prefix transport with `allow_registration_overrides` enabled.
-type PrefixOverride struct {
-	prefixes *prefixes
+type fieldsToOverwrite struct {
+	prefix []byte
+	port   int
 }
 
 type prefixIface interface {
-	selectPrefix(io.Reader, *pb.ClientToStation) ([]byte, bool)
+	selectPrefix(io.Reader, *pb.ClientToStation) (*fieldsToOverwrite, bool)
 }
 
 type prefixes []prefixIface
 
-func (pfs prefixes) selectPrefix(r io.Reader, c2s *pb.ClientToStation) ([]byte, bool) {
+func (pfs prefixes) selectPrefix(r io.Reader, c2s *pb.ClientToStation) (*fieldsToOverwrite, bool) {
 	if len(pfs) == 0 {
 		return nil, false
 	} else if len(pfs) == 1 {
@@ -41,10 +40,10 @@ func (pfs prefixes) selectPrefix(r io.Reader, c2s *pb.ClientToStation) ([]byte, 
 	N := big.NewInt(int64(len(pfs)))
 	i, err := rand.Int(r, N)
 	if err != nil {
-		return []byte{}, false
+		return nil, false
 	}
 	if pfs[int(i.Int64())] == nil {
-		return []byte{}, false
+		return nil, false
 	}
 	return pfs[int(i.Int64())].selectPrefix(r, c2s)
 }
@@ -54,7 +53,7 @@ type barPrefix struct {
 	prefix             []byte
 }
 
-func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.ClientToStation) ([]byte, bool) {
+func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.ClientToStation) (*fieldsToOverwrite, bool) {
 	if bp.bar <= 0 {
 		return nil, false
 	}
@@ -62,7 +61,7 @@ func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.ClientToStation) ([]byte, 
 		return nil, false
 	}
 	if bp.bar >= bp.max {
-		return bp.prefix, true
+		return &fieldsToOverwrite{bp.prefix, bp.port}, true
 	}
 
 	N := big.NewInt(int64(bp.max))
@@ -72,7 +71,7 @@ func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.ClientToStation) ([]byte, 
 	}
 	B := big.NewInt(int64(bp.bar))
 	if q.Cmp(B) < 0 {
-		return bp.prefix, true
+		return &fieldsToOverwrite{bp.prefix, bp.port}, true
 	}
 	return nil, false
 }
@@ -80,7 +79,7 @@ func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.ClientToStation) ([]byte, 
 func prefixesFromFile(p string) (*prefixes, error) {
 	fi, err := os.Open(p)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	// close fi on exit and check for its returned error
 	defer func() {
@@ -89,10 +88,22 @@ func prefixesFromFile(p string) (*prefixes, error) {
 		}
 	}()
 
-	return ParsePrefixes(fi)
+	prefs, err := ParsePrefixes(fi)
+	if err != nil {
+		return nil, err
+	}
+
+	return prefs.prefixes, nil
 }
 
-func ParsePrefixes(r io.Reader) (*prefixes, error) {
+// PrefixOverride allows the registration server to override the prefix chosen by the client when
+// they register using the Prefix transport with `allow_registration_overrides` enabled.
+type PrefixOverride struct {
+	prefixes *prefixes
+}
+
+// ParsePrefixes allows prefix overrides to be parsed from an io.Reader
+func ParsePrefixes(r io.Reader) (*PrefixOverride, error) {
 	var prefixSelectors = []prefixIface{}
 
 	scanner := bufio.NewScanner(r)
@@ -121,7 +132,7 @@ func ParsePrefixes(r io.Reader) (*prefixes, error) {
 			[]byte(items[4]),
 		})
 	}
-	return (*prefixes)(&prefixSelectors), nil
+	return &PrefixOverride{(*prefixes)(&prefixSelectors)}, nil
 }
 
 // NewPrefixTransportOverride returns an object that implements the Override trait specific to when
@@ -144,7 +155,28 @@ func NewPrefixTransportOverride(prefixesPath string) (interfaces.RegOverride, er
 // Override implements the RegOverride interface.
 func (po *PrefixOverride) Override(r *pb.ClientToStation) (*pb.ClientToStation, error) {
 	if r == nil {
+		return r, nil
+	}
+
+	if *r.Transport != pb.TransportType_Prefix {
+		return r, nil
+	}
+
+	if po.prefixes == nil {
+		return r, nil
+	}
+
+	fields, ok := po.prefixes.selectPrefix(rand.Reader, r)
+	if !ok || fields == nil {
 		return nil, nil
+	}
+
+	if fields.port > 0 {
+		// r.  set port???
+	}
+	params := r.GetTransportParams()
+	if params == nil {
+		// what to set?
 	}
 
 	return r, nil
