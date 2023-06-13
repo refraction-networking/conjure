@@ -393,6 +393,21 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 
 	regSrc := c2sw.GetRegistrationSource()
 
+	// If a C2SWrapper has a registration response at this stage EITHER auth was disabled OR it was
+	// signed by a registration server and has overrides that should be applied
+	var dstPort = -1
+	if rr := c2sw.GetRegistrationResponse(); rr != nil {
+		if rr.DstPort != nil {
+			dstPort = int(rr.GetDstPort())
+		}
+
+		if rr.TransportParams != nil {
+			c2s.TransportParams = rr.GetTransportParams()
+		}
+
+		// TODO: future, apply the ip addresses from the Registration response (rr.IPv4Addr, rr.IPv6Addr)
+	}
+
 	reg, err := rm.NewRegistration(c2s, &conjureKeys, includeV6, &regSrc)
 	if err != nil || reg == nil {
 		return nil, fmt.Errorf("failed to build registration: %s", err)
@@ -414,6 +429,10 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	reg.regASN, err = rm.GeoIP.ASN(reg.registrationAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed geoip asn lookup: %w", err)
+	}
+
+	if dstPort != -1 {
+		reg.PhantomPort = uint16(dstPort)
 	}
 
 	return reg, nil

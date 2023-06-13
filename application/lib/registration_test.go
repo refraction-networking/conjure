@@ -38,30 +38,6 @@ func mockReceiveFromDetector() (pb.ClientToStation, ConjureSharedKeys) {
 	return *clientToStation, conjureKeys
 }
 
-// func testEqualRegistrations(reg1 *DecoyRegistration, reg2 *DecoyRegistration) bool {
-// 	return true
-// }
-
-// // This is not actually working yet
-// func TestCreateDecoyRegistration(t *testing.T) {
-// 	rm := NewRegistrationManager(&RegConfig{})
-
-// 	c2s, keys := mockReceiveFromDetector()
-
-// 	regSource := pb.RegistrationSource_Detector
-
-// 	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support(), &regSource)
-// 	if err != nil {
-// 		t.Fatalf("Registration failed: %v", err)
-// 	}
-
-// 	expectedReg := DecoyRegistration{}
-
-// 	if !testEqualRegistrations(newReg, &expectedReg) {
-// 		t.Fatalf("Bad registration Created")
-// 	}
-// }
-
 func TestRegistrationLookup(t *testing.T) {
 	rm := NewRegistrationManager(&RegConfig{})
 
@@ -116,9 +92,7 @@ func TestRegisterForDetectorOnce(t *testing.T) {
 
 	// check message
 	msg := <-channel
-	if msg == nil {
-		t.Fatalf("no messages received\n")
-	}
+	require.NotNil(t, msg)
 
 	// reconstruct IP from message
 	parsed := pb.StationToDetector{}
@@ -174,9 +148,7 @@ func TestRegisterForDetectorArray(t *testing.T) {
 
 		// check message
 		msg := <-channel
-		if msg == nil {
-			t.Fatalf("no messages received %s\n", addr)
-		}
+		require.NotNil(t, msg)
 
 		// reconstruct IP from message
 		parsed := pb.StationToDetector{}

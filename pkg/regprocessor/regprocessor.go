@@ -6,6 +6,7 @@ package regprocessor
 import "C"
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
@@ -66,6 +67,7 @@ type RegProcessor struct {
 	sock          zmqSender
 	metrics       *metrics.Metrics
 	authenticated bool
+	privkey       []byte // private key for the zmq_privkey pair - for signing proto messages to stations.
 
 	regOverrides interfaces.Overrides
 
@@ -73,7 +75,7 @@ type RegProcessor struct {
 }
 
 // NewRegProcessor initialize a new RegProcessor
-func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics) (*RegProcessor, error) {
+func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics) (*RegProcessor, error) {
 
 	phantomSelector, err := lib.GetPhantomSubnetSelector()
 	if err != nil {
@@ -92,11 +94,12 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 
 // initializes the registration processor without the phantom selector which can be added by a
 // wrapping function before it is returned. This function is required for testing.
-func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVerbose bool, stationPublicKeys []string) (*RegProcessor, error) {
+func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string) (*RegProcessor, error) {
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, ErrZmqSocket
 	}
+	privkeyZ85 := zmq.Z85encode(string(privkey))
 
 	zmq.AuthSetVerbose(authVerbose)
 	zmq.AuthAllow("*")
@@ -109,7 +112,7 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 		return nil, ErrZmqAuthFail
 	}
 
-	err = sock.ServerAuthCurve("*", privkey)
+	err = sock.ServerAuthCurve("*", privkeyZ85)
 	if err != nil {
 		return nil, ErrZmqAuthFail
 	}
@@ -125,6 +128,7 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 		sock:          sock,
 		transports:    make(map[pb.TransportType]lib.Transport),
 		authenticated: true,
+		privkey:       privkey,
 	}, nil
 }
 
@@ -371,12 +375,28 @@ func (p *RegProcessor) processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr [
 		payload.RegistrationAddress = c2sPayload.GetRegistrationAddress()
 	}
 
+	if p.authenticated && c2sPayload.GetRegistrationResponse() != nil {
+		regRespBytes, err := proto.Marshal(c2sPayload.GetRegistrationResponse())
+		if err != nil {
+			return nil, err
+		}
+		// Sign the bytes for the marshalled Registration response with the registration server's
+		// ed25519 key so that the stations will know that the registration response with parameter
+		// overrides was approved by the registrar (not sent by the client).
+		payload.RegRespBytes = regRespBytes
+		payload.RegRespSignature = ed25519.Sign(p.privkey, regRespBytes)
+	}
+
 	payload.SharedSecret = c2sPayload.GetSharedSecret()
 	payload.RegistrationPayload = c2sPayload.GetRegistrationPayload()
+	payload.RegistrationResponse = c2sPayload.GetRegistrationResponse()
 
 	return proto.Marshal(payload)
 }
 
+// ReloadSubnets allows the registrar to reload the configuration for phantom address selection
+// subnets when the registrar receives a SIGHUP signal for example. If it fails it reports and error
+// and keeps the existing set of phantom subnets.
 func (p *RegProcessor) ReloadSubnets() error {
 	phantomSelector, err := lib.GetPhantomSubnetSelector()
 	if err != nil {
@@ -387,5 +407,12 @@ func (p *RegProcessor) ReloadSubnets() error {
 	defer p.selectorMutex.Unlock()
 	p.ipSelector = phantomSelector
 
+	return nil
+}
+
+// ReloadOverrides allows the registrar to reload the configuration for the registration processing
+// overrides when the registrar receives a SIGHUP signal for example.
+// TODO: implement
+func (p *RegProcessor) ReloadOverrides() error {
 	return nil
 }

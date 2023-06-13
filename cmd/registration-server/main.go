@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	zmq "github.com/pebbe/zmq4"
 	"github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
@@ -113,13 +112,12 @@ func readKey(path string) ([]byte, error) {
 	return privkey, nil
 }
 
-func readKeyAndEncode(path string) (string, error) {
+func readKeyAndEncode(path string) ([]byte, error) {
 	keyBytes, err := readKey(path)
 	if err != nil {
-		return "", err
+		return []byte{}, err
 	}
-	privkey := zmq.Z85encode(string(keyBytes))
-	return privkey, nil
+	return keyBytes, nil
 }
 
 // loadConfig is intended to re-parse portions of the config in conjunction with

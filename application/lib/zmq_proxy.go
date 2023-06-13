@@ -218,6 +218,11 @@ func (zi *ZMQIngester) proxyZMQ() {
 					zi.logger.Errorf("read from %s failed: %v\n", config.Address, err)
 					continue
 				}
+				// TODO: Check if the signature over RegResponse is correct or clear it and add count.
+				// If it is not an authenticated pub then clear all registration responses because
+				// there is no pubkey to check signing with
+				// 		if connectSocket.AuthenticationType == "CURVE" {
+				// 		}
 				messages <- msg
 			}
 		}(sock, connectSocket)
