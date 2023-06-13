@@ -9,6 +9,7 @@ the `allow_registrar_overrides` field in the `ClientToStation` message is set to
 import (
 	"bufio"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -16,22 +17,27 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type fieldsToOverwrite struct {
 	prefix []byte
 	port   int
+	id     int
 }
 
 type prefixIface interface {
-	selectPrefix(io.Reader, *pb.ClientToStation) (*fieldsToOverwrite, bool)
+	// Includes C2SWrapper just in case we ever want to do geoip things with the client address.
+	// Also this allows us to write / overwrite the transport params that the station will see.
+	selectPrefix(io.Reader, *pb.C2SWrapper) (*fieldsToOverwrite, bool)
 }
 
 type prefixes []prefixIface
 
-func (pfs prefixes) selectPrefix(r io.Reader, c2s *pb.ClientToStation) (*fieldsToOverwrite, bool) {
+func (pfs prefixes) selectPrefix(r io.Reader, c2s *pb.C2SWrapper) (*fieldsToOverwrite, bool) {
 	if len(pfs) == 0 {
 		return nil, false
 	} else if len(pfs) == 1 {
@@ -53,7 +59,7 @@ type barPrefix struct {
 	prefix             []byte
 }
 
-func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.ClientToStation) (*fieldsToOverwrite, bool) {
+func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.C2SWrapper) (*fieldsToOverwrite, bool) {
 	if bp.bar <= 0 {
 		return nil, false
 	}
@@ -61,7 +67,7 @@ func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.ClientToStation) (*fieldsT
 		return nil, false
 	}
 	if bp.bar >= bp.max {
-		return &fieldsToOverwrite{bp.prefix, bp.port}, true
+		return &fieldsToOverwrite{bp.prefix, bp.port, bp.id}, true
 	}
 
 	N := big.NewInt(int64(bp.max))
@@ -71,7 +77,7 @@ func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.ClientToStation) (*fieldsT
 	}
 	B := big.NewInt(int64(bp.bar))
 	if q.Cmp(B) < 0 {
-		return &fieldsToOverwrite{bp.prefix, bp.port}, true
+		return &fieldsToOverwrite{bp.prefix, bp.port, bp.id}, true
 	}
 	return nil, false
 }
@@ -103,10 +109,10 @@ type PrefixOverride struct {
 }
 
 // ParsePrefixes allows prefix overrides to be parsed from an io.Reader
-func ParsePrefixes(r io.Reader) (*PrefixOverride, error) {
+func ParsePrefixes(conf io.Reader) (*PrefixOverride, error) {
 	var prefixSelectors = []prefixIface{}
 
-	scanner := bufio.NewScanner(r)
+	scanner := bufio.NewScanner(conf)
 	for scanner.Scan() {
 		line := scanner.Text()
 		items := strings.Fields(line)
@@ -156,31 +162,50 @@ func NewPrefixTransportOverride(prefixesPath string) (interfaces.RegOverride, er
 }
 
 // Override implements the RegOverride interface.
-func (po *PrefixOverride) Override(r *pb.ClientToStation) (*pb.ClientToStation, error) {
-	if r == nil {
-		return r, nil
+func (po *PrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader) error {
+	if reg == nil || reg.RegistrationPayload == nil {
+		return ErrMissingRegistration
+	} else if reg.RegistrationPayload.GetTransport() != pb.TransportType_Prefix {
+		return ErrNotPrefixTransport
+	} else if po.prefixes == nil {
+		return nil
 	}
 
-	if *r.Transport != pb.TransportType_Prefix {
-		return r, nil
-	}
-
-	if po.prefixes == nil {
-		return r, nil
-	}
-
-	fields, ok := po.prefixes.selectPrefix(rand.Reader, r)
+	fields, ok := po.prefixes.selectPrefix(randReader, reg)
 	if !ok || fields == nil {
-		return nil, nil
+		return nil
+	}
+
+	// if we have made it this far we overwrite the prefix even if the new one is empty
+	params := &pb.PrefixTransportParams{}
+	err := transports.UnmarshalAnypbTo(reg.RegistrationPayload.GetTransportParams(), params)
+	if err != nil {
+		return err
+	}
+	params.Prefix = fields.prefix
+	var i int32 = int32(fields.id)
+	params.PrefixId = &i
+
+	if reg.RegistrationResponse == nil {
+		reg.RegistrationResponse = &pb.RegistrationResponse{}
 	}
 
 	if fields.port > 0 {
-		// r.  set port???
-	}
-	params := r.GetTransportParams()
-	if params == nil {
-		// what to set?
+		p := uint32(fields.port)
+		reg.RegistrationResponse.DstPort = &p
 	}
 
-	return r, nil
+	anypbParams, err := anypb.New(params)
+	if err != nil {
+		return err
+	}
+
+	reg.RegistrationResponse.TransportParams = anypbParams
+
+	return nil
 }
+
+var (
+	ErrNotPrefixTransport  = errors.New("registration does not use Prefix transport")
+	ErrMissingRegistration = errors.New("no registration to modify")
+)

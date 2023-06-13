@@ -1,6 +1,8 @@
 package interfaces
 
 import (
+	"io"
+
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 )
 
@@ -10,19 +12,19 @@ import (
 type Overrides []RegOverride
 
 // Override implements the RegOverride interface.
-func (o Overrides) Override(r *pb.ClientToStation) (*pb.ClientToStation, error) {
+func (o Overrides) Override(reg *pb.C2SWrapper, randReader io.Reader) error {
 	var err error
 	for _, override := range o {
-		r, err = override.Override(r)
+		err = override.Override(reg, randReader)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return r, nil
+	return nil
 }
 
 // RegOverride provides a generic way for the station to mutate an incoming registration before
 // handing it off to the stations or returning it to the client as part of the RegResponse protobuf.
 type RegOverride interface {
-	Override(r *pb.ClientToStation) (*pb.ClientToStation, error)
+	Override(*pb.C2SWrapper, io.Reader) error
 }

@@ -6,13 +6,13 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"reflect"
 	"strings"
 	"syscall"
 	"testing"
 
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 func TestOverrideNewPrefix(t *testing.T) {
@@ -62,11 +62,6 @@ func TestOverrideNewPrefix(t *testing.T) {
 
 func TestOverrideSelectPrefix(t *testing.T) {
 
-	d := func(s string) []byte {
-		x, _ := hex.DecodeString(s)
-		return x
-	}
-
 	notRand := d("000000")
 	rr := bytes.NewReader(notRand)
 
@@ -85,7 +80,7 @@ func TestOverrideSelectPrefix(t *testing.T) {
 		{"guaranteed non-selection", "1 0 0x22 -1 Foo", "", false, -1, rr},
 		{"two prefixes first ignored", "0 0 0x21 80 HTT\n1000 10 0x22 22 SSH", "SSH", true, 22, rr},
 		{"two prefixes select first", "1000 10 0x21 80 HTT\n1000 10 0x22 22 SSH", "HTT", true, 80, rr},
-		{"two prefixes select second", "1000 10 0x21 80 HTT\n1000 10 0x22 22 SSH", "SSH", true, 22, bytes.NewReader(d("0100000"))},
+		{"two prefixes select second", "1000 10 0x21 80 HTT\n1000 10 0x22 22 SSH", "SSH", true, 22, bytes.NewReader(d("01000000"))},
 	}
 
 	for _, tt := range tests {
@@ -110,35 +105,120 @@ func TestOverrideSelectPrefix(t *testing.T) {
 	}
 }
 
-func TestPrefixOverride_Override(t *testing.T) {
-	type fields struct {
-		prefixes *prefixes
-	}
-	type args struct {
-		r *pb.ClientToStation
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *pb.ClientToStation
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			po := &PrefixOverride{
-				prefixes: tt.fields.prefixes,
-			}
-			got, err := po.Override(tt.args.r)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("PrefixOverride.Override() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("PrefixOverride.Override() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+type expected struct {
+	wantErr   bool
+	wantedErr error
+	port      uint32
+	prefix    []byte
 }
+
+func TestPrefixOverride_Override(t *testing.T) {
+	var po = &PrefixOverride{}
+	var c *pb.C2SWrapper
+	var out expected
+	var i = 0
+	test := func(t *testing.T) {
+		i += 1
+		rr := bytes.NewReader(d("00000000"))
+		err := po.Override(c, rr)
+
+		if out.wantErr {
+			require.ErrorIs(t, err, out.wantedErr, "t.Run %d", i)
+			return
+		}
+		require.Nil(t, err)
+		require.NotNil(t, c.RegistrationResponse)
+		require.Equal(t, uint32(out.port), c.RegistrationResponse.GetDstPort())
+		// require.Equal(t, out.prefix, c.)
+	}
+
+	out = expected{true, ErrMissingRegistration, 0, nil}
+	t.Run("select using uninitialized PrefixOverride", test)
+
+	c = &pb.C2SWrapper{}
+	T := true
+	params := &pb.GenericTransportParams{}
+	p, err := anypb.New(params)
+	require.Nil(t, err)
+
+	ttMin := pb.TransportType_Min
+	reg := &pb.ClientToStation{
+		AllowRegistrarOverrides: &T,
+		TransportParams:         p,
+		Transport:               &ttMin,
+	}
+	c.RegistrationPayload = reg
+
+	out = expected{true, ErrNotPrefixTransport, 0, []byte{}}
+	t.Run("registration wrong tt and params", test)
+
+	ttPrefix := pb.TransportType_Prefix
+	paramsPref, _ := anypb.New(&pb.PrefixTransportParams{})
+	c.RegistrationPayload.Transport = &ttPrefix
+	c.RegistrationPayload.TransportParams = paramsPref
+
+	out = expected{true, nil, 0, []byte{}}
+	t.Run("empty prefix override set", test)
+
+	conf := strings.NewReader("100 1 0x22 22 SSH")
+	po, err = ParsePrefixes(conf)
+	require.Nil(t, err)
+
+	out = expected{false, nil, 22, []byte("SSH")}
+	t.Run("select from single prefix", test)
+
+	conf = strings.NewReader("100 1 0x22 -1 ABC")
+	po, err = ParsePrefixes(conf)
+	require.Nil(t, err)
+	tmpPort := uint32(1024)
+	c.RegistrationResponse.DstPort = &tmpPort
+
+	out = expected{false, nil, 1024, []byte("ABC")}
+	t.Run("select prefix with port override disabled", test)
+}
+
+func d(s string) []byte {
+	x, e := hex.DecodeString(s)
+	if e != nil {
+		panic(e)
+	}
+	return x
+}
+
+// 	type out struct {
+// 		id int32
+// 		port
+// 	}
+// 	type fields struct {
+// 		prefixes *prefixes
+// 	}
+// 	type args struct {
+// 		reg  *pb.ClientToStation
+// 		resp *pb.RegistrationResponse
+// 	}
+// 	tests := []struct {
+// 		name    string
+// 		fields  fields
+// 		args    args
+// 		want	out
+// 		wantErr bool
+// 		wantedErr    error
+// 	}{
+// 		// TODO: Add test cases.
+// 	}
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			po := &PrefixOverride{
+// 				prefixes: tt.fields.prefixes,
+// 			}
+// 			err := po.Override(tt.args.reg, tt.args.resp)
+// 			if (err != nil) != tt.wantErr {
+// 				t.Errorf("PrefixOverride.Override() error = %v, wantErr %v", err, tt.wantErr)
+// 				return
+// 			}
+// 			if !reflect.DeepEqual( tt.want) {
+// 				t.Errorf("PrefixOverride.Override() = %v, want %v", got, tt.want)
+// 			}
+// 		})
+// 	}
+// }
