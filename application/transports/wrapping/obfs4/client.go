@@ -3,6 +3,7 @@ package obfs4
 import (
 	"fmt"
 
+	dd "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 
@@ -14,6 +15,8 @@ import (
 // the station side Transport struct has one instance to be re-used for all sessions.
 type ClientTransport struct {
 	Parameters *pb.GenericTransportParams
+	connectTag []byte
+	keys       dd.ConjureSharedKeys
 }
 
 // Name returns a string identifier for the Transport for logging
@@ -58,9 +61,3 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
-
-// // Connect creates the connection to the phantom address negotiated in the registration phase of
-// // Conjure connection establishment.
-// func (*ClientTransport) Connect(ctx context.Context, reg *cj.ConjureReg) (net.Conn, error) {
-// 	return nil, nil
-// }
