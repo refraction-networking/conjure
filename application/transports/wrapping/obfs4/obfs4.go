@@ -164,20 +164,18 @@ func (t ClientTransport) Connect(conn net.Conn) (net.Conn, error) {
 	obfsTransport := obfs4.Transport{}
 	args := pt.Args{}
 
-	args.Add("node-id", obfsTransport.Obfs4Keys.NodeID.Hex())
-	args.Add("public-key", obfsTransport.Obfs4Keys.PublicKey.Hex())
+	args.Add("node-id", t.keys.Obfs4Keys.NodeID.Hex())
+	args.Add("public-key", t.keys.Obfs4Keys.PublicKey.Hex())
 	args.Add("iat-mode", "1")
 
 	c, err := obfsTransport.ClientFactory("")
 	if err != nil {
-		fmt.Errorf("failed to create client factory")
-		return nil, err
+		return nil, fmt.Errorf("failed to create client factory")
 	}
 
 	parsedArgs, err := c.ParseArgs(&args)
 	if err != nil {
-		fmt.Errorf("failed to parse obfs4 args")
-		return nil, err
+		return nil, fmt.Errorf("failed to parse obfs4 args")
 	}
 
 	d := func(network, address string) (net.Conn, error) {
@@ -189,5 +187,11 @@ func (t ClientTransport) Connect(conn net.Conn) (net.Conn, error) {
 
 func (t *ClientTransport) Prepare(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
 	t.connectTag = core.ConjureHMAC(sharedSecret, "obfs4TransportHMACString")
+	// Generate shared keys
+	var err error
+	t.keys, err = dd.GenSharedKeys(sharedSecret, pb.TransportType_Obfs4)
+	if err != nil {
+		return fmt.Errorf("failed to generate shared keys")
+	}
 	return nil
 }
