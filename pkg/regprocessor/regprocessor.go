@@ -6,6 +6,7 @@ package regprocessor
 import "C"
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 
 	zmq "github.com/pebbe/zmq4"
 	"github.com/refraction-networking/conjure/application/lib"
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
@@ -64,6 +66,8 @@ type RegProcessor struct {
 	sock          zmqSender
 	metrics       *metrics.Metrics
 	authenticated bool
+
+	regOverrides interfaces.Overrides
 
 	transports map[pb.TransportType]lib.Transport
 }
@@ -187,6 +191,13 @@ func (p *RegProcessor) sendToZMQ(message []byte) error {
 
 // RegisterUnidirectional process a unidirectional registration request and publish it to zmq
 func (p *RegProcessor) RegisterUnidirectional(c2sPayload *pb.C2SWrapper, regMethod pb.RegistrationSource, clientAddr []byte) error {
+	// While Registration response is a valid field in the client-to-station-wrapper (C2SWrapper) it
+	// is not a field that the client is allowed to set, and it is not meaningful in the context of
+	// a unidirectional registration.
+	if c2sPayload.GetRegistrationResponse() != nil {
+		c2sPayload.RegistrationResponse = nil
+	}
+
 	zmqPayload, err := p.processC2SWrapper(c2sPayload, clientAddr, regMethod)
 	if err != nil {
 		return err
@@ -202,6 +213,12 @@ func (p *RegProcessor) RegisterUnidirectional(c2sPayload *pb.C2SWrapper, regMeth
 
 // RegisterBidirectional process a bidirectional registration request, publish it to zmq, and returns a response
 func (p *RegProcessor) RegisterBidirectional(c2sPayload *pb.C2SWrapper, regMethod pb.RegistrationSource, clientAddr []byte) (*pb.RegistrationResponse, error) {
+	// While Registration response is a valid field in the client-to-station-wrapper (C2SWrapper) it
+	// is not a field that the client is allowed to set, so we clear anything that is already here.
+	if c2sPayload.GetRegistrationResponse() != nil {
+		c2sPayload.RegistrationResponse = nil
+	}
+
 	regResp, err := p.processBdReq(c2sPayload)
 	if err != nil {
 		return nil, err
@@ -300,6 +317,17 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	// have an outward facing uint16 type.
 	port := uint32(dstPort)
 	regResp.DstPort = &port
+
+	// Overrides will modify the C2SWrapper and put the updated registrationResponse inside to be
+	// forwarded to the station.
+	c2sPayload.RegistrationResponse = regResp
+	if p.regOverrides != nil {
+		err := p.regOverrides.Override(c2sPayload, rand.Reader)
+		if err != nil {
+			return nil, err
+		}
+	}
+	regResp = c2sPayload.GetRegistrationResponse()
 
 	return regResp, nil
 }

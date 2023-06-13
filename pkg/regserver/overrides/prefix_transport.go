@@ -115,6 +115,11 @@ func ParsePrefixes(conf io.Reader) (*PrefixOverride, error) {
 	scanner := bufio.NewScanner(conf)
 	for scanner.Scan() {
 		line := scanner.Text()
+		if len(line) == 0 {
+			continue
+		} else if line[0] == '#' {
+			continue
+		}
 		items := strings.Fields(line)
 		if len(items) != 5 {
 			return nil, fmt.Errorf("malformed line: %s", line)

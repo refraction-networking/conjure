@@ -81,6 +81,7 @@ func TestOverrideSelectPrefix(t *testing.T) {
 		{"two prefixes first ignored", "0 0 0x21 80 HTT\n1000 10 0x22 22 SSH", "SSH", true, 22, rr},
 		{"two prefixes select first", "1000 10 0x21 80 HTT\n1000 10 0x22 22 SSH", "HTT", true, 80, rr},
 		{"two prefixes select second", "1000 10 0x21 80 HTT\n1000 10 0x22 22 SSH", "SSH", true, 22, bytes.NewReader(d("01000000"))},
+		{"comment line and single prefix", "#this is a comment\n1000 10 0x22 22 SSH", "SSH", true, 22, rr},
 	}
 
 	for _, tt := range tests {
