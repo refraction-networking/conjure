@@ -60,6 +60,8 @@ github.com/refraction-networking/gotapdance v1.5.0 h1:F28CrhFhyQLAgk2diKxSn7EIp8
 github.com/refraction-networking/gotapdance v1.5.0/go.mod h1:MrslNp4kScP2RX23nmVf4kegVsKCL5xqToqN1YEWCZc=
 github.com/refraction-networking/gotapdance v1.5.1-0.20230609161923-f04c3e4ebe5b h1:E2CTrJr5wG8c5J2ld29aHnqJ8cXM+GVJnIirH0S/Uug=
 github.com/refraction-networking/gotapdance v1.5.1-0.20230609161923-f04c3e4ebe5b/go.mod h1:MrslNp4kScP2RX23nmVf4kegVsKCL5xqToqN1YEWCZc=
+github.com/refraction-networking/gotapdance v1.5.1 h1:JK1cHMnzcS7FWpKdCRmVq4xVMoiNOeyTH7VR/2POdIY=
+github.com/refraction-networking/gotapdance v1.5.1/go.mod h1:MrslNp4kScP2RX23nmVf4kegVsKCL5xqToqN1YEWCZc=
 github.com/refraction-networking/utls v1.2.0 h1:U5f8wkij2NVinfLuJdFP3gCMwIHs+EzvhxmYdXgiapo=
 github.com/refraction-networking/utls v1.2.0/go.mod h1:NPq+cVqzH7D1BeOkmOcb5O/8iVewAsiVt2x1/eO0hgQ=
 github.com/sergeyfrolov/bsbuffer v0.0.0-20180903213811-94e85abb8507 h1:ML7ZNtcln5UBo5Wv7RIv9Xg3Pr5VuRCWLFXEwda54Y4=

@@ -16,7 +16,7 @@ require (
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/pebbe/zmq4 v1.2.9
 	github.com/pelletier/go-toml v1.9.5
-	github.com/refraction-networking/gotapdance v1.5.1-0.20230609161923-f04c3e4ebe5b
+	github.com/refraction-networking/gotapdance v1.5.1
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.1
 	gitlab.com/yawning/obfs4.git v0.0.0-20220904064028-336a71d6e4cf
