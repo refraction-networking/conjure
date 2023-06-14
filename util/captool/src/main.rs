@@ -1,25 +1,34 @@
+
+
+
+
+
 #![feature(ip)]
 #![feature(let_chains)]
 #![feature(associated_type_bounds)]
 #![feature(path_file_prefix)]
 
-#[macro_use]
-extern crate log;
-extern crate maxminddb;
-
+mod capture;
 mod flows;
 mod ip;
 mod limit;
 mod packet_handler;
-use ip::MutableIpPacket;
-use packet_handler::{PacketError, PacketHandler, SupplementalFields};
+mod error;
+mod zbalance_ipc;
+
+use crate::ip::MutableIpPacket;
+use crate::packet_handler::{PacketError, PacketHandler, SupplementalFields};
+use crate::capture::Capture;
+
+#[macro_use]
+extern crate log;
 
 use clap::Parser;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use humantime::parse_duration;
 use ipnet::IpNet;
-use pcap::{Activated, Capture, Device, Linktype};
+use pcap::{Activated, Device, Linktype, self};
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
 use pcap_file::pcapng::PcapNgWriter;
@@ -269,6 +278,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn read<W,C>(
+    captures: [C],
+    handler: Arc<Mutex<PacketHandler>>,
+    arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
+    term: Arc<AtomicBool>,
+    timeout: Option<Duration>,
+) where
+W: Write + std::marker::Send + 'static,
+C: Into<Capture>
+{
+
+}
+
 fn read_interfaces<W>(
     interfaces: String,
     handler: Arc<Mutex<PacketHandler>>,
@@ -299,7 +321,7 @@ fn read_interfaces<W>(
                 let t = Arc::clone(&term);
                 let ic = Arc::clone(&interfaces_complete);
                 pool.execute(move || {
-                    let cap = Capture::from_device(dev)
+                    let cap = pcap::Capture::from_device(dev)
                         .unwrap()
                         .immediate_mode(true) // enable immediate mode
                         .open()
@@ -371,7 +393,7 @@ fn read_pcap_dir<W>(
                 let t = Arc::clone(&term);
                 let fc = Arc::clone(&files_complete);
                 pool.execute(move || {
-                    let cap = Capture::from_file(p.path()).unwrap();
+                    let cap = pca::Capture::from_file(p.path()).unwrap();
                     read_packets(n as u32, cap, h, w, t);
                     fc.fetch_add(1, Ordering::Relaxed);
                 });
@@ -413,14 +435,14 @@ fn read_pcap_dir<W>(
 
 // abstracts over live captures (Capture<Active>) and file captures
 // (Capture<Offline>) using generics and the Activated trait,
-fn read_packets<T, W>(
+fn read_packets<T, C>(
     id: u32,
-    mut capture: Capture<T>,
+    mut capture: C,
     handler: Arc<Mutex<PacketHandler>>,
     writer: Arc<Mutex<PcapNgWriter<W>>>,
     terminate: Arc<AtomicBool>,
 ) where
-    T: Activated,
+    T: Capture,
     W: Write,
 {
     let seed = { handler.lock().unwrap().seed };

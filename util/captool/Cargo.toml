@@ -29,3 +29,12 @@ serde = "1.0.163"
 tempfile = "3.5.0"
 byteorder_slice = "3.0.0"
 hex = "0.4.3"
+
+
+[lib]
+name = "cap"
+path = "src/lib.rs"
+
+[[bin]]
+name = "captool"
+path = "src/main.rs"
