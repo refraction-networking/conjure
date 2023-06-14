@@ -29,6 +29,7 @@ use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::flag::register;
 use threadpool::ThreadPool;
 
+use pnet::packet::tcp::TcpPacket;
 use std::borrow::Cow;
 use std::error::Error;
 use std::fs::{self, File};
@@ -40,8 +41,6 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{self, Duration};
-use pnet::packet::tcp::TcpPacket;
-
 
 const ASNDB_PATH: &str = "/usr/share/GeoIP/GeoLite2-ASN.mmdb";
 const CCDB_PATH: &str = "/usr/share/GeoIP/GeoLite2-Country.mmdb";
@@ -53,8 +52,6 @@ $ captool -t \"192.168.0.0/16\" -i \"en01\"
 
 $ captool -t \"192.168.0.0/16,2001:abcd::/64\" -i \"ens15f0,ens15f1,en01\" -a \"$(cat ./asn_list.txt)\" -lpa 10000 -o \"$(date -u +\"%FT%H%MZ\").pcapng.gz\"
 ";
-
-// captool -t "152.136.0.0/16" --pcap-dir "pcaps/server.pcap"
 
 #[derive(Parser, Debug, Serialize)]
 #[command(
@@ -174,7 +171,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let out_path = Path::new(&args.out);
     let config_path = out_path.with_file_name(format!(
         "{}.cfg",
-        out_path.file_prefix().unwrap().to_str().unwrap().replace("\"", "")
+        out_path
+            .file_prefix()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .replace("\"", "")
     ));
     let mut file = File::create(&config_path)?;
     file.write_all(&toml_conf.into_bytes())?;
@@ -291,6 +293,23 @@ fn read_interfaces<W>(
         register(*sig, Arc::clone(&term)).unwrap();
     }
 
+    // print stats
+    let h_display = Arc::clone(&handler);
+    let t_display = Arc::clone(&term);
+    let ic_display = Arc::clone(&interfaces_complete);
+    pool.execute(move || loop {
+        if t_display.load(Ordering::Relaxed) {
+            h_display.lock().unwrap().print_stats();
+            break;
+        }
+        if ic_display.load(Ordering::Relaxed) >= n_interfaces as u32 {
+            h_display.lock().unwrap().print_stats();
+            break;
+        }
+        h_display.lock().unwrap().print_stats();
+        thread::sleep(Duration::from_secs(10));
+    });
+
     for (n, iface) in interfaces.split(',').enumerate() {
         match Device::list()
             .unwrap()
@@ -310,7 +329,6 @@ fn read_interfaces<W>(
                         .unwrap();
                     read_packets(n as u32, cap, h, w, t);
                     ic.fetch_add(1, Ordering::Relaxed);
-
                 });
             }
             None => println!("Couldn't find interface '{iface}'"),
@@ -359,10 +377,28 @@ fn read_pcap_dir<W>(
 {
     let mut paths = fs::read_dir(pcap_dir.clone()).unwrap();
     let total_files = paths.count();
-    let pool = ThreadPool::new(total_files + 2);
+    let pool = ThreadPool::new(total_files + 2 + 1);
     signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term)).unwrap();
 
     let files_complete = Arc::new(AtomicU32::new(0_u32));
+
+    // Print Stats
+    let h_display = Arc::clone(&handler);
+    let t_display = Arc::clone(&term);
+    let fc_display = Arc::clone(&files_complete);
+
+    pool.execute(move || loop {
+        if t_display.load(Ordering::Relaxed) {
+            h_display.lock().unwrap().print_stats();
+            break;
+        }
+        if fc_display.load(Ordering::Relaxed) >= total_files as u32 {
+            h_display.lock().unwrap().print_stats();
+            break;
+        }
+        h_display.lock().unwrap().print_stats();
+        thread::sleep(Duration::from_secs(10));
+    });
 
     // refresh the path list and launch jobs
     paths = fs::read_dir(pcap_dir).unwrap();
@@ -492,7 +528,7 @@ fn read_packets<T, W>(
             }
         };
 
-        match TcpPacket::new(ip_pkt.to_immutable().payload()){
+        match TcpPacket::new(ip_pkt.to_immutable().payload()) {
             Some(x) => {
                 let y = ip_pkt.to_immutable();
                 handler.lock().unwrap().append_to_stats(&y, &x);

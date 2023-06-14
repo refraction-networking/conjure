@@ -2,10 +2,11 @@ use crate::flows::LimiterState;
 use crate::limit::LimitError;
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::fmt;
 use std::net::IpAddr;
+use std::cmp::{min, max};
 
 use crate::ip::IpPacket;
 use ipnet::IpNet;
@@ -79,14 +80,12 @@ impl fmt::Display for Flow {
 pub struct FlowStats {
     pub packet_count: u32,
     // ipv4
-    pub ipids: Option<Vec<u16>>,
-    pub ttl_range: Option<Vec<u8>>,
+    pub ipids: Option<IpidStats>,
+    pub ttl_range: Option<TtlStats>,
 
     // ipv6
     pub flow_label: Option<u32>,
-    pub hop_limit_range: Option<Vec<u8>>,
-    // tcp
-    // pub TCPOptions: bool,
+    pub hop_limit_range: Option<HopLimitStats>,
 }
 
 impl FlowStats {
@@ -94,42 +93,166 @@ impl FlowStats {
         match ip_pkt {
             IpPacket::V4(pkt) => FlowStats {
                 packet_count: 1,
-                ipids: Some(vec![pkt.get_identification()]),
-                ttl_range: Some(vec![pkt.get_ttl()]),
+                ipids: Some(IpidStats::new(pkt.get_identification())),
+                ttl_range: Some(TtlStats::new(pkt.get_ttl())),
                 flow_label: None,
                 hop_limit_range: None,
-                // TCPOptions: ,
             },
             IpPacket::V6(pkt) => FlowStats {
                 packet_count: 1,
                 ipids: None,
                 ttl_range: None,
                 flow_label: Some(pkt.get_flow_label()),
-                hop_limit_range: Some(vec![pkt.get_hop_limit()]),
-                // TCPOptions: ,
+                hop_limit_range: Some(HopLimitStats::new(pkt.get_hop_limit())),
             },
         }
     }
 
+    /// append a packet to the given FlowStats object
     pub fn append(&mut self, ip_pkt: &IpPacket, _tcp_pkt: &TcpPacket) {
         match ip_pkt {
             IpPacket::V4(pkt) =>
             {
                 self.packet_count += 1;
-                self.ipids.as_mut().expect("identification of ipv4 packet not initialized").push(pkt.get_identification());
-                self.ttl_range.as_mut().expect("ttl of ipv4 packet not initialized").push(pkt.get_ttl());
+                self.ipids.as_mut().expect("identification of ipv4 packet not initialized").update(pkt.get_identification());
+                self.ttl_range.as_mut().expect("ttl of ipv4 packet not initialized").update(pkt.get_ttl());
             },
             IpPacket::V6(pkt) => {
                 self.packet_count += 1;
-                self.hop_limit_range.as_mut().expect("hop limit of ipv6 packet not initialized").push(pkt.get_hop_limit());
+                self.hop_limit_range.as_mut().expect("hop limit of ipv6 packet not initialized").update(pkt.get_hop_limit());
             },
         }
     }
+
 }
 
 impl fmt::Display for FlowStats {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} packets in flow", self.packet_count)
+        write!(f, "{} packets in flow\n", self.packet_count);
+        match &self.ipids {
+            Some(i) => { 
+                match i.min_offset{
+                    Some(o) => {write!(f, "min IPID change : {} | ", o); }
+                    None => {write!(f, "min IPID change : NONE | ");}
+                }
+                match i.max_offset{
+                    Some(o) => {write!(f, "max IPID change : {}\n", o); }
+                    None => {write!(f, "max IPID change : NONE\n");}
+                } 
+            }
+            None=>{}
+        }
+        match &self.ttl_range {
+            Some(t) =>{ 
+                write!(f, "min TTL : {} | max TTL: {}", t.min_ttl, t.max_ttl);
+            }
+            None => {}
+        }
+        match self.flow_label {
+            Some(fl) => {  write!(f, "flow label: {}\n", fl); }
+            None => {}
+        }
+        match &self.hop_limit_range {
+            Some(t) =>{ 
+                write!(f, "min Hop Limit : {} | max Hop Limit: {}", t.min_hop, t.max_hop);
+            }
+            None => {}
+        }
+        write!(f, " ")
+    }
+}
+
+pub struct IpidStats {
+    pub curr_ipid: u16,
+
+    // currently tracks 5 most recent offsets
+    pub recent_offsets: VecDeque<u16>,
+
+    pub min_offset: Option<u16>,
+    pub max_offset: Option<u16>,
+}
+
+impl IpidStats{
+    pub fn new(ipid: u16) -> IpidStats {
+        IpidStats {
+            curr_ipid: ipid,
+            recent_offsets: VecDeque::new(),
+            min_offset : None,
+            max_offset : None,
+        }
+    }
+
+    pub fn update(&mut self, new_ipid: u16) {
+        let new_off = (self.curr_ipid as i16 - new_ipid as i16).abs() as u16;
+        if self.recent_offsets.len() < 5 {
+            self.recent_offsets.push_back(new_off);
+            self.curr_ipid = new_ipid;
+
+            match self.min_offset
+            {
+                Some(mo) => { self.min_offset = Some(min(mo, new_off)); }
+                None => { self.min_offset = Some(new_off);}
+            }
+            match self.max_offset
+            {
+                Some(mo) => { self.max_offset = Some(max(mo, new_off)); }
+                None => { self.max_offset = Some(new_off);}
+            }
+        }
+        else {
+            self.recent_offsets.pop_front();
+            self.recent_offsets.push_back(new_off);
+            self.curr_ipid = new_ipid;
+
+            match self.min_offset
+            {
+                Some(mo) => { self.min_offset = Some(min(mo, new_off)); }
+                None => { self.min_offset = Some(new_off);}
+            }
+            match self.max_offset
+            {
+                Some(mo) => { self.max_offset = Some(max(mo, new_off)); }
+                None => { self.max_offset = Some(new_off);}
+            }
+        }
+    }
+}
+
+pub struct TtlStats {
+    pub min_ttl: u8,
+    pub max_ttl: u8,
+}
+
+impl TtlStats{
+    pub fn new(ttl: u8) -> TtlStats {
+        TtlStats {
+            min_ttl : ttl,
+            max_ttl : ttl,
+        }
+    }
+
+    pub fn update(&mut self, new_ttl: u8) {
+        self.min_ttl = min(self.min_ttl, new_ttl);
+        self.max_ttl = max(self.max_ttl, new_ttl);
+    }
+}
+
+pub struct HopLimitStats {
+    pub min_hop: u8,
+    pub max_hop: u8,
+}
+
+impl HopLimitStats{
+    pub fn new(hop: u8) -> HopLimitStats {
+        HopLimitStats {
+            min_hop : hop,
+            max_hop : hop,
+        }
+    }
+
+    pub fn update(&mut self, new_hop: u8) {
+        self.min_hop = min(self.min_hop, new_hop);
+        self.max_hop = max(self.max_hop, new_hop);
     }
 }
 
@@ -244,11 +367,10 @@ impl PacketHandler {
         if !self.stats.contains_key(&curr_flow) {
             let curr_stats = FlowStats::new(ip_pkt, tcp_pkt);
             self.stats.insert(curr_flow, curr_stats);
-            debug!("new flow! {}\n{}", curr_flow, self.stats[&curr_flow]);
         }
         else {
             if let Some(x) = self.stats.get_mut(&curr_flow) {
-                x.append(ip_pkt, tcp_pkt); debug!("{}\n{}", curr_flow, self.stats[&curr_flow]);
+                x.append(ip_pkt, tcp_pkt); 
             }
         }
     }
@@ -348,7 +470,15 @@ impl PacketHandler {
         }
         Ok(country)
     }
+
+    pub fn print_stats(&self){
+        for (fl, flst) in self.stats.iter() {
+            println!("\n{}\n{}\n-", fl, flst);
+        }
+
+    }
 }
+
 
 #[cfg(test)]
 mod tests {
