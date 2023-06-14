@@ -70,7 +70,10 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 // Conjure connection establishment.
 func (t *ClientTransport) Connect(conn net.Conn) (net.Conn, error) {
 	// Send hmac(seed, str) bytes to indicate to station (min transport) generated during Prepare(...)
-	conn.Write(t.connectTag)
+	_, err := conn.Write(t.connectTag)
+	if err != nil {
+		return nil, err
+	}
 	return conn, nil
 }
 
