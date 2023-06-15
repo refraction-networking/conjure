@@ -5,7 +5,7 @@ dns_listen_addr = "[::]:53"
 domain = "r.refraction.network"
 
 # Path to Conjure private key file
-dns_private_key_path = "/opt/conjure/sysconfig/privkey"
+dns_private_key_path = "/var/lib/conjure/privkey"
 
 # Log level, one of the following: panic, fatal, error, warn, info, debug, trace
 log_level = "info"
@@ -21,7 +21,7 @@ zmq_port = 5591
 zmq_bind_addr = "*"
 
 # The path on disk to the private key used for the ZMQ socket
-zmq_privkey_path = "/opt/conjure/sysconfig/privkey"
+zmq_privkey_path = "/var/lib/conjure/privkey"
 
 # The type of authentication to use on the ZMQ socket.
 # Can be set to "NULL" which allows all connections, or "CURVE"
@@ -44,4 +44,4 @@ station_pubkeys = [
 bidirectional_api_generation = 957
 
 # Path on disk to the latest ClientConfig file that the station should use
-clientconf_path = "/opt/conjure/sysconfig/ClientConf"
+clientconf_path = "/var/lib/conjure/ClientConf"
