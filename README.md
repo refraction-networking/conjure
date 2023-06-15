@@ -9,7 +9,7 @@
 <a href="https://goreportcard.com/report/github.com/refraction-networking/conjure"><img src="https://goreportcard.com/badge/github.com/refraction-networking/conjure"></a>
 </p>
 
-### See also 
+### See also
 
 [Refraction Client Library](https://github.com/refraction-networking/gotapdance) -
 pure golang client library for connecting to refraction systems. Implements BOTH
@@ -23,14 +23,13 @@ station code implementing the previous iteration of refraction networking develo
 This is an abridged install and configuration process, for expanded install instructions,
 configuration options, or multi-station deployments see [the wiki](https://github.com/refraction-networking/conjure/wiki).
 
-
 ### Requirements
 
 Building the station requires both go and rust:
 
 - [Install Golang](https://golang.org/doc/install)
 
-- [Install Rust](https://www.rust-lang.org/tools/install) 
+- [Install Rust](https://www.rust-lang.org/tools/install)
 
 **Install packages and go libraries**
 
@@ -39,12 +38,12 @@ sudo apt install  wget git make gcc bison flex protobuf-compiler curl libssl-dev
 go get -d -u -t github.com/refraction-networking/gotapdance/...
 ```
 
-**Install PF_RING** 
+**Install PF_RING**
 
 1. [Install from Package](https://github.com/refraction-networking/conjure/wiki/PF_RING#from-packages)
 
 2. [Install From Git / Source](https://github.com/refraction-networking/conjure/wiki/PF_RING#from-source)
-    * if installing from git / source make the zbalance_ipc executable, and ensure that it is available through your `$PATH`.
+    - if installing from git / source make the zbalance_ipc executable, and ensure that it is available through your `$PATH`.
 
 ### Build the station
 
@@ -57,6 +56,38 @@ make
 
 ### Configure
 
+The layout of configuration expected by the default layout of a production server is:
+
+```sh
+## Station specific configuration and files go in /var/lib/conjure
+$ tree /var/lib/conjure/
+/var/lib/conjure/
+├── app_config.toml
+├── ClientConf      # if running the registration server locally
+├── conjure.conf
+├── phantom_subnets.toml
+├── privkey
+├── pubkey
+└── reg_config.toml # if running the registration server locally
+
+## Scripts, executables, and the default environment script (conjure.conf) go in /opt/conjure
+$ tree /opt/conjure/
+/opt/conjure/
+├── bin
+│   ├── application
+│   ├── conjure
+│   └── registration_server  # if running the registration server locally
+├── on-reboot.sh
+├── scripts
+│   ├── install_pfring.sh
+│   ├── start_application.sh
+│   ├── start_detector.sh
+│   ├── start_registrar.sh
+│   └── start_zbalance_ipc.sh
+└── sysconfig
+    └── conjure.conf    # Expected by systemd services, applies overrides from /var/lib/conjure/conjure.conf
+```
+
 To run a station configuration modifications are required. This section outlines
 some minimal changes, for more configuration options see the [wiki configuration page](https://github.com/refraction-networking/conjure/wiki/Configuration).
 
@@ -67,7 +98,7 @@ some minimal changes, for more configuration options see the [wiki configuration
     # The interface(s) which PF_RING Zero Copy will tap.
     CJ_IFACE="zc:enp179s0f0,zc:enp179s0f1"
 
-    Public addresses that of non-tap interface - used for kernel DNAT 
+    Public addresses that of non-tap interface - used for kernel DNAT
     IP4_ADDR="<PUBLIC_STATION_V4_ADDRESS>"
     IP6_ADDR="<PUBLIC_STATION_V6_ADDRESS>"
 
@@ -75,16 +106,17 @@ some minimal changes, for more configuration options see the [wiki configuration
 
     Note: ipv6 in disabled by default. To enable IPv6 modify
     `application/config.toml`
+
     ```diff
     # Allow the station to opt out of either version of internet protocol to limit a
     # station to handling one or the other. For example, v6 on small station deployment
-    # with only v6 phantom subnet,  v4 only on station with no puvlic v6 address. 
+    # with only v6 phantom subnet,  v4 only on station with no puvlic v6 address.
     enable_v4 = true
     -enable_v6 = false
     +enable_v6 = true
     ```
 
-2. Define application parameters in `application/congfig.toml`
+2. Define application parameters in `application/app_config.toml`
 
     ```toml
     # ============[ REQUIRED ]============
@@ -105,16 +137,16 @@ updated going forward with new generations) in `sysconfig/phantom_subnets.toml`
             Generation = 1
             [[Networks.1.WeightedSubnets]]
                 Weight = 9
-                Subnets = ["192.122.190.0/24", "2001:0123:4567:89ab::/64"] 
+                Subnets = ["192.122.190.0/24", "2001:0123:4567:89ab::/64"]
 
         [Networks.2]
             Generation = 2
             [[Networks.2.WeightedSubnets]]
                 Weight = 9
-                Subnets = ["192.0.0.0/24", "2001:0123:4567:89ab::/64"] 
+                Subnets = ["192.0.0.0/24", "2001:0123:4567:89ab::/64"]
             [[Networks.2.WeightedSubnets]]
                 Weight = 1
-                Subnets = ["2001:0123:4567:89ab::/96"] 
+                Subnets = ["2001:0123:4567:89ab::/96"]
     ```
 
 ### Setup
@@ -155,7 +187,7 @@ sudo systemctl enable conjure-registration-server
 Start the station.
 
 ```sh
-# zbalance has to be first or the detector will throw an error 
+# zbalance has to be first or the detector will throw an error
 systemctl start zbalance
 
 # Next start the detector and station application processes
@@ -166,4 +198,4 @@ systemctl start conjure-app
 systemctl start conjure-registration-server
 ```
 
-## [FAQ](https://github.com/refraction-networking/conjure/wiki/FAQ) | [WIKI](https://github.com/refraction-networking/conjure/wiki) 
+## [FAQ](https://github.com/refraction-networking/conjure/wiki/FAQ) | [WIKI](https://github.com/refraction-networking/conjure/wiki)
