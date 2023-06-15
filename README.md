@@ -57,6 +57,40 @@ make
 
 ### Configure
 
+The layout of configuration expected by the default layout of a production server is:
+
+```sh
+## Station specific configuration and files go in /var/lib/conjure
+$ tree /var/lib/conjure/
+/var/lib/conjure/
+├── app_config.toml
+├── ClientConf
+├── conjure.conf
+├── phantom_subnets.toml
+├── privkey
+├── pubkey
+└── reg_config.toml
+
+// scripts, executables and the default environment script (conjure.conf) go in /opt/conjure
+$ tree /opt/conjure/
+/opt/conjure/
+├── bin
+│   ├── application
+│   ├── conjure
+│   └── registration_server
+├── on-reboot.sh
+├── scripts
+│   ├── install_pfring.sh
+│   ├── start_application.sh
+│   ├── start_detector.sh
+│   ├── start_registrar.sh
+│   └── start_zbalance_ipc.sh
+└── sysconfig
+    └── conjure.conf    # Expected by systemd services, applies overrides from /var/lib/conjure/conjure.conf
+
+```
+
+
 To run a station configuration modifications are required. This section outlines
 some minimal changes, for more configuration options see the [wiki configuration page](https://github.com/refraction-networking/conjure/wiki/Configuration).
 

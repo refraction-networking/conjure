@@ -9,7 +9,7 @@ Type=simple
 WorkingDirectory=/opt/conjure/
 
 SyslogIdentifier=zbalance
-EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
+# EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
 
 # makes if binary doesn't exist
 #ExecStartPre=/usr/bin/make zbalance
