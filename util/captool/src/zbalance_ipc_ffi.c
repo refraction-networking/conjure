@@ -17,6 +17,12 @@ struct zbalance_ipc_runner
     int queue_id;
 };
 
+struct zbalance_packet
+{
+    int size;
+    int *bytes;
+}
+
 /// @brief create a runner object that will maintain state for a pfring zbalance ipc ingest queue
 /// @param ptr a pointer which will be set to point to the new runner on success
 /// @param cluster_id the pfring zbalance cluster ID to attach onto
@@ -92,9 +98,12 @@ int unset_filter(zbalance_ipc_runner *runner)
 /// @brief Read the next packet from the queue
 /// @param runner  The C struct managing this queue
 /// @return 1 on success, 0 on empty queue (non-blocking only), a negative value otherwise.
-int next_packet(zbalance_ipc_runner *runner)
+int next_packet(zbalance_ipc_runner *runner, zbalance_packet *packet)
 {
-    return pfring_zc_recv_pkt(runner->g_queue, runner->g_buf, 0);
+    int res = pfring_zc_recv_pkt(runner->g_queue, runner->g_buf, 0);
+    packet->size = runner->g_buf[0]->size;
+    packet->bytes = pfring_zc_pkt_buff_data(runner->g_buf[0], runner->g_ring);
+    return res;
 }
 
 /// @brief Read a burst of `buf_len` packets from the queue.

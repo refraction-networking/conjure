@@ -12,11 +12,13 @@ extern "C"
 
     typedef struct zbalance_ipc_runner zbalance_ipc_runner;
 
+    typedef struct zbalance_packet zbalance_packet;
+
     int create_runner(struct zbalance_ipc_runner **ptr, int cluster_id, int queue_id, int buf_len);
 
     int next_packet_burst(zbalance_ipc_runner *runner);
 
-    int next_packet(zbalance_ipc_runner *runner);
+    int next_packet(zbalance_ipc_runner *runner, zbalance_packet *packet);
 
     int set_filter(zbalance_ipc_runner *runner, char *filter);
 

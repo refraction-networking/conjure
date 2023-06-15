@@ -393,7 +393,7 @@ fn read_pcap_dir<W>(
                 let t = Arc::clone(&term);
                 let fc = Arc::clone(&files_complete);
                 pool.execute(move || {
-                    let cap = pca::Capture::from_file(p.path()).unwrap();
+                    let cap = pcap::Capture::from_file(p.path()).unwrap();
                     read_packets(n as u32, cap, h, w, t);
                     fc.fetch_add(1, Ordering::Relaxed);
                 });
@@ -439,11 +439,11 @@ fn read_packets<T, C>(
     id: u32,
     mut capture: C,
     handler: Arc<Mutex<PacketHandler>>,
-    writer: Arc<Mutex<PcapNgWriter<W>>>,
+    writer: Arc<Mutex<PcapNgWriter<C>>>,
     terminate: Arc<AtomicBool>,
 ) where
     T: Capture,
-    W: Write,
+    C: Write,
 {
     let seed = { handler.lock().unwrap().seed };
 
