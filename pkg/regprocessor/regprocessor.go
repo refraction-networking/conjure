@@ -77,6 +77,11 @@ type RegProcessor struct {
 // NewRegProcessor initialize a new RegProcessor
 func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics) (*RegProcessor, error) {
 
+	if len(privkey) != ed25519.PrivateKeySize {
+		// We require the 64 byte [private_key][public_key] format to Sign using crypto/ed25519
+		return nil, fmt.Errorf("incorrect private key size %d, expected %d", len(privkey), ed25519.PrivateKeySize)
+	}
+
 	phantomSelector, err := lib.GetPhantomSubnetSelector()
 	if err != nil {
 		return nil, err
@@ -99,7 +104,10 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 	if err != nil {
 		return nil, ErrZmqSocket
 	}
-	privkeyZ85 := zmq.Z85encode(string(privkey))
+
+	// XXX: for some weird reason zmq takes just the private key portion of the keypair as the z85
+	// encoded secret key. I guess for public key operations it is enough.
+	privkeyZ85 := zmq.Z85encode(string(privkey[:32]))
 
 	zmq.AuthSetVerbose(authVerbose)
 	zmq.AuthAllow("*")

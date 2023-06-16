@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/ed25519"
 	"flag"
 	"fmt"
 	"os"
@@ -105,19 +106,13 @@ func run(regServers []regServer) {
 
 func readKey(path string) ([]byte, error) {
 	privkey, err := os.ReadFile(path)
-	privkey = privkey[:32]
 	if err != nil {
 		return nil, err
+	} else if len(privkey) < ed25519.PrivateKeySize {
+		return nil, fmt.Errorf("Private Key too short")
 	}
-	return privkey, nil
-}
 
-func readKeyAndEncode(path string) ([]byte, error) {
-	keyBytes, err := readKey(path)
-	if err != nil {
-		return []byte{}, err
-	}
-	return keyBytes, nil
+	return privkey[:ed25519.PrivateKeySize], nil
 }
 
 // loadConfig is intended to re-parse portions of the config in conjunction with
@@ -183,7 +178,7 @@ func main() {
 	}
 	log.SetLevel(logLevel)
 
-	zmqPrivkey, err := readKeyAndEncode(conf.ZMQPrivateKeyPath)
+	zmqPrivkey, err := readKey(conf.ZMQPrivateKeyPath)
 	if err != nil {
 		log.Fatal(err)
 	}
