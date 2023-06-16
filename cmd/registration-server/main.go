@@ -217,7 +217,7 @@ func main() {
 			log.Fatal(err)
 		}
 
-		dnsRegServer, err = dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey, processor, conf.latestClientConf.GetGeneration(), log.WithField("registrar", "DNS"), metrics)
+		dnsRegServer, err = dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey[:32], processor, conf.latestClientConf.GetGeneration(), log.WithField("registrar", "DNS"), metrics)
 		if err != nil {
 			log.Fatal(err)
 		}
