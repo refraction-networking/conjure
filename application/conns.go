@@ -40,7 +40,7 @@ func newConnManager(conf *connManagerConfig) *connManager {
 			TraceDebugRate:  0,
 		}
 	}
-	return &connManager{&connStats{}, conf}
+	return &connManager{&connStats{geoIPMap: make(map[uint]*asnCounts)}, conf}
 }
 
 func (cm *connManager) acceptConnections(ctx context.Context, rm *cj.RegistrationManager, logger *log.Logger) {
@@ -110,6 +110,11 @@ func (cm *connManager) handleNewConn(regManager *cj.RegistrationManager, clientC
 	}
 	fd.Close()
 
+	cm.handleNewTCPConn(regManager, clientConn, originalDstIP)
+}
+
+func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clientConn net.Conn, originalDstIP net.IP) {
+	logger := sharedLogger
 	var originalDst, originalSrc string
 	if logClientIP {
 		originalSrc = clientConn.RemoteAddr().String()
