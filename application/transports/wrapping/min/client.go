@@ -66,9 +66,9 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
 
-// Connect creates the connection to the phantom address negotiated in the registration phase of
+// WrapConn creates the connection to the phantom address negotiated in the registration phase of
 // Conjure connection establishment.
-func (t *ClientTransport) Connect(conn net.Conn) (net.Conn, error) {
+func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 	// Send hmac(seed, str) bytes to indicate to station (min transport) generated during Prepare(...)
 	_, err := conn.Write(t.connectTag)
 	if err != nil {

@@ -6,7 +6,7 @@ import (
 	"net"
 
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
-	dd "github.com/refraction-networking/conjure/application/lib"
+	cj "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
@@ -21,7 +21,7 @@ import (
 type ClientTransport struct {
 	Parameters *pb.GenericTransportParams
 	connectTag []byte
-	keys       dd.ConjureSharedKeys
+	keys       cj.ConjureSharedKeys
 }
 
 // Name returns a string identifier for the Transport for logging
@@ -67,9 +67,9 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
 
-// Connect creates the connection to the phantom address negotiated in the registration phase of
+// WrapConn creates the connection to the phantom address negotiated in the registration phase of
 // Conjure connection establishment.
-func (t ClientTransport) Connect(conn net.Conn) (net.Conn, error) {
+func (t ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 	obfsTransport := obfs4.Transport{}
 	args := pt.Args{}
 
@@ -98,7 +98,7 @@ func (t *ClientTransport) Prepare(pubkey [32]byte, sharedSecret []byte, dRand io
 	t.connectTag = core.ConjureHMAC(sharedSecret, "obfs4TransportHMACString")
 	// Generate shared keys
 	var err error
-	t.keys, err = dd.GenSharedKeys(sharedSecret, pb.TransportType_Obfs4)
+	t.keys, err = cj.GenSharedKeys(sharedSecret, pb.TransportType_Obfs4)
 	if err != nil {
 		return fmt.Errorf("failed to generate shared keys")
 	}
