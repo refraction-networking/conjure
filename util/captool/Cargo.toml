@@ -7,6 +7,7 @@ edition = "2021"
 
 
 [dependencies]
+libc = "0.2"
 pcap = "1.0.0"
 maxminddb = "0.23.0"
 ipnet = "2.7.2"
@@ -32,9 +33,9 @@ hex = "0.4.3"
 
 
 [lib]
-name = "cap"
+name = "libcap"
 path = "src/lib.rs"
 
 [[bin]]
 name = "captool"
-path = "src/main.rs"
+path = "src/bin/captool.rs"

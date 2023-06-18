@@ -7,7 +7,7 @@ use std::fmt;
 use std::net::IpAddr;
 
 use ipnet::IpNet;
-use maxminddb::{geoip2, Reader, MaxMindDBError};
+use maxminddb::{geoip2, MaxMindDBError, Reader};
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketOption;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -68,6 +68,12 @@ impl fmt::Display for PacketError {
     }
 }
 
+impl From<()> for PacketError {
+    fn from(_value: ()) -> Self {
+        PacketError::Skip
+    }
+}
+
 impl From<LimitError> for PacketError {
     fn from(value: LimitError) -> Self {
         PacketError::SkipLimit(value)
@@ -78,7 +84,6 @@ impl From<MaxMindDBError> for PacketError {
     fn from(value: MaxMindDBError) -> Self {
         PacketError::SkipGeoip(value)
     }
-
 }
 
 impl From<Box<dyn Error>> for PacketError {

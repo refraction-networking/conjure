@@ -1,19 +1,18 @@
-
 use crate::limit::LimitError;
 use crate::packet_handler::PacketError;
 
-use std::fmt;
 use pcap;
+use std::fmt;
 
 #[derive(Debug)]
 pub enum Error {
     LimitErr(LimitError),
     PacketErr(PacketError),
     OtherErr(Box<dyn std::error::Error>),
-    PcapErr(pcap::Error)
+    PcapErr(pcap::Error),
 }
 
-impl std::error::Error for Error { }
+impl std::error::Error for Error {}
 
 impl From<LimitError> for Error {
     fn from(value: LimitError) -> Self {
@@ -39,6 +38,12 @@ impl From<&str> for Error {
     }
 }
 
+impl From<pcap::Error> for Error {
+    fn from(value: pcap::Error) -> Self {
+        Error::PcapErr(value)
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -49,4 +54,3 @@ impl fmt::Display for Error {
         }
     }
 }
-

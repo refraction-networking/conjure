@@ -1,24 +1,14 @@
-
-
-
-
-
 #![feature(ip)]
 #![feature(let_chains)]
 #![feature(associated_type_bounds)]
 #![feature(path_file_prefix)]
 
-mod capture;
-mod flows;
-mod ip;
-mod limit;
-mod packet_handler;
-mod error;
-mod zbalance_ipc;
-
-use crate::ip::MutableIpPacket;
-use crate::packet_handler::{PacketError, PacketHandler, SupplementalFields};
-use crate::capture::Capture;
+use libcap::capture::{Capture, PcapCapture};
+use libcap::error::Error::PcapErr;
+use libcap::flows;
+use libcap::ip::MutableIpPacket;
+use libcap::limit;
+use libcap::packet_handler::{PacketError, PacketHandler, SupplementalFields};
 
 #[macro_use]
 extern crate log;
@@ -28,7 +18,7 @@ use flate2::write::GzEncoder;
 use flate2::Compression;
 use humantime::parse_duration;
 use ipnet::IpNet;
-use pcap::{Activated, Device, Linktype, self};
+use pcap::{self, Device, Linktype};
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
 use pcap_file::pcapng::PcapNgWriter;
@@ -179,7 +169,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let out_path = Path::new(&args.out);
     let config_path = out_path.with_file_name(format!(
         "{}.cfg",
-        out_path.file_prefix().unwrap().to_str().unwrap().replace("\"", "")
+        out_path
+            .file_prefix()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .replace("\"", "")
     ));
     let mut file = File::create(&config_path)?;
     file.write_all(&toml_conf.into_bytes())?;
@@ -278,172 +273,72 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn read<W,C>(
-    captures: [C],
-    handler: Arc<Mutex<PacketHandler>>,
-    arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
-    term: Arc<AtomicBool>,
-    timeout: Option<Duration>,
-) where
-W: Write + std::marker::Send + 'static,
-C: Into<Capture>
-{
+// fn read<W, C>(
+//     captures: [C],
+//     handler: Arc<Mutex<PacketHandler>>,
+//     arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
+//     term: Arc<AtomicBool>,
+//     timeout: Option<Duration>,
+// ) where
+//     W: Write + std::marker::Send + 'static,
+//     C: Into<Capture>,
+// {
+//     for sig in TERM_SIGNALS {
+//         register(*sig, Arc::clone(&term)).unwrap();
+//     }
 
-}
+//     for (n, capture) in interfaces.split(',').enumerate() {
+//         let h = Arc::clone(&handler);
+//         let w = Arc::clone(&arc_writer);
+//         let t = Arc::clone(&term);
+//         let ic = Arc::clone(&interfaces_complete);
+//         pool.execute(move || {
+//             read_packets(n as u32, capture, h, w, t);
+//             ic.fetch_add(1, Ordering::Relaxed);
+//         });
+//     }
 
-fn read_interfaces<W>(
-    interfaces: String,
-    handler: Arc<Mutex<PacketHandler>>,
-    arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
-    term: Arc<AtomicBool>,
-    timeout: Option<Duration>,
-) where
-    W: Write + std::marker::Send + 'static,
-{
-    let n_interfaces = interfaces.matches(',').count();
-    let pool = ThreadPool::new(n_interfaces + 2);
+//     // if we were given a duration timeout sleep-wait until the flag is set or we hit the timeout.
+//     if let Some(duration_limit) = timeout {
+//         debug!("duration: {duration_limit:?}");
+//         let term_timeout = Arc::clone(&term);
+//         pool.execute(move || {
+//             let beginning_park = time::Instant::now();
+//             let mut timeout_remaining = duration_limit;
+//             let ic = Arc::clone(&interfaces_complete);
+//             loop {
+//                 thread::park_timeout(timeout_remaining);
+//                 let elapsed = beginning_park.elapsed();
+//                 debug!("t: {elapsed:?}");
+//                 if term_timeout.load(Ordering::Relaxed) {
+//                     break;
+//                 }
+//                 if elapsed >= duration_limit {
+//                     term_timeout.store(true, Ordering::Relaxed);
+//                     break;
+//                 }
+//                 if ic.load(Ordering::Relaxed) >= n_interfaces as u32 {
+//                     break;
+//                 }
 
-    let interfaces_complete = Arc::new(AtomicU32::new(0_u32));
+//                 timeout_remaining = duration_limit - elapsed;
+//             }
+//         })
+//     };
 
-    for sig in TERM_SIGNALS {
-        register(*sig, Arc::clone(&term)).unwrap();
-    }
-
-    for (n, iface) in interfaces.split(',').enumerate() {
-        match Device::list()
-            .unwrap()
-            .into_iter()
-            .find(|d| d.name == iface)
-        {
-            Some(dev) => {
-                let h = Arc::clone(&handler);
-                let w = Arc::clone(&arc_writer);
-                let t = Arc::clone(&term);
-                let ic = Arc::clone(&interfaces_complete);
-                pool.execute(move || {
-                    let cap = pcap::Capture::from_device(dev)
-                        .unwrap()
-                        .immediate_mode(true) // enable immediate mode
-                        .open()
-                        .unwrap();
-                    read_packets(n as u32, cap, h, w, t);
-                    ic.fetch_add(1, Ordering::Relaxed);
-
-                });
-            }
-            None => println!("Couldn't find interface '{iface}'"),
-        }
-    }
-
-    // if we were given a duration timeout sleep-wait until the flag is set or we hit the timeout.
-    if let Some(duration_limit) = timeout {
-        debug!("duration: {duration_limit:?}");
-        let term_timeout = Arc::clone(&term);
-        pool.execute(move || {
-            let beginning_park = time::Instant::now();
-            let mut timeout_remaining = duration_limit;
-            let ic = Arc::clone(&interfaces_complete);
-            loop {
-                thread::park_timeout(timeout_remaining);
-                let elapsed = beginning_park.elapsed();
-                debug!("t: {elapsed:?}");
-                if term_timeout.load(Ordering::Relaxed) {
-                    break;
-                }
-                if elapsed >= duration_limit {
-                    term_timeout.store(true, Ordering::Relaxed);
-                    break;
-                }
-                if ic.load(Ordering::Relaxed) >= n_interfaces as u32 {
-                    break;
-                }
-
-                timeout_remaining = duration_limit - elapsed;
-            }
-        })
-    };
-
-    pool.join();
-}
-
-fn read_pcap_dir<W>(
-    pcap_dir: String,
-    handler: Arc<Mutex<PacketHandler>>,
-    arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
-    term: Arc<AtomicBool>,
-    timeout: Option<Duration>,
-) where
-    W: Write + std::marker::Send + 'static,
-{
-    let mut paths = fs::read_dir(pcap_dir.clone()).unwrap();
-    let total_files = paths.count();
-    let pool = ThreadPool::new(total_files + 2);
-    signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term)).unwrap();
-
-    let files_complete = Arc::new(AtomicU32::new(0_u32));
-
-    // refresh the path list and launch jobs
-    paths = fs::read_dir(pcap_dir).unwrap();
-    for (n, path) in paths.enumerate() {
-        match path {
-            Ok(p) => {
-                // println!("{}", p.path().display());
-                let h = Arc::clone(&handler);
-                let w = Arc::clone(&arc_writer);
-                let t = Arc::clone(&term);
-                let fc = Arc::clone(&files_complete);
-                pool.execute(move || {
-                    let cap = pcap::Capture::from_file(p.path()).unwrap();
-                    read_packets(n as u32, cap, h, w, t);
-                    fc.fetch_add(1, Ordering::Relaxed);
-                });
-            }
-            Err(e) => println!("path error: {e}"),
-        }
-    }
-
-    // if we were given a duration timeout sleep-wait until the flag is set or we hit the timeout.
-    if let Some(duration_limit) = timeout {
-        debug!("duration: {duration_limit:?}");
-        let term_timeout = Arc::clone(&term);
-        let fc = Arc::clone(&files_complete);
-        pool.execute(move || {
-            let beginning_park = time::Instant::now();
-            let mut timeout_remaining = duration_limit;
-            loop {
-                thread::park_timeout(timeout_remaining);
-                let elapsed = beginning_park.elapsed();
-                debug!("t: {elapsed:?}");
-                if term_timeout.load(Ordering::Relaxed) {
-                    break;
-                }
-                if elapsed >= duration_limit {
-                    term_timeout.store(true, Ordering::Relaxed);
-                    break;
-                }
-                if fc.load(Ordering::Relaxed) >= total_files as u32 {
-                    break;
-                }
-
-                timeout_remaining = duration_limit - elapsed;
-            }
-        })
-    };
-
-    pool.join(); // all threads must complete or the process will hang
-}
+//     pool.join();
+// }
 
 // abstracts over live captures (Capture<Active>) and file captures
 // (Capture<Offline>) using generics and the Activated trait,
-fn read_packets<T, C>(
+fn read_packets<W>(
     id: u32,
-    mut capture: C,
+    mut capture: impl Capture,
     handler: Arc<Mutex<PacketHandler>>,
-    writer: Arc<Mutex<PcapNgWriter<C>>>,
+    writer: Arc<Mutex<PcapNgWriter<W>>>,
     terminate: Arc<AtomicBool>,
 ) where
-    T: Capture,
-    C: Write,
+    W: Write,
 {
     let seed = { handler.lock().unwrap().seed };
 
@@ -471,8 +366,8 @@ fn read_packets<T, C>(
             Ok(p) => p,
             Err(e) => {
                 match e {
-                    pcap::Error::NoMorePackets => {}
-                    pcap::Error::TimeoutExpired => {}
+                    PcapErr(pcap::Error::NoMorePackets) => {}
+                    PcapErr(pcap::Error::TimeoutExpired) => {}
                     _ => {
                         println!("thread {id} err: {e}");
                     }
@@ -603,6 +498,151 @@ fn parse_cc_list(input: Option<String>) -> Vec<String> {
 // [X] conditional limitations on the number of packets captured
 //
 // [X] verbose / debug printing for runtime errors.
+//
+// [ ] Support PF_Ring as an ingest option
+
+fn read_interfaces<W>(
+    interfaces: String,
+    handler: Arc<Mutex<PacketHandler>>,
+    arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
+    term: Arc<AtomicBool>,
+    timeout: Option<Duration>,
+) where
+    W: Write + std::marker::Send + 'static,
+{
+    let n_interfaces = interfaces.matches(',').count();
+    let pool = ThreadPool::new(n_interfaces + 2);
+
+    let interfaces_complete = Arc::new(AtomicU32::new(0_u32));
+
+    for sig in TERM_SIGNALS {
+        register(*sig, Arc::clone(&term)).unwrap();
+    }
+
+    for (n, iface) in interfaces.split(',').enumerate() {
+        match Device::list()
+            .unwrap()
+            .into_iter()
+            .find(|d| d.name == iface)
+        {
+            Some(dev) => {
+                let h = Arc::clone(&handler);
+                let w = Arc::clone(&arc_writer);
+                let t = Arc::clone(&term);
+                let ic = Arc::clone(&interfaces_complete);
+                pool.execute(move || {
+                    let cap = pcap::Capture::from_device(dev)
+                        .unwrap()
+                        .immediate_mode(true) // enable immediate mode
+                        .open()
+                        .unwrap();
+                    let capture = PcapCapture::from(cap);
+                    read_packets(n as u32, capture, h, w, t);
+                    ic.fetch_add(1, Ordering::Relaxed);
+                });
+            }
+            None => println!("Couldn't find interface '{iface}'"),
+        }
+    }
+
+    // if we were given a duration timeout sleep-wait until the flag is set or we hit the timeout.
+    if let Some(duration_limit) = timeout {
+        debug!("duration: {duration_limit:?}");
+        let term_timeout = Arc::clone(&term);
+        pool.execute(move || {
+            let beginning_park = time::Instant::now();
+            let mut timeout_remaining = duration_limit;
+            let ic = Arc::clone(&interfaces_complete);
+            loop {
+                thread::park_timeout(timeout_remaining);
+                let elapsed = beginning_park.elapsed();
+                debug!("t: {elapsed:?}");
+                if term_timeout.load(Ordering::Relaxed) {
+                    break;
+                }
+                if elapsed >= duration_limit {
+                    term_timeout.store(true, Ordering::Relaxed);
+                    break;
+                }
+                if ic.load(Ordering::Relaxed) >= n_interfaces as u32 {
+                    break;
+                }
+
+                timeout_remaining = duration_limit - elapsed;
+            }
+        })
+    };
+
+    pool.join();
+}
+
+fn read_pcap_dir<W>(
+    pcap_dir: String,
+    handler: Arc<Mutex<PacketHandler>>,
+    arc_writer: Arc<Mutex<PcapNgWriter<W>>>,
+    term: Arc<AtomicBool>,
+    timeout: Option<Duration>,
+) where
+    W: Write + std::marker::Send + 'static,
+{
+    let mut paths = fs::read_dir(pcap_dir.clone()).unwrap();
+    let total_files = paths.count();
+    let pool = ThreadPool::new(total_files + 2);
+    signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term)).unwrap();
+
+    let files_complete = Arc::new(AtomicU32::new(0_u32));
+
+    // refresh the path list and launch jobs
+    paths = fs::read_dir(pcap_dir).unwrap();
+    for (n, path) in paths.enumerate() {
+        match path {
+            Ok(p) => {
+                // println!("{}", p.path().display());
+                let h = Arc::clone(&handler);
+                let w = Arc::clone(&arc_writer);
+                let t = Arc::clone(&term);
+                let fc = Arc::clone(&files_complete);
+                pool.execute(move || {
+                    let cap = pcap::Capture::from_file(p.path()).unwrap();
+                    let capture = PcapCapture::from(cap);
+                    read_packets(n as u32, capture, h, w, t);
+                    fc.fetch_add(1, Ordering::Relaxed);
+                });
+            }
+            Err(e) => println!("path error: {e}"),
+        }
+    }
+
+    // if we were given a duration timeout sleep-wait until the flag is set or we hit the timeout.
+    if let Some(duration_limit) = timeout {
+        debug!("duration: {duration_limit:?}");
+        let term_timeout = Arc::clone(&term);
+        let fc = Arc::clone(&files_complete);
+        pool.execute(move || {
+            let beginning_park = time::Instant::now();
+            let mut timeout_remaining = duration_limit;
+            loop {
+                thread::park_timeout(timeout_remaining);
+                let elapsed = beginning_park.elapsed();
+                debug!("t: {elapsed:?}");
+                if term_timeout.load(Ordering::Relaxed) {
+                    break;
+                }
+                if elapsed >= duration_limit {
+                    term_timeout.store(true, Ordering::Relaxed);
+                    break;
+                }
+                if fc.load(Ordering::Relaxed) >= total_files as u32 {
+                    break;
+                }
+
+                timeout_remaining = duration_limit - elapsed;
+            }
+        })
+    };
+
+    pool.join(); // all threads must complete or the process will hang
+}
 
 #[cfg(test)]
 mod tests {

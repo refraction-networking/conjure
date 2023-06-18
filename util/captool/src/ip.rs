@@ -1,6 +1,6 @@
 use hmac::{Hmac, Mac};
 use ipnet::{IpBitAnd, IpBitOr, IpNet};
-use pcap::Linktype;
+use pcap;
 use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
 use pnet::packet::ipv4::{Ipv4Packet, MutableIpv4Packet};
 use pnet::packet::ipv6::{Ipv6Packet, MutableIpv6Packet};
@@ -14,6 +14,7 @@ use std::fmt::{self, Display};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use crate::limit::Limit;
+use crate::packet_handler::PacketError;
 use crate::packet_handler::SupplementalFields;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -91,21 +92,21 @@ impl<'p> From<MutableIpv6Packet<'p>> for MutableIpPacket<'p> {
     }
 }
 
-impl<'p> TryFrom<(&'p mut [u8], Linktype)> for MutableIpPacket<'p> {
-    type Error = ();
+impl<'p> TryFrom<(&'p mut [u8], pcap::Linktype)> for MutableIpPacket<'p> {
+    type Error = PacketError;
 
-    fn try_from(input: (&'p mut [u8], Linktype)) -> Result<Self, Self::Error> {
+    fn try_from(input: (&'p mut [u8], pcap::Linktype)) -> Result<Self, Self::Error> {
         let (data, link_type) = input;
         if data.is_empty() {
             Err(())?
         }
         match link_type {
-            Linktype::IPV4 => Ok(MutableIpv4Packet::new(data).ok_or(())?.into()),
-            Linktype::IPV6 => Ok(MutableIpv6Packet::new(data).ok_or(())?.into()),
-            Linktype::ETHERNET => {
+            pcap::Linktype::IPV4 => Ok(MutableIpv4Packet::new(data).ok_or(())?.into()),
+            pcap::Linktype::IPV6 => Ok(MutableIpv6Packet::new(data).ok_or(())?.into()),
+            pcap::Linktype::ETHERNET => {
                 if data.len() < 14 {
                     // println!("ETH SHORT");
-                    Err(())?
+                    Err(PacketError::OtherError("ETH_SHORT".into()))?
                 }
                 match u16::from_be_bytes([data[12], data[13]]) {
                     0x0800 => Ok(MutableIpPacket::V4(
@@ -131,7 +132,7 @@ impl<'p> TryFrom<(&'p mut [u8], Linktype)> for MutableIpPacket<'p> {
                     _ => Err(())?,
                 }
             }
-            Linktype::RAW => match data[0] & 0xF0 {
+            pcap::Linktype::RAW => match data[0] & 0xF0 {
                 0x40 => Ok(MutableIpv4Packet::new(data).ok_or(())?.into()),
                 0x60 => Ok(MutableIpv6Packet::new(data).ok_or(())?.into()),
                 _ => Err(())?,
@@ -144,7 +145,7 @@ impl<'p> TryFrom<(&'p mut [u8], Linktype)> for MutableIpPacket<'p> {
                     _ => Err(())?,
                 }
             }
-            _ => Err(()),
+            _ => Err(PacketError::OtherError("Unknown LinkType".into())),
         }
     }
 }
