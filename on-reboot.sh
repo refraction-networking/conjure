@@ -34,7 +34,7 @@ build_or_rebuild_iptables() {
     return_code=$?
     if [ $return_code -eq 0 ]; then
         # Chain already exists
-        iptables -t $table -X ${chain}
+        iptables -t ${table} -X ${chain}
     fi
     iptables -t ${table} -N ${chain}
 
@@ -42,7 +42,7 @@ build_or_rebuild_iptables() {
     return_code=$?
     if [ $return_code -eq 0 ]; then
         # Chain already exists
-        ip6tables -t $table -X ${chain}
+        ip6tables -t ${table} -X ${chain}
     fi
     ip6tables -t ${table} -N ${chain}
 }
@@ -116,8 +116,8 @@ build_or_rebuild_iptables nat CJ_PREROUTING
 do_or_die "iptables -t nat -A PREROUTING -j CJ_PREROUTING"
 do_or_die "ip6tables -t nat -A PREROUTING -j CJ_PREROUTING"
 build_or_rebuild_iptables filter CJ_INPUT
-do_or_die "iptable -A INPUT -j CJ_INPUT"
-do_or_die "ip6table -A INPUT -j CJ_INPUT"
+do_or_die "iptables -A INPUT -j CJ_INPUT"
+do_or_die "ip6tables -A INPUT -j CJ_INPUT"
 
 # Create a tunnel for each core.
 # The tunnel numbers do not match the core index per the OS,
