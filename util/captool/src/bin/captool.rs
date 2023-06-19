@@ -563,9 +563,9 @@ fn parse_cc_list(input: Option<String>) -> Vec<String> {
 //
 // [X] verbose / debug printing for runtime errors.
 //
-// [ ] Support PF_Ring as an ingest option
+// [X] Support PF_Ring as an ingest option
 //
-// [ ] Support BPF filtering
+// [X] Support BPF filtering
 
 #[cfg(test)]
 mod tests {
