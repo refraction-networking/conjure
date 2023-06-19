@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,8 +20,16 @@ func TestHandleNewTCPConn(t *testing.T) {
 	ip := net.ParseIP("8.8.8.8")
 	clientConn, serverConn := net.Pipe()
 
+	// Create a WaitGroup to synchronize the test execution
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	// Call the handleNewTCPConn function in a separate goroutine
-	go connManager.handleNewTCPConn(rm, clientConn, ip)
+	// go connManager.handleNewTCPConn(rm, clientConn, ip)
+	go func() {
+		connManager.handleNewTCPConn(rm, clientConn, ip)
+		wg.Done()
+	}()
 
 	// Simulate sending data from the client to the server
 	clientData := []byte("Hello, server!")
@@ -40,12 +49,27 @@ func TestHandleNewTCPConn(t *testing.T) {
 		t.Fatalf("failed to read data from server: %v", err)
 	}
 
+	// // Create a buffered reader to read data from the client connection
+	// clientReader := bufio.NewReader(clientConn)
+	// serverData := make([]byte, len(clientData))
+
+	// // Read data from the client connection until it is closed
+	// var err error
+	// for err == nil {
+	// 	_, err = clientReader.Read(serverData)
+	// }
+
 	// Verify that the server received the correct data
 	if string(serverData) != string(clientData) {
 		t.Errorf("unexpected data received by the server: got %q, want %q", serverData, clientData)
 	}
 
-	// Close the server & client connections
+	// Close the server connection
 	serverConn.Close()
+
+	// Wait for the handleNewTCPConn function to finish processing
+	wg.Wait()
+
+	// Close the client connection
 	clientConn.Close()
 }
