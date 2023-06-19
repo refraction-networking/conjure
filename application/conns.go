@@ -114,7 +114,7 @@ func (cm *connManager) handleNewConn(regManager *cj.RegistrationManager, clientC
 }
 
 func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clientConn net.Conn, originalDstIP net.IP) {
-	logger := sharedLogger
+	// logger := sharedLogger
 	var originalDst, originalSrc string
 	if logClientIP {
 		originalSrc = clientConn.RemoteAddr().String()
@@ -123,10 +123,16 @@ func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clie
 	}
 	originalDst = originalDstIP.String()
 	flowDescription := fmt.Sprintf("%s -> %s ", originalSrc, originalDst)
-	logger = log.New(os.Stdout, "[CONN] "+flowDescription, golog.Ldate|golog.Lmicroseconds)
+	logger := log.New(os.Stdout, "[CONN] "+flowDescription, golog.Ldate|golog.Lmicroseconds)
 
 	asn, err := regManager.GeoIP.ASN(net.ParseIP(clientConn.RemoteAddr().String()))
+	if err != nil {
+		logger.Errorln("failed to get ASN:", err)
+	}
 	cc, err := regManager.GeoIP.CC(net.ParseIP(clientConn.RemoteAddr().String()))
+	if err != nil {
+		logger.Errorln("failed to get CC:", err)
+	}
 
 	count := regManager.CountRegistrations(originalDstIP)
 	logger.Debugf("new connection (%d potential registrations)\n", count)
