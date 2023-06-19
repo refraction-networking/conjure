@@ -120,12 +120,12 @@ struct Args {
     #[arg(long, conflicts_with_all=["lpa", "lfa"])]
     lfc: Option<u64>,
 
-    /// Comma separated interfaces on which to listen (mutually exclusive with `--pcap_dir`, and `--read` options).
-    #[arg(short, long, default_value_t = String::from("eno1"), conflicts_with = "pcap_dir")]
+    /// Comma separated interfaces on which to listen
+    #[arg(short, long, default_value_t = String::from("eno1"))]
     interfaces: String,
 
     /// Path to directory containing PCAPs files to read
-    #[arg(short, long, conflicts_with = "interfaces")]
+    #[arg(short, long)]
     pcap_dir: Option<String>,
 
     /// Enable capture for IPv4 Packets ONLY. Requires at least one IPv4 subnet in target-subnets or
@@ -149,6 +149,22 @@ struct Args {
     /// Path to the Geolite CountryCode database (.mmdb) file
     #[arg(long, default_value_t = String::from(CCDB_PATH))]
     cc_db: String,
+
+    ///
+    #[arg(long, requires = "pf_queues")]
+    pf_cluster: Option<i32>,
+
+    ///
+    #[arg(long, requires = "pf_cluster")]
+    pf_queues: Option<i32>,
+
+    ///
+    #[arg(long, requires = "pf_queues")]
+    pf_offset: Option<i32>,
+
+    /// BPF filter to apply to all captures (pf_ring, file, or interface)
+    #[arg(long, default_value_t = String::from(""))]
+    filter: String,
 }
 
 #[cfg(debug_assertions)]
@@ -286,15 +302,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     if let Some(cluster_id) = args.pf_cluster {
-        match args.n_pf_queues {
+        match args.pf_queues {
             Some(n) => {
                 let offset = args.pf_offset.unwrap_or(0);
                 for i in 0..n {
-                    let cap = ZbalanceIPCCapture::new(cluster_id, n + offset)?;
+                    let cap = ZbalanceIPCCapture::new(cluster_id, i + offset)?;
                     all_captures.push(Box::new(cap));
                 }
             }
             None => {}
+        }
+    }
+
+    if !args.filter.is_empty() {
+        for cap in all_captures.iter_mut() {
+            cap.set_filter(args.filter.clone())?
         }
     }
 
