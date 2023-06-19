@@ -1,0 +1,3 @@
+[submodule "util/captool/PF_RING"]
+	path = util/captool/PF_RING
+	url = https://github.com/ntop/PF_RING.git

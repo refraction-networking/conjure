@@ -1,7 +1,8 @@
 
 
 #include <stdint.h>
-// #include <stdio.h>
+#include <stdio.h>
+#include <stdlib.h>
 // #include <errno.h>
 #include "zbalance_ipc_ffi.h"
 #include "pfring_zc.h"
@@ -34,17 +35,16 @@ int init_runner(struct zbalance_ipc_runner **ptr, int cluster_id, int queue_id, 
     if (buf_len < 1)
         buf_len = PF_BURST_SIZE;
 
+    // pfring_zc_pkt_buff *g_buf[buf_len];
     pfring_zc_pkt_buff **g_buf = malloc(sizeof(pfring_zc_pkt_buff *) * buf_len);
 
-    zbalance_ipc_runner *runner = maloc(sizeof(zbalance_ipc_runner));
+    zbalance_ipc_runner *runner = malloc(sizeof(zbalance_ipc_runner));
     runner->g_queue = 0;
     runner->g_buf = g_buf;
     runner->g_pool = 0;
     runner->buf_len = buf_len;
     runner->cluster_id = cluster_id;
     runner->queue_id = queue_id;
-
-    pfring_zc_pkt_buff *g_buf[buf_len];
 
     char cluster_iface_id[200];
     sprintf(cluster_iface_id, "zc:%d@%d", runner->cluster_id, runner->queue_id);
@@ -122,7 +122,7 @@ int unset_filter(zbalance_ipc_runner *runner)
 /// @return 0 on success, a negative value otherwise.
 int close(zbalance_ipc_runner *runner)
 {
-    if (runner = 0)
+    if (runner == 0)
         return 0;
 
     // Stop receiving from the queue
