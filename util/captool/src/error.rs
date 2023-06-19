@@ -2,6 +2,7 @@ use crate::limit::LimitError;
 use crate::packet_handler::PacketError;
 
 use pcap;
+use std::ffi;
 use std::fmt;
 
 #[derive(Debug)]
@@ -10,6 +11,7 @@ pub enum Error {
     PacketErr(PacketError),
     OtherErr(Box<dyn std::error::Error>),
     PcapErr(pcap::Error),
+    NulErr(ffi::NulError),
 }
 
 impl std::error::Error for Error {}
@@ -38,9 +40,21 @@ impl From<&str> for Error {
     }
 }
 
+impl From<String> for Error {
+    fn from(value: String) -> Self {
+        Error::OtherErr(value.into())
+    }
+}
+
 impl From<pcap::Error> for Error {
     fn from(value: pcap::Error) -> Self {
         Error::PcapErr(value)
+    }
+}
+
+impl From<ffi::NulError> for Error {
+    fn from(value: ffi::NulError) -> Self {
+        Error::NulErr(value)
     }
 }
 
@@ -50,6 +64,7 @@ impl fmt::Display for Error {
             Error::PacketErr(e) => write!(f, "{e}"),
             Error::LimitErr(e) => write!(f, "{e}"),
             Error::OtherErr(e) => write!(f, "{e}"),
+            Error::NulErr(e) => write!(f, "C ffi issue {e}"),
             e => write!(f, "{e}"),
         }
     }

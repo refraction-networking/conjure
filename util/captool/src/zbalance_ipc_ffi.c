@@ -21,7 +21,7 @@ struct zbalance_packet
 {
     int size;
     int *bytes;
-}
+};
 
 /// @brief create a runner object that will maintain state for a pfring zbalance ipc ingest queue
 /// @param ptr a pointer which will be set to point to the new runner on success
@@ -29,7 +29,7 @@ struct zbalance_packet
 /// @param queue_id the pfring zbalance queue ID to read from
 /// @param buf_len the length of the packet buffer for calls to `next_packet_burst` cannot be changed after initialization.
 /// @return 0 on success, a negative value otherwise.
-int create_runner(struct zbalance_ipc_runner **ptr, int cluster_id, int queue_id, int buf_len)
+int init_runner(struct zbalance_ipc_runner **ptr, int cluster_id, int queue_id, int buf_len)
 {
     if (buf_len < 1)
         buf_len = PF_BURST_SIZE;
@@ -79,6 +79,28 @@ int create_runner(struct zbalance_ipc_runner **ptr, int cluster_id, int queue_id
     return 0;
 }
 
+/// @brief Read the next packet from the queue
+/// @param runner  The C struct managing this queue
+/// @return 1 on success, 0 on empty queue (non-blocking only), a negative value otherwise.
+int next_packet(zbalance_ipc_runner *runner, zbalance_packet *packet)
+{
+    int res = pfring_zc_recv_pkt(runner->g_queue, runner->g_buf, 0);
+    if (res <= 0)
+        return res;
+
+    packet->size = runner->g_buf[0]->len;
+    packet->bytes = pfring_zc_pkt_buff_data(runner->g_buf[0], runner->g_queue);
+    return 1;
+}
+
+/// @brief Read a burst of `buf_len` packets from the queue.
+/// @param runner The C struct managing this queue
+/// @return 1 on success, 0 on empty queue (non-blocking only), a negative value otherwise.
+int next_packet_burst(zbalance_ipc_runner *runner)
+{
+    return pfring_zc_recv_pkt_burst(runner->g_queue, runner->g_buf, PF_BURST_SIZE, 0);
+}
+
 /// @brief Apply a BPF filter from text.
 /// @param runner The C struct managing this queue
 /// @return 0 on success, a negative value otherwise.
@@ -93,25 +115,6 @@ int set_filter(zbalance_ipc_runner *runner, char *filter)
 int unset_filter(zbalance_ipc_runner *runner)
 {
     return pfring_zc_remove_bpf_filter(runner->g_queue);
-}
-
-/// @brief Read the next packet from the queue
-/// @param runner  The C struct managing this queue
-/// @return 1 on success, 0 on empty queue (non-blocking only), a negative value otherwise.
-int next_packet(zbalance_ipc_runner *runner, zbalance_packet *packet)
-{
-    int res = pfring_zc_recv_pkt(runner->g_queue, runner->g_buf, 0);
-    packet->size = runner->g_buf[0]->size;
-    packet->bytes = pfring_zc_pkt_buff_data(runner->g_buf[0], runner->g_ring);
-    return res;
-}
-
-/// @brief Read a burst of `buf_len` packets from the queue.
-/// @param runner The C struct managing this queue
-/// @return 1 on success, 0 on empty queue (non-blocking only), a negative value otherwise.
-int next_packet_burst(zbalance_ipc_runner *runner)
-{
-    return pfring_zc_recv_pkt_burst(runner->g_queue, runner->g_buf, PF_BURST_SIZE, 0);
 }
 
 /// @brief cleanup after a runner object, detaching from pfring and freeing resources

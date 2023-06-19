@@ -1,16 +1,22 @@
 use libc::{suseconds_t, time_t, timeval};
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_int, c_void, CString};
 use std::ptr::null_mut;
 use std::slice;
 use std::time::{Duration, Instant};
+
+use errno::errno;
+
+use crate::error::Error;
 
 pub struct ZbalanceIPCCapture {
     _runner: zbalance_ipc_runner,
     _start: Instant,
 }
 
+unsafe impl Send for ZbalanceIPCCapture {}
+
 impl ZbalanceIPCCapture {
-    pub fn new(cluster: i32, queue: i32) -> ZbalanceIPCCapture {
+    pub fn new(cluster: i32, queue: i32) -> Result<ZbalanceIPCCapture, Error> {
         let mut zbalance_ipc_capture = ZbalanceIPCCapture {
             _runner: zbalance_ipc_runner {
                 g_buf: null_mut(),
@@ -24,25 +30,49 @@ impl ZbalanceIPCCapture {
         };
 
         unsafe {
-            init_runner(&mut &mut zbalance_ipc_capture._runner);
+            let ret = init_runner(&mut &mut zbalance_ipc_capture._runner);
+            if ret < 0 {
+                // if the return value is less than 0 return the errno error
+                let e = errno();
+                return Err(format!("Error: {} {}", e.0, e).into());
+            }
         }
 
-        zbalance_ipc_capture
+        Ok(zbalance_ipc_capture)
     }
 
-    pub fn next_zbalance_packet(&mut self) -> &mut [u8] {
+    pub fn next_zbalance_packet(&mut self) -> Result<&mut [u8], Error> {
         let mut zbalance_packet = zbalance_packet {
             size: 0,
             bytes: null_mut(),
         };
         unsafe {
-            next_packet(&mut self._runner, &mut zbalance_packet);
+            let ret = next_packet(&mut self._runner, &mut zbalance_packet);
+            if ret < 0 {
+                // if the return value is less than 0 return the errno error
+                let e = errno();
+                return Err(format!("Error: {} {}", e.0, e).into());
+            }
         }
         unsafe {
-            slice::from_raw_parts_mut(
+            Ok(slice::from_raw_parts_mut(
                 zbalance_packet.bytes as *mut u8,
                 zbalance_packet.size as usize,
-            )
+            ))
+        }
+    }
+
+    pub fn set_bpf_filter<S: Into<String>>(&mut self, filter: S) -> Result<(), Error> {
+        let c_filter = CString::new(filter.into())?;
+        unsafe {
+            let ret = set_filter(&mut self._runner, c_filter.as_ptr());
+            if ret < 0 {
+                // if the return value is less than 0 return the errno error
+                let e = errno();
+                Err(format!("Error: {} {}", e.0, e).into())
+            } else {
+                Ok(())
+            }
         }
     }
 
@@ -59,7 +89,6 @@ impl Drop for ZbalanceIPCCapture {
     }
 }
 
-pub const _TD_LOADKEY_H_: u32 = 1;
 pub const PF_BURST_SIZE: u32 = 16;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -81,24 +110,26 @@ struct zbalance_packet {
 }
 
 extern "C" {
-    fn init_runner(runner: &mut &mut zbalance_ipc_runner);
+    /// create a runner object that will maintain state for a pfring zbalance ipc ingest queue
+    fn init_runner(runner: &mut &mut zbalance_ipc_runner) -> ::std::os::raw::c_int;
 
-    // fn create_runner(ptr: *mut *mut zbalance_ipc_runner) -> ::std::os::raw::c_int;
+    #[allow(dead_code)]
+    /// Read a burst of up to `buf_len` packets from the queue.
+    fn next_packet_burst(runner: *mut zbalance_ipc_runner) -> ::std::os::raw::c_int;
 
-    fn next_packet_burst(runner: *mut zbalance_i) -> ::std::os::raw::c_int;
-
+    /// Read the next packet from the queue
     fn next_packet(
         runner: *mut zbalance_ipc_runner,
         packet: *mut zbalance_packet,
     ) -> ::std::os::raw::c_int;
 
+    /// Apply a BPF filter from text.
     fn set_filter(
         runner: *mut zbalance_ipc_runner,
-        filter: *mut ::std::os::raw::c_char,
+        filter: *const libc::c_char,
     ) -> ::std::os::raw::c_int;
 
-    fn unset_filter(runner: *mut zbalance_ipc_runner) -> ::std::os::raw::c_int;
-
+    /// cleanup after a runner object, detaching from pfring and freeing resources
     fn close(runner: *mut zbalance_ipc_runner) -> ::std::os::raw::c_int;
 }
 

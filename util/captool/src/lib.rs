@@ -14,4 +14,9 @@ pub mod flows;
 pub mod ip;
 pub mod limit;
 pub mod packet_handler;
-mod zbalance_ipc;
+pub mod zbalance_ipc;
+
+#[cfg(test)]
+mod tests {
+    mod threading;
+}
