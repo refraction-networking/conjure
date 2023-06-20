@@ -149,6 +149,10 @@ struct Args {
     /// Path to the Geolite CountryCode database (.mmdb) file
     #[arg(long, default_value_t = String::from(CCDB_PATH))]
     cc_db: String,
+
+    /// Subnets to exclude -- packets that include source addresses in this subnet will not be captured
+    #[arg(short, long)]
+    ex: Option<String>,
 }
 
 #[cfg(debug_assertions)]
@@ -218,6 +222,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let limiter = if unlimited { None } else { Some(limit_state) };
     let target_subnets = parse_targets(args.t);
+    let exclude_subnets = parse_excludes(args.ex);
     if target_subnets.is_empty() {
         error!("no valid target subnets provided{HELP}");
         Err("no valid target subnets provided")?;
@@ -232,6 +237,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         asn_list,
         args.v4,
         args.v6,
+        exclude_subnets,
     )?));
 
     let file = File::create(args.out)?;
@@ -499,7 +505,7 @@ fn read_packets<T, W>(
             }
         };
 
-        if packet.is_empty() {
+        if packet.is_empty() { 
             continue;
         }
 
@@ -513,6 +519,12 @@ fn read_packets<T, W>(
             Ok(p) => p,
             Err(_) => continue,
         };
+
+        // TODO: add packet exclusion here
+        if handler.lock().unwrap().should_exclude(ip_pkt.source()) {
+            continue
+        }
+
 
         let supplemental_fields: SupplementalFields = match {
             let mut h = handler.lock().unwrap();
@@ -584,6 +596,30 @@ fn parse_targets(input: String) -> Vec<IpNet> {
         }
     }
     out
+}
+
+fn parse_excludes(inp: Option<String>) -> Vec<IpNet> {
+    // vec!["192.122.190.0/24".parse()?]
+    match {inp} {
+        Some(input) => {if input.is_empty() {
+            return vec![];
+        }
+    
+        let mut out = vec![];
+        for s in input.split(',') {
+            if let Ok(subnet) = s.trim().parse() {
+                out.push(subnet);
+                debug!("adding target: {subnet}");
+            } else {
+                warn!("failed to parse subnet: \"{s}\" continuing");
+            }
+        }
+        out
+    }
+        None => {
+            return vec![];
+        }
+    }
 }
 
 fn parse_asn_list(input: Option<String>) -> Vec<u32> {

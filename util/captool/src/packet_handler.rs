@@ -35,6 +35,9 @@ pub struct PacketHandler {
     pub v4_only: bool,
     pub v6_only: bool,
 
+    // subnets from which to ignore incoming packets
+    pub exclude_subnets: Vec<IpNet>,
+
     pub stats: HashMap<Flow, FlowStats>,
 
     pub seed: [u8; 32],
@@ -345,6 +348,7 @@ impl PacketHandler {
         asn_filter: Vec<u32>,
         v4_only: bool,
         v6_only: bool,
+        exclude_subnets: Vec<IpNet>,
     ) -> Result<Self, Box<dyn Error>> {
         let mut p = PacketHandler {
             asn_reader: maxminddb::Reader::open_readfile(String::from(asn_path))?,
@@ -356,6 +360,7 @@ impl PacketHandler {
             seed: [0u8; 32],
             v4_only,
             v6_only,
+            exclude_subnets,
             stats: HashMap::new(),
         };
         OsRng.fill_bytes(&mut p.seed);
@@ -366,7 +371,7 @@ impl PacketHandler {
         let curr_flow = Flow::new(ip_pkt, tcp_pkt);
         if !self.stats.contains_key(&curr_flow) {
             // 18 = SYNACK packet, IPID is 0 in this case so ignore it (?)
-            if(tcp_pkt.get_flags() != 18)
+            if tcp_pkt.get_flags() != 18
             {
                 let curr_stats = FlowStats::new(ip_pkt, tcp_pkt);
                 self.stats.insert(curr_flow, curr_stats);
@@ -420,6 +425,19 @@ impl PacketHandler {
             }
         }
         AnonymizeTypes::None
+    }
+
+    pub fn should_exclude(&self, src: IpAddr) -> bool {
+        // if (self.v4_only && src.is_ipv6()) || (self.v6_only && src.is_ipv4()) {
+        //     return AnonymizeTypes::None;
+        // }
+
+        for exclude_subnet in &self.exclude_subnets {
+            if exclude_subnet.contains(&src) {
+                return true;
+            }
+        }
+        false
     }
 
     fn get_asn(&self, addr: IpAddr) -> Result<(u32, usize), PacketError> {
