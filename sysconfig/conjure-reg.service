@@ -7,7 +7,6 @@ Type=simple
 WorkingDirectory=/opt/conjure/
 
 SyslogIdentifier=conjure
-# EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
 
 ExecStart=/bin/bash /opt/conjure/scripts/start_registrar.sh
 

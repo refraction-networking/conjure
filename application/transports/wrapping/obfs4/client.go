@@ -6,11 +6,11 @@ import (
 	"net"
 
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.com/yawning/obfs4.git/transports/obfs4"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/refraction-networking/conjure/application/transports"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
-	"gitlab.com/yawning/obfs4.git/transports/obfs4"
-
-	"google.golang.org/protobuf/proto"
 )
 
 // ClientTransport implements the client side transport interface for the Min transport. The

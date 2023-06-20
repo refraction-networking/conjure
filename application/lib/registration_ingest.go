@@ -98,7 +98,10 @@ func (rm *RegistrationManager) startIngestThread(ctx context.Context, regChan <-
 		case msg := <-regChan:
 			newRegs, err := rm.parseRegMessage(msg.([]byte))
 			if err != nil {
-				logger.Errorf("Encountered err when creating Reg: %v\n", err)
+
+				if !errors.Is(err, ErrLegacyAddrSelectBug) {
+					logger.Errorf("Encountered err when creating Reg: %v\n", err)
+				}
 				continue
 			}
 			if len(newRegs) == 0 {
@@ -300,7 +303,10 @@ func (rm *RegistrationManager) parseRegMessage(msg []byte) ([]*DecoyRegistration
 	if parsed.GetRegistrationPayload().GetV4Support() && rm.EnableIPv4 && sourceAddr.To4() != nil {
 		reg, err := rm.NewRegistrationC2SWrapper(parsed, false)
 		if err != nil {
-			logger.Errorf("Failed to create registration from v4 C2S: %v", err)
+
+			if !errors.Is(err, ErrLegacyAddrSelectBug) {
+				logger.Errorf("Failed to create registration from v4 C2S: %v", err)
+			}
 			return nil, err
 		}
 
@@ -386,12 +392,27 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	c2s := c2sw.GetRegistrationPayload()
 
 	// Generate keys from shared secret using HKDF
-	conjureKeys, err := GenSharedKeys(c2sw.GetSharedSecret(), c2s.GetTransport())
+	conjureKeys, err := GenSharedKeys(uint(c2s.GetClientLibVersion()), c2sw.GetSharedSecret(), c2s.GetTransport())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate keys: %v", err)
 	}
 
 	regSrc := c2sw.GetRegistrationSource()
+
+	// If a C2SWrapper has a registration response at this stage EITHER auth was disabled OR it was
+	// signed by a registration server and has overrides that should be applied
+	var dstPort = -1
+	if rr := c2sw.GetRegistrationResponse(); rr != nil {
+		if rr.DstPort != nil {
+			dstPort = int(rr.GetDstPort())
+		}
+
+		if rr.TransportParams != nil {
+			c2s.TransportParams = rr.GetTransportParams()
+		}
+
+		// TODO: future, apply the ip addresses from the Registration response (rr.IPv4Addr, rr.IPv6Addr)
+	}
 
 	reg, err := rm.NewRegistration(c2s, &conjureKeys, includeV6, &regSrc)
 	if err != nil || reg == nil {
@@ -414,6 +435,10 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	reg.regASN, err = rm.GeoIP.ASN(reg.registrationAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed geoip asn lookup: %w", err)
+	}
+
+	if dstPort != -1 {
+		reg.PhantomPort = uint16(dstPort)
 	}
 
 	return reg, nil

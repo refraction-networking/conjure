@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net"
 
+	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -23,7 +24,7 @@ func (*mockTransport) Name() string      { return "MockTransport" }
 func (*mockTransport) LogPrefix() string { return "MOCK" }
 
 func (*mockTransport) GetIdentifier(d *DecoyRegistration) string {
-	return string(d.Keys.ConjureHMAC("MockTransportHMACString"))
+	return string(core.ConjureHMAC(d.Keys.SharedSecret, "MockTransportHMACString"))
 }
 
 func (*mockTransport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *RegistrationManager) (*DecoyRegistration, net.Conn, error) {

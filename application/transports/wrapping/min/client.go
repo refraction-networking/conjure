@@ -6,7 +6,7 @@ import (
 	"net"
 
 	"github.com/refraction-networking/conjure/application/transports"
-	core "github.com/refraction-networking/conjure/pkg/core"
+	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -17,10 +17,8 @@ import (
 type ClientTransport struct {
 	// Parameters are fields that will be shared with the station in the registration
 	Parameters *pb.GenericTransportParams
+
 	connectTag []byte
-	// // state tracks fields internal to the registrar that survive for the lifetime
-	// // of the transport session without being shared - i.e. local derived keys.
-	// state any
 }
 
 // Name returns a string identifier for the Transport for logging
@@ -77,6 +75,9 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 	return conn, nil
 }
 
+// PrepareKeys provides an opportunity for the transport to integrate the station public key
+// as well as bytes from the deterministic random generator associated with the registration
+// that this ClientTransport is attached t
 func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
 	t.connectTag = core.ConjureHMAC(sharedSecret, "MinTransportHMACString")
 	return nil

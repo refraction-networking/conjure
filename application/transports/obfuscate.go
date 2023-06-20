@@ -204,6 +204,46 @@ func (CTRObfuscator) Obfuscate(plainText []byte, stationPubkey []byte) ([]byte, 
 	return tag, nil
 }
 
+// XORObfuscator implements the Obfuscator interface for no modification the provided tag /
+// plaintext / ciphertext. Will NOT prevent tag re-use if a registration is re-used.
+type XORObfuscator struct{}
+
+// TryReveal for XORObfuscator just returns the provided ciphertext without modification
+func (XORObfuscator) TryReveal(cipherText []byte, privateKey [32]byte) ([]byte, error) {
+	if len(cipherText)%2 != 0 || len(cipherText) == 0 {
+		return nil, errors.New("Unexpected message with even length")
+	}
+
+	n := len(cipherText) / 2
+	out := make([]byte, n)
+	for i, b := range cipherText[:n] {
+		out[i] = b ^ cipherText[n+i]
+	}
+	return out, nil
+}
+
+// Obfuscate for XORObfuscator just returns the provided plaintext without modification
+func (XORObfuscator) Obfuscate(plainText []byte, stationPubkey []byte) ([]byte, error) {
+	lp := len(plainText)
+	if lp == 0 {
+		return []byte{}, nil
+	}
+	out := make([]byte, lp*2)
+
+	randByte := make([]byte, lp)
+	_, err := rand.Read(randByte)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, b := range randByte {
+		out[i] = b
+		out[lp+i] = b ^ plainText[i]
+	}
+
+	return out, nil
+}
+
 // NilObfuscator implements the Obfuscator interface for no modification the provided tag /
 // plaintext / ciphertext. Will NOT prevent tag re-use if a registration is re-used.
 type NilObfuscator struct{}
