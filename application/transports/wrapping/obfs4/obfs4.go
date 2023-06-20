@@ -6,7 +6,7 @@ import (
 	"net"
 
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
-	dd "github.com/refraction-networking/conjure/application/lib"
+	cj "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"gitlab.com/yawning/obfs4.git/common/drbg"
@@ -34,7 +34,7 @@ func (Transport) Name() string { return "obfs4" }
 func (Transport) LogPrefix() string { return "OBFS4" }
 
 // GetIdentifier implements the station Transport interface
-func (Transport) GetIdentifier(r *dd.DecoyRegistration) string {
+func (Transport) GetIdentifier(r *cj.DecoyRegistration) string {
 	return string(r.Keys.Obfs4Keys.PublicKey.Bytes()[:]) + string(r.Keys.Obfs4Keys.NodeID.Bytes()[:])
 }
 
@@ -66,7 +66,7 @@ func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 }
 
 // WrapConnection implements the station Transport interface
-func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, net.Conn, error) {
+func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, regManager *cj.RegistrationManager) (*cj.DecoyRegistration, net.Conn, error) {
 	if data.Len() < ClientMinHandshakeLength {
 		return nil, nil, transports.ErrTryAgain
 	}
@@ -119,8 +119,8 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 // This function makes the assumption that any identifier with length 52 is an obfs4 registration.
 // This may not be strictly true, but any other identifier will simply fail to form a connection and
 // should be harmless.
-func getObfs4Registrations(regManager *dd.RegistrationManager, darkDecoyAddr net.IP) []*dd.DecoyRegistration {
-	var regs []*dd.DecoyRegistration
+func getObfs4Registrations(regManager *cj.RegistrationManager, darkDecoyAddr net.IP) []*cj.DecoyRegistration {
+	var regs []*cj.DecoyRegistration
 
 	for identifier, r := range regManager.GetRegistrations(darkDecoyAddr) {
 		if len(identifier) == ntor.PublicKeyLength+ntor.NodeIDLength {
