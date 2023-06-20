@@ -7,7 +7,6 @@ import (
 
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
 	"github.com/refraction-networking/conjure/application/transports"
-	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"gitlab.com/yawning/obfs4.git/transports/obfs4"
 
@@ -19,7 +18,6 @@ import (
 // the station side Transport struct has one instance to be re-used for all sessions.
 type ClientTransport struct {
 	Parameters *pb.GenericTransportParams
-	connectTag []byte
 	keys       Obfs4Keys
 }
 
@@ -94,7 +92,6 @@ func (t ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 }
 
 func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
-	t.connectTag = core.ConjureHMAC(sharedSecret, "obfs4TransportHMACString")
 	// Generate shared keys
 	var err error
 	t.keys, err = generateObfs4Keys(dRand)
