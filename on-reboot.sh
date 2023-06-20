@@ -25,26 +25,38 @@ exit_msg() {
 }
 
 build_or_rebuild_iptables() {
-    if [[ $# -lt 2 ]]; then
-        exit_msg "script broken, build_or_rebuild requires iptables table and chain names"
+    if [[ $# -lt 3 ]]; then
+        exit_msg "script broken, build_or_rebuild requires iptables table, chain, and source chain names"
     fi
-    local chain=$1
-    local table=$2
-    iptables -n -L ${chain} >/dev/null 2>&
-    return_code=$?
-    if [ $return_code -eq 0 ]; then
+    local table=$1
+    local chain=$2
+    local src_chain=$3
+    iptables -t ${table} -n -L ${chain} >/dev/null 2>&1
+    if [ "$?" -eq 0 ]; then
         # Chain already exists
+	while [ "$?" -eq 0 ];
+	do 
+	    iptables -t ${table} -D ${src_chain} -j ${chain}
+	done
+	iptables -t ${table} -F ${chain}
         iptables -t ${table} -X ${chain}
     fi
+    echo "building chain ${chain} in table ${table}"
     iptables -t ${table} -N ${chain}
+    do_or_die "iptables -t ${table} -I ${src_chain} 1 -j ${chain}"
 
-    ip6tables -n -L ${chain} >/dev/null 2>&
-    return_code=$?
-    if [ $return_code -eq 0 ]; then
+    ip6tables -t ${table} -n -L ${chain} >/dev/null 2>&1
+    if [ "$?" -eq 0 ]; then
         # Chain already exists
+	while [ "$?" -eq 0 ];
+	do 
+	    ip6tables -t ${table} -D ${src_chain} -j ${chain}
+	done
+        ip6tables -t ${table} -F ${chain}
         ip6tables -t ${table} -X ${chain}
     fi
     ip6tables -t ${table} -N ${chain}
+    do_or_die "ip6tables -t ${table} -I ${src_chain} 1 -j ${chain}"
 }
 
 tun_setup_fn () {
@@ -104,20 +116,17 @@ fi
 
 # Internal Network Setup
 do_or_die "sysctl -w net.ipv4.conf.default.rp_filter=0"
+do_or_die "sysctl -w net.ipv4.conf.all.rp_filter=0"
 
 rule_table_name="custom"
-rule_table_check=$(ip route show table "$rule_table_name")
+rule_table_check=$(ip route show table "$rule_table_name" >/dev/null 2>&1)
 if [[ -z "$rule_table_check" ]]; then
   echo "adding routing table ${rule_table_name}"
   echo "200 ${rule_table_name}" >> /etc/iproute2/rt_tables
 fi
 
-build_or_rebuild_iptables nat CJ_PREROUTING
-do_or_die "iptables -t nat -I PREROUTING 1 -j CJ_PREROUTING"
-do_or_die "ip6tables -t nat -I PREROUTING 1 -j CJ_PREROUTING"
-build_or_rebuild_iptables filter CJ_INPUT
-do_or_die "iptables -I INPUT 1 -j CJ_INPUT"
-do_or_die "ip6tables -I INPUT 1 -j CJ_INPUT"
+build_or_rebuild_iptables nat CJ_PREROUTING PREROUTING
+build_or_rebuild_iptables filter CJ_INPUT INPUT
 
 # Create a tunnel for each core.
 # The tunnel numbers do not match the core index per the OS,

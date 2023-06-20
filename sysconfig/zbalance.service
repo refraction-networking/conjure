@@ -12,7 +12,7 @@ SyslogIdentifier=zbalance
 # EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
 
 # makes if binary doesn't exist
-#ExecStartPre=/usr/bin/make zbalance
+ExecStartPre=/opt/conjure/bin/on-reboot.sh
 
 ExecStart=/bin/bash /opt/conjure/scripts/start_zbalance_ipc.sh
 
