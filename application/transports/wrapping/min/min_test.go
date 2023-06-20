@@ -18,7 +18,8 @@ import (
 )
 
 func TestSuccessfulWrap(t *testing.T) {
-	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	cwd, _ := os.Getwd()
+	testSubnetPath := cwd + "/../../../lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	var transport Transport

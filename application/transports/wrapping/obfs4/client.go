@@ -3,13 +3,14 @@ package obfs4
 import (
 	"fmt"
 	"io"
+	"net"
+
+	pt "git.torproject.org/pluggable-transports/goptlib.git"
+	"gitlab.com/yawning/obfs4.git/transports/obfs4"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/refraction-networking/conjure/application/transports"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
-	"gitlab.com/yawning/obfs4.git/common/ntor"
-	"golang.org/x/crypto/curve25519"
-
-	"google.golang.org/protobuf/proto"
 )
 
 // ClientTransport implements the client side transport interface for the Min transport. The
@@ -17,8 +18,7 @@ import (
 // the station side Transport struct has one instance to be re-used for all sessions.
 type ClientTransport struct {
 	Parameters *pb.GenericTransportParams
-
-	keys obfs4Keys
+	keys       Obfs4Keys
 }
 
 // Name returns a string identifier for the Transport for logging
@@ -64,49 +64,39 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
 
-// // Connect creates the connection to the phantom address negotiated in the registration phase of
-// // Conjure connection establishment.
-// func (*ClientTransport) Connect(ctx context.Context, reg *cj.ConjureReg) (net.Conn, error) {
-// 	return nil, nil
-// }
+// WrapConn creates the connection to the phantom address negotiated in the registration phase of
+// Conjure connection establishment.
+func (t ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
+	obfsTransport := obfs4.Transport{}
+	args := pt.Args{}
 
-// Prepare provides an opportunity for the transport to integrate the station public key
-// as well as bytes from the deterministic random generator associated with the registration
-// that this ClientTransport is attached to.
-func (t *ClientTransport) Prepare(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+	args.Add("node-id", t.keys.NodeID.Hex())
+	args.Add("public-key", t.keys.PublicKey.Hex())
+	args.Add("iat-mode", "1")
+
+	c, err := obfsTransport.ClientFactory("")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client factory")
+	}
+
+	parsedArgs, err := c.ParseArgs(&args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse obfs4 args")
+	}
+
+	d := func(network, address string) (net.Conn, error) {
+		return conn, nil
+	}
+
+	return c.Dial("tcp", "", d, parsedArgs)
+}
+
+func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+	// Generate shared keys
 	var err error
 	t.keys, err = generateObfs4Keys(dRand)
-	return err
-}
-
-type obfs4Keys struct {
-	PrivateKey *ntor.PrivateKey
-	PublicKey  *ntor.PublicKey
-	NodeID     *ntor.NodeID
-}
-
-func generateObfs4Keys(rand io.Reader) (obfs4Keys, error) {
-	keys := obfs4Keys{
-		PrivateKey: new(ntor.PrivateKey),
-		PublicKey:  new(ntor.PublicKey),
-		NodeID:     new(ntor.NodeID),
-	}
-
-	_, err := rand.Read(keys.PrivateKey[:])
 	if err != nil {
-		return keys, err
+		return err
 	}
-
-	keys.PrivateKey[0] &= 248
-	keys.PrivateKey[31] &= 127
-	keys.PrivateKey[31] |= 64
-
-	pub, err := curve25519.X25519(keys.PrivateKey[:], curve25519.Basepoint)
-	if err != nil {
-		return keys, err
-	}
-	copy(keys.PublicKey[:], pub)
-
-	_, err = rand.Read(keys.NodeID[:])
-	return keys, err
+	return nil
 }

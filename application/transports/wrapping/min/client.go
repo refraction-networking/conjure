@@ -3,6 +3,7 @@ package min
 import (
 	"fmt"
 	"io"
+	"net"
 
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/pkg/core"
@@ -16,10 +17,6 @@ import (
 type ClientTransport struct {
 	// Parameters are fields that will be shared with the station in the registration
 	Parameters *pb.GenericTransportParams
-
-	// // state tracks fields internal to the registrar that survive for the lifetime
-	// // of the transport session without being shared - i.e. local derived keys.
-	// state any
 
 	connectTag []byte
 }
@@ -67,10 +64,21 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
 
-// Prepare provides an opportunity for the transport to integrate the station public key
+// WrapConn creates the connection to the phantom address negotiated in the registration phase of
+// Conjure connection establishment.
+func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
+	// Send hmac(seed, str) bytes to indicate to station (min transport) generated during Prepare(...)
+	_, err := conn.Write(t.connectTag)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+// PrepareKeys provides an opportunity for the transport to integrate the station public key
 // as well as bytes from the deterministic random generator associated with the registration
-// that this ClientTransport is attached to.
-func (t *ClientTransport) Prepare(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
-	t.connectTag = core.ConjureHMAC(sharedSecret, "PrefixTransportHMACString")
+// that this ClientTransport is attached t
+func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+	t.connectTag = core.ConjureHMAC(sharedSecret, "MinTransportHMACString")
 	return nil
 }
