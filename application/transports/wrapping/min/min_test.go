@@ -17,7 +17,8 @@ import (
 )
 
 func TestSuccessfulWrap(t *testing.T) {
-	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	cwd, _ := os.Getwd()
+	testSubnetPath := cwd + "/../../../lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	var transport Transport
@@ -108,7 +109,7 @@ func TestTryParamsToDstPort(t *testing.T) {
 	clv := randomizeDstPortMinVersion
 	seed, _ := hex.DecodeString("0000000000000000000000000000000000")
 
-	cases := []struct{
+	cases := []struct {
 		r bool
 		p uint16
 	}{{true, 58047}, {false, 443}}

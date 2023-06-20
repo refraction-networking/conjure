@@ -2,9 +2,13 @@ package obfs4
 
 import (
 	"fmt"
+	"io"
+	"net"
 
+	pt "git.torproject.org/pluggable-transports/goptlib.git"
 	"github.com/refraction-networking/conjure/application/transports"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"gitlab.com/yawning/obfs4.git/transports/obfs4"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -14,6 +18,7 @@ import (
 // the station side Transport struct has one instance to be re-used for all sessions.
 type ClientTransport struct {
 	Parameters *pb.GenericTransportParams
+	keys       Obfs4Keys
 }
 
 // Name returns a string identifier for the Transport for logging
@@ -59,8 +64,39 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
 
-// // Connect creates the connection to the phantom address negotiated in the registration phase of
-// // Conjure connection establishment.
-// func (*ClientTransport) Connect(ctx context.Context, reg *cj.ConjureReg) (net.Conn, error) {
-// 	return nil, nil
-// }
+// WrapConn creates the connection to the phantom address negotiated in the registration phase of
+// Conjure connection establishment.
+func (t ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
+	obfsTransport := obfs4.Transport{}
+	args := pt.Args{}
+
+	args.Add("node-id", t.keys.NodeID.Hex())
+	args.Add("public-key", t.keys.PublicKey.Hex())
+	args.Add("iat-mode", "1")
+
+	c, err := obfsTransport.ClientFactory("")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client factory")
+	}
+
+	parsedArgs, err := c.ParseArgs(&args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse obfs4 args")
+	}
+
+	d := func(network, address string) (net.Conn, error) {
+		return conn, nil
+	}
+
+	return c.Dial("tcp", "", d, parsedArgs)
+}
+
+func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+	// Generate shared keys
+	var err error
+	t.keys, err = generateObfs4Keys(dRand)
+	if err != nil {
+		return err
+	}
+	return nil
+}
