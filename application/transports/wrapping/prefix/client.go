@@ -64,15 +64,6 @@ func (*ClientTransport) ID() pb.TransportType {
 	return pb.TransportType_Prefix
 }
 
-// Prepare provides an opportunity for the transport to integrate the station public key
-// as well as bytes from the deterministic random generator associated with the registration
-// that this ClientTransport is attached to.
-func (t *ClientTransport) Prepare(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
-	t.connectTag = core.ConjureHMAC(sharedSecret, "PrefixTransportHMACString")
-	t.stationPublicKey = pubkey
-	return nil
-}
-
 // GetParams returns a generic protobuf with any parameters from both the registration and the
 // transport.
 func (t *ClientTransport) GetParams() proto.Message {
@@ -113,9 +104,18 @@ func (t *ClientTransport) Build() ([]byte, error) {
 	return append(prefix, obfuscatedID...), nil
 }
 
+// PrepareKeys provides an opportunity for the transport to integrate the station public key
+// as well as bytes from the deterministic random generator associated with the registration
+// that this ClientTransport is attached to.
+func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, hkdf io.Reader) error {
+	t.connectTag = core.ConjureHMAC(sharedSecret, "PrefixTransportHMACString")
+	t.stationPublicKey = pubkey
+	return nil
+}
+
 // WrapConn gives the transport the opportunity to perform a handshake and wrap / transform the
 // incoming and outgoing bytes send by the implementing client.
-func (t ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
+func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 	// Send hmac(seed, str) bytes to indicate to station (min transport) generated during Prepare(...)
 
 	// // Send hmac(seed, str) bytes to indicate to station (min transport)

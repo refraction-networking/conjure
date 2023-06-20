@@ -98,7 +98,10 @@ func (rm *RegistrationManager) startIngestThread(ctx context.Context, regChan <-
 		case msg := <-regChan:
 			newRegs, err := rm.parseRegMessage(msg.([]byte))
 			if err != nil {
-				logger.Errorf("Encountered err when creating Reg: %v\n", err)
+
+				if !errors.Is(err, ErrLegacyAddrSelectBug) {
+					logger.Errorf("Encountered err when creating Reg: %v\n", err)
+				}
 				continue
 			}
 			if len(newRegs) == 0 {
@@ -300,7 +303,10 @@ func (rm *RegistrationManager) parseRegMessage(msg []byte) ([]*DecoyRegistration
 	if parsed.GetRegistrationPayload().GetV4Support() && rm.EnableIPv4 && sourceAddr.To4() != nil {
 		reg, err := rm.NewRegistrationC2SWrapper(parsed, false)
 		if err != nil {
-			logger.Errorf("Failed to create registration from v4 C2S: %v", err)
+
+			if !errors.Is(err, ErrLegacyAddrSelectBug) {
+				logger.Errorf("Failed to create registration from v4 C2S: %v", err)
+			}
 			return nil, err
 		}
 
