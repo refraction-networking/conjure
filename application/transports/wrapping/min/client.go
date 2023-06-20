@@ -77,7 +77,7 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 	return conn, nil
 }
 
-func (t *ClientTransport) Prepare(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
 	t.connectTag = core.ConjureHMAC(sharedSecret, "MinTransportHMACString")
 	return nil
 }
