@@ -116,7 +116,7 @@ impl FlowStats {
                 self.packet_count += 1;
                 self.ipids.as_mut().expect("identification of ipv4 packet not initialized").update(pkt.get_identification());
                 self.ttl_range.as_mut().expect("ttl of ipv4 packet not initialized").update(pkt.get_ttl());
-            },
+            }
             IpPacket::V6(pkt) => {
                 self.packet_count += 1;
                 self.hop_limit_range.as_mut().expect("hop limit of ipv6 packet not initialized").update(pkt.get_hop_limit());
@@ -183,7 +183,7 @@ impl IpidStats{
     }
 
     pub fn update(&mut self, new_ipid: u16) {
-        let new_off = (self.curr_ipid as i16 - new_ipid as i16).abs() as u16;
+        let new_off = (self.curr_ipid as i32 - new_ipid as i32).abs() as u16;
         if self.recent_offsets.len() < 5 {
             self.recent_offsets.push_back(new_off);
             self.curr_ipid = new_ipid;
@@ -365,8 +365,12 @@ impl PacketHandler {
     pub fn append_to_stats(&mut self, ip_pkt: &IpPacket, tcp_pkt: &TcpPacket) {
         let curr_flow = Flow::new(ip_pkt, tcp_pkt);
         if !self.stats.contains_key(&curr_flow) {
-            let curr_stats = FlowStats::new(ip_pkt, tcp_pkt);
-            self.stats.insert(curr_flow, curr_stats);
+            // 18 = SYNACK packet, IPID is 0 in this case so ignore it (?)
+            if(tcp_pkt.get_flags() != 18)
+            {
+                let curr_stats = FlowStats::new(ip_pkt, tcp_pkt);
+                self.stats.insert(curr_flow, curr_stats);
+            }
         }
         else {
             if let Some(x) = self.stats.get_mut(&curr_flow) {
