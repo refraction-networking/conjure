@@ -4,7 +4,7 @@ Description=Conjure Registration Server
 [Service]
 Type=simple
 
-WorkingDirectory=/opt/conjure/cmd/registration-server/
+WorkingDirectory=/opt/conjure/
 
 SyslogIdentifier=conjure
 # EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
