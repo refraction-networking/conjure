@@ -114,7 +114,6 @@ func (cm *connManager) handleNewConn(regManager *cj.RegistrationManager, clientC
 }
 
 func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clientConn net.Conn, originalDstIP net.IP) {
-	// logger := sharedLogger
 	var originalDst, originalSrc string
 	if logClientIP {
 		originalSrc = clientConn.RemoteAddr().String()
@@ -125,14 +124,23 @@ func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clie
 	flowDescription := fmt.Sprintf("%s -> %s ", originalSrc, originalDst)
 	logger := log.New(os.Stdout, "[CONN] "+flowDescription, golog.Ldate|golog.Lmicroseconds)
 
-	asn, err := regManager.GeoIP.ASN(net.ParseIP(clientConn.RemoteAddr().String()))
+	var asn uint = 0
+	var cc string
+	var err error
+	cc, err = regManager.GeoIP.CC(net.ParseIP(clientConn.RemoteAddr().String()))
 	if err != nil {
-		logger.Errorln("failed to get ASN:", err)
+		logger.Errorln("Failed to get CC:", err)
+		return
 	}
-	cc, err := regManager.GeoIP.CC(net.ParseIP(clientConn.RemoteAddr().String()))
-	if err != nil {
-		logger.Errorln("failed to get CC:", err)
+	if cc != "unk" {
+		// logger.Infoln("CC not unk:", cc, "ASN:", asn) // TESTING
+		asn, err = regManager.GeoIP.ASN(net.ParseIP(clientConn.RemoteAddr().String()))
+		if err != nil {
+			logger.Errorln("Failed to get ASN:", err)
+			return
+		}
 	}
+	// logger.Infoln("CC:", cc, "ASN:", asn) // TESTING
 
 	count := regManager.CountRegistrations(originalDstIP)
 	logger.Debugf("new connection (%d potential registrations)\n", count)
@@ -397,12 +405,14 @@ func (c *connStats) addCreated(asn uint, cc string) {
 	atomic.AddInt64(&c.numCreated, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numCreated, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numCreated, 1)
 }
 
 func (c *connStats) createdToDiscard(asn uint, cc string) {
@@ -412,14 +422,16 @@ func (c *connStats) createdToDiscard(asn uint, cc string) {
 	atomic.AddInt64(&c.numCreatedToDiscard, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToDiscard, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numCreatedToDiscard, 1)
 }
 
 func (c *connStats) createdToCheck(asn uint, cc string) {
@@ -429,14 +441,16 @@ func (c *connStats) createdToCheck(asn uint, cc string) {
 	atomic.AddInt64(&c.numCreatedToCheck, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numChecking, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToCheck, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numChecking, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numCreatedToCheck, 1)
 }
 
 func (c *connStats) createdToReset(asn uint, cc string) {
@@ -446,14 +460,16 @@ func (c *connStats) createdToReset(asn uint, cc string) {
 	atomic.AddInt64(&c.numCreatedToReset, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToReset, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numCreatedToReset, 1)
 }
 
 func (c *connStats) createdToTimeout(asn uint, cc string) {
@@ -463,14 +479,16 @@ func (c *connStats) createdToTimeout(asn uint, cc string) {
 	atomic.AddInt64(&c.numCreatedToTimeout, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToTimeout, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numCreatedToTimeout, 1)
 }
 
 func (c *connStats) createdToError(asn uint, cc string) {
@@ -480,14 +498,16 @@ func (c *connStats) createdToError(asn uint, cc string) {
 	atomic.AddInt64(&c.numCreatedToError, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToError, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numCreatedToError, 1)
 }
 
 func (c *connStats) readToCheck(asn uint, cc string) {
@@ -497,14 +517,16 @@ func (c *connStats) readToCheck(asn uint, cc string) {
 	atomic.AddInt64(&c.numReadToCheck, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numChecking, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numReadToCheck, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numChecking, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numReadToCheck, 1)
 }
 
 func (c *connStats) readToTimeout(asn uint, cc string) {
@@ -514,14 +536,16 @@ func (c *connStats) readToTimeout(asn uint, cc string) {
 	atomic.AddInt64(&c.numReadToTimeout, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numReadToTimeout, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numReadToTimeout, 1)
 }
 
 func (c *connStats) readToReset(asn uint, cc string) {
@@ -531,14 +555,16 @@ func (c *connStats) readToReset(asn uint, cc string) {
 	atomic.AddInt64(&c.numReadToReset, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numReadToReset, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numReadToReset, 1)
 }
 
 func (c *connStats) readToError(asn uint, cc string) {
@@ -548,14 +574,16 @@ func (c *connStats) readToError(asn uint, cc string) {
 	atomic.AddInt64(&c.numReadToError, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numReadToError, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numReadToError, 1)
 }
 
 func (c *connStats) checkToCreated(asn uint, cc string) {
@@ -565,14 +593,16 @@ func (c *connStats) checkToCreated(asn uint, cc string) {
 	atomic.AddInt64(&c.numCheckToCreated, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numCreated, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numCheckToCreated, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numCreated, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numCheckToCreated, 1)
 }
 
 func (c *connStats) checkToRead(asn uint, cc string) {
@@ -582,14 +612,16 @@ func (c *connStats) checkToRead(asn uint, cc string) {
 	atomic.AddInt64(&c.numCheckToRead, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numReading, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numCheckToRead, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numReading, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numCheckToRead, 1)
 }
 
 func (c *connStats) checkToFound(asn uint, cc string) {
@@ -599,14 +631,16 @@ func (c *connStats) checkToFound(asn uint, cc string) {
 	atomic.AddInt64(&c.numCheckToFound, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numFound, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numCheckToFound, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numFound, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numCheckToFound, 1)
 }
 
 func (c *connStats) checkToError(asn uint, cc string) {
@@ -616,14 +650,16 @@ func (c *connStats) checkToError(asn uint, cc string) {
 	atomic.AddInt64(&c.numCheckToError, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numCheckToError, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numCheckToError, 1)
 }
 
 func (c *connStats) checkToDiscard(asn uint, cc string) {
@@ -633,14 +669,16 @@ func (c *connStats) checkToDiscard(asn uint, cc string) {
 	atomic.AddInt64(&c.numCheckToDiscard, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numCheckToDiscard, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numCheckToDiscard, 1)
 }
 
 func (c *connStats) discardToReset(asn uint, cc string) {
@@ -650,14 +688,16 @@ func (c *connStats) discardToReset(asn uint, cc string) {
 	atomic.AddInt64(&c.numDiscardToReset, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numDiscardToReset, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numDiscardToReset, 1)
 }
 
 func (c *connStats) discardToTimeout(asn uint, cc string) {
@@ -667,14 +707,16 @@ func (c *connStats) discardToTimeout(asn uint, cc string) {
 	atomic.AddInt64(&c.numDiscardToTimeout, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numDiscardToTimeout, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numDiscardToTimeout, 1)
 }
 
 func (c *connStats) discardToError(asn uint, cc string) {
@@ -684,14 +726,16 @@ func (c *connStats) discardToError(asn uint, cc string) {
 	atomic.AddInt64(&c.numDiscardToError, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numDiscardToError, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numDiscardToError, 1)
 }
 
 func (c *connStats) discardToClose(asn uint, cc string) {
@@ -701,12 +745,18 @@ func (c *connStats) discardToClose(asn uint, cc string) {
 	atomic.AddInt64(&c.numDiscardToClose, 1)
 
 	// GeoIP tracking
-	if _, ok := c.geoIPMap[asn]; !ok {
-		// We haven't seen asn before, so add it to the map
-		c.geoIPMap[asn] = &asnCounts{}
-		c.geoIPMap[asn].cc = cc
+	if isValidCC(cc) {
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
+		atomic.AddInt64(&c.geoIPMap[asn].numClosed, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numDiscardToClose, 1)
 	}
-	atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
-	atomic.AddInt64(&c.geoIPMap[asn].numClosed, 1)
-	atomic.AddInt64(&c.geoIPMap[asn].numDiscardToClose, 1)
+}
+
+func isValidCC(cc string) bool {
+	return cc != ""
 }
