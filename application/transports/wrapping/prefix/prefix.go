@@ -10,7 +10,6 @@ import (
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -188,7 +187,7 @@ func (t Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 	}
 
 	var m = &pb.PrefixTransportParams{}
-	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
+	err := transports.UnmarshalAnypbTo(data, m)
 
 	// Check if this is a prefix that we know how to parse, if not, drop the registration because
 	// we will be unable to pick up.
@@ -197,6 +196,19 @@ func (t Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 	}
 
 	return m, err
+}
+
+// ParamStrings returns an array of tag string that will be added to tunStats when a proxy session
+// is closed.
+func (t Transport) ParamStrings(p any) []string {
+	params, ok := p.(*pb.PrefixTransportParams)
+	if !ok {
+		return nil
+	}
+
+	out := []string{PrefixID(params.GetPrefixId()).Name()}
+
+	return out
 }
 
 // GetDstPort Given the library version, a seed, and a generic object

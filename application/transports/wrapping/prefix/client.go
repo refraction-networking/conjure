@@ -97,6 +97,9 @@ func (t *ClientTransport) Build() ([]byte, error) {
 	// Send hmac(seed, str) bytes to indicate to station (min transport)
 	prefix := t.Prefix.Bytes
 
+	if t.TagObfuscator == nil {
+		t.TagObfuscator = transports.CTRObfuscator{}
+	}
 	obfuscatedID, err := t.TagObfuscator.Obfuscate(t.connectTag, t.stationPublicKey[:])
 	if err != nil {
 		return nil, err
