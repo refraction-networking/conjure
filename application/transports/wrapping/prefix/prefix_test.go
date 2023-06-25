@@ -154,10 +154,18 @@ func TestTryAgain(t *testing.T) {
 	}
 }
 
+type ptp = pb.PrefixTransportParams
+
+var f = false
+var t = true
+var i1 int32 = 1
+var in1 int32 = -1
+var i22 int32 = 22
+
 var _cases = []struct {
 	d  string // description
 	x  Prefix // Prefix interface in ClientTransport.Prefix
-	r  bool   // randomize
+	r  *ptp   // randomize
 	p  uint16 // client_port (on getDstPort)
 	sp uint16 // server_port (on getDstPort)
 	e  error  // client_error (on getDstPort)
@@ -165,33 +173,34 @@ var _cases = []struct {
 	ge error  // client GetParams error
 }{
 	// Nil Prefix w/ and w/out randomization
-	{"1", nil, true, 0, 0, ErrBadParams, ErrBadParams, ErrBadParams},
-	{"2", nil, false, 0, 0, ErrBadParams, ErrUnknownPrefix, ErrBadParams},
+	{"1", nil, nil, 0, 0, ErrBadParams, ErrBadParams, ErrBadParams},
+	{"2", nil, &ptp{RandomizeDstPort: &f}, 0, 443, ErrBadParams, nil, ErrBadParams},   // When using the getter for PrefixTransportParams PrefixID defaults to 0
+	{"2", nil, &ptp{RandomizeDstPort: &t}, 0, 58047, ErrBadParams, nil, ErrBadParams}, // When using the getter for PrefixTransportParams PrefixID defaults to 0
 
 	// because the Prefix object is defined the client doesn't care that the id isn't in the
 	// set of defaults, because the Prefix can give the dst port.
-	{"3", &clientPrefix{[]byte{}, 22, 1025}, false, 1025, 0, nil, ErrUnknownPrefix, ErrUnknownPrefix},
-	{"9", &clientPrefix{[]byte{}, 22, 1025}, true, 58047, 0, nil, ErrUnknownPrefix, ErrBadParams},
+	{"3", &clientPrefix{[]byte{}, 22, 1025}, &ptp{RandomizeDstPort: &f, PrefixId: &i22}, 1025, 0, nil, ErrUnknownPrefix, ErrUnknownPrefix},
+	{"4", &clientPrefix{[]byte{}, 22, 1025}, &ptp{RandomizeDstPort: &t, PrefixId: &i22}, 58047, 0, nil, ErrUnknownPrefix, ErrBadParams},
 
 	// Properly working examples
-	{"4", &clientPrefix{[]byte{}, 0, 443}, true, 58047, 58047, nil, nil, nil},
-	{"5", &clientPrefix{[]byte{}, 0, 443}, false, 443, 443, nil, nil, nil},
+	{"5", &clientPrefix{[]byte{}, 0, 443}, &ptp{RandomizeDstPort: &t}, 58047, 58047, nil, nil, nil},
+	{"6", &clientPrefix{[]byte{}, 0, 443}, &ptp{RandomizeDstPort: &f}, 443, 443, nil, nil, nil},
 
 	// // This will result in a broken connection, valid for both client and server. but unable to
 	// // connect since they will disagree about the expected port. This is not taking into account
 	// // the overrides system which could also cause this, but will be valid and applied properly
 	// // so as not to cause something like this from happening.
-	{"6", &clientPrefix{[]byte{}, 0, 1025}, false, 1025, 443, nil, nil, nil},
-	{"7", &clientPrefix{[]byte{}, 1, 1025}, false, 1025, 80, nil, nil, ErrBadParams},
+	{"7", &clientPrefix{[]byte{}, 0, 1025}, &ptp{RandomizeDstPort: &f}, 1025, 443, nil, nil, nil},
+	{"8", &clientPrefix{[]byte{}, 1, 1025}, &ptp{RandomizeDstPort: &f, PrefixId: &i1}, 1025, 80, nil, nil, ErrBadParams},
 
 	// Params nil. Prefix not nil
-	{"10", &clientPrefix{[]byte{}, -2, 1025}, false, 1025, 0, nil, ErrUnknownPrefix, ErrUnknownPrefix},
-	{"11", &clientPrefix{[]byte{}, -2, 443}, false, 443, 0, nil, ErrUnknownPrefix, nil},
+	{"9", &clientPrefix{[]byte{}, -2, 1025}, nil, 1025, 0, nil, ErrBadParams, ErrUnknownPrefix},
+	{"10", &clientPrefix{[]byte{}, -2, 443}, nil, 443, 0, nil, ErrBadParams, nil},
 
 	// Random prefix, resolved by client into another prefix BEFORE calling GetParams. This means
 	// that none of ClientTransport.GetParams, ClientTransport.DstPort, or Transport.GetDstPort are
 	// aware of a PrefixID of -1 (Rand)
-	{"14", &clientPrefix{[]byte{}, -1, 1025}, true, 0, 0, ErrUnknownPrefix, ErrUnknownPrefix, ErrUnknownPrefix},
+	{"11", &clientPrefix{[]byte{}, -1, 1025}, &ptp{RandomizeDstPort: &t, PrefixId: &in1}, 0, 0, ErrUnknownPrefix, ErrUnknownPrefix, ErrUnknownPrefix},
 }
 
 func TestPrefixGetDstPortServer(t *testing.T) {
@@ -205,15 +214,8 @@ func TestPrefixGetDstPortServer(t *testing.T) {
 			continue
 		}
 
-		id := int32(testCase.x.ID())
-		var pp *pb.PrefixTransportParams = nil
-		if id != -10 {
-			pp = &pb.PrefixTransportParams{PrefixId: &id, RandomizeDstPort: &testCase.r}
-
-		}
-
 		// Check server Get destination port
-		serverPort, err := transport.GetDstPort(clv, seed, pp)
+		serverPort, err := transport.GetDstPort(clv, seed, testCase.r)
 		if err != nil {
 			require.ErrorIs(t, err, testCase.se, testCase.d)
 			require.Equal(t, uint16(0), serverPort, testCase.d)
@@ -229,15 +231,13 @@ func TestPrefixGetDstPortClient(t *testing.T) {
 	seed, _ := hex.DecodeString("0000000000000000000000000000000000")
 
 	// Check nil ClientParams
-	ct := &ClientTransport{Prefix: DefaultPrefixes[0], Parameters: nil}
+	ct := &ClientTransport{Prefix: DefaultPrefixes[0], parameters: nil}
 	port, err := ct.GetDstPort(seed)
 	require.Nil(t, err)
 	require.Equal(t, uint16(443), port)
 
 	for _, testCase := range _cases {
-		ct := &ClientTransport{Prefix: testCase.x}
-
-		ct.Parameters = &ClientParams{testCase.r}
+		ct := &ClientTransport{Prefix: testCase.x, parameters: testCase.r}
 
 		// check client get destination.
 		clientPort, err := ct.GetDstPort(seed)
@@ -253,13 +253,14 @@ func TestPrefixGetDstPortClient(t *testing.T) {
 func TestPrefixGetParamsClient(t *testing.T) {
 
 	// Check nil clientParams
-	ct := &ClientTransport{Prefix: DefaultPrefixes[0], Parameters: nil}
+	ct := &ClientTransport{Prefix: DefaultPrefixes[0], parameters: nil}
 	pp, err := ct.GetParams()
 	require.Nil(t, err)
-	require.Equal(t, false, pp.(*pb.PrefixTransportParams).GetRandomizeDstPort())
+	require.NotNil(t, pp)
+	require.False(t, pp.(*pb.PrefixTransportParams).GetRandomizeDstPort())
 
 	for _, testCase := range _cases {
-		ct := &ClientTransport{Prefix: testCase.x, Parameters: &ClientParams{testCase.r}}
+		ct := &ClientTransport{Prefix: testCase.x, parameters: testCase.r}
 
 		// Check Client Param parsing
 		pp, err := ct.GetParams()
@@ -268,7 +269,34 @@ func TestPrefixGetParamsClient(t *testing.T) {
 			require.Nil(t, pp)
 		}
 	}
+}
 
+func TestPrefixSetParamsClient(t *testing.T) {
+	id := int32(-1)
+	params := &pb.PrefixTransportParams{PrefixId: &id}
+
+	ct := &ClientTransport{}
+	err := ct.SetParams(params)
+	require.Nil(t, err)
+	require.NotEqual(t, -1, int(ct.Prefix.ID()))
+	require.Equal(t, ct.Prefix.ID(), PrefixID(ct.parameters.GetPrefixId()))
+
+	id = int32(Min)
+	params = &pb.PrefixTransportParams{PrefixId: &id}
+
+	ct = &ClientTransport{}
+	err = ct.SetParams(params)
+	require.Nil(t, err)
+	require.Equal(t, Min, ct.Prefix.ID())
+	require.Equal(t, Min, PrefixID(ct.parameters.GetPrefixId()))
+	require.False(t, ct.parameters.GetRandomizeDstPort())
+
+	id = int32(-10) // unknown Prefix ID
+	params = &pb.PrefixTransportParams{PrefixId: &id}
+
+	ct = &ClientTransport{}
+	err = ct.SetParams(params)
+	require.ErrorIs(t, err, ErrUnknownPrefix)
 }
 
 func TestClientTransportFromID(t *testing.T) {

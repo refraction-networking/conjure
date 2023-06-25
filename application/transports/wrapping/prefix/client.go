@@ -16,9 +16,9 @@ import (
 // ClientTransport implements the client side transport interface for the Min transport. The
 // significant difference is that there is an instance of this structure per client session, where
 // the station side Transport struct has one instance to be re-used for all sessions.
+//
+// External libraries must set parameters through SetParams using PrefixTransportParams.
 type ClientTransport struct {
-	// Parameters are fields that will be shared with the station in the registration
-	Parameters *ClientParams
 	parameters *pb.PrefixTransportParams
 
 	// // state tracks fields internal to the registrar that survive for the lifetime
@@ -51,12 +51,15 @@ var DefaultPrefixes = map[PrefixID]Prefix{}
 
 // Name returns the human-friendly name of the transport, implementing the Transport interface.
 func (t *ClientTransport) Name() string {
+	if t.Prefix == nil {
+		return "prefix"
+	}
 	return "prefix_" + t.Prefix.ID().Name()
 }
 
 // String returns a string identifier for the Transport for logging (including string formatters)
 func (t *ClientTransport) String() string {
-	return "prefix_" + t.Prefix.ID().Name()
+	return t.Name()
 }
 
 // ID provides an identifier that will be sent to the conjure station during the registration so
@@ -76,29 +79,57 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 		return nil, fmt.Errorf("%w: empty or invalid Prefix provided", ErrBadParams)
 	}
 
-	if t.Parameters == nil {
-		t.Parameters = &ClientParams{false}
-	}
-
 	id := int32(t.Prefix.ID())
+	F := false
 	t.parameters = &pb.PrefixTransportParams{
 		PrefixId:         &id,
-		RandomizeDstPort: &t.Parameters.RandomizeDstPort,
+		RandomizeDstPort: &F,
 	}
 
 	return t.parameters, nil
 }
 
 // SetParams allows the caller to set parameters associated with the transport, returning an
-// error if the provided generic message is not compatible.
+// error if the provided generic message is not compatible or the parameters are otherwise invalid
 func (t *ClientTransport) SetParams(p any) error {
-	params, ok := p.(*pb.PrefixTransportParams)
+	prefixParams, ok := p.(*pb.PrefixTransportParams)
 	if !ok {
 		return ErrBadParams
 	}
-	t.parameters = params
 
-	return nil
+	if prefixParams == nil {
+		return ErrBadParams
+	}
+
+	if prefix, ok := DefaultPrefixes[PrefixID(prefixParams.GetPrefixId())]; ok {
+		t.Prefix = prefix
+		t.parameters = prefixParams
+
+		// clear the prefix if it was set. this is used for RegResponse only.
+		t.parameters.Prefix = []byte{}
+		return nil
+	}
+
+	if prefixParams.GetPrefixId() == int32(Rand) {
+		newPrefix, err := pickRandomPrefix(rand.Reader)
+		if err != nil {
+			return err
+		}
+
+		t.Prefix = newPrefix
+
+		if t.parameters == nil {
+			t.parameters = &pb.PrefixTransportParams{}
+		}
+
+		id := int32(t.Prefix.ID())
+		t.parameters.PrefixId = &id
+		t.parameters.RandomizeDstPort = prefixParams.RandomizeDstPort
+
+		return nil
+	}
+
+	return ErrUnknownPrefix
 }
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
@@ -112,25 +143,31 @@ func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 		return 0, fmt.Errorf("%w: empty or invalid Prefix provided", ErrBadParams)
 	}
 
-	if t.Parameters == nil {
-		t.Parameters = &ClientParams{false}
-	}
-
 	prefixID := t.Prefix.ID()
 
 	if prefixID == Rand {
-		return 0, fmt.Errorf("%w: use FromID() if using Rand prefix", ErrUnknownPrefix)
+		return 0, fmt.Errorf("%w: use SetParams or FromID if using Rand prefix", ErrUnknownPrefix)
 	}
 
-	if t.Parameters.RandomizeDstPort {
+	if t.parameters == nil {
+		p := int32(prefixID)
+		t.parameters = &pb.PrefixTransportParams{PrefixId: &p}
+	}
+
+	if t.parameters.GetRandomizeDstPort() {
 		return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 	}
+
 	return t.Prefix.DstPort(seed), nil
 }
 
 // Build is specific to the Prefix transport, providing a utility function for building the
 // prefix that the client should write to the wire before sending any client bytes.
 func (t *ClientTransport) Build() ([]byte, error) {
+	if t.Prefix == nil {
+		return nil, ErrBadParams
+	}
+
 	// Send hmac(seed, str) bytes to indicate to station (min transport)
 	prefix := t.Prefix.Bytes()
 
