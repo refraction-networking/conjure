@@ -62,7 +62,7 @@ func TestSuccessfulWrap(t *testing.T) {
 
 	var transport Transport
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Obfs4, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4, 0)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4, nil, 0)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -138,7 +138,7 @@ func TestSuccessfulWrapMulti(t *testing.T) {
 
 	// register 5 sessions guaranteeing collisions on phantom IP addresses
 	for _, secret := range sharedSecrets {
-		c2p, sfp, reg = tests.SetupPhantomConnectionsSecret(manager, pb.TransportType_Obfs4, secret, 2, testSubnetPath)
+		c2p, sfp, reg = tests.SetupPhantomConnectionsSecret(manager, pb.TransportType_Obfs4, nil, secret, 2, testSubnetPath)
 	}
 
 	defer c2p.Close()
@@ -190,7 +190,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	var transport Transport
 	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Obfs4, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4, 2)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4, nil, 2)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -212,7 +212,7 @@ func TestTryAgain(t *testing.T) {
 	var transport Transport
 	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Obfs4, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4, 0)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Obfs4, nil, 0)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -292,13 +292,15 @@ func TestTryParamsToDstPort(t *testing.T) {
 		ct := ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &testCase.r}}
 		var transport Transport
 
-		rawParams, err := anypb.New(ct.GetParams())
+		params, err := ct.GetParams()
+		require.Nil(t, err)
+		rawParams, err := anypb.New(params)
 		require.Nil(t, err)
 
-		params, err := transport.ParseParams(clv, rawParams)
+		newParams, err := transport.ParseParams(clv, rawParams)
 		require.Nil(t, err)
 
-		port, err := transport.GetDstPort(clv, seed, params)
+		port, err := transport.GetDstPort(clv, seed, newParams)
 		require.Nil(t, err)
 		require.Equal(t, testCase.p, port)
 	}

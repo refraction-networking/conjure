@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/curve25519"
-	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/internal/tests"
@@ -31,13 +30,16 @@ func TestSuccessfulWrap(t *testing.T) {
 	extra25519.PrivateKeyToCurve25519(&curve25519Private, private)
 	curve25519.ScalarBaseMult(&curve25519Public, &curve25519Private)
 
+	var p int32 = int32(Min)
+	params := &pb.PrefixTransportParams{PrefixId: &p}
+
 	var transport = Transport{
 		TagObfuscator:     transports.CTRObfuscator{},
 		Privkey:           curve25519Private,
 		SupportedPrefixes: defaultPrefixes,
 	}
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, randomizeDstPortMinVersion)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, params, randomizeDstPortMinVersion)
 	defer c2p.Close()
 	defer sfp.Close()
 	require.NotNil(t, reg)
@@ -79,8 +81,11 @@ func TestUnsuccessfulWrap(t *testing.T) {
 		SupportedPrefixes: defaultPrefixes,
 	}
 
+	var p int32 = int32(Min)
+	params := &pb.PrefixTransportParams{PrefixId: &p}
+
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, randomizeDstPortMinVersion)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, params, randomizeDstPortMinVersion)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -108,9 +113,13 @@ func TestTryAgain(t *testing.T) {
 		Privkey:           [32]byte{},
 		SupportedPrefixes: defaultPrefixes,
 	}
+
+	var p int32 = int32(Min)
+	params := &pb.PrefixTransportParams{PrefixId: &p}
+
 	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, randomizeDstPortMinVersion)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, params, randomizeDstPortMinVersion)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -145,52 +154,156 @@ func TestTryAgain(t *testing.T) {
 	}
 }
 
-func TestTryParamsToDstPort(t *testing.T) {
+var _cases = []struct {
+	d  string // description
+	x  Prefix // Prefix interface in ClientTransport.Prefix
+	r  bool   // randomize
+	p  uint16 // client_port (on getDstPort)
+	sp uint16 // server_port (on getDstPort)
+	e  error  // client_error (on getDstPort)
+	se error  // server_error (on getDstPort)
+	ge error  // client GetParams error
+}{
+	// Nil Prefix w/ and w/out randomization
+	{"1", nil, true, 0, 0, ErrBadParams, ErrBadParams, ErrBadParams},
+	{"2", nil, false, 0, 0, ErrBadParams, ErrUnknownPrefix, ErrBadParams},
+
+	// because the Prefix object is defined the client doesn't care that the id isn't in the
+	// set of defaults, because the Prefix can give the dst port.
+	{"3", &clientPrefix{[]byte{}, 22, 1025}, false, 1025, 0, nil, ErrUnknownPrefix, ErrUnknownPrefix},
+	{"9", &clientPrefix{[]byte{}, 22, 1025}, true, 58047, 0, nil, ErrUnknownPrefix, ErrBadParams},
+
+	// Properly working examples
+	{"4", &clientPrefix{[]byte{}, 0, 443}, true, 58047, 58047, nil, nil, nil},
+	{"5", &clientPrefix{[]byte{}, 0, 443}, false, 443, 443, nil, nil, nil},
+
+	// // This will result in a broken connection, valid for both client and server. but unable to
+	// // connect since they will disagree about the expected port. This is not taking into account
+	// // the overrides system which could also cause this, but will be valid and applied properly
+	// // so as not to cause something like this from happening.
+	{"6", &clientPrefix{[]byte{}, 0, 1025}, false, 1025, 443, nil, nil, nil},
+	{"7", &clientPrefix{[]byte{}, 1, 1025}, false, 1025, 80, nil, nil, ErrBadParams},
+
+	// Params nil. Prefix not nil
+	{"10", &clientPrefix{[]byte{}, -2, 1025}, false, 1025, 0, nil, ErrUnknownPrefix, ErrUnknownPrefix},
+	{"11", &clientPrefix{[]byte{}, -2, 443}, false, 443, 0, nil, ErrUnknownPrefix, nil},
+
+	// Random prefix, resolved by client into another prefix BEFORE calling GetParams. This means
+	// that none of ClientTransport.GetParams, ClientTransport.DstPort, or Transport.GetDstPort are
+	// aware of a PrefixID of -1 (Rand)
+	{"14", &clientPrefix{[]byte{}, -1, 1025}, true, 0, 0, ErrUnknownPrefix, ErrUnknownPrefix, ErrUnknownPrefix},
+}
+
+func TestPrefixGetDstPortServer(t *testing.T) {
 	clv := randomizeDstPortMinVersion
 	seed, _ := hex.DecodeString("0000000000000000000000000000000000")
-
-	cases := []struct {
-		r bool
-		p uint16
-	}{{true, 58047}, {false, 443}}
-
 	transport, err := Default([32]byte{})
 	require.Nil(t, err)
 
-	// for id, _ := range transport.SupportedPrefixes {
-	// 	t.Log(id.Name())
-	// }
+	for _, testCase := range _cases {
+		if testCase.x == nil {
+			continue
+		}
 
-	for _, testCase := range cases {
-		ct := ClientTransport{Parameters: &pb.PrefixTransportParams{RandomizeDstPort: &testCase.r}}
+		id := int32(testCase.x.ID())
+		var pp *pb.PrefixTransportParams = nil
+		if id != -10 {
+			pp = &pb.PrefixTransportParams{PrefixId: &id, RandomizeDstPort: &testCase.r}
 
-		rawParams, err := anypb.New(ct.GetParams())
-		require.Nil(t, err)
+		}
 
-		params, err := transport.ParseParams(clv, rawParams)
-		require.Nil(t, err)
+		// Check server Get destination port
+		serverPort, err := transport.GetDstPort(clv, seed, pp)
+		if err != nil {
+			require.ErrorIs(t, err, testCase.se, testCase.d)
+			require.Equal(t, uint16(0), serverPort, testCase.d)
+		} else {
+			require.Nil(t, err, testCase.d)
+			require.Equal(t, testCase.sp, serverPort, testCase.d)
+		}
 
-		port, err := transport.GetDstPort(clv, seed, params)
-		require.Nil(t, err)
-		require.Equal(t, testCase.p, port)
 	}
 }
 
-func TestTryParseParamsBadPrefixID(t *testing.T) {
-	clv := randomizeDstPortMinVersion
+func TestPrefixGetDstPortClient(t *testing.T) {
+	seed, _ := hex.DecodeString("0000000000000000000000000000000000")
 
-	// Dont Add anything to supported Transports
-	transport, err := New([32]byte{})
+	// Check nil ClientParams
+	ct := &ClientTransport{Prefix: DefaultPrefixes[0], Parameters: nil}
+	port, err := ct.GetDstPort(seed)
 	require.Nil(t, err)
+	require.Equal(t, uint16(443), port)
 
-	ct := ClientTransport{Parameters: &pb.PrefixTransportParams{}}
+	for _, testCase := range _cases {
+		ct := &ClientTransport{Prefix: testCase.x}
 
-	rawParams, err := anypb.New(ct.GetParams())
+		ct.Parameters = &ClientParams{testCase.r}
+
+		// check client get destination.
+		clientPort, err := ct.GetDstPort(seed)
+		if testCase.e != nil {
+			require.ErrorIs(t, err, testCase.e, testCase.d)
+		} else {
+			require.Nil(t, err, testCase.d)
+		}
+		require.Equal(t, testCase.p, clientPort, testCase.d)
+	}
+}
+
+func TestPrefixGetParamsClient(t *testing.T) {
+
+	// Check nil clientParams
+	ct := &ClientTransport{Prefix: DefaultPrefixes[0], Parameters: nil}
+	pp, err := ct.GetParams()
 	require.Nil(t, err)
+	require.Equal(t, false, pp.(*pb.PrefixTransportParams).GetRandomizeDstPort())
 
-	// Any transport Id will be unknown
-	_, err = transport.ParseParams(clv, rawParams)
+	for _, testCase := range _cases {
+		ct := &ClientTransport{Prefix: testCase.x, Parameters: &ClientParams{testCase.r}}
+
+		// Check Client Param parsing
+		pp, err := ct.GetParams()
+		if err != nil {
+			require.ErrorIs(t, err, testCase.ge, testCase.d)
+			require.Nil(t, pp)
+		}
+	}
+
+}
+
+func TestClientTransportFromID(t *testing.T) {
+	// DefaultPrefixes provides the prefixes supported by default for use when by the client.
+	DefaultPrefixes = make(map[PrefixID]Prefix)
+
+	_, err := TryFromID(Min)
 	require.ErrorIs(t, err, ErrUnknownPrefix)
+	_, err = TryFromID(Rand)
+	require.ErrorIs(t, err, ErrUnknownPrefix)
+
+	applyDefaultPrefixes()
+
+	_, err = TryFromID(-2)
+	require.ErrorIs(t, err, ErrUnknownPrefix)
+
+	_, err = TryFromID(PrefixID((len(defaultPrefixes) + 10)))
+	require.ErrorIs(t, err, ErrUnknownPrefix)
+
+	_, err = TryFromID(Rand)
+	require.Nil(t, err)
+
+	p, err := TryFromID(Min)
+	require.Nil(t, err)
+	require.Equal(t, &clientPrefix{defaultPrefixes[0].StaticMatch, 0, 443}, p)
+
+	p, err = TryFromID(OpenSSH2)
+	require.Nil(t, err)
+	require.Equal(t, &clientPrefix{defaultPrefixes[OpenSSH2].StaticMatch, OpenSSH2, 22}, p)
+
+	b, _ := hex.DecodeString("010000")
+	r := bytes.NewReader(b)
+	p, err = pickRandomPrefix(r)
+	require.Nil(t, err)
+	require.Equal(t, &clientPrefix{defaultPrefixes[1].StaticMatch, 1, 80}, p)
 }
 
 /*

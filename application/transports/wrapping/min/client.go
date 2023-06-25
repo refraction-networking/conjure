@@ -39,8 +39,8 @@ func (*ClientTransport) ID() pb.TransportType {
 
 // GetParams returns a generic protobuf with any parameters from both the registration and the
 // transport.
-func (t *ClientTransport) GetParams() proto.Message {
-	return t.Parameters
+func (t *ClientTransport) GetParams() (proto.Message, error) {
+	return t.Parameters, nil
 }
 
 // SetParams allows the caller to set parameters associated with the transport, returning an
@@ -56,7 +56,7 @@ func (t *ClientTransport) SetParams(p any) error {
 }
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
-func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
+func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 	if t.Parameters == nil || !t.Parameters.GetRandomizeDstPort() {
 		return 443, nil
 	}

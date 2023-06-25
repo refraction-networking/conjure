@@ -24,7 +24,7 @@ func TestSuccessfulWrap(t *testing.T) {
 
 	var transport Transport
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Min, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min, 0)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min, nil, 0)
 	defer c2p.Close()
 	defer sfp.Close()
 	require.NotNil(t, reg)
@@ -52,7 +52,7 @@ func TestSuccessfulWrap(t *testing.T) {
 func TestUnsuccessfulWrap(t *testing.T) {
 	var transport Transport
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Min, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min, 0)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min, nil, 0)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -76,7 +76,7 @@ func TestTryAgain(t *testing.T) {
 	var transport Transport
 	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Min, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min, 0)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Min, nil, 0)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -119,13 +119,15 @@ func TestTryParamsToDstPort(t *testing.T) {
 		ct := ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &testCase.r}}
 		var transport Transport
 
-		rawParams, err := anypb.New(ct.GetParams())
+		params, err := ct.GetParams()
+		require.Nil(t, err)
+		rawParams, err := anypb.New(params)
 		require.Nil(t, err)
 
-		params, err := transport.ParseParams(clv, rawParams)
+		newParams, err := transport.ParseParams(clv, rawParams)
 		require.Nil(t, err)
 
-		port, err := transport.GetDstPort(clv, seed, params)
+		port, err := transport.GetDstPort(clv, seed, newParams)
 		require.Nil(t, err)
 		require.Equal(t, testCase.p, port)
 	}
