@@ -79,11 +79,13 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 		return nil, fmt.Errorf("%w: empty or invalid Prefix provided", ErrBadParams)
 	}
 
-	id := int32(t.Prefix.ID())
-	F := false
-	t.parameters = &pb.PrefixTransportParams{
-		PrefixId:         &id,
-		RandomizeDstPort: &F,
+	if t.parameters == nil {
+		id := int32(t.Prefix.ID())
+		F := false
+		t.parameters = &pb.PrefixTransportParams{
+			PrefixId:         &id,
+			RandomizeDstPort: &F,
+		}
 	}
 
 	return t.parameters, nil
