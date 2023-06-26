@@ -4,12 +4,11 @@ Description=Conjure Registration Server
 [Service]
 Type=simple
 
-WorkingDirectory=/opt/conjure/cmd/registration-server/
+WorkingDirectory=/opt/conjure/
 
 SyslogIdentifier=conjure
-EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
 
-ExecStart=/opt/conjure/cmd/registration-server/registration-server --config /opt/conjure/cmd/registration-server/config.toml
+ExecStart=/bin/bash /opt/conjure/scripts/start_registrar.sh
 
 # send SIGHUP to the registration server process
 ExecReload=/bin/kill -HUP $MAINPID

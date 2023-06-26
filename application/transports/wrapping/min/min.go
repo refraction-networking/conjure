@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"net"
 
-	dd "github.com/refraction-networking/conjure/application/lib"
+	cj "github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/application/transports"
+	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -37,8 +38,8 @@ func (Transport) LogPrefix() string { return "MIN" }
 // GetIdentifier takes in a registration and returns an identifier for it. This
 // identifier should be unique for each registration on a given phantom;
 // registrations on different phantoms can have the same identifier.
-func (Transport) GetIdentifier(d *dd.DecoyRegistration) string {
-	return string(d.Keys.ConjureHMAC("MinTrasportHMACString"))
+func (Transport) GetIdentifier(d *cj.DecoyRegistration) string {
+	return string(core.ConjureHMAC(d.Keys.SharedSecret, "MinTrasportHMACString"))
 }
 
 // GetProto returns the next layer protocol that the transport uses. Implements
@@ -68,6 +69,12 @@ func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 	return m, err
 }
 
+// ParamStrings returns an array of tag string that will be added to tunStats when a proxy
+// session is closed. For now, no params of interest.
+func (t Transport) ParamStrings(p any) []string {
+	return nil
+}
+
 // WrapConnection attempts to wrap the given connection in the transport. It
 // takes the information gathered so far on the connection in data, attempts to
 // identify itself, and if it positively identifies itself wraps the connection
@@ -75,7 +82,7 @@ func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 //
 // If the returned error is nil or non-nil and non-{ transports.ErrTryAgain,
 // transports.ErrNotTransport }, the caller may no longer use data or conn.
-func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, net.Conn, error) {
+func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *cj.RegistrationManager) (*cj.DecoyRegistration, net.Conn, error) {
 	if data.Len() < minTagLength {
 		return nil, nil, transports.ErrTryAgain
 	}

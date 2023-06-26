@@ -47,7 +47,6 @@ func TestConcurrentProxy(t *testing.T) {
 	config := ZMQConfig{
 		SocketName:        "test-proxying",
 		ConnectSockets:    []socketConfig{},
-		PrivateKeyPath:    keyFilename,
 		HeartbeatInterval: 30000,
 		HeartbeatTimeout:  30000,
 	}

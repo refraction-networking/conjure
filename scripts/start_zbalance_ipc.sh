@@ -34,12 +34,15 @@ check_ZC_driver() {
 	echo ''
 	sleep 10
 	exit 1;
-	fi	
+	fi
 }
 
 # Run zbalance. Needed for zero-copy mode Conjure
 # See README.md
+# load config. will access config in /var/lib/conjure for overrides
+set -a
 source /opt/conjure/sysconfig/conjure.conf
+set +a
 
 # CJ_IFACE could be a CSV list of interfaces.
 # Pull them apart to ensure each gets zc: prefix
@@ -53,7 +56,7 @@ do
         ifcelem=${ifc}
     fi
 
-    check_ZC_driver ${ifcelem} 
+    check_ZC_driver ${ifcelem}
 
     if [ $didfirst -ne 0 ]; then
         ifcarg="$ifcarg,$ifcelem"

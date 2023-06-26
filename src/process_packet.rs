@@ -382,7 +382,7 @@ mod tests {
 
     #[test]
     fn test_filter_station_traffic() {
-        env::set_var("CJ_STATION_CONFIG", "./application/config.toml");
+        env::set_var("CJ_STATION_CONFIG", "./application/app_config.toml");
 
         // --
         let conf_path = env::var("CJ_STATION_CONFIG").unwrap();

@@ -9,15 +9,13 @@ Type=simple
 WorkingDirectory=/opt/conjure/
 
 SyslogIdentifier=zbalance
-EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
 
-# makes if binary doesn't exist
-#ExecStartPre=/usr/bin/make zbalance
+ExecStartPre=/opt/conjure/on-reboot.sh
 
 ExecStart=/bin/bash /opt/conjure/scripts/start_zbalance_ipc.sh
 
-# on stop processes will get SIGTERM, and after 10 secs - SIGKILL (default 90)
-TimeoutStopSec=10
+# on stop processes will get SIGTERM, and after 20 secs - SIGKILL (default 90)
+TimeoutStopSec=20
 
 [Install]
 WantedBy=multi-user.target
