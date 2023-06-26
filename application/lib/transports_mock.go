@@ -56,6 +56,12 @@ func (*mockTransport) ParseParams(libVersion uint, data *anypb.Any) (any, error)
 	return m, err
 }
 
+// ParamStrings returns an array of tag string that will be added to tunStats when a proxy
+// session is closed. For now, no params of interest.
+func (m *mockTransport) ParamStrings(p any) []string {
+	return nil
+}
+
 // GetDstPort Given the library version, a seed, and a generic object
 // containing parameters the transport should be able to return the
 // destination port that a clients phantom connection will attempt to reach

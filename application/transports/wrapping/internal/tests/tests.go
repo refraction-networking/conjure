@@ -9,6 +9,8 @@ import (
 	dd "github.com/refraction-networking/conjure/application/lib"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type Transport struct {
@@ -20,13 +22,14 @@ var SharedSecret = []byte(`6a328b8ec2024dd92dd64332164cc0425ddbde40cb7b81e055bf7
 
 // SetupPhantomConnections registers one session with the provided transport and
 // registration manager using a pre-determined kay and phantom subnet file.
-func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.TransportType, libver uint) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
+func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.TransportType, params protoreflect.ProtoMessage, libver uint) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
 	cwd, _ := os.Getwd()
 	testSubnetPath := cwd + "/../internal/tests/phantom_subnets.toml"
-	return SetupPhantomConnectionsSecret(manager, transport, SharedSecret, libver, testSubnetPath)
+
+	return SetupPhantomConnectionsSecret(manager, transport, params, SharedSecret, libver, testSubnetPath)
 }
 
-func SetupPhantomConnectionsSecret(manager *dd.RegistrationManager, transport pb.TransportType, sharedSecret []byte, libver uint, testSubnetPath string) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
+func SetupPhantomConnectionsSecret(manager *dd.RegistrationManager, transport pb.TransportType, params protoreflect.ProtoMessage, sharedSecret []byte, libver uint, testSubnetPath string) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	phantom := bufconn.Listen(65535)
@@ -66,6 +69,14 @@ func SetupPhantomConnectionsSecret(manager *dd.RegistrationManager, transport pb
 		CovertAddress:       &covert,
 		DecoyListGeneration: &gen,
 	}
+	if params != nil {
+		p, err := anypb.New(params)
+		if err != nil {
+			log.Fatalln("failed to make params", err)
+		}
+		c2s.TransportParams = p
+	}
+
 	reg, err = manager.NewRegistration(c2s, &keys, false, &regType)
 	if err != nil {
 		log.Fatalln("failed to create new Registration:", err)

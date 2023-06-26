@@ -69,6 +69,12 @@ func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 	return m, err
 }
 
+// ParamStrings returns an array of tag string that will be added to tunStats when a proxy
+// session is closed. For now, no params of interest.
+func (t Transport) ParamStrings(p any) []string {
+	return nil
+}
+
 // WrapConnection attempts to wrap the given connection in the transport. It
 // takes the information gathered so far on the connection in data, attempts to
 // identify itself, and if it positively identifies itself wraps the connection

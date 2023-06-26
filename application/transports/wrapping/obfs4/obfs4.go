@@ -65,6 +65,12 @@ func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 	return m, err
 }
 
+// ParamStrings returns an array of tag string that will be added to tunStats when a proxy
+// session is closed. For now, no params of interest.
+func (t Transport) ParamStrings(p any) []string {
+	return nil
+}
+
 // WrapConnection implements the station Transport interface
 func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, regManager *cj.RegistrationManager) (*cj.DecoyRegistration, net.Conn, error) {
 	if data.Len() < ClientMinHandshakeLength {

@@ -10,7 +10,6 @@ import (
 	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -59,6 +58,10 @@ type prefix struct {
 
 	// Minimum client library version that supports this prefix
 	MinVer uint
+
+	// Default DST Port for this prefix. We are not bound by client_lib_version (yet) so we can set the
+	// default destination port for each prefix individually
+	DefaultDstPort uint16
 }
 
 // PrefixID provide an integer Identifier for each individual prefixes allowing clients to indicate
@@ -66,7 +69,8 @@ type prefix struct {
 type PrefixID int
 
 const (
-	Min PrefixID = iota
+	Rand PrefixID = -1 + iota
+	Min
 	GetLong
 	PostLong
 	HTTPResp
@@ -76,12 +80,16 @@ const (
 	TLSAlertFatal
 	DNSOverTCP
 	OpenSSH2
-	// GetShort
+	// GetShortBase64
 )
 
 var (
 	// ErrUnknownPrefix indicates that the provided Prefix ID is unknown to the transport object.
 	ErrUnknownPrefix = errors.New("unknown / unsupported prefix")
+
+	// ErrBadParams indicates that the parameters provided to a call on the server side do not make
+	// sense in the context that they are provided and the registration will be ignored.
+	ErrBadParams = errors.New("bad parameters provided")
 )
 
 // Name returns the human-friendly name of the prefix.
@@ -89,7 +97,6 @@ func (id PrefixID) Name() string {
 	switch id {
 	case Min:
 		return "Min"
-
 	case GetLong:
 		return "GetLong"
 	case PostLong:
@@ -118,28 +125,28 @@ func (id PrefixID) Name() string {
 // defaultPrefixes provides the prefixes supported by default for use when
 // initializing the prefix transport.
 var defaultPrefixes = map[PrefixID]prefix{
+	//Min - Empty prefix
+	Min: {[]byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion, 443},
+	// HTTP GET
+	GetLong: {[]byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion, 80},
+	// HTTP POST
+	PostLong: {[]byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion, 80},
+	// HTTP Response
+	HTTPResp: {[]byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion, 80},
+	// TLS Client Hello
+	TLSClientHello: {[]byte("\x16\x03\x01\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 443},
+	// TLS Server Hello
+	TLSServerHello: {[]byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion, 443},
+	// TLS Alert Warning
+	TLSAlertWarning: {[]byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443},
+	// TLS Alert Fatal
+	TLSAlertFatal: {[]byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443},
+	// DNS over TCP
+	DNSOverTCP: {[]byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 53},
+	// SSH-2.0-OpenSSH_8.9p1
+	OpenSSH2: {[]byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion, 22},
 	// // HTTP GET base64 in url min tag length 88 because 64 bytes base64 encoded should be length 88
 	// GetShort: {base64TagDecode, []byte("GET /"), 5, 5 + 88, 5 + 88, randomizeDstPortMinVersion},
-	// HTTP GET
-	GetLong: {[]byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion},
-	// HTTP POST
-	PostLong: {[]byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion},
-	// HTTP Response
-	HTTPResp: {[]byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion},
-	// TLS Client Hello
-	TLSClientHello: {[]byte("\x16\x03\x01\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion},
-	// TLS Server Hello
-	TLSServerHello: {[]byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion},
-	// TLS Alert Warning
-	TLSAlertWarning: {[]byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion},
-	// TLS Alert Fatal
-	TLSAlertFatal: {[]byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion},
-	// DNS over TCP
-	DNSOverTCP: {[]byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion},
-	// SSH-2.0-OpenSSH_8.9p1
-	OpenSSH2: {[]byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion},
-	//Min - Empty prefix
-	Min: {[]byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion},
 }
 
 // Transport provides a struct implementing the Transport, WrappingTransport,
@@ -171,24 +178,20 @@ func (Transport) GetProto() pb.IPProto {
 	return pb.IPProto_Tcp
 }
 
-// ParseParams gives the specific transport an option to parse a generic object
-// into parameters provided by the client during registration.
+// ParseParams gives the specific transport an option to parse a generic object into parameters
+// provided by the client during registration. This Transport was written after RandomizeDstPort was
+// added, so it should not be usable by clients who don't support destination port randomization.
 func (t Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 	if data == nil {
 		return nil, nil
 	}
 
-	// For backwards compatibility we create a generic transport params object
-	// for transports that existed before the transportParams fields existed.
 	if libVersion < randomizeDstPortMinVersion {
-		f := false
-		return &pb.PrefixTransportParams{
-			RandomizeDstPort: &f,
-		}, nil
+		return nil, fmt.Errorf("client couldn't support this transport")
 	}
 
 	var m = &pb.PrefixTransportParams{}
-	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
+	err := transports.UnmarshalAnypbTo(data, m)
 
 	// Check if this is a prefix that we know how to parse, if not, drop the registration because
 	// we will be unable to pick up.
@@ -199,29 +202,47 @@ func (t Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 	return m, err
 }
 
+// ParamStrings returns an array of tag string that will be added to tunStats when a proxy session
+// is closed.
+func (t Transport) ParamStrings(p any) []string {
+	params, ok := p.(*pb.PrefixTransportParams)
+	if !ok {
+		return nil
+	}
+
+	out := []string{PrefixID(params.GetPrefixId()).Name()}
+
+	return out
+}
+
 // GetDstPort Given the library version, a seed, and a generic object
 // containing parameters the transport should be able to return the
 // destination port that a clients phantom connection will attempt to reach
-func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, error) {
+func (t Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, error) {
 
 	if libVersion < randomizeDstPortMinVersion {
-		return 443, nil
+		return 0, fmt.Errorf("client couldn't support this transport")
 	}
-
-	if params == nil {
-		return 443, nil
-	}
-
 	parameters, ok := params.(*pb.PrefixTransportParams)
 	if !ok {
-		return 0, fmt.Errorf("bad parameters provided")
+		return 0, ErrBadParams
+	}
+
+	if parameters == nil {
+		return 0, ErrBadParams
+	}
+
+	prefix := parameters.GetPrefixId()
+	p, ok := t.SupportedPrefixes[PrefixID(prefix)]
+	if !ok {
+		return 0, ErrUnknownPrefix
 	}
 
 	if parameters.GetRandomizeDstPort() {
 		return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 	}
 
-	return 443, nil
+	return p.DefaultDstPort, nil
 }
 
 // WrapConnection attempts to wrap the given connection in the transport. It
@@ -349,12 +370,16 @@ func tryParsePrefixes(filepath string) (map[PrefixID]prefix, error) {
 	return nil, nil
 }
 
-func init() {
+func applyDefaultPrefixes() {
 	// if at any point we need to do init on the prefixes (i.e compiling regular expressions) it
 	// should happen here.
 	for ID, p := range defaultPrefixes {
-		DefaultPrefixes = append(DefaultPrefixes, Prefix{p.StaticMatch, ID})
+		DefaultPrefixes[ID] = &clientPrefix{p.StaticMatch, ID, p.DefaultDstPort}
 	}
+}
+
+func init() {
+	applyDefaultPrefixes()
 }
 
 func min(a, b int) int {
