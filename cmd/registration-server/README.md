@@ -13,11 +13,17 @@ cd cmd/registration-server
 make
 ```
 
+## Installing bin files
+
+```sh
+cp -r conjure /opt/
+mkdir /opt/conjure/bin
+cp /opt/conjure/cmd/registration-server/registration-server /opt/conjure/bin/
+```
 
 ## Config files in /var/lib/conjure
 
 ```sh
-cp -r conjure /opt/
 mkdir /var/lib/conjure/
 cp conjure/sysconfig/conjure.conf /var/lib/conjure/conjure.conf
 cp conjure/cmd/registration-server/reg_config.toml /var/lib/conjure/reg_config.toml
@@ -71,7 +77,25 @@ registration.refraction.network {
 }
 ```
 
+```sh
+sudo systemctl reload caddy
+```
 
-### DNS registrar
 
-TODO
+## DNS registrar
+
+To make the DNS registrar work, we need to listen on :53. Ubuntu normally has resolvd listening there,
+so we can disable it:
+
+```sh
+sudo systemctl disable systemd-resolved.service
+sudo systemctl stop systemd-resolved.service
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
+```
+
+
+## Running
+
+```sh
+sudo systemctl start conjure-reg
+```
