@@ -10,7 +10,7 @@ WorkingDirectory=/opt/conjure/
 
 SyslogIdentifier=zbalance
 
-ExecStartPre=/opt/conjure/bin/on-reboot.sh
+ExecStartPre=/opt/conjure/on-reboot.sh
 
 ExecStart=/bin/bash /opt/conjure/scripts/start_zbalance_ipc.sh
 
