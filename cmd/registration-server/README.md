@@ -59,6 +59,19 @@ pubkey = "ZmZ7vr]i&g+.F$JfL5beQZI*kO)rwj9b?*!7woS]"
 subscription = ""
 ```
 
+Setup Caddy:
+```
+registration.refraction.network {
+    route /api/* {
+        uri strip_prefix /api
+        reverse_proxy localhost:8080 {
+            trusted_proxies 0.0.0.0/0
+        }
+    }
+}
+```
+
+
 ### DNS registrar
 
 TODO
