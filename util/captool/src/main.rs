@@ -140,7 +140,11 @@ struct Args {
 
     /// Path to the output PCAP_NG file.
     #[arg(short, long, default_value_t = String::from("./out.pcapng.gz"))]
-    out: String,
+    out_pcap: String,
+
+    /// Path to the output stats CSV file.
+    #[arg(long, default_value_t = String::from("./stats_out.csv"))]
+    out_csv: String,
 
     /// Path to the Geolite ASN database (.mmdb) file
     #[arg(long, default_value_t = String::from(ASNDB_PATH))]
@@ -172,7 +176,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let flag = Arc::new(AtomicBool::new(false));
 
     let toml_conf = toml::to_string(&args).unwrap();
-    let out_path = Path::new(&args.out);
+    let out_path = Path::new(&args.out_pcap);
     let config_path = out_path.with_file_name(format!(
         "{}.cfg",
         out_path
@@ -222,7 +226,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let limiter = if unlimited { None } else { Some(limit_state) };
     let target_subnets = parse_targets(args.t);
-    let exclude_subnets = parse_excludes(args.ex);
+    let exclude_subnets = match args.ex {
+        Some(ex) => {parse_targets(ex)}
+        None => { vec![] }
+    };
     if target_subnets.is_empty() {
         error!("no valid target subnets provided{HELP}");
         Err("no valid target subnets provided")?;
@@ -238,9 +245,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         args.v4,
         args.v6,
         exclude_subnets,
+        args.out_csv,
     )?));
 
-    let file = File::create(args.out)?;
+    let file = File::create(args.out_pcap)?;
     let gzip_file = GzEncoder::new(file, Compression::default());
     let mut writer = PcapNgWriter::new(gzip_file).expect("failed to build writer");
     let ip4_iface = InterfaceDescriptionBlock {
@@ -305,15 +313,15 @@ fn read_interfaces<W>(
     let ic_display = Arc::clone(&interfaces_complete);
     pool.execute(move || loop {
         if t_display.load(Ordering::Relaxed) {
-            h_display.lock().unwrap().print_stats();
+            let _ = h_display.lock().unwrap().output_csv();
             break;
         }
         if ic_display.load(Ordering::Relaxed) >= n_interfaces as u32 {
-            h_display.lock().unwrap().print_stats();
+            let _ = h_display.lock().unwrap().output_csv();
             break;
         }
-        h_display.lock().unwrap().print_stats();
-        thread::sleep(Duration::from_secs(10));
+        // h_display.lock().unwrap().print_stats();
+        thread::sleep(Duration::from_secs(5));
     });
 
     for (n, iface) in interfaces.split(',').enumerate() {
@@ -395,15 +403,15 @@ fn read_pcap_dir<W>(
 
     pool.execute(move || loop {
         if t_display.load(Ordering::Relaxed) {
-            h_display.lock().unwrap().print_stats();
+            let _ = h_display.lock().unwrap().output_csv();
             break;
         }
         if fc_display.load(Ordering::Relaxed) >= total_files as u32 {
-            h_display.lock().unwrap().print_stats();
+            let _ = h_display.lock().unwrap().output_csv();
             break;
         }
-        h_display.lock().unwrap().print_stats();
-        thread::sleep(Duration::from_secs(10));
+        // h_display.lock().unwrap().print_stats();
+        thread::sleep(Duration::from_secs(5));
     });
 
     // refresh the path list and launch jobs
@@ -596,30 +604,6 @@ fn parse_targets(input: String) -> Vec<IpNet> {
         }
     }
     out
-}
-
-fn parse_excludes(inp: Option<String>) -> Vec<IpNet> {
-    // vec!["192.122.190.0/24".parse()?]
-    match {inp} {
-        Some(input) => {if input.is_empty() {
-            return vec![];
-        }
-    
-        let mut out = vec![];
-        for s in input.split(',') {
-            if let Ok(subnet) = s.trim().parse() {
-                out.push(subnet);
-                debug!("adding target: {subnet}");
-            } else {
-                warn!("failed to parse subnet: \"{s}\" continuing");
-            }
-        }
-        out
-    }
-        None => {
-            return vec![];
-        }
-    }
 }
 
 fn parse_asn_list(input: Option<String>) -> Vec<u32> {

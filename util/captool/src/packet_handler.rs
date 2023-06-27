@@ -7,6 +7,7 @@ use std::error::Error;
 use std::fmt;
 use std::net::IpAddr;
 use std::cmp::{min, max};
+use csv::Writer;
 
 use crate::ip::IpPacket;
 use ipnet::IpNet;
@@ -39,6 +40,7 @@ pub struct PacketHandler {
     pub exclude_subnets: Vec<IpNet>,
 
     pub stats: HashMap<Flow, FlowStats>,
+    pub stats_output_path: String,
 
     pub seed: [u8; 32],
 }
@@ -71,6 +73,11 @@ impl Flow {
             },
         }
     }
+
+    // pub fn to_string(&self) -> String {
+    //     let re = String(self.src_ip) + ":" + self.src_port + " -> " +self.dst_ip + ":" + self.dst_port;
+    //     return re;
+    // }
 }
 
 impl fmt::Display for Flow {
@@ -129,41 +136,41 @@ impl FlowStats {
 
 }
 
-impl fmt::Display for FlowStats {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} packets in flow\n", self.packet_count);
-        match &self.ipids {
-            Some(i) => { 
-                match i.min_offset{
-                    Some(o) => {write!(f, "min IPID change : {} | ", o); }
-                    None => {write!(f, "min IPID change : NONE | ");}
-                }
-                match i.max_offset{
-                    Some(o) => {write!(f, "max IPID change : {}\n", o); }
-                    None => {write!(f, "max IPID change : NONE\n");}
-                } 
-            }
-            None=>{}
-        }
-        match &self.ttl_range {
-            Some(t) =>{ 
-                write!(f, "min TTL : {} | max TTL: {}", t.min_ttl, t.max_ttl);
-            }
-            None => {}
-        }
-        match self.flow_label {
-            Some(fl) => {  write!(f, "flow label: {}\n", fl); }
-            None => {}
-        }
-        match &self.hop_limit_range {
-            Some(t) =>{ 
-                write!(f, "min Hop Limit : {} | max Hop Limit: {}", t.min_hop, t.max_hop);
-            }
-            None => {}
-        }
-        write!(f, " ")
-    }
-}
+// impl fmt::Display for FlowStats {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "{} packets in flow\n", self.packet_count);
+//         match &self.ipids {
+//             Some(i) => { 
+//                 match i.min_offset{
+//                     Some(o) => {write!(f, "min IPID change : {} | ", o); }
+//                     None => {write!(f, "min IPID change : NONE | ");}
+//                 }
+//                 match i.max_offset{
+//                     Some(o) => {write!(f, "max IPID change : {}\n", o); }
+//                     None => {write!(f, "max IPID change : NONE\n");}
+//                 } 
+//             }
+//             None=>{}
+//         }
+//         match &self.ttl_range {
+//             Some(t) =>{ 
+//                 write!(f, "min TTL : {} | max TTL: {}", t.min_ttl, t.max_ttl);
+//             }
+//             None => {}
+//         }
+//         match self.flow_label {
+//             Some(fl) => {  write!(f, "flow label: {}\n", fl); }
+//             None => {}
+//         }
+//         match &self.hop_limit_range {
+//             Some(t) =>{ 
+//                 write!(f, "min Hop Limit : {} | max Hop Limit: {}", t.min_hop, t.max_hop);
+//             }
+//             None => {}
+//         }
+//         write!(f, " ")
+//     }
+// }
 
 pub struct IpidStats {
     pub curr_ipid: u16,
@@ -349,6 +356,7 @@ impl PacketHandler {
         v4_only: bool,
         v6_only: bool,
         exclude_subnets: Vec<IpNet>,
+        stats_output_path: String
     ) -> Result<Self, Box<dyn Error>> {
         let mut p = PacketHandler {
             asn_reader: maxminddb::Reader::open_readfile(String::from(asn_path))?,
@@ -362,6 +370,7 @@ impl PacketHandler {
             v6_only,
             exclude_subnets,
             stats: HashMap::new(),
+            stats_output_path,
         };
         OsRng.fill_bytes(&mut p.seed);
         Ok(p)
@@ -493,14 +502,56 @@ impl PacketHandler {
         Ok(country)
     }
 
-    pub fn print_stats(&self){
-        for (fl, flst) in self.stats.iter() {
-            println!("\n{}\n{}\n-", fl, flst);
-        }
+    // pub fn print_stats(&self){
+    //     for (fl, flst) in self.stats.iter() {
+    //         // println!("\n{}\n{}\n-", fl, flst);
+    //     }
 
+    // }
+
+    pub fn output_csv(&self) -> Result<(), Box<dyn Error>>{
+        let mut wtr = Writer::from_path(self.stats_output_path.clone())?;
+
+        // write headers
+        wtr.write_record(&["flow_key", "packet_count", "min_ipid_delta", "max_ipid_delta", "min_ttl", "max_ttl", "flow_label", "min_hop_limit", "max_hop_limit"])?;
+
+        // write stats object
+        for (fl, flst) in self.stats.iter(){
+
+            // v4
+            let mut to_write = vec![format!("{}:{}->{}:{}", fl.src_ip,fl.src_port,fl.dst_ip, fl.dst_port), format!("{}",flst.packet_count)];
+            match &flst.ipids {
+                Some(i) => { 
+                    match i.min_offset {
+                        Some(mo) => {to_write.push(format!("{}",mo));}
+                        None => {to_write.push("NaN".to_string());}
+                    }
+                    match i.max_offset {
+                        Some(mo) => {to_write.push(format!("{}",mo));}
+                        None => {to_write.push("NaN".to_string());}
+                    }
+                }
+                None => { to_write.push("NaN".to_string()); to_write.push("NaN".to_string());}
+            }
+            match &flst.ttl_range {
+                Some(t) => { to_write.push(format!("{}",t.min_ttl)); to_write.push(format!("{}",t.max_ttl));}
+                None => { to_write.push("NaN".to_string()); to_write.push("NaN".to_string());}
+            }
+
+            // v6
+            match flst.flow_label {
+                Some(lab) => { to_write.push(format!("{}",lab));}
+                None => { to_write.push("NaN".to_string());}
+            }
+            match &flst.hop_limit_range {
+                Some(h) => { to_write.push(format!("{}",h.min_hop)); to_write.push(format!("{}",h.max_hop));}
+                None => { to_write.push("NaN".to_string()); to_write.push("NaN".to_string());}
+            }
+        let _ = wtr.write_record(to_write);
+        }
+        Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {
