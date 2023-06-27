@@ -388,10 +388,7 @@ func TestRegProcessBdReq(t *testing.T) {
 		regOverrides:  nil,
 	}
 
-	defaultPrefix, err := prefix.Default([32]byte{})
-	require.Nil(t, err)
-
-	err = r.AddTransport(pb.TransportType_Prefix, defaultPrefix)
+	err := r.AddTransport(pb.TransportType_Prefix, prefix.DefaultSet())
 	require.Nil(t, err)
 
 	tspt := pb.TransportType_Prefix
