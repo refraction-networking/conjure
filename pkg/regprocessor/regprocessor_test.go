@@ -5,13 +5,16 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	zmq "github.com/pebbe/zmq4"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/prefix"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	log "github.com/sirupsen/logrus"
@@ -373,4 +376,52 @@ func TestRegisterBidirectional(t *testing.T) {
 	if net.IP(respIpv6).String() != fakeV6Phantom {
 		t.Fatal("response ip incorrect")
 	}
+}
+
+func TestRegProcessBdReq(t *testing.T) {
+
+	r := &RegProcessor{
+		zmqMutex:      sync.Mutex{},
+		selectorMutex: sync.RWMutex{},
+		authenticated: false,
+		ipSelector:    &mockIPSelector{},
+		regOverrides:  nil,
+	}
+
+	defaultPrefix, err := prefix.Default([32]byte{})
+	require.Nil(t, err)
+
+	err = r.AddTransport(pb.TransportType_Prefix, defaultPrefix)
+	require.Nil(t, err)
+
+	tspt := pb.TransportType_Prefix
+	trueptr := true
+	id := int32(prefix.Min)
+	params, err := anypb.New(&pb.PrefixTransportParams{
+		PrefixId:         &id,
+		RandomizeDstPort: &trueptr,
+	})
+	require.Nil(t, err)
+
+	clv := uint32(4)
+	c2sw := &pb.C2SWrapper{
+		RegistrationPayload: &pb.ClientToStation{
+			ClientLibVersion: &clv,
+			Transport:        &tspt,
+			V6Support:        &trueptr,
+			V4Support:        &trueptr,
+			TransportParams:  params,
+		},
+		SharedSecret: make([]byte, 32),
+	}
+
+	resp, err := r.processBdReq(c2sw)
+	require.Nil(t, err)
+	require.NotNil(t, resp)
+}
+
+type mockIPSelector struct{}
+
+func (*mockIPSelector) Select([]byte, uint, uint, bool) (net.IP, error) {
+	return net.ParseIP("8.8.8.8"), nil
 }

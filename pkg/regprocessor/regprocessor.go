@@ -255,26 +255,26 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	// Create registration response object
 	regResp := &pb.RegistrationResponse{}
 
-	if c2sPayload.GetRegistrationPayload() == nil {
+	c2s := c2sPayload.GetRegistrationPayload()
+	if c2s == nil {
 		return nil, ErrNoC2SBody
 	}
 
-	clientLibVer := uint(c2sPayload.GetRegistrationPayload().GetClientLibVersion())
+	clientLibVer := uint(c2s.GetClientLibVersion())
 
 	// Generate seed and phantom address
-	cjkeys, err := lib.GenSharedKeys(clientLibVer, c2sPayload.SharedSecret, c2sPayload.RegistrationPayload.GetTransport())
-
+	cjkeys, err := lib.GenSharedKeys(clientLibVer, c2sPayload.SharedSecret, c2s.GetTransport())
 	if err != nil {
 		// p.logger.Println("Failed to generate the shared key using SharedSecret:", err)
 		return nil, ErrRegProcessFailed
 	}
 
-	if *c2sPayload.RegistrationPayload.V4Support {
+	if c2s.GetV4Support() {
 		p.selectorMutex.RLock()
 		defer p.selectorMutex.RUnlock()
 		phantom4, err := p.ipSelector.Select(
 			cjkeys.ConjureSeed,
-			uint(c2sPayload.GetRegistrationPayload().GetDecoyListGeneration()), //generation type uint
+			uint(c2s.GetDecoyListGeneration()), //generation type uint
 			clientLibVer,
 			false,
 		)
@@ -287,12 +287,12 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		regResp.Ipv4Addr = &addr4
 	}
 
-	if *c2sPayload.RegistrationPayload.V6Support {
+	if c2s.GetV6Support() {
 		p.selectorMutex.RLock()
 		defer p.selectorMutex.RUnlock()
 		phantom6, err := p.ipSelector.Select(
 			cjkeys.ConjureSeed,
-			uint(c2sPayload.GetRegistrationPayload().GetDecoyListGeneration()),
+			uint(c2s.GetDecoyListGeneration()),
 			clientLibVer,
 			true,
 		)
@@ -303,11 +303,6 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		regResp.Ipv6Addr = phantom6
 	}
 
-	c2s := c2sPayload.GetRegistrationPayload()
-	if c2s == nil {
-		return nil, fmt.Errorf("missing registration payload")
-	}
-
 	transportType := c2s.GetTransport()
 	transportParams := c2s.GetTransportParams()
 	t, ok := p.transports[transportType]
@@ -316,7 +311,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	}
 
 	params, err := t.ParseParams(uint(c2s.GetClientLibVersion()), transportParams)
-	if !ok {
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse transport parameters: %w", err)
 	}
 

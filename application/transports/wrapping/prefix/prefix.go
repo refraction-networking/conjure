@@ -225,11 +225,11 @@ func (t Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16,
 	}
 	parameters, ok := params.(*pb.PrefixTransportParams)
 	if !ok {
-		return 0, ErrBadParams
+		return 0, fmt.Errorf("%w: incorrect type", ErrBadParams)
 	}
 
 	if parameters == nil {
-		return 0, ErrBadParams
+		return 0, fmt.Errorf("%w: nil params", ErrBadParams)
 	}
 
 	prefix := parameters.GetPrefixId()
@@ -364,6 +364,21 @@ func Default(privkey [32]byte, filepath ...string) (*Transport, error) {
 		}
 	}
 	return t, nil
+}
+
+// DefaultSet builds a hollow version of the transport with the DEFAULT set of supported
+// prefixes. This is useful in instances where we just need to check whether the prefix ID is known,
+// not actually handle any major operations (tryFindReg / WrapConn)
+func DefaultSet() *Transport {
+	var prefixes map[PrefixID]prefix = make(map[PrefixID]prefix)
+	for k, v := range defaultPrefixes {
+		if _, ok := prefixes[k]; !ok {
+			prefixes[k] = v
+		}
+	}
+	return &Transport{
+		SupportedPrefixes: prefixes,
+	}
 }
 
 func tryParsePrefixes(filepath string) (map[PrefixID]prefix, error) {
