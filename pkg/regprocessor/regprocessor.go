@@ -13,9 +13,9 @@ import (
 	"sync"
 
 	zmq "github.com/pebbe/zmq4"
-	"github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/pkg/metrics"
-	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"github.com/refraction-networking/conjure/pkg/station/lib"
+	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
 )
 

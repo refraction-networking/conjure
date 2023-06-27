@@ -10,9 +10,9 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	zmq "github.com/pebbe/zmq4"
-	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/metrics"
-	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
+	pb "github.com/refraction-networking/conjure/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
