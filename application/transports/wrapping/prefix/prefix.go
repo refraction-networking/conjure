@@ -62,6 +62,10 @@ type prefix struct {
 	// Default DST Port for this prefix. We are not bound by client_lib_version (yet) so we can set the
 	// default destination port for each prefix individually
 	DefaultDstPort uint16
+
+	// Flush Indicates whether the client is expected to flush the write buffer after the prefix
+	// before writing the tag. This would allow the whole first packet to be a prefix (with no tag).
+	Flush bool
 }
 
 // PrefixID provide an integer Identifier for each individual prefixes allowing clients to indicate
@@ -80,6 +84,9 @@ const (
 	TLSAlertFatal
 	DNSOverTCP
 	OpenSSH2
+	TLSCompleteCHNoSNI
+	TLSCompleteCHSNI
+	HTTPGetComplete
 	// GetShortBase64
 )
 
@@ -126,25 +133,30 @@ func (id PrefixID) Name() string {
 // initializing the prefix transport.
 var defaultPrefixes = map[PrefixID]prefix{
 	//Min - Empty prefix
-	Min: {[]byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion, 443},
+	Min: {[]byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion, 443, false},
 	// HTTP GET
-	GetLong: {[]byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion, 80},
+	GetLong: {[]byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion, 80, false},
 	// HTTP POST
-	PostLong: {[]byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion, 80},
+	PostLong: {[]byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion, 80, false},
 	// HTTP Response
-	HTTPResp: {[]byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion, 80},
+	HTTPResp: {[]byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion, 80, false},
 	// TLS Client Hello
-	TLSClientHello: {[]byte("\x16\x03\x01\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 443},
+	TLSClientHello: {[]byte("\x16\x03\x03\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 443, false},
 	// TLS Server Hello
-	TLSServerHello: {[]byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion, 443},
+	TLSServerHello: {[]byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion, 443, false},
 	// TLS Alert Warning
-	TLSAlertWarning: {[]byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443},
+	TLSAlertWarning: {[]byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443, false},
 	// TLS Alert Fatal
-	TLSAlertFatal: {[]byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443},
+	TLSAlertFatal: {[]byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443, false},
 	// DNS over TCP
-	DNSOverTCP: {[]byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 53},
+	DNSOverTCP: {[]byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 53, false},
 	// SSH-2.0-OpenSSH_8.9p1
-	OpenSSH2: {[]byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion, 22},
+	OpenSSH2: {[]byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion, 22, false},
+
+	TLSCompleteCHNoSNI: {[]byte{}, 0, 0, 0, randomizeDstPortMinVersion, 443, true},
+	TLSCompleteCHSNI:   {[]byte{}, 0, 0, 0, randomizeDstPortMinVersion, 443, true},
+	HTTPGetComplete:    {[]byte{}, 0, 0, 0, randomizeDstPortMinVersion, 80, true},
+
 	// // HTTP GET base64 in url min tag length 88 because 64 bytes base64 encoded should be length 88
 	// GetShort: {base64TagDecode, []byte("GET /"), 5, 5 + 88, 5 + 88, randomizeDstPortMinVersion},
 }
@@ -389,7 +401,7 @@ func applyDefaultPrefixes() {
 	// if at any point we need to do init on the prefixes (i.e compiling regular expressions) it
 	// should happen here.
 	for ID, p := range defaultPrefixes {
-		DefaultPrefixes[ID] = &clientPrefix{p.StaticMatch, ID, p.DefaultDstPort}
+		DefaultPrefixes[ID] = &clientPrefix{p.StaticMatch, ID, p.DefaultDstPort, p.Flush}
 	}
 }
 

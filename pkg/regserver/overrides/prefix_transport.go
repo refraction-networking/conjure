@@ -24,9 +24,10 @@ import (
 )
 
 type fieldsToOverwrite struct {
-	prefix []byte
-	port   int
-	id     int
+	prefix           []byte
+	port             int
+	id               int
+	flushAfterPrefix bool
 }
 
 type prefixIface interface {
@@ -57,6 +58,7 @@ func (pfs prefixes) selectPrefix(r io.Reader, c2s *pb.C2SWrapper) (*fieldsToOver
 type barPrefix struct {
 	max, bar, id, port int
 	prefix             []byte
+	flushAfterPrefix   bool
 }
 
 func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.C2SWrapper) (*fieldsToOverwrite, bool) {
@@ -67,7 +69,7 @@ func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.C2SWrapper) (*fieldsToOver
 		return nil, false
 	}
 	if bp.bar >= bp.max {
-		return &fieldsToOverwrite{bp.prefix, bp.port, bp.id}, true
+		return &fieldsToOverwrite{bp.prefix, bp.port, bp.id, bp.flushAfterPrefix}, true
 	}
 
 	N := big.NewInt(int64(bp.max))
@@ -77,7 +79,7 @@ func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.C2SWrapper) (*fieldsToOver
 	}
 	B := big.NewInt(int64(bp.bar))
 	if q.Cmp(B) < 0 {
-		return &fieldsToOverwrite{bp.prefix, bp.port, bp.id}, true
+		return &fieldsToOverwrite{bp.prefix, bp.port, bp.id, bp.flushAfterPrefix}, true
 	}
 	return nil, false
 }
@@ -144,6 +146,7 @@ func ParsePrefixes(conf io.Reader) (*PrefixOverride, error) {
 			int(id),
 			int(port),
 			[]byte(items[4]),
+			false, // TODO - make this not static
 		})
 	}
 	return &PrefixOverride{(*prefixes)(&prefixSelectors)}, nil
@@ -190,6 +193,7 @@ func (po *PrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader) err
 	params.Prefix = fields.prefix
 	var i int32 = int32(fields.id)
 	params.PrefixId = &i
+	params.FlushAfterPrefix = &fields.flushAfterPrefix
 
 	if reg.RegistrationResponse == nil {
 		reg.RegistrationResponse = &pb.RegistrationResponse{}
