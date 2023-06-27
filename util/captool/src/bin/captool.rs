@@ -121,7 +121,7 @@ struct Args {
     lfc: Option<u64>,
 
     /// Comma separated interfaces on which to listen
-    #[arg(short, long, default_value_t = String::from("eno1"))]
+    #[arg(short, long, default_value_t = String::new())]
     interfaces: String,
 
     /// Path to directory containing PCAPs files to read
@@ -165,6 +165,10 @@ struct Args {
     /// BPF filter to apply to all captures (pf_ring, file, or interface)
     #[arg(long, default_value_t = String::from(""))]
     filter: String,
+
+    /// GRE Offset to be removed from packet. (For CU tap infrastructure)
+    #[arg(short, long)]
+    gre_offset: Option<usize>,
 }
 
 #[cfg(debug_assertions)]
@@ -305,8 +309,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         match args.pf_queues {
             Some(n) => {
                 let offset = args.pf_offset.unwrap_or(0);
+                let gre_offset = args.gre_offset.unwrap_or(0);
                 for i in 0..n {
-                    let cap = ZbalanceIPCCapture::new(cluster_id, i + offset)?;
+                    let cap = ZbalanceIPCCapture::new(cluster_id, i + offset, gre_offset)?;
                     all_captures.push(Box::new(cap));
                 }
             }

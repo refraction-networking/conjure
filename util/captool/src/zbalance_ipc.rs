@@ -11,12 +11,13 @@ use crate::error::Error;
 pub struct ZbalanceIPCCapture {
     _runner: zbalance_ipc_runner,
     _start: Instant,
+    pub gre_offset: usize,
 }
 
 unsafe impl Send for ZbalanceIPCCapture {}
 
 impl ZbalanceIPCCapture {
-    pub fn new(cluster: i32, queue: i32) -> Result<ZbalanceIPCCapture, Error> {
+    pub fn new(cluster: i32, queue: i32, gre_offset: usize) -> Result<ZbalanceIPCCapture, Error> {
         let mut zbalance_ipc_capture = ZbalanceIPCCapture {
             _runner: zbalance_ipc_runner {
                 g_buf: null_mut(),
@@ -27,10 +28,11 @@ impl ZbalanceIPCCapture {
                 queue_id: queue as c_int,
             },
             _start: Instant::now(),
+            gre_offset: gre_offset,
         };
 
         unsafe {
-            let ret = init_runner(&mut &mut zbalance_ipc_capture._runner);
+            let ret = init_runner(&mut zbalance_ipc_capture._runner, cluster as c_int, queue as c_int, PF_BURST_SIZE as c_int);
             if ret < 0 {
                 // if the return value is less than 0 return the errno error
                 let e = errno();
@@ -84,7 +86,7 @@ impl ZbalanceIPCCapture {
 impl Drop for ZbalanceIPCCapture {
     fn drop(&mut self) {
         unsafe {
-            close(&mut self._runner);
+            close_runner(&mut self._runner);
         }
     }
 }
@@ -111,7 +113,7 @@ struct zbalance_packet {
 
 extern "C" {
     /// create a runner object that will maintain state for a pfring zbalance ipc ingest queue
-    fn init_runner(runner: &mut &mut zbalance_ipc_runner) -> ::std::os::raw::c_int;
+    fn init_runner(runner: &mut zbalance_ipc_runner, cluster_id: c_int, queue_id: c_int, buf_len: c_int) -> ::std::os::raw::c_int;
 
     #[allow(dead_code)]
     /// Read a burst of up to `buf_len` packets from the queue.
@@ -130,7 +132,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 
     /// cleanup after a runner object, detaching from pfring and freeing resources
-    fn close(runner: *mut zbalance_ipc_runner) -> ::std::os::raw::c_int;
+    fn close_runner(runner: *mut zbalance_ipc_runner) -> ::std::os::raw::c_int;
 }
 
 fn duration_to_timeval(duration: Duration) -> timeval {

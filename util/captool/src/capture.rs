@@ -37,9 +37,14 @@ impl<A: Activated> From<pcap::Capture<A>> for PcapCapture<A> {
 impl Capture for ZbalanceIPCCapture {
     fn next_packet(&mut self) -> Result<Packet<'_>, Error> {
         let ts = self.time_since_start();
-
+        let gre_offset = self.gre_offset;
         // take should give us ownership of the bytes without performing a copy.
-        let bytes = std::mem::take(&mut self.next_zbalance_packet()?);
+        let raw_bytes = std::mem::take(&mut self.next_zbalance_packet()?);
+
+        if raw_bytes.len() <= 0 || (raw_bytes.len() as u32) < (gre_offset as u32) {
+            error!("Packet shorter than offset");
+        }
+        let bytes = &raw_bytes[gre_offset..];
 
         // We create a Box<PacketHeader> named packet_header on the heap. We then pass a reference to
         // the PacketHeader by performing an as_ref() on the Box and casting it to a raw pointer
@@ -115,11 +120,12 @@ pub fn from_zbalance_queues(
     cluster_id: i32,
     queue_count: i32,
     queue_offset: i32,
+    gre_offset: usize,
 ) -> Result<Vec<Box<dyn Capture>>, Error> {
     let mut captures: Vec<Box<dyn Capture>> = vec![];
 
     for queue_id in 0..queue_count {
-        let zb_ipc_cap = ZbalanceIPCCapture::new(cluster_id, queue_id + queue_offset)?;
+        let zb_ipc_cap = ZbalanceIPCCapture::new(cluster_id, queue_id + queue_offset, gre_offset)?;
         captures.push(Box::new(zb_ipc_cap) as Box<dyn Capture>);
     }
     Ok(captures)

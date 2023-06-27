@@ -30,15 +30,13 @@ struct zbalance_packet
 /// @param queue_id the pfring zbalance queue ID to read from
 /// @param buf_len the length of the packet buffer for calls to `next_packet_burst` cannot be changed after initialization.
 /// @return 0 on success, a negative value otherwise.
-int init_runner(struct zbalance_ipc_runner **ptr, int cluster_id, int queue_id, int buf_len)
+int init_runner(struct zbalance_ipc_runner *runner, int cluster_id, int queue_id, int buf_len)
 {
     if (buf_len < 1)
         buf_len = PF_BURST_SIZE;
 
-    // pfring_zc_pkt_buff *g_buf[buf_len];
     pfring_zc_pkt_buff **g_buf = malloc(sizeof(pfring_zc_pkt_buff *) * buf_len);
 
-    zbalance_ipc_runner *runner = malloc(sizeof(zbalance_ipc_runner));
     runner->g_queue = 0;
     runner->g_buf = g_buf;
     runner->g_pool = 0;
@@ -120,7 +118,7 @@ int unset_filter(zbalance_ipc_runner *runner)
 /// @brief cleanup after a runner object, detaching from pfring and freeing resources
 /// @param runner the runner object to be cleaned
 /// @return 0 on success, a negative value otherwise.
-int close(zbalance_ipc_runner *runner)
+int close_runner(zbalance_ipc_runner *runner)
 {
     if (runner == 0)
         return 0;
@@ -141,9 +139,6 @@ int close(zbalance_ipc_runner *runner)
     // free the buffer and our runner object
     if (runner->g_buf != 0)
         free(runner->g_buf);
-
-    free(runner);
-    runner = 0;
 
     return 0;
 }
