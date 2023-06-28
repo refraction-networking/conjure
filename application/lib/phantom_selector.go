@@ -10,6 +10,7 @@ import (
 	mrand "math/rand"
 	"net"
 	"sort"
+	"time"
 
 	wr "github.com/mroth/weightedrand"
 	"golang.org/x/crypto/hkdf"
@@ -45,6 +46,8 @@ func (sc *SubnetConfig) getSubnetsVarint(seed []byte, weighted bool) []string {
 			fmt.Println("failed to seed random for weighted rand")
 			return nil
 		}
+
+		// nolint:staticcheck // here for backwards compatibility with clients
 		mrand.Seed(seedInt)
 
 		choices := make([]wr.Choice, 0, len(sc.WeightedSubnets))
@@ -400,8 +403,11 @@ func SelectAddrFromSubnet(seed []byte, net1 *net.IPNet) (net.IP, error) {
 		return nil, fmt.Errorf("failed to create seed ")
 	}
 
+	// nolint:staticcheck // here for backwards compatibility with clients
 	mrand.Seed(seedInt)
 	randBytes := make([]byte, addrLen/8)
+
+	// nolint:staticcheck // here for backwards compatibility with clients
 	_, err := mrand.Read(randBytes)
 	if err != nil {
 		return nil, err
@@ -578,4 +584,10 @@ func (p *PhantomIPSelector) RemoveGeneration(generation uint) bool {
 func (p *PhantomIPSelector) UpdateGeneration(generation uint, subnets *SubnetConfig) bool {
 	p.Networks[generation] = subnets
 	return true
+}
+
+func init() {
+	// NOTE: math/rand is only used for backwards compatibility.
+	// nolint:staticcheck
+	mrand.Seed(time.Now().UnixNano())
 }

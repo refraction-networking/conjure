@@ -30,6 +30,7 @@ use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::flag::register;
 use threadpool::ThreadPool;
 
+use pnet::packet::tcp::TcpPacket;
 use std::borrow::Cow;
 use std::error::Error;
 use std::fs::{self, File};
@@ -140,7 +141,11 @@ struct Args {
 
     /// Path to the output PCAP_NG file.
     #[arg(short, long, default_value_t = String::from("./out.pcapng.gz"))]
-    out: String,
+    out_pcap: String,
+
+    /// Path to the output stats CSV file.
+    #[arg(long, default_value_t = String::from("./stats_out.csv"))]
+    out_csv: String,
 
     /// Path to the Geolite ASN database (.mmdb) file
     #[arg(long, default_value_t = String::from(ASNDB_PATH))]
@@ -169,6 +174,10 @@ struct Args {
     /// GRE Offset to be removed from packet. (For CU tap infrastructure)
     #[arg(short, long)]
     gre_offset: Option<usize>,
+
+    /// Subnets to exclude -- packets that include source addresses in this subnet will not be captured
+    #[arg(short, long)]
+    ex: Option<String>,
 }
 
 #[cfg(debug_assertions)]
@@ -188,7 +197,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let flag = Arc::new(AtomicBool::new(false));
 
     let toml_conf = toml::to_string(&args).unwrap();
-    let out_path = Path::new(&args.out);
+    let out_path = Path::new(&args.out_pcap);
     let config_path = out_path.with_file_name(format!(
         "{}.cfg",
         out_path
@@ -196,7 +205,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .unwrap()
             .to_str()
             .unwrap()
-            .replace('\"', "")
+            .replace("\"", "")
     ));
     let mut file = File::create(&config_path)?;
     file.write_all(&toml_conf.into_bytes())?;
@@ -238,6 +247,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let limiter = if unlimited { None } else { Some(limit_state) };
     let target_subnets = parse_targets(args.t);
+    let exclude_subnets = match args.ex {
+        Some(ex) => {parse_targets(ex)}
+        None => { vec![] }
+    };
     if target_subnets.is_empty() {
         error!("no valid target subnets provided{HELP}");
         Err("no valid target subnets provided")?;
@@ -252,9 +265,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         asn_list,
         args.v4,
         args.v6,
+        exclude_subnets,
+        args.out_csv,
     )?));
 
-    let file = File::create(args.out)?;
+    let file = File::create(args.out_pcap)?;
     let gzip_file = GzEncoder::new(file, Compression::default());
     let mut writer = PcapNgWriter::new(gzip_file).expect("failed to build writer");
     let ip4_iface = InterfaceDescriptionBlock {
@@ -356,6 +371,23 @@ fn launch_captures<W>(
         register(*sig, Arc::clone(&term)).unwrap();
     }
 
+    // print stats
+    let h_display = Arc::clone(&handler);
+    let t_display = Arc::clone(&term);
+    let ic_display = Arc::clone(&interfaces_complete);
+    pool.execute(move || loop {
+        if t_display.load(Ordering::Relaxed) {
+            let _ = h_display.lock().unwrap().output_csv();
+            break;
+        }
+        if ic_display.load(Ordering::Relaxed) >= n_interfaces as u32 {
+            let _ = h_display.lock().unwrap().output_csv();
+            break;
+        }
+        // h_display.lock().unwrap().print_stats();
+        thread::sleep(Duration::from_secs(5));
+    });
+
     for (n, mut cap) in captures.into_iter().enumerate() {
         let h = Arc::clone(&handler);
         let w = Arc::clone(&arc_writer);
@@ -445,7 +477,7 @@ fn read_packets<W>(
             }
         };
 
-        if packet.is_empty() {
+        if packet.is_empty() { 
             continue;
         }
 
@@ -460,6 +492,12 @@ fn read_packets<W>(
             Err(_) => continue,
         };
 
+        // TODO: add packet exclusion here
+        if handler.lock().unwrap().should_exclude(ip_pkt.source()) {
+            continue
+        }
+
+
         let supplemental_fields: SupplementalFields = match {
             let mut h = handler.lock().unwrap();
             h.get_supplemental(ip_pkt.source(), ip_pkt.destination())
@@ -473,6 +511,14 @@ fn read_packets<W>(
                 continue;
             }
         };
+
+        match TcpPacket::new(ip_pkt.to_immutable().payload()) {
+            Some(x) => {
+                let y = ip_pkt.to_immutable();
+                handler.lock().unwrap().append_to_stats(&y, &x);
+            }
+            None => {}
+        }
 
         let mut interface_id = 0;
         if matches!(ip_pkt, MutableIpPacket::V6(_)) {

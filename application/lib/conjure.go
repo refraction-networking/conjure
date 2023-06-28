@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"crypto/hmac"
 	"crypto/sha256"
 	"io"
 
@@ -44,13 +43,15 @@ func generateObfs4Keys(rand io.Reader) (Obfs4Keys, error) {
 	return keys, err
 }
 
+// ConjureSharedKeys contains keys that the station is required to keep.
 type ConjureSharedKeys struct {
 	SharedSecret                                            []byte
 	FspKey, FspIv, VspKey, VspIv, MasterSecret, ConjureSeed []byte
 	Obfs4Keys                                               Obfs4Keys
 }
 
-func GenSharedKeys(sharedSecret []byte, tt pb.TransportType) (ConjureSharedKeys, error) {
+// GenSharedKeys generates the keys requires to form a Conjure connection based on the SharedSecret
+func GenSharedKeys(clientLibVer uint, sharedSecret []byte, tt pb.TransportType) (ConjureSharedKeys, error) {
 	tdHkdf := hkdf.New(sha256.New, sharedSecret, []byte("conjureconjureconjureconjure"), nil)
 	keys := ConjureSharedKeys{
 		SharedSecret: sharedSecret,
@@ -85,16 +86,6 @@ func GenSharedKeys(sharedSecret []byte, tt pb.TransportType) (ConjureSharedKeys,
 	if tt == pb.TransportType_Obfs4 {
 		keys.Obfs4Keys, err = generateObfs4Keys(tdHkdf)
 	}
+
 	return keys, err
-}
-
-// from client tapdance/conjure.go
-func conjureHMAC(key []byte, str string) []byte {
-	hash := hmac.New(sha256.New, key)
-	hash.Write([]byte(str))
-	return hash.Sum(nil)
-}
-
-func (k *ConjureSharedKeys) ConjureHMAC(str string) []byte {
-	return conjureHMAC(k.SharedSecret, str)
 }

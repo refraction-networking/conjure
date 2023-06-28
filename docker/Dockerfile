@@ -54,7 +54,7 @@ touch /opt/conjure/src/lib.rs
 PATH="$HOME/.cargo/bin:$PATH" make rust
 EOF
 
-RUN PATH="$HOME/.cargo/bin:$PATH" make conjure-sim && mv conjure conjure-sim
+RUN PATH="$HOME/.cargo/bin:$PATH" make conjure-sim && mv bin/conjure bin/conjure-sim
 RUN PATH="$HOME/.cargo/bin:$PATH" make conjure
 
 COPY go.* /opt/conjure/
@@ -66,11 +66,11 @@ RUN PATH="$HOME/.go/bin/:$PATH" make app
 RUN PATH="$HOME/.go/bin/:$PATH" make registration-server
 
 # Add default configs and launch scripts
-COPY sysconfig/ /opt/conjure/sysconfig
-COPY scripts/ /opt/conjure/bin
+COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
+COPY scripts/ /opt/conjure/scripts
 
 # add application as default entrypoint for dev reasons.
-ENTRYPOINT /opt/conjure/application/application
+ENTRYPOINT /opt/conjure/scripts/start_application.sh
 
 
 # ------------------------------------------------------------------------------
@@ -78,75 +78,65 @@ ENTRYPOINT /opt/conjure/application/application
 # ------------------------------------------------------------------------------
 FROM base_pfring as conjure_zbalance
 # Add default configs and launch scripts
-COPY sysconfig/ /opt/conjure/sysconfig
-COPY scripts/ /opt/conjure/bin
+COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
+COPY scripts/start_zbalance_ipc.sh /opt/conjure/scripts/
 
-ENTRYPOINT /opt/conjure/bin/start_zbalance_ipc.sh
-
+ENTRYPOINT /opt/conjure/scripts/start_zbalance_ipc.sh
 
 # ------------------------------------------------------------------------------
 # Production image detector only (kind of, requires pfring)
 # ------------------------------------------------------------------------------
 FROM base_pfring as conjure_det
 # Add default configs and launch scripts
-COPY sysconfig/ /opt/conjure/sysconfig
-COPY scripts/ /opt/conjure/bin
+COPY sysconfig/conjure.conf /opt/conjure/sysconfig
+COPY scripts/ /opt/conjure/scripts
 
 RUN apt update && apt install -yq libzmq3-dev
-COPY --from=dev_img /opt/conjure/conjure /opt/conjure/bin/
-
+COPY --from=dev_img /opt/conjure/bin/conjure /opt/conjure/bin/
 
 # ------------------------------------------------------------------------------
 # Production image application only
 # ------------------------------------------------------------------------------
 FROM ubuntu:20.04 as conjure_app
 # Add default configs and launch scripts
-COPY sysconfig/ /opt/conjure/sysconfig
-COPY scripts/ /opt/conjure/bin
-COPY application/ /opt/conjure/application
+COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
+COPY scripts/ /opt/conjure/scripts
 
 RUN apt update && apt install -yq libzmq3-dev
-COPY --from=dev_img /opt/conjure/application/application /opt/conjure/bin/
-
+COPY --from=dev_img /opt/conjure/bin/application /opt/conjure/bin/
 
 # ------------------------------------------------------------------------------
 # Production image registration server only
 # ------------------------------------------------------------------------------
 FROM ubuntu:20.04 as conjure_reg
 # Add default configs and launch scripts
-COPY sysconfig/ /opt/conjure/sysconfig
-COPY scripts/ /opt/conjure/bin
+COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
+COPY scripts/ /opt/conjure/scripts/
 
 RUN apt update && apt install -yq libzmq3-dev
-COPY --from=dev_img /opt/conjure/cmd/registration-server/registration-server /opt/conjure/bin/
-
+COPY --from=dev_img /opt/conjure/bin/registration-server /opt/conjure/bin/
 
 # ------------------------------------------------------------------------------
 # Simulation image (no pfring required)
 # ------------------------------------------------------------------------------
 FROM ubuntu:20.04 as conjure_sim
 # Add default configs and launch scripts
-COPY sysconfig/ /opt/conjure/sysconfig
-COPY scripts/ /opt/conjure/bin
+COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
+COPY scripts/ /opt/conjure/scripts/
 
 RUN apt update && apt install -yq libzmq3-dev
-COPY --from=dev_img /opt/conjure/conjure-sim /opt/conjure/bin/conjure
-COPY --from=dev_img /opt/conjure/cmd/registration-server/registration-server /opt/conjure/bin/
-COPY --from=dev_img /opt/conjure/conjure /opt/conjure/bin/
-
+COPY --from=dev_img /opt/conjure/bin/conjure-sim /opt/conjure/bin/conjure
+COPY --from=dev_img /opt/conjure/bin/registration-server /opt/conjure/bin/
 
 # ------------------------------------------------------------------------------
 # Production image all (default)
 # ------------------------------------------------------------------------------
 FROM base_pfring as conjure
 # Add default configs and launch scripts
-COPY sysconfig/ /opt/conjure/sysconfig
-COPY scripts/ /opt/conjure/bin
-COPY application/ /opt/conjure/application
+COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
+COPY scripts/ /opt/conjure/scripts/
 
 RUN apt update && apt install -yq libzmq3-dev
-COPY --from=dev_img /opt/conjure/application/application /opt/conjure/bin/
-COPY --from=dev_img /opt/conjure/cmd/registration-server/registration-server /opt/conjure/bin/
-COPY --from=dev_img /opt/conjure/conjure /opt/conjure/bin/
+COPY --from=dev_img /opt/conjure/bin/ /opt/conjure/bin/
 
 # ENTRYPOINT /bin/bash

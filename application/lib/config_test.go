@@ -11,7 +11,7 @@ import (
 // TestConfigParse double checks to ensure that the identity struct reflection
 // trick works and that the fields are accessible.
 func TestConfigParse(t *testing.T) {
-	os.Setenv("CJ_STATION_CONFIG", "../config.toml")
+	os.Setenv("CJ_STATION_CONFIG", "../app_config.toml")
 
 	var c Config
 	_, err := toml.DecodeFile(os.Getenv("CJ_STATION_CONFIG"), &c)
