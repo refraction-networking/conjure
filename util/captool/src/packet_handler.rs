@@ -2,13 +2,19 @@ use crate::flows::LimiterState;
 use crate::limit::LimitError;
 
 use std::borrow::Cow;
+use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::fmt;
 use std::net::IpAddr;
+use std::cmp::{min, max};
+use csv::Writer;
 
+use crate::ip::IpPacket;
 use ipnet::IpNet;
-use maxminddb::{geoip2, Reader, MaxMindDBError};
+use maxminddb::{geoip2, MaxMindDBError, Reader};
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketOption;
+use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
+use pnet::packet::tcp::TcpPacket;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
@@ -30,8 +36,236 @@ pub struct PacketHandler {
     pub v4_only: bool,
     pub v6_only: bool,
 
+    // subnets from which to ignore incoming packets
+    pub exclude_subnets: Vec<IpNet>,
+
+    pub stats: HashMap<Flow, FlowStats>,
+    pub stats_output_path: String,
+
     pub seed: [u8; 32],
 }
+
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
+pub struct Flow {
+    pub src_ip: IpAddr,
+    pub dst_ip: IpAddr,
+    pub src_port: u16,
+    pub dst_port: u16,
+    pub proto: IpNextHeaderProtocol,
+}
+
+impl Flow {
+    pub fn new(ip_pkt: &IpPacket, tcp_pkt: &TcpPacket) -> Flow {
+        match ip_pkt {
+            IpPacket::V4(pkt) => Flow {
+                src_ip: IpAddr::V4(pkt.get_source()),
+                dst_ip: IpAddr::V4(pkt.get_destination()),
+                src_port: tcp_pkt.get_source(),
+                dst_port: tcp_pkt.get_destination(),
+                proto: IpNextHeaderProtocols::Tcp,
+            },
+            IpPacket::V6(pkt) => Flow {
+                src_ip: IpAddr::V6(pkt.get_source()),
+                dst_ip: IpAddr::V6(pkt.get_destination()),
+                src_port: tcp_pkt.get_source(),
+                dst_port: tcp_pkt.get_destination(),
+                proto: IpNextHeaderProtocols::Tcp,
+            },
+        }
+    }
+
+    // pub fn to_string(&self) -> String {
+    //     let re = String(self.src_ip) + ":" + self.src_port + " -> " +self.dst_ip + ":" + self.dst_port;
+    //     return re;
+    // }
+}
+
+impl fmt::Display for Flow {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{si}:{sp} -> {di}:{dp}", si = self.src_ip, sp = self.src_port, di = self.dst_ip, dp = self.dst_port)
+    }
+}
+
+/// Statistics for a given Flow
+pub struct FlowStats {
+    pub packet_count: u32,
+    // ipv4
+    pub ipids: Option<IpidStats>,
+    pub ttl_range: Option<TtlStats>,
+
+    // ipv6
+    pub flow_label: Option<u32>,
+    pub hop_limit_range: Option<HopLimitStats>,
+}
+
+impl FlowStats {
+    pub fn new(ip_pkt: &IpPacket, _tcp_pkt: &TcpPacket) -> FlowStats {
+        match ip_pkt {
+            IpPacket::V4(pkt) => FlowStats {
+                packet_count: 1,
+                ipids: Some(IpidStats::new(pkt.get_identification())),
+                ttl_range: Some(TtlStats::new(pkt.get_ttl())),
+                flow_label: None,
+                hop_limit_range: None,
+            },
+            IpPacket::V6(pkt) => FlowStats {
+                packet_count: 1,
+                ipids: None,
+                ttl_range: None,
+                flow_label: Some(pkt.get_flow_label()),
+                hop_limit_range: Some(HopLimitStats::new(pkt.get_hop_limit())),
+            },
+        }
+    }
+
+    /// append a packet to the given FlowStats object
+    pub fn append(&mut self, ip_pkt: &IpPacket, _tcp_pkt: &TcpPacket) {
+        match ip_pkt {
+            IpPacket::V4(pkt) =>
+            {
+                self.packet_count += 1;
+                self.ipids.as_mut().expect("identification of ipv4 packet not initialized").update(pkt.get_identification());
+                self.ttl_range.as_mut().expect("ttl of ipv4 packet not initialized").update(pkt.get_ttl());
+            }
+            IpPacket::V6(pkt) => {
+                self.packet_count += 1;
+                self.hop_limit_range.as_mut().expect("hop limit of ipv6 packet not initialized").update(pkt.get_hop_limit());
+            },
+        }
+    }
+
+}
+
+// impl fmt::Display for FlowStats {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "{} packets in flow\n", self.packet_count);
+//         match &self.ipids {
+//             Some(i) => { 
+//                 match i.min_offset{
+//                     Some(o) => {write!(f, "min IPID change : {} | ", o); }
+//                     None => {write!(f, "min IPID change : NONE | ");}
+//                 }
+//                 match i.max_offset{
+//                     Some(o) => {write!(f, "max IPID change : {}\n", o); }
+//                     None => {write!(f, "max IPID change : NONE\n");}
+//                 } 
+//             }
+//             None=>{}
+//         }
+//         match &self.ttl_range {
+//             Some(t) =>{ 
+//                 write!(f, "min TTL : {} | max TTL: {}", t.min_ttl, t.max_ttl);
+//             }
+//             None => {}
+//         }
+//         match self.flow_label {
+//             Some(fl) => {  write!(f, "flow label: {}\n", fl); }
+//             None => {}
+//         }
+//         match &self.hop_limit_range {
+//             Some(t) =>{ 
+//                 write!(f, "min Hop Limit : {} | max Hop Limit: {}", t.min_hop, t.max_hop);
+//             }
+//             None => {}
+//         }
+//         write!(f, " ")
+//     }
+// }
+
+pub struct IpidStats {
+    pub curr_ipid: u16,
+
+    // currently tracks 5 most recent offsets
+    pub recent_offsets: VecDeque<u16>,
+
+    pub min_offset: Option<u16>,
+    pub max_offset: Option<u16>,
+}
+
+impl IpidStats{
+    pub fn new(ipid: u16) -> IpidStats {
+        IpidStats {
+            curr_ipid: ipid,
+            recent_offsets: VecDeque::new(),
+            min_offset : None,
+            max_offset : None,
+        }
+    }
+
+    pub fn update(&mut self, new_ipid: u16) {
+        let new_off = (self.curr_ipid as i32 - new_ipid as i32).abs() as u16;
+        if self.recent_offsets.len() < 5 {
+            self.recent_offsets.push_back(new_off);
+            self.curr_ipid = new_ipid;
+
+            match self.min_offset
+            {
+                Some(mo) => { self.min_offset = Some(min(mo, new_off)); }
+                None => { self.min_offset = Some(new_off);}
+            }
+            match self.max_offset
+            {
+                Some(mo) => { self.max_offset = Some(max(mo, new_off)); }
+                None => { self.max_offset = Some(new_off);}
+            }
+        }
+        else {
+            self.recent_offsets.pop_front();
+            self.recent_offsets.push_back(new_off);
+            self.curr_ipid = new_ipid;
+
+            match self.min_offset
+            {
+                Some(mo) => { self.min_offset = Some(min(mo, new_off)); }
+                None => { self.min_offset = Some(new_off);}
+            }
+            match self.max_offset
+            {
+                Some(mo) => { self.max_offset = Some(max(mo, new_off)); }
+                None => { self.max_offset = Some(new_off);}
+            }
+        }
+    }
+}
+
+pub struct TtlStats {
+    pub min_ttl: u8,
+    pub max_ttl: u8,
+}
+
+impl TtlStats{
+    pub fn new(ttl: u8) -> TtlStats {
+        TtlStats {
+            min_ttl : ttl,
+            max_ttl : ttl,
+        }
+    }
+
+    pub fn update(&mut self, new_ttl: u8) {
+        self.min_ttl = min(self.min_ttl, new_ttl);
+        self.max_ttl = max(self.max_ttl, new_ttl);
+    }
+}
+
+pub struct HopLimitStats {
+    pub min_hop: u8,
+    pub max_hop: u8,
+}
+
+impl HopLimitStats{
+    pub fn new(hop: u8) -> HopLimitStats {
+        HopLimitStats {
+            min_hop : hop,
+            max_hop : hop,
+        }
+    }
+
+    pub fn update(&mut self, new_hop: u8) {
+        self.min_hop = min(self.min_hop, new_hop);
+        self.max_hop = max(self.max_hop, new_hop);
+    }
+}
+
 
 #[derive(Clone)]
 pub struct SupplementalFields {
@@ -78,7 +312,6 @@ impl From<MaxMindDBError> for PacketError {
     fn from(value: MaxMindDBError) -> Self {
         PacketError::SkipGeoip(value)
     }
-
 }
 
 impl From<Box<dyn Error>> for PacketError {
@@ -122,6 +355,8 @@ impl PacketHandler {
         asn_filter: Vec<u32>,
         v4_only: bool,
         v6_only: bool,
+        exclude_subnets: Vec<IpNet>,
+        stats_output_path: String
     ) -> Result<Self, Box<dyn Error>> {
         let mut p = PacketHandler {
             asn_reader: maxminddb::Reader::open_readfile(String::from(asn_path))?,
@@ -133,9 +368,29 @@ impl PacketHandler {
             seed: [0u8; 32],
             v4_only,
             v6_only,
+            exclude_subnets,
+            stats: HashMap::new(),
+            stats_output_path,
         };
         OsRng.fill_bytes(&mut p.seed);
         Ok(p)
+    }
+
+    pub fn append_to_stats(&mut self, ip_pkt: &IpPacket, tcp_pkt: &TcpPacket) {
+        let curr_flow = Flow::new(ip_pkt, tcp_pkt);
+        if !self.stats.contains_key(&curr_flow) {
+            // 18 = SYNACK packet, IPID is 0 in this case so ignore it (?)
+            if tcp_pkt.get_flags() != 18
+            {
+                let curr_stats = FlowStats::new(ip_pkt, tcp_pkt);
+                self.stats.insert(curr_flow, curr_stats);
+            }
+        }
+        else {
+            if let Some(x) = self.stats.get_mut(&curr_flow) {
+                x.append(ip_pkt, tcp_pkt); 
+            }
+        }
     }
 
     pub fn get_supplemental(
@@ -179,6 +434,19 @@ impl PacketHandler {
             }
         }
         AnonymizeTypes::None
+    }
+
+    pub fn should_exclude(&self, src: IpAddr) -> bool {
+        // if (self.v4_only && src.is_ipv6()) || (self.v6_only && src.is_ipv4()) {
+        //     return AnonymizeTypes::None;
+        // }
+
+        for exclude_subnet in &self.exclude_subnets {
+            if exclude_subnet.contains(&src) {
+                return true;
+            }
+        }
+        false
     }
 
     fn get_asn(&self, addr: IpAddr) -> Result<(u32, usize), PacketError> {
@@ -232,6 +500,56 @@ impl PacketHandler {
             return Err(PacketError::SkipCC)?;
         }
         Ok(country)
+    }
+
+    // pub fn print_stats(&self){
+    //     for (fl, flst) in self.stats.iter() {
+    //         // println!("\n{}\n{}\n-", fl, flst);
+    //     }
+
+    // }
+
+    pub fn output_csv(&self) -> Result<(), Box<dyn Error>>{
+        let mut wtr = Writer::from_path(self.stats_output_path.clone())?;
+
+        // write headers
+        wtr.write_record(&["flow_key", "packet_count", "min_ipid_delta", "max_ipid_delta", "min_ttl", "max_ttl", "flow_label", "min_hop_limit", "max_hop_limit"])?;
+
+        // write stats object
+        for (fl, flst) in self.stats.iter(){
+
+            // v4
+            let mut to_write = vec![format!("{}:{}->{}:{}", fl.src_ip,fl.src_port,fl.dst_ip, fl.dst_port), format!("{}",flst.packet_count)];
+            match &flst.ipids {
+                Some(i) => { 
+                    match i.min_offset {
+                        Some(mo) => {to_write.push(format!("{}",mo));}
+                        None => {to_write.push("NaN".to_string());}
+                    }
+                    match i.max_offset {
+                        Some(mo) => {to_write.push(format!("{}",mo));}
+                        None => {to_write.push("NaN".to_string());}
+                    }
+                }
+                None => { to_write.push("NaN".to_string()); to_write.push("NaN".to_string());}
+            }
+            match &flst.ttl_range {
+                Some(t) => { to_write.push(format!("{}",t.min_ttl)); to_write.push(format!("{}",t.max_ttl));}
+                None => { to_write.push("NaN".to_string()); to_write.push("NaN".to_string());}
+            }
+
+            // v6
+            match flst.flow_label {
+                Some(lab) => { to_write.push(format!("{}",lab));}
+                None => { to_write.push("NaN".to_string());}
+            }
+            match &flst.hop_limit_range {
+                Some(h) => { to_write.push(format!("{}",h.min_hop)); to_write.push(format!("{}",h.max_hop));}
+                None => { to_write.push("NaN".to_string()); to_write.push("NaN".to_string());}
+            }
+        let _ = wtr.write_record(to_write);
+        }
+        Ok(())
     }
 }
 
