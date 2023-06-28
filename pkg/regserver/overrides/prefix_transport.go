@@ -175,7 +175,7 @@ func (po *PrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader) err
 	if reg == nil || reg.GetRegistrationPayload() == nil {
 		return ErrMissingRegistration
 	} else if reg.GetRegistrationPayload().GetTransport() != pb.TransportType_Prefix {
-		return ErrNotPrefixTransport
+		return nil
 	} else if po.prefixes == nil {
 		return nil
 	}
@@ -236,7 +236,7 @@ func (rpo *RandPrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader
 	if reg == nil || reg.GetRegistrationPayload() == nil {
 		return ErrMissingRegistration
 	} else if reg.GetRegistrationPayload().GetTransport() != pb.TransportType_Prefix {
-		return ErrNotPrefixTransport
+		return nil
 	}
 
 	newPrefix, err := prefix.TryFromID(prefix.Rand)
@@ -259,6 +259,62 @@ func (rpo *RandPrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader
 	}
 
 	port := newPrefix.DstPort(reg.GetSharedSecret())
+	if port > 0 {
+		p := uint32(port)
+		reg.RegistrationResponse.DstPort = &p
+	}
+
+	anypbParams, err := anypb.New(params)
+	if err != nil {
+		return err
+	}
+
+	reg.RegistrationResponse.TransportParams = anypbParams
+
+	return nil
+}
+
+// FixedPrefixOverride allows the registration server to override the prefix chosen by the client when
+// they register using the Prefix transport with `disable_registration_overrides` enabled.
+type FixedPrefixOverride struct {
+	p prefix.Prefix
+}
+
+// NewFixedPrefixOverride returns an object that implements the Override trait specific to
+// when the Prefix transport it used. This is primarily for testing to ensure that the override
+// system works in practice.
+func NewFixedPrefixOverride(p prefix.Prefix) *FixedPrefixOverride {
+	return &FixedPrefixOverride{
+		p,
+	}
+}
+
+// Override implements the RegOverride interface.
+func (fpo *FixedPrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader) error {
+	if reg == nil || reg.GetRegistrationPayload() == nil {
+		return ErrMissingRegistration
+	} else if reg.GetRegistrationPayload().GetTransport() != pb.TransportType_Prefix {
+		return nil
+	}
+
+	// if we have made it this far we overwrite the prefix even if the new one is empty
+	params := &pb.PrefixTransportParams{}
+	err := transports.UnmarshalAnypbTo(reg.GetRegistrationPayload().GetTransportParams(), params)
+	if err != nil {
+		return err
+	}
+
+	var fp = fpo.p.FlushAfterPrefix()
+	var i int32 = int32(fpo.p.ID())
+	params.PrefixId = &i
+	params.FlushAfterPrefix = &fp
+	params.Prefix = fpo.p.Bytes()
+
+	if reg.GetRegistrationResponse() == nil {
+		reg.RegistrationResponse = &pb.RegistrationResponse{}
+	}
+
+	port := fpo.p.DstPort(reg.GetSharedSecret())
 	if port > 0 {
 		p := uint32(port)
 		reg.RegistrationResponse.DstPort = &p

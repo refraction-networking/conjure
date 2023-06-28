@@ -150,7 +150,7 @@ func TestPrefixOverride_Override(t *testing.T) {
 	}
 	c.RegistrationPayload = reg
 
-	out = expected{true, ErrNotPrefixTransport, 0, []byte{}}
+	out = expected{true, nil, 0, []byte{}}
 	t.Run("registration wrong tt and params", test)
 
 	ttPrefix := pb.TransportType_Prefix

@@ -335,7 +335,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	// Overrides will modify the C2SWrapper and put the updated registrationResponse inside to be
 	// forwarded to the station.
 	c2sPayload.RegistrationResponse = regResp
-	if p.regOverrides != nil {
+	if p.regOverrides != nil && !c2s.GetDisableRegistrarOverrides() {
 		err := p.regOverrides.Override(c2sPayload, rand.Reader)
 		if err != nil {
 			return nil, err

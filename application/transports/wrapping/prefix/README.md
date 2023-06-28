@@ -34,5 +34,8 @@ not be expected to do so.
 - [X] AllowRegistrarOverrides -> DisableRegistrarOverrides
 - [X] Prefix Override Randomize Default as Override system PoC test
 - [X] Long Prefixes
-- [ ] flush after prefix test
-- [ ] override test (and config)
+- [X] flush after prefix test
+- [X] BDAPI Fix test
+- [ ] override test
+- [ ] Prefix transport still works even if you send the wrong prefix
+  - checks all prefixes (we could check after match if it was the right one)

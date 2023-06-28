@@ -12,6 +12,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // ClientTransport implements the client side transport interface for the Min transport. The
@@ -93,16 +94,42 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 	return t.parameters, nil
 }
 
+// ParseParams gives the specific transport an option to parse a generic object into parameters
+// provided by the station in the registration response during registration.
+func (t ClientTransport) ParseParams(data *anypb.Any) (any, error) {
+	if data == nil {
+		return nil, nil
+	}
+
+	var m = &pb.PrefixTransportParams{}
+	err := transports.UnmarshalAnypbTo(data, m)
+	return m, err
+}
+
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible or the parameters are otherwise invalid
-func (t *ClientTransport) SetParams(p any) error {
+func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 	prefixParams, ok := p.(*pb.PrefixTransportParams)
 	if !ok {
-		return ErrBadParams
+		return fmt.Errorf("%w, incorrect param type", ErrBadParams)
 	}
 
 	if prefixParams == nil {
-		return ErrBadParams
+		return fmt.Errorf("%w, nil params", ErrBadParams)
+	}
+
+	if len(unchecked) != 0 && unchecked[0] {
+		// Overwrite the prefix bytes and type without checking the default set. This is used for
+		// RegResponse where the registrar may override the chosen prefix with a prefix outside of
+		// the prefixes that the client known about.
+		t.parameters = prefixParams
+		t.Prefix = &clientPrefix{
+			bytes:            prefixParams.GetPrefix(),
+			id:               PrefixID(prefixParams.GetPrefixId()),
+			flushAfterPrefix: prefixParams.GetFlushAfterPrefix(),
+		}
+
+		return nil
 	}
 
 	if prefix, ok := DefaultPrefixes[PrefixID(prefixParams.GetPrefixId())]; ok {

@@ -13,9 +13,12 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	zmq "github.com/pebbe/zmq4"
+	"github.com/refraction-networking/conjure/application/transports"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/application/transports/wrapping/prefix"
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/metrics"
+	"github.com/refraction-networking/conjure/pkg/regserver/overrides"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -421,4 +424,126 @@ type mockIPSelector struct{}
 
 func (*mockIPSelector) Select([]byte, uint, uint, bool) (net.IP, error) {
 	return net.ParseIP("8.8.8.8"), nil
+}
+
+func TestRegProcessBdReqOverride(t *testing.T) {
+	clv := uint32(4)
+	tspt := pb.TransportType_Prefix
+	trueptr := true
+	falseptr := false
+	id := int32(prefix.Min)
+
+	r := &RegProcessor{
+		zmqMutex:      sync.Mutex{},
+		selectorMutex: sync.RWMutex{},
+		authenticated: false,
+		ipSelector:    &mockIPSelector{},
+		regOverrides:  interfaces.Overrides([]interfaces.RegOverride{overrides.NewRandPrefixOverride()}),
+	}
+
+	err := r.AddTransport(pb.TransportType_Prefix, prefix.DefaultSet())
+	require.Nil(t, err)
+
+	params, err := anypb.New(&pb.PrefixTransportParams{
+		PrefixId:         &id,
+		RandomizeDstPort: &trueptr,
+	})
+	require.Nil(t, err)
+
+	c2sw := &pb.C2SWrapper{
+		RegistrationPayload: &pb.ClientToStation{
+			ClientLibVersion:          &clv,
+			Transport:                 &tspt,
+			V6Support:                 &trueptr,
+			V4Support:                 &trueptr,
+			TransportParams:           params,
+			DisableRegistrarOverrides: &falseptr,
+		},
+		SharedSecret: make([]byte, 32),
+	}
+
+	resp, err := r.processBdReq(c2sw)
+	require.Nil(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, resp, c2sw.GetRegistrationResponse())
+
+	// ----
+
+	// // ensure that nil is returned if DisableRegistrarOverrides is set.
+
+	params, err = anypb.New(&pb.PrefixTransportParams{
+		PrefixId:         &id,
+		RandomizeDstPort: &falseptr,
+	})
+	require.Nil(t, err)
+
+	c2sw = &pb.C2SWrapper{
+		RegistrationPayload: &pb.ClientToStation{
+			ClientLibVersion:          &clv,
+			Transport:                 &tspt,
+			V6Support:                 &trueptr,
+			V4Support:                 &trueptr,
+			TransportParams:           params,
+			DisableRegistrarOverrides: &trueptr,
+		},
+		SharedSecret: make([]byte, 32),
+	}
+
+	resp, err = r.processBdReq(c2sw)
+	require.Nil(t, err)
+	require.Nil(t, resp.GetTransportParams())
+
+	// ----
+	// // ensure that a returned override prefix does not have to be in the Default Prefix set.
+
+	params, err = anypb.New(&pb.PrefixTransportParams{
+		PrefixId:         &id,
+		RandomizeDstPort: &falseptr,
+	})
+	require.Nil(t, err)
+
+	c2sw = &pb.C2SWrapper{
+		RegistrationPayload: &pb.ClientToStation{
+			ClientLibVersion:          &clv,
+			Transport:                 &tspt,
+			V6Support:                 &trueptr,
+			V4Support:                 &trueptr,
+			TransportParams:           params,
+			DisableRegistrarOverrides: &falseptr,
+		},
+		SharedSecret: make([]byte, 32),
+	}
+
+	fixedPrefix := &mockPrefix{[]byte("aaaa"), -2}
+	r.regOverrides = interfaces.Overrides([]interfaces.RegOverride{overrides.NewFixedPrefixOverride(fixedPrefix)})
+
+	resp, err = r.processBdReq(c2sw)
+	require.Nil(t, err)
+	require.NotNil(t, resp.GetTransportParams())
+
+	var m = &pb.PrefixTransportParams{}
+	require.Nil(t, transports.UnmarshalAnypbTo(resp.GetTransportParams(), m))
+	require.Equal(t, int32(-2), m.GetPrefixId())
+	require.Equal(t, []byte("aaaa"), m.GetPrefix())
+}
+
+type mockPrefix struct {
+	b  []byte
+	id int32
+}
+
+func (mp *mockPrefix) Bytes() []byte {
+	return mp.b
+}
+
+func (mp *mockPrefix) ID() prefix.PrefixID {
+	return prefix.PrefixID(mp.id)
+}
+
+func (mp *mockPrefix) DstPort([]byte) uint16 {
+	return 1024
+}
+
+func (mp *mockPrefix) FlushAfterPrefix() bool {
+	return true
 }
