@@ -439,31 +439,7 @@ func (c *connStats) Reset() {
 	atomic.StoreInt64(&c.numDiscardToError, 0)
 	atomic.StoreInt64(&c.numDiscardToClose, 0)
 
-	for _, counts := range c.geoIPMap {
-		atomic.StoreInt64(&counts.numFound, 0)
-		atomic.StoreInt64(&counts.numErr, 0)
-		atomic.StoreInt64(&counts.numTimeout, 0)
-		atomic.StoreInt64(&counts.numReset, 0)
-		atomic.StoreInt64(&counts.numClosed, 0)
-		atomic.StoreInt64(&counts.numCreatedToDiscard, 0)
-		atomic.StoreInt64(&counts.numCreatedToCheck, 0)
-		atomic.StoreInt64(&counts.numCreatedToReset, 0)
-		atomic.StoreInt64(&counts.numCreatedToTimeout, 0)
-		atomic.StoreInt64(&counts.numCreatedToError, 0)
-		atomic.StoreInt64(&counts.numReadToCheck, 0)
-		atomic.StoreInt64(&counts.numReadToTimeout, 0)
-		atomic.StoreInt64(&counts.numReadToReset, 0)
-		atomic.StoreInt64(&counts.numReadToError, 0)
-		atomic.StoreInt64(&counts.numCheckToCreated, 0)
-		atomic.StoreInt64(&counts.numCheckToRead, 0)
-		atomic.StoreInt64(&counts.numCheckToFound, 0)
-		atomic.StoreInt64(&counts.numCheckToError, 0)
-		atomic.StoreInt64(&counts.numCheckToDiscard, 0)
-		atomic.StoreInt64(&counts.numDiscardToReset, 0)
-		atomic.StoreInt64(&counts.numDiscardToTimeout, 0)
-		atomic.StoreInt64(&counts.numDiscardToError, 0)
-		atomic.StoreInt64(&counts.numDiscardToClose, 0)
-	}
+	c.geoIPMap = make(map[uint]*asnCounts)
 
 	c.epochStart = time.Now()
 }
