@@ -361,6 +361,8 @@ type statCounts struct {
 	numDiscardToTimeout int64 // Number of times connections have moved from Discard to Timeout
 	numDiscardToError   int64 // Number of times connections have moved from Discard to Error
 	numDiscardToClose   int64 // Number of times connections have moved from Discard to Close
+
+	totalTransitions int64 // Number of all transitions tracked
 }
 
 type asnCounts struct {
@@ -396,28 +398,92 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 	)
 
 	for asn, counts := range c.geoIPMap {
-		logger.Infof("conn-stats-verbose: %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
-			asn,
-			counts.cc,
-			atomic.LoadInt64(&counts.numCreatedToDiscard),
-			atomic.LoadInt64(&counts.numCreatedToCheck),
-			atomic.LoadInt64(&counts.numCreatedToReset),
-			atomic.LoadInt64(&counts.numCreatedToTimeout),
-			atomic.LoadInt64(&counts.numCreatedToError),
-			atomic.LoadInt64(&counts.numReadToCheck),
-			atomic.LoadInt64(&counts.numReadToTimeout),
-			atomic.LoadInt64(&counts.numReadToReset),
-			atomic.LoadInt64(&counts.numReadToError),
-			atomic.LoadInt64(&counts.numCheckToCreated),
-			atomic.LoadInt64(&counts.numCheckToRead),
-			atomic.LoadInt64(&counts.numCheckToFound),
-			atomic.LoadInt64(&counts.numCheckToError),
-			atomic.LoadInt64(&counts.numCheckToDiscard),
-			atomic.LoadInt64(&counts.numDiscardToReset),
-			atomic.LoadInt64(&counts.numDiscardToTimeout),
-			atomic.LoadInt64(&counts.numDiscardToError),
-			atomic.LoadInt64(&counts.numDiscardToClose),
-		)
+		if counts.totalTransitions != 0 {
+			logger.Infof("conn-stats-verbose: %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f",
+				asn,
+				counts.cc,
+				atomic.LoadInt64(&counts.numCreatedToDiscard),
+				atomic.LoadInt64(&counts.numCreatedToCheck),
+				atomic.LoadInt64(&counts.numCreatedToReset),
+				atomic.LoadInt64(&counts.numCreatedToTimeout),
+				atomic.LoadInt64(&counts.numCreatedToError),
+				atomic.LoadInt64(&counts.numReadToCheck),
+				atomic.LoadInt64(&counts.numReadToTimeout),
+				atomic.LoadInt64(&counts.numReadToReset),
+				atomic.LoadInt64(&counts.numReadToError),
+				atomic.LoadInt64(&counts.numCheckToCreated),
+				atomic.LoadInt64(&counts.numCheckToRead),
+				atomic.LoadInt64(&counts.numCheckToFound),
+				atomic.LoadInt64(&counts.numCheckToError),
+				atomic.LoadInt64(&counts.numCheckToDiscard),
+				atomic.LoadInt64(&counts.numDiscardToReset),
+				atomic.LoadInt64(&counts.numDiscardToTimeout),
+				atomic.LoadInt64(&counts.numDiscardToError),
+				atomic.LoadInt64(&counts.numDiscardToClose),
+				atomic.LoadInt64(&counts.totalTransitions),
+				float64(atomic.LoadInt64(&counts.numCreatedToDiscard)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numCreatedToCheck)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numCreatedToReset)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numCreatedToTimeout)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numCreatedToError)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numReadToCheck)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numReadToTimeout)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numReadToReset)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numReadToError)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numCheckToCreated)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numCheckToRead)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numCheckToFound)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numCheckToError)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numCheckToDiscard)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numDiscardToReset)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numDiscardToTimeout)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numDiscardToError)/atomic.LoadInt64(&counts.totalTransitions)),
+				float64(atomic.LoadInt64(&counts.numDiscardToClose)/atomic.LoadInt64(&counts.totalTransitions)),
+			)
+		} else {
+			logger.Infof("conn-stats-verbose: %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f",
+				asn,
+				counts.cc,
+				atomic.LoadInt64(&counts.numCreatedToDiscard),
+				atomic.LoadInt64(&counts.numCreatedToCheck),
+				atomic.LoadInt64(&counts.numCreatedToReset),
+				atomic.LoadInt64(&counts.numCreatedToTimeout),
+				atomic.LoadInt64(&counts.numCreatedToError),
+				atomic.LoadInt64(&counts.numReadToCheck),
+				atomic.LoadInt64(&counts.numReadToTimeout),
+				atomic.LoadInt64(&counts.numReadToReset),
+				atomic.LoadInt64(&counts.numReadToError),
+				atomic.LoadInt64(&counts.numCheckToCreated),
+				atomic.LoadInt64(&counts.numCheckToRead),
+				atomic.LoadInt64(&counts.numCheckToFound),
+				atomic.LoadInt64(&counts.numCheckToError),
+				atomic.LoadInt64(&counts.numCheckToDiscard),
+				atomic.LoadInt64(&counts.numDiscardToReset),
+				atomic.LoadInt64(&counts.numDiscardToTimeout),
+				atomic.LoadInt64(&counts.numDiscardToError),
+				atomic.LoadInt64(&counts.numDiscardToClose),
+				atomic.LoadInt64(&counts.totalTransitions),
+				float64(atomic.LoadInt64(&counts.numCreatedToDiscard)),
+				float64(atomic.LoadInt64(&counts.numCreatedToCheck)),
+				float64(atomic.LoadInt64(&counts.numCreatedToReset)),
+				float64(atomic.LoadInt64(&counts.numCreatedToTimeout)),
+				float64(atomic.LoadInt64(&counts.numCreatedToError)),
+				float64(atomic.LoadInt64(&counts.numReadToCheck)),
+				float64(atomic.LoadInt64(&counts.numReadToTimeout)),
+				float64(atomic.LoadInt64(&counts.numReadToReset)),
+				float64(atomic.LoadInt64(&counts.numReadToError)),
+				float64(atomic.LoadInt64(&counts.numCheckToCreated)),
+				float64(atomic.LoadInt64(&counts.numCheckToRead)),
+				float64(atomic.LoadInt64(&counts.numCheckToFound)),
+				float64(atomic.LoadInt64(&counts.numCheckToError)),
+				float64(atomic.LoadInt64(&counts.numCheckToDiscard)),
+				float64(atomic.LoadInt64(&counts.numDiscardToReset)),
+				float64(atomic.LoadInt64(&counts.numDiscardToTimeout)),
+				float64(atomic.LoadInt64(&counts.numDiscardToError)),
+				float64(atomic.LoadInt64(&counts.numDiscardToClose)),
+			)
+		}
+
 	}
 
 	c.Reset()
@@ -447,6 +513,7 @@ func (c *connStats) Reset() {
 	atomic.StoreInt64(&c.numDiscardToTimeout, 0)
 	atomic.StoreInt64(&c.numDiscardToError, 0)
 	atomic.StoreInt64(&c.numDiscardToClose, 0)
+	atomic.StoreInt64(&c.totalTransitions, 0)
 
 	c.geoIPMap = make(map[uint]*asnCounts)
 
@@ -473,6 +540,7 @@ func (c *connStats) createdToDiscard(asn uint, cc string) {
 	atomic.AddInt64(&c.numCreated, -1)
 	atomic.AddInt64(&c.numIODiscarding, 1)
 	atomic.AddInt64(&c.numCreatedToDiscard, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -484,6 +552,7 @@ func (c *connStats) createdToDiscard(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToDiscard, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -492,6 +561,7 @@ func (c *connStats) createdToCheck(asn uint, cc string) {
 	atomic.AddInt64(&c.numCreated, -1)
 	atomic.AddInt64(&c.numChecking, 1)
 	atomic.AddInt64(&c.numCreatedToCheck, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -503,6 +573,7 @@ func (c *connStats) createdToCheck(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numChecking, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToCheck, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -511,6 +582,7 @@ func (c *connStats) createdToReset(asn uint, cc string) {
 	atomic.AddInt64(&c.numCreated, -1)
 	atomic.AddInt64(&c.numReset, 1)
 	atomic.AddInt64(&c.numCreatedToReset, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -522,6 +594,7 @@ func (c *connStats) createdToReset(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToReset, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -530,6 +603,7 @@ func (c *connStats) createdToTimeout(asn uint, cc string) {
 	atomic.AddInt64(&c.numCreated, -1)
 	atomic.AddInt64(&c.numTimeout, 1)
 	atomic.AddInt64(&c.numCreatedToTimeout, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -541,6 +615,7 @@ func (c *connStats) createdToTimeout(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToTimeout, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -549,6 +624,7 @@ func (c *connStats) createdToError(asn uint, cc string) {
 	atomic.AddInt64(&c.numCreated, -1)
 	atomic.AddInt64(&c.numErr, 1)
 	atomic.AddInt64(&c.numCreatedToError, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -560,6 +636,7 @@ func (c *connStats) createdToError(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numCreated, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToError, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -568,6 +645,7 @@ func (c *connStats) readToCheck(asn uint, cc string) {
 	atomic.AddInt64(&c.numReading, -1)
 	atomic.AddInt64(&c.numChecking, 1)
 	atomic.AddInt64(&c.numReadToCheck, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -579,6 +657,7 @@ func (c *connStats) readToCheck(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numChecking, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numReadToCheck, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -587,6 +666,7 @@ func (c *connStats) readToTimeout(asn uint, cc string) {
 	atomic.AddInt64(&c.numReading, -1)
 	atomic.AddInt64(&c.numTimeout, 1)
 	atomic.AddInt64(&c.numReadToTimeout, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -598,6 +678,7 @@ func (c *connStats) readToTimeout(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numReadToTimeout, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -606,6 +687,7 @@ func (c *connStats) readToReset(asn uint, cc string) {
 	atomic.AddInt64(&c.numReading, -1)
 	atomic.AddInt64(&c.numReset, 1)
 	atomic.AddInt64(&c.numReadToReset, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -617,6 +699,7 @@ func (c *connStats) readToReset(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numReadToReset, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -625,6 +708,7 @@ func (c *connStats) readToError(asn uint, cc string) {
 	atomic.AddInt64(&c.numReading, -1)
 	atomic.AddInt64(&c.numErr, 1)
 	atomic.AddInt64(&c.numReadToError, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -636,6 +720,7 @@ func (c *connStats) readToError(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numReading, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numReadToError, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -644,6 +729,7 @@ func (c *connStats) checkToCreated(asn uint, cc string) {
 	atomic.AddInt64(&c.numChecking, -1)
 	atomic.AddInt64(&c.numCreated, 1)
 	atomic.AddInt64(&c.numCheckToCreated, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -655,6 +741,7 @@ func (c *connStats) checkToCreated(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCreated, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCheckToCreated, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -663,6 +750,7 @@ func (c *connStats) checkToRead(asn uint, cc string) {
 	atomic.AddInt64(&c.numChecking, -1)
 	atomic.AddInt64(&c.numReading, 1)
 	atomic.AddInt64(&c.numCheckToRead, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -674,6 +762,7 @@ func (c *connStats) checkToRead(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numReading, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCheckToRead, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -682,6 +771,7 @@ func (c *connStats) checkToFound(asn uint, cc string) {
 	atomic.AddInt64(&c.numChecking, -1)
 	atomic.AddInt64(&c.numFound, 1)
 	atomic.AddInt64(&c.numCheckToFound, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -693,6 +783,7 @@ func (c *connStats) checkToFound(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numFound, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCheckToFound, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -701,6 +792,7 @@ func (c *connStats) checkToError(asn uint, cc string) {
 	atomic.AddInt64(&c.numChecking, -1)
 	atomic.AddInt64(&c.numErr, 1)
 	atomic.AddInt64(&c.numCheckToError, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -712,6 +804,7 @@ func (c *connStats) checkToError(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCheckToError, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -720,6 +813,7 @@ func (c *connStats) checkToDiscard(asn uint, cc string) {
 	atomic.AddInt64(&c.numChecking, -1)
 	atomic.AddInt64(&c.numIODiscarding, 1)
 	atomic.AddInt64(&c.numCheckToDiscard, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -731,6 +825,7 @@ func (c *connStats) checkToDiscard(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numChecking, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCheckToDiscard, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -739,6 +834,7 @@ func (c *connStats) discardToReset(asn uint, cc string) {
 	atomic.AddInt64(&c.numIODiscarding, -1)
 	atomic.AddInt64(&c.numReset, 1)
 	atomic.AddInt64(&c.numDiscardToReset, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -750,6 +846,7 @@ func (c *connStats) discardToReset(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numDiscardToReset, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -758,6 +855,7 @@ func (c *connStats) discardToTimeout(asn uint, cc string) {
 	atomic.AddInt64(&c.numIODiscarding, -1)
 	atomic.AddInt64(&c.numTimeout, 1)
 	atomic.AddInt64(&c.numDiscardToTimeout, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -769,6 +867,7 @@ func (c *connStats) discardToTimeout(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numDiscardToTimeout, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -777,6 +876,7 @@ func (c *connStats) discardToError(asn uint, cc string) {
 	atomic.AddInt64(&c.numIODiscarding, -1)
 	atomic.AddInt64(&c.numErr, 1)
 	atomic.AddInt64(&c.numDiscardToError, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -788,6 +888,7 @@ func (c *connStats) discardToError(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numDiscardToError, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 
@@ -796,6 +897,7 @@ func (c *connStats) discardToClose(asn uint, cc string) {
 	atomic.AddInt64(&c.numIODiscarding, -1)
 	atomic.AddInt64(&c.numClosed, 1)
 	atomic.AddInt64(&c.numDiscardToClose, 1)
+	atomic.AddInt64(&c.totalTransitions, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -807,6 +909,7 @@ func (c *connStats) discardToClose(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numIODiscarding, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numClosed, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numDiscardToClose, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
 	}
 }
 

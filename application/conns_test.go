@@ -115,6 +115,7 @@ func TestPrintAndReset(t *testing.T) {
 			numCreatedToReset:   8,
 			numCreatedToTimeout: 9,
 			numCreatedToError:   10,
+			totalTransitions:    2,
 		},
 	}
 	connManager.connStats.numCreated = 55
