@@ -100,8 +100,6 @@ func findMarkMac(mark, buf []byte, startPos, maxPos int, fromTail bool) (pos int
 
 	// The client has to actually do a substring search since the server can
 	// and will send payload trailing the response.
-	//
-	// XXX: bytes.Index() uses a naive search, which kind of sucks.
 	pos = bytes.Index(buf[startPos:endPos], mark)
 	if pos == -1 {
 		return -1

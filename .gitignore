@@ -5,3 +5,5 @@ application/application
 libtapdance/genkey
 cmd/registration-server/registration-server
 target
+bin/
+Cargo.lock
