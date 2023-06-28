@@ -123,17 +123,26 @@ func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clie
 	flowDescription := fmt.Sprintf("%s -> %s ", originalSrc, originalDst)
 	logger := log.New(os.Stdout, "[CONN] "+flowDescription, golog.Ldate|golog.Lmicroseconds)
 
+	remoteAddr := clientConn.RemoteAddr()
+	var remoteIP net.IP
+	if addr, ok := remoteAddr.(*net.TCPAddr); ok {
+		remoteIP = addr.IP
+	} else if addr, ok := remoteAddr.(*net.UDPAddr); ok {
+		remoteIP = addr.IP
+	} else {
+		return
+	}
 	var asn uint = 0
 	var cc string
 	var err error
-	cc, err = regManager.GeoIP.CC(net.ParseIP(clientConn.RemoteAddr().String()))
+	cc, err = regManager.GeoIP.CC(remoteIP)
 	if err != nil {
 		logger.Errorln("Failed to get CC:", err)
 		return
 	}
 	if cc != "unk" {
 		// logger.Infoln("CC not unk:", cc, "ASN:", asn) // TESTING
-		asn, err = regManager.GeoIP.ASN(net.ParseIP(clientConn.RemoteAddr().String()))
+		asn, err = regManager.GeoIP.ASN(remoteIP)
 		if err != nil {
 			logger.Errorln("Failed to get ASN:", err)
 			return
