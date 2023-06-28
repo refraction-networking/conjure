@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	golog "log"
 	"net"
 	"os"
 	"sync"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	cj "github.com/refraction-networking/conjure/application/lib"
+	"github.com/refraction-networking/conjure/application/log"
 )
 
 // MockGeoIP is a mock implementation of the geoip.GeoIP interface.
@@ -89,4 +91,35 @@ func TestHandleNewTCPConn(t *testing.T) {
 
 	// Close the client connection
 	clientConn.Close()
+}
+
+func TestPrintAndReset(t *testing.T) {
+	logger := log.New(os.Stdout, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
+	connManager := newConnManager(nil)
+	newGeoIPMap := make(map[uint]*asnCounts)
+	newGeoIPMap[0] = &asnCounts{
+		cc: "unk",
+		statCounts: statCounts{
+			numCreatedToDiscard: 1,
+			numCreatedToCheck:   2,
+			numCreatedToReset:   3,
+			numCreatedToTimeout: 4,
+			numCreatedToError:   5,
+		},
+	}
+	newGeoIPMap[1] = &asnCounts{
+		cc: "US",
+		statCounts: statCounts{
+			numCreatedToDiscard: 6,
+			numCreatedToCheck:   7,
+			numCreatedToReset:   8,
+			numCreatedToTimeout: 9,
+			numCreatedToError:   10,
+		},
+	}
+	connManager.connStats.numCreated = 55
+	connManager.connStats.numCheckToError = 1
+	connManager.connStats.numReset = 17
+	connManager.connStats.geoIPMap = newGeoIPMap
+	connManager.connStats.PrintAndReset(logger)
 }
