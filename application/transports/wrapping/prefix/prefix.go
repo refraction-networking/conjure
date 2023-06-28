@@ -97,6 +97,16 @@ var (
 	// ErrBadParams indicates that the parameters provided to a call on the server side do not make
 	// sense in the context that they are provided and the registration will be ignored.
 	ErrBadParams = errors.New("bad parameters provided")
+
+	// ErrIncorrectPrefix indicates that tryFindRegistration found a valid registration based on
+	// the obfuscated tag, however the prefix that it matched was not the prefix indicated in the
+	// registration.
+	ErrIncorrectPrefix = errors.New("found connection for unexpected prefix")
+
+	// ErrIncorrectTransport indicates that tryFindRegistration found a valid registration based on
+	// the obfuscated tag, however the prefix that it matched was not the prefix indicated in the
+	// registration.
+	ErrIncorrectTransport = errors.New("found registration w/ incorrect transport type")
 )
 
 // Name returns the human-friendly name of the prefix.
@@ -290,8 +300,9 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 		return nil, transports.ErrTryAgain
 	}
 
+	var eWrongPrefix error = nil
 	err := transports.ErrNotTransport
-	for _, prefix := range t.SupportedPrefixes {
+	for id, prefix := range t.SupportedPrefixes {
 		if len(prefix.StaticMatch) > 0 {
 			matchLen := min(len(prefix.StaticMatch), data.Len())
 			if !bytes.Equal(prefix.StaticMatch[:matchLen], data.Bytes()[:matchLen]) {
@@ -337,11 +348,30 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 			continue
 		}
 
+		if reg.Transport != pb.TransportType_Prefix {
+			return nil, ErrIncorrectTransport
+		} else if params, ok := reg.TransportParams.(*pb.PrefixTransportParams); ok {
+			if params == nil || params.GetPrefixId() != int32(id) {
+				// If the registration we found has no params specified (invalid and shouldn't have
+				// been ingested) or if the prefix ID does not match the expected prefix, set the
+				// err to return if we can't match any other prefixes.
+				eWrongPrefix = ErrIncorrectPrefix
+				continue
+			}
+		}
+
 		// We don't want to forward the prefix or Tag bytes, but if any message
 		// remains we do want to forward it.
 		data.Next(prefix.Offset + forwardBy)
 
 		return reg, nil
+	}
+
+	if err == transports.ErrNotTransport && eWrongPrefix == ErrIncorrectPrefix {
+		// If we found a match and it was the only one that matched (i.e. none of the other prefixes
+		// could possibly match even if we read more bytes). Then something went wrong and the
+		// client is attempting to connect with the wrong prefix.
+		return nil, ErrIncorrectPrefix
 	}
 
 	return nil, err

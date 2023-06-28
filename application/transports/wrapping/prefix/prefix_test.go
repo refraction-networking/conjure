@@ -30,47 +30,57 @@ func TestSuccessfulWrap(t *testing.T) {
 	extra25519.PrivateKeyToCurve25519(&curve25519Private, private)
 	curve25519.ScalarBaseMult(&curve25519Public, &curve25519Private)
 
-	var p int32 = int32(Min)
-	params := &pb.PrefixTransportParams{PrefixId: &p}
-
 	var transport = Transport{
 		TagObfuscator:     transports.CTRObfuscator{},
 		Privkey:           curve25519Private,
 		SupportedPrefixes: defaultPrefixes,
 	}
-	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, params, randomizeDstPortMinVersion)
-	defer c2p.Close()
-	defer sfp.Close()
-	require.NotNil(t, reg)
-
-	hmacID := core.ConjureHMAC(reg.Keys.SharedSecret, "PrefixTransportHMACString")
 	message := []byte(`test message!`)
 
-	for _, prefix := range defaultPrefixes {
-		// if prefix.fn != nil {
-		// 	// skip prefixes that do a special decoding for this test
-		// 	continue
-		// }
+	for idx, _ := range defaultPrefixes {
 
-		obfuscatedID, err := transport.TagObfuscator.Obfuscate(hmacID, curve25519Public[:])
-		require.Nil(t, err)
-		// t.Logf("hmacid - %s\nobfuscated id - %s", hex.EncodeToString(hmacID), hex.EncodeToString(obfuscatedID))
-		_, err = c2p.Write(append(prefix.StaticMatch, append(obfuscatedID, message...)...))
-		require.Nil(t, err)
+		func() {
+			var p int32 = int32(idx)
+			params := &pb.PrefixTransportParams{PrefixId: &p}
+			manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
+			c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, params, randomizeDstPortMinVersion)
+			defer c2p.Close()
+			defer sfp.Close()
+			require.NotNil(t, reg)
 
-		var buf [4096]byte
-		var buffer bytes.Buffer
-		n, _ := sfp.Read(buf[:])
-		buffer.Write(buf[:n])
+			hmacID := core.ConjureHMAC(reg.Keys.SharedSecret, "PrefixTransportHMACString")
 
-		_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
-		require.Nil(t, err, "error getting wrapped connection")
+			for id, prefix := range defaultPrefixes {
+				// if prefix.fn != nil {
+				// 	// skip prefixes that do a special decoding for this test
+				// 	continue
+				// }
 
-		received := make([]byte, len(message))
-		_, err = io.ReadFull(wrapped, received)
-		require.Nil(t, err, "failed reading from connection")
-		require.True(t, bytes.Equal(message, received), "%s\n%s\n%s", string(message), string(received), prefix.StaticMatch)
+				obfuscatedID, err := transport.TagObfuscator.Obfuscate(hmacID, curve25519Public[:])
+				require.Nil(t, err)
+				// t.Logf("hmacid - %s\nobfuscated id - %s", hex.EncodeToString(hmacID), hex.EncodeToString(obfuscatedID))
+				_, err = c2p.Write(append(prefix.StaticMatch, append(obfuscatedID, message...)...))
+				require.Nil(t, err)
+
+				var buf [4096]byte
+				var buffer bytes.Buffer
+				n, _ := sfp.Read(buf[:])
+				buffer.Write(buf[:n])
+
+				_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+				if id != idx {
+					require.ErrorIs(t, err, ErrIncorrectPrefix)
+					continue
+				} else {
+					require.Nil(t, err)
+				}
+
+				received := make([]byte, len(message))
+				_, err = io.ReadFull(wrapped, received)
+				require.Nil(t, err, "failed reading from connection")
+				require.True(t, bytes.Equal(message, received), "%s\n%s\n%s", string(message), string(received), prefix.StaticMatch)
+			}
+		}()
 	}
 }
 

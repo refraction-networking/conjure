@@ -119,7 +119,7 @@ func TestPrefixOverride_Override(t *testing.T) {
 	var out expected
 	var i = 0
 	test := func(t *testing.T) {
-		i += 1
+		i++
 		rr := bytes.NewReader(d("00000000"))
 		err := po.Override(c, rr)
 

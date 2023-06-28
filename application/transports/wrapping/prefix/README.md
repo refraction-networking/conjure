@@ -28,14 +28,3 @@ In order to add a prefix ...
 
 In general this transport will not properly mimic the protocols that are sent as a prefix and should
 not be expected to do so.
-
----
-
-- [X] AllowRegistrarOverrides -> DisableRegistrarOverrides
-- [X] Prefix Override Randomize Default as Override system PoC test
-- [X] Long Prefixes
-- [X] flush after prefix test
-- [X] BDAPI Fix test
-- [ ] override test
-- [ ] Prefix transport still works even if you send the wrong prefix
-  - checks all prefixes (we could check after match if it was the right one)
