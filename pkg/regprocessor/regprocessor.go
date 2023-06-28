@@ -18,6 +18,7 @@ import (
 	"github.com/refraction-networking/conjure/application/lib"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/metrics"
+	"github.com/refraction-networking/conjure/pkg/regserver/overrides"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -130,6 +131,11 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		return nil, ErrZmqSocket
 	}
 
+	var regOverrides interfaces.Overrides = nil
+	if true { // TODO: update this with any desired registration overrides.
+		regOverrides = interfaces.Overrides([]interfaces.RegOverride{overrides.NewRandPrefixOverride()})
+	}
+
 	return &RegProcessor{
 		zmqMutex:      sync.Mutex{},
 		selectorMutex: sync.RWMutex{},
@@ -137,6 +143,7 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		transports:    make(map[pb.TransportType]lib.Transport),
 		authenticated: true,
 		privkey:       privkey,
+		regOverrides:  regOverrides,
 	}, nil
 }
 

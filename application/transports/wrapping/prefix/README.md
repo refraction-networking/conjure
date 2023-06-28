@@ -1,7 +1,7 @@
 
 # Prefix Transport
 
-This package impleemnts the prefix transport for the conjure refraction-networking system. The
+This package implements the prefix transport for the conjure refraction-networking system. The
 prefix transport operates in much the same way as the min transport, sending a tag in the fist
 packet signalling to the station that the flow has knowledge of a secret shared with the station by
 a previous registration.
@@ -31,9 +31,8 @@ not be expected to do so.
 
 ---
 
-Change this to an opt out rather than an opt in.
-
-- [ ] AllowRegistrarOverrides -> DisableRegistrarOverrides
-- [ ] Prefix Override Randomize Default as Override system PoC test
-- [ ] Long Prefixes
+- [X] AllowRegistrarOverrides -> DisableRegistrarOverrides
+- [X] Prefix Override Randomize Default as Override system PoC test
+- [X] Long Prefixes
 - [ ] flush after prefix test
+- [ ] override test (and config)

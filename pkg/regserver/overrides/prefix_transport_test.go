@@ -137,16 +137,16 @@ func TestPrefixOverride_Override(t *testing.T) {
 	t.Run("select using uninitialized PrefixOverride", test)
 
 	c = &pb.C2SWrapper{}
-	T := true
+	F := false
 	params := &pb.GenericTransportParams{}
 	p, err := anypb.New(params)
 	require.Nil(t, err)
 
 	ttMin := pb.TransportType_Min
 	reg := &pb.ClientToStation{
-		AllowRegistrarOverrides: &T,
-		TransportParams:         p,
-		Transport:               &ttMin,
+		DisableRegistrarOverrides: &F,
+		TransportParams:           p,
+		Transport:                 &ttMin,
 	}
 	c.RegistrationPayload = reg
 

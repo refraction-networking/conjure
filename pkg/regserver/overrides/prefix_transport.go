@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/refraction-networking/conjure/application/transports"
+	"github.com/refraction-networking/conjure/application/transports/wrapping/prefix"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -171,9 +172,9 @@ func NewPrefixTransportOverride(prefixesPath string) (interfaces.RegOverride, er
 
 // Override implements the RegOverride interface.
 func (po *PrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader) error {
-	if reg == nil || reg.RegistrationPayload == nil {
+	if reg == nil || reg.GetRegistrationPayload() == nil {
 		return ErrMissingRegistration
-	} else if reg.RegistrationPayload.GetTransport() != pb.TransportType_Prefix {
+	} else if reg.GetRegistrationPayload().GetTransport() != pb.TransportType_Prefix {
 		return ErrNotPrefixTransport
 	} else if po.prefixes == nil {
 		return nil
@@ -186,7 +187,7 @@ func (po *PrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader) err
 
 	// if we have made it this far we overwrite the prefix even if the new one is empty
 	params := &pb.PrefixTransportParams{}
-	err := transports.UnmarshalAnypbTo(reg.RegistrationPayload.GetTransportParams(), params)
+	err := transports.UnmarshalAnypbTo(reg.GetRegistrationPayload().GetTransportParams(), params)
 	if err != nil {
 		return err
 	}
@@ -195,7 +196,7 @@ func (po *PrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader) err
 	params.PrefixId = &i
 	params.FlushAfterPrefix = &fields.flushAfterPrefix
 
-	if reg.RegistrationResponse == nil {
+	if reg.GetRegistrationResponse() == nil {
 		reg.RegistrationResponse = &pb.RegistrationResponse{}
 	}
 
@@ -218,3 +219,57 @@ var (
 	ErrNotPrefixTransport  = errors.New("registration does not use Prefix transport")
 	ErrMissingRegistration = errors.New("no registration to modify")
 )
+
+// RandPrefixOverride allows the registration server to override the prefix chosen by the client when
+// they register using the Prefix transport with `disable_registration_overrides` enabled.
+type RandPrefixOverride struct{}
+
+// NewRandPrefixOverride returns an object that implements the Override trait specific to
+// when the Prefix transport it used. This is primarily for testing to ensure that the override
+// system works in practice.
+func NewRandPrefixOverride() *RandPrefixOverride {
+	return &RandPrefixOverride{}
+}
+
+// Override implements the RegOverride interface.
+func (rpo *RandPrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader) error {
+	if reg == nil || reg.GetRegistrationPayload() == nil {
+		return ErrMissingRegistration
+	} else if reg.GetRegistrationPayload().GetTransport() != pb.TransportType_Prefix {
+		return ErrNotPrefixTransport
+	}
+
+	newPrefix, err := prefix.TryFromID(prefix.Rand)
+
+	// if we have made it this far we overwrite the prefix even if the new one is empty
+	params := &pb.PrefixTransportParams{}
+	err = transports.UnmarshalAnypbTo(reg.GetRegistrationPayload().GetTransportParams(), params)
+	if err != nil {
+		return err
+	}
+
+	var fp = newPrefix.FlushAfterPrefix()
+	var i int32 = int32(newPrefix.ID())
+	params.PrefixId = &i
+	params.FlushAfterPrefix = &fp
+	params.Prefix = newPrefix.Bytes()
+
+	if reg.GetRegistrationResponse() == nil {
+		reg.RegistrationResponse = &pb.RegistrationResponse{}
+	}
+
+	port := newPrefix.DstPort(reg.GetSharedSecret())
+	if port > 0 {
+		p := uint32(port)
+		reg.RegistrationResponse.DstPort = &p
+	}
+
+	anypbParams, err := anypb.New(params)
+	if err != nil {
+		return err
+	}
+
+	reg.RegistrationResponse.TransportParams = anypbParams
+
+	return nil
+}
