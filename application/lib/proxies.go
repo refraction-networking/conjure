@@ -27,9 +27,6 @@ var (
 	// errConnTimeout replaces the ip.timeout error in the halfpipe to remove ips and extra bytes
 	errConnTimeout = errors.New("timeout")
 
-	// errBrokenPipe replaces the write: broken pipe error to prevent client IP logging
-	errBrokenPipe = errors.New("broken_pipe")
-
 	// replaces refused error to prevent client IP logging
 	errConnRefused = errors.New("refused")
 
@@ -95,7 +92,7 @@ func halfPipe(src net.Conn, dst net.Conn,
 		if ok {
 			e := cTCP.SetLinger(resetIfNotClosedAfter)
 			if eg := generalizeErr(e); eg != nil {
-				logger.Errorf("failed to SetLinger: %w", eg)
+				logger.Errorln("failed to SetLinger: ", eg)
 			}
 		}
 
