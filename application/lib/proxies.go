@@ -74,6 +74,15 @@ func halfPipe(src net.Conn, dst net.Conn,
 	var proxyStartTime = time.Now()
 	isUpload := strings.HasPrefix(tag, "Up")
 
+	cleanup := func() {
+		wg.Done()
+		// Finalize tunnel stats
+		proxyEndTime := time.Since(proxyStartTime)
+		stats.duration(int64(proxyEndTime/time.Millisecond), isUpload)
+		stats.completed(isUpload)
+	}
+	defer cleanup()
+
 	// Set deadlines in case either side disappears.
 	err := src.SetDeadline(time.Now().Add(proxyStallTimeout))
 	if err != nil {
@@ -192,12 +201,6 @@ func halfPipe(src net.Conn, dst net.Conn,
 			}
 		}
 	}
-
-	// Finalize tunnel stats
-	proxyEndTime := time.Since(proxyStartTime)
-	stats.duration(int64(proxyEndTime/time.Millisecond), isUpload)
-	stats.completed(isUpload)
-	wg.Done()
 }
 
 // Proxy take a registration and a net.Conn and forwards client traffic to the
