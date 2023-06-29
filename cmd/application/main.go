@@ -100,11 +100,11 @@ func main() {
 
 	connManager := newConnManager(nil)
 
-	cj.Stat().AddStatsModule(zmqIngester)
-	cj.Stat().AddStatsModule(regManager.LivenessTester)
-	cj.Stat().AddStatsModule(cj.GetProxyStats())
-	cj.Stat().AddStatsModule(regManager)
-	cj.Stat().AddStatsModule(connManager)
+	cj.Stat().AddStatsModule(zmqIngester, false)
+	cj.Stat().AddStatsModule(regManager.LivenessTester, false)
+	cj.Stat().AddStatsModule(cj.GetProxyStats(), false)
+	cj.Stat().AddStatsModule(regManager, false)
+	cj.Stat().AddStatsModule(connManager, true)
 
 	// Periodically clean old registrations
 	wg.Add(1)

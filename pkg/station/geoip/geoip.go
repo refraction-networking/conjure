@@ -109,6 +109,9 @@ func (mmdb *maxMindDatabase) CC(ipAddress net.IP) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if record == nil {
+		return "unk", nil
+	}
 
 	return record.Country.IsoCode, nil
 }
