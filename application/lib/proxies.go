@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,6 +18,7 @@ import (
 )
 
 const proxyStallTimeout = 30 * time.Second
+const resetIfNotClosedAfter = 10 // seconds
 
 var (
 	// errConnReset replaces the reset error in the halfpipe to remove ips and extra bytes
@@ -39,32 +41,35 @@ var (
 )
 
 func generalizeErr(err error) error {
-	if err == nil {
+	switch {
+	case err == nil:
 		return nil
-	} else if errors.Is(err, net.ErrClosed) {
+	case
+		errors.Is(err, net.ErrClosed), // Errors indicating operation on something already closed.
+		errors.Is(err, io.EOF),
+		errors.Is(err, syscall.EPIPE),
+		errors.Is(err, os.ErrClosed):
 		return nil
-	} else if errors.Is(err, io.EOF) {
-		return nil
-	} else if errors.Is(err, syscall.ECONNRESET) {
+	case errors.Is(err, syscall.ECONNRESET):
 		return errConnReset
-	} else if errors.Is(err, syscall.ECONNREFUSED) {
+	case errors.Is(err, syscall.ECONNREFUSED):
 		return errConnRefused
-	} else if errors.Is(err, syscall.ECONNABORTED) {
+	case errors.Is(err, syscall.ECONNABORTED):
 		return errConnAborted
-	} else if errors.Is(err, syscall.EPIPE) {
-		return errBrokenPipe
-	} else if errors.Is(err, syscall.EHOSTUNREACH) {
+	case errors.Is(err, syscall.EHOSTUNREACH):
 		return errUnreachable
-	} else if errN, ok := err.(net.Error); ok && errN.Timeout() {
-		return errConnTimeout
+	default:
+		if errN, ok := err.(net.Error); ok && errN.Timeout() {
+			return errConnTimeout
+		}
 	}
 
 	// if it is not a well known error, return it
 	return err
 }
 
-// this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to pass around
-// TODO: refactor
+// this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to
+// pass around
 func halfPipe(src net.Conn, dst net.Conn,
 	wg *sync.WaitGroup,
 	oncePrintErr *sync.Once,
@@ -75,43 +80,63 @@ func halfPipe(src net.Conn, dst net.Conn,
 	isUpload := strings.HasPrefix(tag, "Up")
 
 	cleanup := func() {
-		wg.Done()
 		// Finalize tunnel stats
 		proxyEndTime := time.Since(proxyStartTime)
 		stats.duration(int64(proxyEndTime/time.Millisecond), isUpload)
 		stats.completed(isUpload)
+		wg.Done()
 	}
 	defer cleanup()
 
-	closeConn := func(c net.Conn) {
-		// Close dst
-		errConnClose := dst.Close()
-		if e := generalizeErr(errConnClose); e != nil {
-			if errors.Is(e, errConnTimeout) {
-				stats.CovertConnErr = e.Error()
-				stats.ClientConnErr = e.Error()
-			} else if isUpload {
-				if stats.CovertConnErr == "" {
-					stats.CovertConnErr = e.Error()
-				}
+	closeConn := func(c net.Conn, isSrc bool) {
+		var errConnClose error
+
+		// If the conn is TCP and close would hang because we have unacknowledged data in the buffer
+		// we force the socket to close after 10 seconds. Non-TCP sockets should not have this issue
+		cTCP, ok := c.(*net.TCPConn)
+		if ok {
+			e := cTCP.SetLinger(resetIfNotClosedAfter)
+			if eg := generalizeErr(e); eg != nil {
+				logger.Errorf("failed to SetLinger: %w", eg)
 			} else {
+				errConnClose = cTCP.Close()
+			}
+		} else {
+			errConnClose = c.Close()
+		}
+
+		if eg := generalizeErr(errConnClose); eg != nil {
+			if errors.Is(eg, errConnTimeout) {
+				stats.CovertConnErr = eg.Error()
+				stats.ClientConnErr = eg.Error()
+			} else if isUpload == isSrc { // !(isUpload xor isSource) => connection to covert
+				if stats.CovertConnErr == "" {
+					stats.CovertConnErr = eg.Error()
+				}
+			} else { // isUpload xor isSource => connection to client
 				if stats.ClientConnErr == "" {
-					stats.ClientConnErr = e.Error()
+					stats.ClientConnErr = eg.Error()
 				}
 			}
 		}
 	}
-	defer closeConn(src)
-	defer closeConn(dst)
+
+	defer func() {
+		// ensure that neither close blocks on the other
+		go closeConn(src, true)
+		closeConn(dst, false)
+	}()
 
 	// Set deadlines in case either side disappears.
 	err := src.SetDeadline(time.Now().Add(proxyStallTimeout))
 	if err != nil {
 		logger.Errorln("error setting deadline for src conn: ", tag)
+		return
 	}
 	err = dst.SetDeadline(time.Now().Add(proxyStallTimeout))
 	if err != nil {
 		logger.Errorln("error setting deadline for dst conn: ", tag)
+		return
 	}
 
 	// using io.CopyBuffer doesn't let us see
@@ -176,16 +201,17 @@ func halfPipe(src net.Conn, dst net.Conn,
 			break
 		}
 
-		// refresh stall timeout - set both because it only happens on write
-		// so if connection is sending traffic unidirectionally we prevent
-		// the receiving side from timing out.
+		// refresh stall timeout - set both because it only happens on write so if connection is
+		// sending traffic unidirectionally we prevent the receiving side from timing out.
 		err := src.SetDeadline(time.Now().Add(proxyStallTimeout))
 		if err != nil {
 			logger.Errorln("error setting deadline for src conn: ", tag)
+			return
 		}
 		err = dst.SetDeadline(time.Now().Add(proxyStallTimeout))
 		if err != nil {
 			logger.Errorln("error setting deadline for dst conn: ", tag)
+			return
 		}
 	}
 }
