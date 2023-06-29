@@ -2,6 +2,7 @@ package encryption
 
 import (
 	"bufio"
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -71,6 +72,10 @@ func GeneratePrivkey() ([]byte, error) {
 
 // PubkeyFromPrivkey returns the public key that corresponds to privkey.
 func PubkeyFromPrivkey(privkey []byte) []byte {
+	if len(privkey) == ed25519.PrivateKeySize {
+		return privkey[ed25519.PublicKeySize:]
+	}
+
 	pubkey, err := curve25519.X25519(privkey, curve25519.Basepoint)
 	if err != nil {
 		panic(err)
