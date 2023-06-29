@@ -98,12 +98,10 @@ func halfPipe(src net.Conn, dst net.Conn,
 			e := cTCP.SetLinger(resetIfNotClosedAfter)
 			if eg := generalizeErr(e); eg != nil {
 				logger.Errorf("failed to SetLinger: %w", eg)
-			} else {
-				errConnClose = cTCP.Close()
 			}
-		} else {
-			errConnClose = c.Close()
 		}
+
+		errConnClose = c.Close()
 
 		if eg := generalizeErr(errConnClose); eg != nil {
 			if errors.Is(eg, errConnTimeout) {
