@@ -89,8 +89,6 @@ func halfPipe(src net.Conn, dst net.Conn,
 	defer cleanup()
 
 	closeConn := func(c net.Conn, isSrc bool) {
-		var errConnClose error
-
 		// If the conn is TCP and close would hang because we have unacknowledged data in the buffer
 		// we force the socket to close after 10 seconds. Non-TCP sockets should not have this issue
 		cTCP, ok := c.(*net.TCPConn)
@@ -101,8 +99,7 @@ func halfPipe(src net.Conn, dst net.Conn,
 			}
 		}
 
-		errConnClose = c.Close()
-
+		errConnClose := c.Close()
 		if eg := generalizeErr(errConnClose); eg != nil {
 			if errors.Is(eg, errConnTimeout) {
 				stats.CovertConnErr = eg.Error()
