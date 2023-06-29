@@ -23,25 +23,27 @@ func TestTransportParameterFunctionality(t *testing.T) {
 	transport := &min.ClientTransport{}
 
 	// If params is unset it returns nil
-	params := transport.GetParams()
+	params, err := transport.GetParams()
+	require.Nil(t, err)
 	require.Nil(t, params)
 
 	transport.Parameters = paramsRandomize
 
 	// Once params are set it returns a protobuf message that can be cast and parsed or otherwise
 	// operated upon
-	params = transport.GetParams()
+	params, err = transport.GetParams()
+	require.Nil(t, err)
 	require.Equal(t, true, params.(*pb.GenericTransportParams).GetRandomizeDstPort())
 
 	// We can then set the parameters if the proper parameters structure is provided even using
 	// the generic transport interface.
 	var gt cj.Transport = transport
-	err := gt.SetParams(paramsStatic)
+	err = gt.SetParams(paramsStatic)
 	require.Nil(t, err)
 
 	// The updated parameters are reflected when we get the parameters,  again returning a protobuf
 	// message that can be cast and parsed or otherwise operated upon.
-	params = transport.GetParams()
+	params, err = transport.GetParams()
 	require.Nil(t, err)
 	require.Equal(t, false, params.(*pb.GenericTransportParams).GetRandomizeDstPort())
 

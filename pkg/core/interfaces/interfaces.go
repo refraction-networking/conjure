@@ -22,14 +22,14 @@ type Transport interface {
 
 	// GetParams returns a generic protobuf with any parameters from both the registration and the
 	// transport.
-	GetParams() proto.Message
+	GetParams() (proto.Message, error)
 
 	// SetParams allows the caller to set parameters associated with the transport, returning an
 	// error if the provided generic message is not compatible.
 	SetParams(any) error
 
 	// GetDstPort returns the destination port that the client should open the phantom connection with.
-	GetDstPort(seed []byte, params any) (uint16, error)
+	GetDstPort(seed []byte) (uint16, error)
 
 	// PrepareKeys provides an opportunity for the transport to integrate the station public key
 	// as well as bytes from the deterministic random generator associated with the registration
