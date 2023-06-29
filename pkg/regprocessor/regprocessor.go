@@ -340,8 +340,14 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		if err != nil {
 			return nil, err
 		}
+		regResp = c2sPayload.GetRegistrationResponse()
+	} else {
+		regResp.TransportParams = nil
+		if c2sPayload.RegistrationResponse != nil {
+			c2sPayload.RegistrationResponse.TransportParams = nil
+		}
+		regResp = c2sPayload.GetRegistrationResponse()
 	}
-	regResp = c2sPayload.GetRegistrationResponse()
 
 	return regResp, nil
 }

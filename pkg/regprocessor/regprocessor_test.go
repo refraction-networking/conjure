@@ -469,7 +469,8 @@ func TestRegProcessBdReqOverride(t *testing.T) {
 
 	// ----
 
-	// // ensure that nil is returned if DisableRegistrarOverrides is set.
+	// ensure that the expected prefix (the one provided) is returned if DisableRegistrarOverrides
+	// is set.
 
 	params, err = anypb.New(&pb.PrefixTransportParams{
 		PrefixId:         &id,
