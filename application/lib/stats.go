@@ -29,7 +29,8 @@ type stats interface {
 type Stats struct {
 	logger *log.Logger
 
-	moduleStats []stats
+	moduleStats  []stats
+	verboseStats []stats
 
 	// TODO JMWAMPLE REMOVE
 	activeConns            int64 // incremented on add, decremented on remove, not reset
@@ -68,12 +69,16 @@ func Stat() *Stats {
 	return &statInstance
 }
 
-func (s *Stats) AddStatsModule(sm stats) {
+func (s *Stats) AddStatsModule(sm stats, isVerbose bool) {
 	if sm == nil {
 		return
 	}
 
-	s.moduleStats = append(s.moduleStats, sm)
+	if isVerbose {
+		s.verboseStats = append(s.verboseStats, sm)
+	} else {
+		s.moduleStats = append(s.moduleStats, sm)
+	}
 }
 
 func initStats() {
@@ -84,11 +89,19 @@ func initStats() {
 		genMutex:    &sync.Mutex{},
 	}
 
-	// Periodic PrintStats()
+	// Periodic normal PrintStats()
 	ticker := time.NewTicker(5 * time.Second)
 	go func() {
 		for range ticker.C {
-			statInstance.PrintStats()
+			statInstance.PrintStats(false)
+		}
+	}()
+
+	// Periodic verbose PrintStats()
+	verbose_ticker := time.NewTicker(60 * time.Second)
+	go func() {
+		for range verbose_ticker.C {
+			statInstance.PrintStats(true)
 		}
 	}()
 }
@@ -120,23 +133,31 @@ func (s *Stats) ResetAll() {
 	s.Reset()
 }
 
-func (s *Stats) PrintStats() {
-	for _, module := range s.moduleStats {
-		if module != nil {
-			module.PrintAndReset(s.logger)
+func (s *Stats) PrintStats(isVerbose bool) {
+	if isVerbose {
+		for _, v_module := range s.verboseStats {
+			if v_module != nil {
+				v_module.PrintAndReset(s.logger)
+			}
 		}
-	}
+	} else {
+		for _, module := range s.moduleStats {
+			if module != nil {
+				module.PrintAndReset(s.logger)
+			}
+		}
 
-	s.logger.Infof("Conns: %d cur %d new %d err Regs: %d cur %d new (%d local %d API %d shared %d unknown) %d miss %d err %d dup LiveT: %d valid %d live %d cached Byte: %d up %d down",
-		atomic.LoadInt64(&s.activeConns), atomic.LoadInt64(&s.newConns), atomic.LoadInt64(&s.newErrConns),
-		atomic.LoadInt64(&s.activeRegistrations),
-		atomic.LoadInt64(&s.newRegistrations),
-		atomic.LoadInt64(&s.newLocalRegistrations), atomic.LoadInt64(&s.newAPIRegistrations), atomic.LoadInt64(&s.newSharedRegistrations), atomic.LoadInt64(&s.newUnknownRegistrations),
-		atomic.LoadInt64(&s.newMissedRegistrations),
-		atomic.LoadInt64(&s.newErrRegistrations), atomic.LoadInt64(&s.newDupRegistrations),
-		atomic.LoadInt64(&s.newLivenessPass), atomic.LoadInt64(&s.newLivenessFail), atomic.LoadInt64(&s.newLivenessCached),
-		atomic.LoadInt64(&s.newBytesUp), atomic.LoadInt64(&s.newBytesDown))
-	s.Reset()
+		s.logger.Infof("Conns: %d cur %d new %d err Regs: %d cur %d new (%d local %d API %d shared %d unknown) %d miss %d err %d dup LiveT: %d valid %d live %d cached Byte: %d up %d down",
+			atomic.LoadInt64(&s.activeConns), atomic.LoadInt64(&s.newConns), atomic.LoadInt64(&s.newErrConns),
+			atomic.LoadInt64(&s.activeRegistrations),
+			atomic.LoadInt64(&s.newRegistrations),
+			atomic.LoadInt64(&s.newLocalRegistrations), atomic.LoadInt64(&s.newAPIRegistrations), atomic.LoadInt64(&s.newSharedRegistrations), atomic.LoadInt64(&s.newUnknownRegistrations),
+			atomic.LoadInt64(&s.newMissedRegistrations),
+			atomic.LoadInt64(&s.newErrRegistrations), atomic.LoadInt64(&s.newDupRegistrations),
+			atomic.LoadInt64(&s.newLivenessPass), atomic.LoadInt64(&s.newLivenessFail), atomic.LoadInt64(&s.newLivenessCached),
+			atomic.LoadInt64(&s.newBytesUp), atomic.LoadInt64(&s.newBytesDown))
+		s.Reset()
+	}
 }
 
 func (s *Stats) AddConn() {
