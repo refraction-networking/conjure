@@ -38,6 +38,10 @@ type Transport interface {
 	// provided by the client during registration. The libVersion is provided incase of version
 	// dependent changes in the transport params or param parsing.
 	ParseParams(libVersion uint, data *anypb.Any) (any, error)
+
+	// ParamStrings returns an array of tag string that will be added to tunStats when a proxy
+	// session is closed.
+	ParamStrings(p any) []string
 }
 
 // WrappingTransport describes any transport that is able to passively

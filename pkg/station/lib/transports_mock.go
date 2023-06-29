@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net"
 
+	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -23,7 +24,7 @@ func (*mockTransport) Name() string      { return "MockTransport" }
 func (*mockTransport) LogPrefix() string { return "MOCK" }
 
 func (*mockTransport) GetIdentifier(d *DecoyRegistration) string {
-	return string(d.Keys.ConjureHMAC("MockTransportHMACString"))
+	return string(core.ConjureHMAC(d.Keys.SharedSecret, "MockTransportHMACString"))
 }
 
 func (*mockTransport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *RegistrationManager) (*DecoyRegistration, net.Conn, error) {
@@ -53,6 +54,12 @@ func (*mockTransport) ParseParams(libVersion uint, data *anypb.Any) (any, error)
 	var m *pb.GenericTransportParams
 	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
 	return m, err
+}
+
+// ParamStrings returns an array of tag string that will be added to tunStats when a proxy
+// session is closed. For now, no params of interest.
+func (m *mockTransport) ParamStrings(p any) []string {
+	return nil
 }
 
 // GetDstPort Given the library version, a seed, and a generic object

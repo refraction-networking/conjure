@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"math/rand"
 	"os"
 	"os/signal"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/station/log"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
+	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
 	pb "github.com/refraction-networking/conjure/proto"
 )
 
@@ -22,12 +22,12 @@ var sharedLogger *log.Logger
 var logClientIP = false
 
 var enabledTransports = map[pb.TransportType]cj.Transport{
-	pb.TransportType_Min:   min.Transport{},
-	pb.TransportType_Obfs4: obfs4.Transport{},
+	pb.TransportType_Min:    min.Transport{},
+	pb.TransportType_Obfs4:  obfs4.Transport{},
+	pb.TransportType_Prefix: prefix.Transport{},
 }
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
 	var err error
 	var zmqAddress string
 	flag.StringVar(&zmqAddress, "zmq-address", "ipc://@zmq-proxy", "Address of ZMQ proxy")
@@ -65,6 +65,23 @@ func main() {
 		logClientIP = false
 	}
 
+	privkey, err := conf.ParsePrivateKey()
+	if err != nil {
+		logger.Fatalf("error parseing private key: %s", err)
+	}
+
+	var prefixTransport cj.Transport
+	if conf.DisableDefaultPrefixes {
+		prefixTransport, err = prefix.New(privkey, conf.PrefixFilePath)
+	} else {
+		prefixTransport, err = prefix.Default(privkey, conf.PrefixFilePath)
+	}
+	if err != nil {
+		logger.Errorf("Failed to parse provided custom prefix transport file: %s", err)
+	} else {
+		enabledTransports[pb.TransportType_Prefix] = prefixTransport
+	}
+
 	// Add supported transport options for registration validation
 	for transportType, transport := range enabledTransports {
 		err = regManager.AddTransport(transportType, transport)
@@ -76,7 +93,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := new(sync.WaitGroup)
 	regChan := make(chan interface{}, 10000)
-	zmqIngester := cj.NewZMQIngest(zmqAddress, regChan, conf.ZMQConfig)
+	zmqIngester, err := cj.NewZMQIngest(zmqAddress, regChan, privkey, conf.ZMQConfig)
+	if err != nil {
+		logger.Fatal("error creating ZMQ Ingest: %w", err)
+	}
 
 	connManager := newConnManager(nil)
 

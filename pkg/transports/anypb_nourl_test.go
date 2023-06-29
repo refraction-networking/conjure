@@ -1,7 +1,7 @@
 package transports_test
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"testing"
 
 	"github.com/refraction-networking/conjure/pkg/transports"

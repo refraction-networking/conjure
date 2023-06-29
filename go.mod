@@ -16,11 +16,11 @@ require (
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/pebbe/zmq4 v1.2.9
 	github.com/pelletier/go-toml v1.9.5
-	github.com/refraction-networking/gotapdance v1.3.5-0.20230118171142-e3cad8ff1431
+	github.com/refraction-networking/gotapdance v1.5.3
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.1
 	gitlab.com/yawning/obfs4.git v0.0.0-20220904064028-336a71d6e4cf
-	golang.org/x/crypto v0.5.0
+	golang.org/x/crypto v0.9.0
 	google.golang.org/grpc v1.52.0
 	google.golang.org/protobuf v1.31.0
 )
@@ -35,7 +35,7 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/oschwald/maxminddb-golang v1.10.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	gitlab.com/yawning/edwards25519-extra.git v0.0.0-20211229043746-2f91fcc9fbdb // indirect
-	golang.org/x/sys v0.4.0 // indirect
+	gitlab.com/yawning/edwards25519-extra.git v0.0.0-20220726154925-def713fd18e4 // indirect
+	golang.org/x/sys v0.8.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

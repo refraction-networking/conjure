@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/refraction-networking/conjure/internal/conjurepath"
+	"github.com/refraction-networking/conjure/pkg/core"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
@@ -31,7 +32,7 @@ func mockReceiveFromDetector() (*pb.ClientToStation, cj.ConjureSharedKeys) {
 	clientToStation.Flags = &pb.RegistrationFlags{Use_TIL: &t}
 	clientToStation.ClientLibVersion = &v
 
-	conjureKeys, _ := cj.GenSharedKeys(sharedSecret, 0)
+	conjureKeys, _ := cj.GenSharedKeys(uint(v), sharedSecret, 0)
 
 	return clientToStation, conjureKeys
 }
@@ -60,7 +61,7 @@ func TestManagerFunctionality(t *testing.T) {
 
 	potentialRegistrations := rm.GetRegistrations(newReg.PhantomIp)
 	require.NotEqual(t, 0, len(potentialRegistrations))
-	storedReg := potentialRegistrations[string(newReg.Keys.ConjureHMAC("MinTrasportHMACString"))]
+	storedReg := potentialRegistrations[string(core.ConjureHMAC(newReg.Keys.SharedSecret, "MinTrasportHMACString"))]
 	require.NotNil(t, storedReg)
 
 	if storedReg.PhantomIp.String() != "192.122.190.148" || storedReg.Covert != "52.44.73.6:443" {

@@ -36,7 +36,11 @@ func NewDNSRegServer(domain string, udpAddr string, privkey []byte, regprocessor
 		return nil, errors.New("all arguments must not be nil")
 	}
 
-	respder, err := responder.NewDnsResponder(domain, udpAddr, privkey)
+	if len(privkey) < 32 {
+		return nil, fmt.Errorf("Expected 32 byte privkey: got %d", len(privkey))
+	}
+
+	respder, err := responder.NewDnsResponder(domain, udpAddr, privkey[:32])
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DNS responder: %v", err)
 	}

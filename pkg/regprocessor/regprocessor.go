@@ -6,6 +6,8 @@ package regprocessor
 import "C"
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -13,6 +15,7 @@ import (
 	"sync"
 
 	zmq "github.com/pebbe/zmq4"
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/station/lib"
 	pb "github.com/refraction-networking/conjure/proto"
@@ -64,12 +67,20 @@ type RegProcessor struct {
 	sock          zmqSender
 	metrics       *metrics.Metrics
 	authenticated bool
+	privkey       []byte // private key for the zmq_privkey pair - for signing proto messages to stations.
+
+	regOverrides interfaces.Overrides
 
 	transports map[pb.TransportType]lib.Transport
 }
 
 // NewRegProcessor initialize a new RegProcessor
-func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics) (*RegProcessor, error) {
+func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics) (*RegProcessor, error) {
+
+	if len(privkey) != ed25519.PrivateKeySize {
+		// We require the 64 byte [private_key][public_key] format to Sign using crypto/ed25519
+		return nil, fmt.Errorf("incorrect private key size %d, expected %d", len(privkey), ed25519.PrivateKeySize)
+	}
 
 	phantomSelector, err := lib.GetPhantomSubnetSelector()
 	if err != nil {
@@ -88,11 +99,15 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 
 // initializes the registration processor without the phantom selector which can be added by a
 // wrapping function before it is returned. This function is required for testing.
-func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVerbose bool, stationPublicKeys []string) (*RegProcessor, error) {
+func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string) (*RegProcessor, error) {
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, ErrZmqSocket
 	}
+
+	// XXX: for some weird reason zmq takes just the private key portion of the keypair as the z85
+	// encoded secret key. I guess for public key operations it is enough.
+	privkeyZ85 := zmq.Z85encode(string(privkey[:32]))
 
 	zmq.AuthSetVerbose(authVerbose)
 	zmq.AuthAllow("*")
@@ -105,7 +120,7 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 		return nil, ErrZmqAuthFail
 	}
 
-	err = sock.ServerAuthCurve("*", privkey)
+	err = sock.ServerAuthCurve("*", privkeyZ85)
 	if err != nil {
 		return nil, ErrZmqAuthFail
 	}
@@ -121,6 +136,7 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey string, authVer
 		sock:          sock,
 		transports:    make(map[pb.TransportType]lib.Transport),
 		authenticated: true,
+		privkey:       privkey,
 	}, nil
 }
 
@@ -187,6 +203,13 @@ func (p *RegProcessor) sendToZMQ(message []byte) error {
 
 // RegisterUnidirectional process a unidirectional registration request and publish it to zmq
 func (p *RegProcessor) RegisterUnidirectional(c2sPayload *pb.C2SWrapper, regMethod pb.RegistrationSource, clientAddr []byte) error {
+	// While Registration response is a valid field in the client-to-station-wrapper (C2SWrapper) it
+	// is not a field that the client is allowed to set, and it is not meaningful in the context of
+	// a unidirectional registration.
+	if c2sPayload.GetRegistrationResponse() != nil {
+		c2sPayload.RegistrationResponse = nil
+	}
+
 	zmqPayload, err := p.processC2SWrapper(c2sPayload, clientAddr, regMethod)
 	if err != nil {
 		return err
@@ -202,6 +225,12 @@ func (p *RegProcessor) RegisterUnidirectional(c2sPayload *pb.C2SWrapper, regMeth
 
 // RegisterBidirectional process a bidirectional registration request, publish it to zmq, and returns a response
 func (p *RegProcessor) RegisterBidirectional(c2sPayload *pb.C2SWrapper, regMethod pb.RegistrationSource, clientAddr []byte) (*pb.RegistrationResponse, error) {
+	// While Registration response is a valid field in the client-to-station-wrapper (C2SWrapper) it
+	// is not a field that the client is allowed to set, so we clear anything that is already here.
+	if c2sPayload.GetRegistrationResponse() != nil {
+		c2sPayload.RegistrationResponse = nil
+	}
+
 	regResp, err := p.processBdReq(c2sPayload)
 	if err != nil {
 		return nil, err
@@ -233,7 +262,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	clientLibVer := uint(c2sPayload.GetRegistrationPayload().GetClientLibVersion())
 
 	// Generate seed and phantom address
-	cjkeys, err := lib.GenSharedKeys(c2sPayload.SharedSecret, c2sPayload.RegistrationPayload.GetTransport())
+	cjkeys, err := lib.GenSharedKeys(clientLibVer, c2sPayload.SharedSecret, c2sPayload.RegistrationPayload.GetTransport())
 
 	if err != nil {
 		// p.logger.Println("Failed to generate the shared key using SharedSecret:", err)
@@ -301,6 +330,17 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	port := uint32(dstPort)
 	regResp.DstPort = &port
 
+	// Overrides will modify the C2SWrapper and put the updated registrationResponse inside to be
+	// forwarded to the station.
+	c2sPayload.RegistrationResponse = regResp
+	if p.regOverrides != nil {
+		err := p.regOverrides.Override(c2sPayload, rand.Reader)
+		if err != nil {
+			return nil, err
+		}
+	}
+	regResp = c2sPayload.GetRegistrationResponse()
+
 	return regResp, nil
 }
 
@@ -343,12 +383,28 @@ func (p *RegProcessor) processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr [
 		payload.RegistrationAddress = c2sPayload.GetRegistrationAddress()
 	}
 
+	if p.authenticated && c2sPayload.GetRegistrationResponse() != nil {
+		regRespBytes, err := proto.Marshal(c2sPayload.GetRegistrationResponse())
+		if err != nil {
+			return nil, err
+		}
+		// Sign the bytes for the marshalled Registration response with the registration server's
+		// ed25519 key so that the stations will know that the registration response with parameter
+		// overrides was approved by the registrar (not sent by the client).
+		payload.RegRespBytes = regRespBytes
+		payload.RegRespSignature = ed25519.Sign(p.privkey, regRespBytes)
+	}
+
 	payload.SharedSecret = c2sPayload.GetSharedSecret()
 	payload.RegistrationPayload = c2sPayload.GetRegistrationPayload()
+	payload.RegistrationResponse = c2sPayload.GetRegistrationResponse()
 
 	return proto.Marshal(payload)
 }
 
+// ReloadSubnets allows the registrar to reload the configuration for phantom address selection
+// subnets when the registrar receives a SIGHUP signal for example. If it fails it reports and error
+// and keeps the existing set of phantom subnets.
 func (p *RegProcessor) ReloadSubnets() error {
 	phantomSelector, err := lib.GetPhantomSubnetSelector()
 	if err != nil {
@@ -359,5 +415,12 @@ func (p *RegProcessor) ReloadSubnets() error {
 	defer p.selectorMutex.Unlock()
 	p.ipSelector = phantomSelector
 
+	return nil
+}
+
+// ReloadOverrides allows the registrar to reload the configuration for the registration processing
+// overrides when the registrar receives a SIGHUP signal for example.
+// TODO: implement
+func (p *RegProcessor) ReloadOverrides() error {
 	return nil
 }

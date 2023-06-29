@@ -93,7 +93,6 @@ func (cm *connManager) handleNewConn(regManager *cj.RegistrationManager, clientC
 		return
 	}
 
-	// TODO: if NOT mPort 443: just forward things and return
 	fdPtr := fd.Fd()
 	originalDstIP, err := getOriginalDst(fdPtr)
 	if err != nil {

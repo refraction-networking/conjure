@@ -223,6 +223,11 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 		Gen:         uint(reg.DecoyListVersion),
 	}
 
+	paramStrs := (*reg.TransportPtr).ParamStrings(reg.TransportParams)
+	if paramStrs != nil {
+		tunStats.TransportOpts = paramStrs
+	}
+
 	covertConn, err := net.Dial("tcp", reg.Covert)
 	if e := generalizeErr(err); e != nil {
 		tunStats.CovertDialErr = e.Error()

@@ -24,6 +24,8 @@ import (
 var errNotExist = errors.New("not implemented")
 
 // under construction - not finalized or definitive
+// TODO: flesh out this test, or disable it. The go routines have a race condition that can result
+// in the test being useless.
 func TestProxyMockCovertReset(t *testing.T) {
 
 	wg := new(sync.WaitGroup)
@@ -108,15 +110,15 @@ func (m *mockConn) RemoteAddr() net.Addr {
 }
 
 func (m *mockConn) SetDeadline(t time.Time) error {
-	return errNotExist
+	return nil
 }
 
 func (m *mockConn) SetReadDeadline(t time.Time) error {
-	return errNotExist
+	return nil
 }
 
 func (m *mockConn) SetWriteDeadline(t time.Time) error {
-	return errNotExist
+	return nil
 }
 
 func TestHalfpipeDeadlineEcho(t *testing.T) {

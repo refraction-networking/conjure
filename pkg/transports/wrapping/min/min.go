@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 
+	core "github.com/refraction-networking/conjure/pkg/core"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
@@ -38,7 +39,7 @@ func (Transport) LogPrefix() string { return "MIN" }
 // identifier should be unique for each registration on a given phantom;
 // registrations on different phantoms can have the same identifier.
 func (Transport) GetIdentifier(d *cj.DecoyRegistration) string {
-	return string(d.Keys.ConjureHMAC("MinTrasportHMACString"))
+	return string(core.ConjureHMAC(d.Keys.SharedSecret, "MinTrasportHMACString"))
 }
 
 // GetProto returns the next layer protocol that the transport uses. Implements
@@ -66,6 +67,12 @@ func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 	var m = &pb.GenericTransportParams{}
 	err := transports.UnmarshalAnypbTo(data, m)
 	return m, err
+}
+
+// ParamStrings returns an array of tag string that will be added to tunStats when a proxy
+// session is closed. For now, no params of interest.
+func (t Transport) ParamStrings(p any) []string {
+	return nil
 }
 
 // WrapConnection attempts to wrap the given connection in the transport. It

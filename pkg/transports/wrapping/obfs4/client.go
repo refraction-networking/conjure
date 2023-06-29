@@ -6,7 +6,6 @@ import (
 	"net"
 
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
-	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"gitlab.com/yawning/obfs4.git/transports/obfs4"
@@ -19,7 +18,6 @@ import (
 // the station side Transport struct has one instance to be re-used for all sessions.
 type ClientTransport struct {
 	Parameters *pb.GenericTransportParams
-	connectTag []byte
 	keys       Obfs4Keys
 }
 
@@ -41,8 +39,8 @@ func (*ClientTransport) ID() pb.TransportType {
 
 // GetParams returns a generic protobuf with any parameters from both the registration and the
 // transport.
-func (t *ClientTransport) GetParams() proto.Message {
-	return t.Parameters
+func (t *ClientTransport) GetParams() (proto.Message, error) {
+	return t.Parameters, nil
 }
 
 // SetParams allows the caller to set parameters associated with the transport, returning an
@@ -58,7 +56,7 @@ func (t *ClientTransport) SetParams(p any) error {
 }
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
-func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
+func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 	if t.Parameters == nil || !t.Parameters.GetRandomizeDstPort() {
 		return 443, nil
 	}
@@ -94,7 +92,6 @@ func (t ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 }
 
 func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
-	t.connectTag = core.ConjureHMAC(sharedSecret, "obfs4TransportHMACString")
 	// Generate shared keys
 	var err error
 	t.keys, err = generateObfs4Keys(dRand)
