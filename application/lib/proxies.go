@@ -69,7 +69,6 @@ func generalizeErr(err error) error {
 // pass around
 func halfPipe(src net.Conn, dst net.Conn,
 	wg *sync.WaitGroup,
-	oncePrintErr *sync.Once,
 	logger *log.Logger,
 	tag string, stats *tunnelStats) {
 
@@ -260,13 +259,12 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	}
 
 	wg := sync.WaitGroup{}
-	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
 	getProxyStats().addSession()
 
-	go halfPipe(clientConn, covertConn, &wg, &oncePrintErr, logger, "Up "+reg.IDString(), tunStats)
-	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down "+reg.IDString(), tunStats)
+	go halfPipe(clientConn, covertConn, &wg, logger, "Up "+reg.IDString(), tunStats)
+	go halfPipe(covertConn, clientConn, &wg, logger, "Down "+reg.IDString(), tunStats)
 	wg.Wait()
 	getProxyStats().removeSession()
 
