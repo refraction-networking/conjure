@@ -240,6 +240,9 @@ func (rpo *RandPrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader
 	}
 
 	newPrefix, err := prefix.TryFromID(prefix.Rand)
+	if err != nil {
+		return err
+	}
 
 	// if we have made it this far we overwrite the prefix even if the new one is empty
 	params := &pb.PrefixTransportParams{}

@@ -37,7 +37,7 @@ func TestSuccessfulWrap(t *testing.T) {
 	}
 	message := []byte(`test message!`)
 
-	for idx, _ := range defaultPrefixes {
+	for idx := range defaultPrefixes {
 
 		func() {
 			var p int32 = int32(idx)
