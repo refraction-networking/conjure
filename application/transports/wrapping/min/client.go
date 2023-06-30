@@ -9,6 +9,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // ClientTransport implements the client side transport interface for the Min transport. The
@@ -43,9 +44,21 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 	return t.Parameters, nil
 }
 
+// ParseParams gives the specific transport an option to parse a generic object into parameters
+// provided by the station in the registration response during registration.
+func (t ClientTransport) ParseParams(data *anypb.Any) (any, error) {
+	if data == nil {
+		return nil, nil
+	}
+
+	var m = &pb.GenericTransportParams{}
+	err := transports.UnmarshalAnypbTo(data, m)
+	return m, err
+}
+
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible.
-func (t *ClientTransport) SetParams(p any) error {
+func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 	params, ok := p.(*pb.GenericTransportParams)
 	if !ok {
 		return fmt.Errorf("unable to parse params")

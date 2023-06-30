@@ -119,7 +119,7 @@ func TestPrefixOverride_Override(t *testing.T) {
 	var out expected
 	var i = 0
 	test := func(t *testing.T) {
-		i += 1
+		i++
 		rr := bytes.NewReader(d("00000000"))
 		err := po.Override(c, rr)
 
@@ -137,20 +137,20 @@ func TestPrefixOverride_Override(t *testing.T) {
 	t.Run("select using uninitialized PrefixOverride", test)
 
 	c = &pb.C2SWrapper{}
-	T := true
+	F := false
 	params := &pb.GenericTransportParams{}
 	p, err := anypb.New(params)
 	require.Nil(t, err)
 
 	ttMin := pb.TransportType_Min
 	reg := &pb.ClientToStation{
-		AllowRegistrarOverrides: &T,
-		TransportParams:         p,
-		Transport:               &ttMin,
+		DisableRegistrarOverrides: &F,
+		TransportParams:           p,
+		Transport:                 &ttMin,
 	}
 	c.RegistrationPayload = reg
 
-	out = expected{true, ErrNotPrefixTransport, 0, []byte{}}
+	out = expected{true, nil, 0, []byte{}}
 	t.Run("registration wrong tt and params", test)
 
 	ttPrefix := pb.TransportType_Prefix

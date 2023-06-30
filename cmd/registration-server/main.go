@@ -50,7 +50,7 @@ type config struct {
 var defaultTransports = map[pb.TransportType]lib.Transport{
 	pb.TransportType_Min:    min.Transport{},
 	pb.TransportType_Obfs4:  obfs4.Transport{},
-	pb.TransportType_Prefix: prefix.Transport{},
+	pb.TransportType_Prefix: prefix.DefaultSet(),
 	// [transports:enable]
 }
 

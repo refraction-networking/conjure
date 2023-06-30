@@ -413,7 +413,9 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 			dstPort = int(rr.GetDstPort())
 		}
 
-		if rr.TransportParams != nil {
+		// if Transport param overrides are defined and the client indicated that overrides are
+		// allowed, apply the overrides while creating the registration
+		if rr.GetTransportParams() != nil && !c2s.GetDisableRegistrarOverrides() {
 			c2s.TransportParams = rr.GetTransportParams()
 		}
 

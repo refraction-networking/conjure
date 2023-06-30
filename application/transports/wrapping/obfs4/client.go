@@ -8,6 +8,7 @@ import (
 	pt "git.torproject.org/pluggable-transports/goptlib.git"
 	"gitlab.com/yawning/obfs4.git/transports/obfs4"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/refraction-networking/conjure/application/transports"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
@@ -45,7 +46,7 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible.
-func (t *ClientTransport) SetParams(p any) error {
+func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 	params, ok := p.(*pb.GenericTransportParams)
 	if !ok {
 		return fmt.Errorf("unable to parse params")
@@ -53,6 +54,18 @@ func (t *ClientTransport) SetParams(p any) error {
 	t.Parameters = params
 
 	return nil
+}
+
+// ParseParams gives the specific transport an option to parse a generic object into parameters
+// provided by the station in the registration response during registration.
+func (t ClientTransport) ParseParams(data *anypb.Any) (any, error) {
+	if data == nil {
+		return nil, nil
+	}
+
+	var m = &pb.GenericTransportParams{}
+	err := transports.UnmarshalAnypbTo(data, m)
+	return m, err
 }
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
