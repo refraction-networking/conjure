@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,6 +18,7 @@ import (
 )
 
 const proxyStallTimeout = 30 * time.Second
+const resetIfNotClosedAfter = 10 // seconds
 
 var (
 	// errConnReset replaces the reset error in the halfpipe to remove ips and extra bytes
@@ -24,9 +26,6 @@ var (
 
 	// errConnTimeout replaces the ip.timeout error in the halfpipe to remove ips and extra bytes
 	errConnTimeout = errors.New("timeout")
-
-	// errBrokenPipe replaces the write: broken pipe error to prevent client IP logging
-	errBrokenPipe = errors.New("broken_pipe")
 
 	// replaces refused error to prevent client IP logging
 	errConnRefused = errors.New("refused")
@@ -39,49 +38,96 @@ var (
 )
 
 func generalizeErr(err error) error {
-	if err == nil {
+	switch {
+	case err == nil:
 		return nil
-	} else if errors.Is(err, net.ErrClosed) {
+	case
+		errors.Is(err, net.ErrClosed), // Errors indicating operation on something already closed.
+		errors.Is(err, io.EOF),
+		errors.Is(err, syscall.EPIPE),
+		errors.Is(err, os.ErrClosed):
 		return nil
-	} else if errors.Is(err, io.EOF) {
-		return nil
-	} else if errors.Is(err, syscall.ECONNRESET) {
+	case errors.Is(err, syscall.ECONNRESET):
 		return errConnReset
-	} else if errors.Is(err, syscall.ECONNREFUSED) {
+	case errors.Is(err, syscall.ECONNREFUSED):
 		return errConnRefused
-	} else if errors.Is(err, syscall.ECONNABORTED) {
+	case errors.Is(err, syscall.ECONNABORTED):
 		return errConnAborted
-	} else if errors.Is(err, syscall.EPIPE) {
-		return errBrokenPipe
-	} else if errors.Is(err, syscall.EHOSTUNREACH) {
+	case errors.Is(err, syscall.EHOSTUNREACH):
 		return errUnreachable
-	} else if errN, ok := err.(net.Error); ok && errN.Timeout() {
-		return errConnTimeout
+	default:
+		if errN, ok := err.(net.Error); ok && errN.Timeout() {
+			return errConnTimeout
+		}
 	}
 
 	// if it is not a well known error, return it
 	return err
 }
 
-// this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to pass around
-// TODO: refactor
+// this function is kinda ugly, uses undecorated logger, and passes things around it doesn't have to
+// pass around
 func halfPipe(src net.Conn, dst net.Conn,
 	wg *sync.WaitGroup,
-	oncePrintErr *sync.Once,
 	logger *log.Logger,
 	tag string, stats *tunnelStats) {
 
 	var proxyStartTime = time.Now()
 	isUpload := strings.HasPrefix(tag, "Up")
 
+	cleanup := func() {
+		// Finalize tunnel stats
+		proxyEndTime := time.Since(proxyStartTime)
+		stats.duration(int64(proxyEndTime/time.Millisecond), isUpload)
+		stats.completed(isUpload)
+		wg.Done()
+	}
+	defer cleanup()
+
+	closeConn := func(c net.Conn, isSrc bool) {
+		// If the conn is TCP and close would hang because we have unacknowledged data in the buffer
+		// we force the socket to close after 10 seconds. Non-TCP sockets should not have this issue
+		cTCP, ok := c.(*net.TCPConn)
+		if ok {
+			e := cTCP.SetLinger(resetIfNotClosedAfter)
+			if eg := generalizeErr(e); eg != nil {
+				logger.Errorln("failed to SetLinger: ", eg)
+			}
+		}
+
+		errConnClose := c.Close()
+		if eg := generalizeErr(errConnClose); eg != nil {
+			if errors.Is(eg, errConnTimeout) {
+				stats.CovertConnErr = eg.Error()
+				stats.ClientConnErr = eg.Error()
+			} else if isUpload == isSrc { // !(isUpload xor isSource) => connection to covert
+				if stats.CovertConnErr == "" {
+					stats.CovertConnErr = eg.Error()
+				}
+			} else { // isUpload xor isSource => connection to client
+				if stats.ClientConnErr == "" {
+					stats.ClientConnErr = eg.Error()
+				}
+			}
+		}
+	}
+
+	defer func() {
+		// ensure that neither close blocks on the other
+		go closeConn(src, true)
+		closeConn(dst, false)
+	}()
+
 	// Set deadlines in case either side disappears.
 	err := src.SetDeadline(time.Now().Add(proxyStallTimeout))
 	if err != nil {
 		logger.Errorln("error setting deadline for src conn: ", tag)
+		return
 	}
 	err = dst.SetDeadline(time.Now().Add(proxyStallTimeout))
 	if err != nil {
 		logger.Errorln("error setting deadline for dst conn: ", tag)
+		return
 	}
 
 	// using io.CopyBuffer doesn't let us see
@@ -146,58 +192,19 @@ func halfPipe(src net.Conn, dst net.Conn,
 			break
 		}
 
-		// refresh stall timeout - set both because it only happens on write
-		// so if connection is sending traffic unidirectionally we prevent
-		// the receiving side from timing out.
+		// refresh stall timeout - set both because it only happens on write so if connection is
+		// sending traffic unidirectionally we prevent the receiving side from timing out.
 		err := src.SetDeadline(time.Now().Add(proxyStallTimeout))
 		if err != nil {
 			logger.Errorln("error setting deadline for src conn: ", tag)
+			return
 		}
 		err = dst.SetDeadline(time.Now().Add(proxyStallTimeout))
 		if err != nil {
 			logger.Errorln("error setting deadline for dst conn: ", tag)
+			return
 		}
 	}
-
-	// Close dst
-	errDst := dst.Close()
-	if err = generalizeErr(errDst); err != nil {
-		if errors.Is(err, errConnTimeout) {
-			stats.CovertConnErr = err.Error()
-			stats.ClientConnErr = err.Error()
-		} else if isUpload {
-			if stats.CovertConnErr == "" {
-				stats.CovertConnErr = err.Error()
-			}
-		} else {
-			if stats.ClientConnErr == "" {
-				stats.ClientConnErr = err.Error()
-			}
-		}
-	}
-
-	// Close src
-	errSrc := src.Close()
-	if err = generalizeErr(errSrc); err != nil {
-		if errors.Is(err, errConnTimeout) {
-			stats.CovertConnErr = err.Error()
-			stats.ClientConnErr = err.Error()
-		} else if isUpload {
-			if stats.ClientConnErr == "" {
-				stats.ClientConnErr = err.Error()
-			}
-		} else {
-			if stats.CovertConnErr == "" {
-				stats.CovertConnErr = err.Error()
-			}
-		}
-	}
-
-	// Finalize tunnel stats
-	proxyEndTime := time.Since(proxyStartTime)
-	stats.duration(int64(proxyEndTime/time.Millisecond), isUpload)
-	stats.completed(isUpload)
-	wg.Done()
 }
 
 // Proxy take a registration and a net.Conn and forwards client traffic to the
@@ -252,13 +259,12 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 	}
 
 	wg := sync.WaitGroup{}
-	oncePrintErr := sync.Once{}
 	wg.Add(2)
 
 	getProxyStats().addSession()
 
-	go halfPipe(clientConn, covertConn, &wg, &oncePrintErr, logger, "Up "+reg.IDString(), tunStats)
-	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down "+reg.IDString(), tunStats)
+	go halfPipe(clientConn, covertConn, &wg, logger, "Up "+reg.IDString(), tunStats)
+	go halfPipe(covertConn, clientConn, &wg, logger, "Down "+reg.IDString(), tunStats)
 	wg.Wait()
 	getProxyStats().removeSession()
 
@@ -454,300 +460,3 @@ func getProxyStats() *ProxyStats {
 	proxyStatsOnce.Do(initProxyStats)
 	return &proxyStatsInstance
 }
-
-// // ProxyFactory returns an internal proxy
-// func ProxyFactory(reg *DecoyRegistration, proxyProtocol uint) func(*DecoyRegistration, *net.TCPConn, net.IP) {
-// 	switch proxyProtocol {
-// 	case 0:
-// 		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
-// 			twoWayProxy(reg, clientConn, originalDstIP)
-// 		}
-// 	case 1:
-// 		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
-// 			threeWayProxy(reg, clientConn, originalDstIP)
-// 		}
-// 	case 2:
-// 		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
-// 			// Obfs4 handler
-// 		}
-// 	default:
-// 		return func(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
-// 		}
-// 	}
-// }
-
-/*
-func twoWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
-	var err error
-	originalDst := originalDstIP.String()
-	notReallyOriginalSrc := clientConn.RemoteAddr().String()
-	flowDescription := fmt.Sprintf("[%s -> %s (covert=%s)] ",
-		notReallyOriginalSrc, originalDst, reg.Covert)
-	logger := log.New(os.Stdout, "[2WP] "+flowDescription, log.Ldate|log.Lmicroseconds)
-	logger.Debugln("new flow")
-
-	covertConn, err := net.Dial("tcp", reg.Covert)
-	if err != nil {
-		logger.Errorf("failed to dial target: %s", err)
-		return
-	}
-	defer covertConn.Close()
-
-	if reg.Flags.GetProxyHeader() {
-		err = writePROXYHeader(covertConn, clientConn.RemoteAddr().String())
-		if err != nil {
-			logger.Errorf("failed to send PROXY header to covert: %s", err)
-			return
-		}
-	}
-
-	wg := sync.WaitGroup{}
-	oncePrintErr := sync.Once{}
-	wg.Add(2)
-
-	go halfPipe(clientConn, covertConn, &wg, &oncePrintErr, logger, "Up")
-	go halfPipe(covertConn, clientConn, &wg, &oncePrintErr, logger, "Down")
-	wg.Wait()
-}
-*/
-
-/*
-
-const (
-	tlsRecordTypeChangeCipherSpec = byte(20)
-	tlsRecordTypeHandshake        = byte(22)
-	// tlsRecordTypeAlert            = byte(21)
-	// tlsRecordTypeApplicationData  = byte(23)
-	// tlsRecordTypeHearbeat         = byte(24)
-)
-
-const (
-	TlsHandshakeTypeHelloRequest       = byte(0)
-	TlsHandshakeTypeClientHello        = byte(1)
-	TlsHandshakeTypeServerHello        = byte(2)
-	TlsHandshakeTypeNewSessionTicket   = byte(4)
-	TlsHandshakeTypeCertificate        = byte(11)
-	TlsHandshakeTypeServerKeyExchange  = byte(12)
-	TlsHandshakeTypeCertificateRequest = byte(13)
-	TlsHandshakeTypeServerHelloDone    = byte(14)
-	TlsHandshakeTypeCertificateVerify  = byte(15)
-	TlsHandshakeTypeClientKeyExchange  = byte(16)
-	TlsHandshakeTypeFinished           = byte(20)
-	TlsHandshakeTypeCertificateStatus  = byte(22)
-	TlsHandshakeTypeNextProtocol       = byte(67)
-)
-
-const (
-	TdFlagUploadOnly  = uint8(1 << 7)
-	TdFlagDarkDecoy   = uint8(1 << 6)
-	TdFlagProxyHeader = uint8(1 << 1)
-	TdFlagUseTIL      = uint8(1 << 0)
-)
-
-func threeWayProxy(reg *DecoyRegistration, clientConn *net.TCPConn, originalDstIP net.IP) {
-	maskHostPort := reg.Mask
-	targetHostPort := reg.Covert
-	masterSecret := reg.Keys.MasterSecret[:]
-	originalDst := originalDstIP.String()
-	notReallyOriginalSrc := clientConn.LocalAddr().String()
-
-	flowDescription := fmt.Sprintf("[%s -> %s(%v) -> %s] ",
-		notReallyOriginalSrc, originalDst, maskHostPort, targetHostPort)
-	logger := log.New(os.Stdout, "[3WP] "+flowDescription, log.Ldate|log.Lmicroseconds)
-
-	if _, mPort, err := net.SplitHostPort(maskHostPort); err != nil {
-		maskHostPort = net.JoinHostPort(maskHostPort, "443")
-	} else {
-		if mPort != "443" {
-			logger.Errorf("port %v is not allowed in masked host", mPort)
-			return
-		}
-	}
-	logger.Debugln("new flow")
-
-	maskedConn, err := net.DialTimeout("tcp", maskHostPort, time.Second*10)
-	if err != nil {
-		logger.Errorf("failed to dial masked host: %v", err)
-		return
-	}
-	defer maskedConn.Close()
-
-	// TODO: set timeouts
-
-	var clientRandom, serverRandom [32]byte
-	var cipherSuite uint16
-
-	clientBufConn := makeBufferedReaderConn(clientConn, bufio.NewReader(clientConn))
-	serverBufConn := makeBufferedReaderConn(maskedConn, bufio.NewReader(maskedConn))
-
-	// readFromClientAndParse returns when handshake is over
-	// returned error signals if there were any errors reading/writing
-	// If readFromClientAndParse returns successfully, following variables will be set:
-	//    clientRandom: Client Random
-	//    clientBufferedRecordSize: size of TLS record(+header) that will be sitting in clientBufConn
-	clientBufferedRecordSize := 0
-	readFromClientAndParse := func() error {
-		var clientRandomParsed bool
-		for {
-			const outerRecordHeaderLen = int(5)
-			var outerTlsHeader []byte
-			outerTlsHeader, err := clientBufConn.Peek(outerRecordHeaderLen)
-			if err != nil {
-				return err
-			}
-			outerRecordType := uint8(outerTlsHeader[0])
-			// outerRecordTlsVersion := binary.BigEndian.Uint16(outerTlsHeader[1:3])
-			outerRecordLength := int(binary.BigEndian.Uint16(outerTlsHeader[3:5]))
-
-			if outerRecordType != tlsRecordTypeHandshake && outerRecordType != tlsRecordTypeChangeCipherSpec {
-				clientBufferedRecordSize = outerRecordHeaderLen + outerRecordLength
-				return nil
-			}
-
-			if outerRecordType == tlsRecordTypeHandshake && !clientRandomParsed {
-				// next 38 bytes include type(1), length(3), version(2), clientRandom(32)
-				innerTlsHeader, err := clientBufConn.Peek(outerRecordHeaderLen + 38)
-				if err != nil {
-					return err
-				}
-				// innerRecordType := uint8(innerTlsHeader[5])
-				// innerRecordTlsLength := binary.BigEndian.Uint24(innerTlsHeader[6:9])
-				// innerRecordVersion := binary.BigEndian.Uint16(innerTlsHeader[10:11])
-				copy(clientRandom[:], innerTlsHeader[11:])
-				clientRandomParsed = true
-			}
-
-			_, err = io.CopyN(serverBufConn, clientBufConn, int64(outerRecordHeaderLen+outerRecordLength))
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// readFromServerAndParse returns when handshake is over
-	// returned error signals if there were any errors reading/writing
-	// may set serverRandom
-	readFromServerAndParse := func() error {
-		for {
-			const outerRecordHeaderLen = 5
-			tlsHeader, err := serverBufConn.Peek(outerRecordHeaderLen)
-			if err != nil {
-				return err
-			}
-			outerRecordType := uint8(tlsHeader[0])
-			// outerRecordTlsVersion := binary.BigEndian.Uint16(tlsHeader[1:3])
-			outerRecordLength := binary.BigEndian.Uint16(tlsHeader[3:5])
-
-			if outerRecordType != tlsRecordTypeHandshake && outerRecordType != tlsRecordTypeChangeCipherSpec {
-				return nil
-			}
-
-			if outerRecordLength >= 39 {
-				// next 38 bytes are type(1), length(3), version(2), then serverRandom(32)
-				tlsHeader, err = serverBufConn.Peek(outerRecordHeaderLen + 39)
-				if err != nil {
-					return err
-				}
-				innerRecordType := uint8(tlsHeader[5])
-				// innerRecordTlsLength := binary.BigEndian.Uint24(tlsHeader[6:9])
-				// innerRecordVersion := binary.BigEndian.Uint16(tlsHeader[10:11])
-
-				if innerRecordType == TlsHandshakeTypeServerHello {
-					copy(serverRandom[:], tlsHeader[11:43])
-					sessionIdLen := int(tlsHeader[43])
-					tlsHeader, err = serverBufConn.Peek(outerRecordHeaderLen + 39 + sessionIdLen + 2)
-					if err != nil {
-						return err
-					}
-					cipherSuite = binary.BigEndian.Uint16(tlsHeader[outerRecordHeaderLen+39+sessionIdLen : outerRecordHeaderLen+39+sessionIdLen+2])
-				}
-				// then goes compressionMethod(1), extensionsLen(2), extensions(extensionsLen)
-			}
-
-			_, err = io.CopyN(clientBufConn, serverBufConn, outerRecordHeaderLen+int64(outerRecordLength))
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	serverErrChan := make(chan error)
-	go func() {
-		_err := readFromServerAndParse()
-		serverErrChan <- _err
-	}()
-
-	err = readFromClientAndParse()
-	if err != nil {
-		logger.Errorf("failed to readFromClientAndParse: %v", err)
-		return
-	}
-
-	// at this point:
-	//   readFromClientAndParse exited and there's unread non-handshake data in the conn
-	//   readFromServerAndParse is still in Peek()
-	firstAppData, err := clientBufConn.Peek(clientBufferedRecordSize)
-	if err != nil {
-		logger.Errorf("failed to peek into first app data: %v", err)
-		return
-	}
-
-	p1, p2 := net.Pipe()
-
-	inMemTlsConn := tls.MakeConnWithCompleteHandshake(
-		p1, tls.VersionTLS12, // TODO: parse version!
-		cipherSuite, masterSecret, clientRandom[:], serverRandom[:], false)
-
-	go func() {
-		_, err := p2.Write(firstAppData)
-		logger.Errorf("error closing %s", err)
-
-		p2.Close()
-	}()
-
-	var finalTargetConn net.Conn // either connection to the masked site or to real requested target
-	var finalClientConn net.Conn // original conn or forgedTlsConn
-
-	finalTargetConn = serverBufConn
-	finalClientConn = clientBufConn
-
-	decryptedFirstAppData, err := io.ReadAll(inMemTlsConn)
-	if err != nil || len(decryptedFirstAppData) == 0 {
-		logger.Debugf("not tagged: %s", err)
-	} else {
-		// almost success! now need to dial targetHostPort (TODO: do it in advance!)
-		targetConn, err := net.Dial("tcp", targetHostPort)
-		if err != nil {
-			logger.Errorf("failed to dial target: %s", err)
-		} else {
-			logger.Debugf("flow is tagged")
-			defer targetConn.Close()
-			serverBufConn.Close()
-			forgedTlsConn := tls.MakeConnWithCompleteHandshake(
-				clientBufConn, tls.VersionTLS12,
-				cipherSuite, masterSecret, clientRandom[:], serverRandom[:], false)
-			finalClientConn = forgedTlsConn
-			finalTargetConn = targetConn
-		}
-	}
-
-	wg := sync.WaitGroup{}
-	oncePrintErr := sync.Once{}
-	wg.Add(2)
-
-	go halfPipe(finalClientConn, finalTargetConn, &wg, &oncePrintErr, logger, "Up")
-
-	go func() {
-		// wait for readFromServerAndParse to exit first, as it probably haven't seen appdata yet
-		select {
-		case <-serverErrChan:
-			halfPipe(finalClientConn, finalTargetConn, &wg, &oncePrintErr, logger, "Down")
-		case <-time.After(10 * time.Second):
-			finalClientConn.Close()
-			wg.Done()
-		}
-	}()
-	wg.Wait()
-	// closes for all the things are deferred
-}
-*/

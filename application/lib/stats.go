@@ -3,6 +3,7 @@ package lib
 import (
 	golog "log"
 	"os"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -147,7 +148,7 @@ func (s *Stats) PrintStats(isVerbose bool) {
 			}
 		}
 
-		s.logger.Infof("Conns: %d cur %d new %d err Regs: %d cur %d new (%d local %d API %d shared %d unknown) %d miss %d err %d dup LiveT: %d valid %d live %d cached Byte: %d up %d down",
+		s.logger.Infof("Conns: %d cur %d new %d err Regs: %d cur %d new (%d local %d API %d shared %d unknown) %d miss %d err %d dup LiveT: %d valid %d live %d cached Byte: %d up %d down gorts %d",
 			atomic.LoadInt64(&s.activeConns), atomic.LoadInt64(&s.newConns), atomic.LoadInt64(&s.newErrConns),
 			atomic.LoadInt64(&s.activeRegistrations),
 			atomic.LoadInt64(&s.newRegistrations),
@@ -155,7 +156,8 @@ func (s *Stats) PrintStats(isVerbose bool) {
 			atomic.LoadInt64(&s.newMissedRegistrations),
 			atomic.LoadInt64(&s.newErrRegistrations), atomic.LoadInt64(&s.newDupRegistrations),
 			atomic.LoadInt64(&s.newLivenessPass), atomic.LoadInt64(&s.newLivenessFail), atomic.LoadInt64(&s.newLivenessCached),
-			atomic.LoadInt64(&s.newBytesUp), atomic.LoadInt64(&s.newBytesDown))
+			atomic.LoadInt64(&s.newBytesUp), atomic.LoadInt64(&s.newBytesDown),
+			runtime.NumGoroutine())
 		s.Reset()
 	}
 }
