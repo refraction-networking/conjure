@@ -287,12 +287,6 @@ impl SessionTracker {
         // Dark Decoys Map is not sorted by timeout, so need to check all
         map.retain(|_, v| (*v > right_now));
         let num_sessions_after = map.len();
-        if num_sessions_before != num_sessions_after {
-            debug!(
-                "Dark Decoys drops: {} - > {}",
-                num_sessions_before, num_sessions_after
-            );
-        }
         num_sessions_before - num_sessions_after
     }
 
