@@ -373,8 +373,7 @@ fn substitute_addr(a: &IpAddr, s: IpNet, r: Vec<u8>) -> Result<SocketAddr, Box<d
                     let lower = Ipv4Addr::from(out).bitand(hostmask);
                     addr = IpAddr::V4(upper.bitor(lower));
                 } else {
-                    return Err("IP version mismatch")?;
-                }
+                    return Err("IP version mismatch")?; }
             } else {
                 return Err("IP version mismatch")?;
             }
@@ -408,18 +407,22 @@ fn format_str(
     src_port: u16,
     dst_port: u16,
 ) -> String {
+    let mut s = src.to_string();
+    s.push_str("-");
+    s.push_str(&src_port.to_string());
+
+    let mut d = dst.to_string();
+    d.push_str("-");
+    d.push_str(&dst_port.to_string());
+
     if randomize_source {
-        return format!(
-            "{}->{}",
-            SocketAddr::new(src, src_port),
-            SocketAddr::new(dst, dst_port)
-        );
+        s.push_str("->");
+        s.push_str(&d);
+        return s
     }
-    format!(
-        "{}->{}",
-        SocketAddr::new(dst, dst_port),
-        SocketAddr::new(src, src_port)
-    )
+    d.push_str("->");
+    d.push_str(&s);
+    d
 }
 
 fn get_hmac(seed: [u8; 32], m: &[u8]) -> Vec<u8> {
@@ -472,7 +475,7 @@ mod tests {
             net,
             ip4.get_destination()
         );
-        assert_eq!(ip4.get_destination(), "94.74.177.171".parse::<Ipv4Addr>()?);
+        assert_eq!(ip4.get_destination(), "94.74.176.3".parse::<Ipv4Addr>()?);
 
         Ok(())
     }
@@ -526,7 +529,7 @@ mod tests {
         let src_port = 3456;
         let dst_port = 7890;
         let s1 = format_str(true, src, dst, src_port, dst_port);
-        assert_eq!(s1, "10.12.34.56:3456->1.2.3.4:7890");
+        assert_eq!(s1, "10.12.34.56-3456->1.2.3.4-7890");
         let hm = get_hmac(seed, s1.as_bytes());
 
         let new_addr = substitute_addr(&src, subnet, hm)?;
@@ -548,7 +551,7 @@ mod tests {
         let src_port = 3456;
         let dst_port = 7890;
         let s1 = format_str(true, src, dst, src_port, dst_port);
-        assert_eq!(s1, "[1ff::2001]:3456->[2001:2222::dead:beef]:7890");
+        assert_eq!(s1, "1ff::2001-3456->2001:2222::dead:beef-7890");
         let hm = get_hmac(seed, s1.as_bytes());
 
         let new_addr = substitute_addr(&src, subnet, hm)?;
@@ -580,15 +583,15 @@ mod tests {
         let src_port = 3456;
         let dst_port = 7890;
         let s1 = format_str(true, src, dst, src_port, dst_port);
-        assert_eq!(s1, "10.12.34.56:3456->1.2.3.4:7890");
+        assert_eq!(s1, "10.12.34.56-3456->1.2.3.4-7890");
         let s2 = format_str(false, dst, src, dst_port, src_port);
         assert_eq!(s1, s2);
 
         let hm = get_hmac(seed, s1.as_bytes());
         let expected_hm =
-            hex::decode("1b284c47ac28518b0489e6e2140d9bc2c6169f48faa7edd78cab3005588d2266")
+            hex::decode("50a9136aaf81b818f45f7fd17ee695ddc6660d611397c5b79175e8fbe0d84a72")
                 .unwrap();
-        assert_eq!(hm[..], expected_hm[..]);
+        assert_eq!(hm[..], expected_hm[..], "{}", hex::encode(&hm));
         Ok(())
     }
 
@@ -601,15 +604,15 @@ mod tests {
         let src_port = 3456;
         let dst_port = 7890;
         let s1 = format_str(true, src, dst, src_port, dst_port);
-        assert_eq!(s1, "[1ff::2001]:3456->[2001:2222::dead:beef]:7890");
+        assert_eq!(s1, "1ff::2001-3456->2001:2222::dead:beef-7890");
         let s2 = format_str(false, dst, src, dst_port, src_port);
         assert_eq!(s1, s2);
 
         let hm = get_hmac(seed, s1.as_bytes());
         let expected_hm =
-            hex::decode("afbe350e57b9b4d3932f4507e20284270002321ddf68e9fd61e1173978fec6b0")
+            hex::decode("62d9b601d504250e7c86f2b6a17e83ad7ea07eca88088825e1da402cb0e4ae9e")
                 .unwrap();
-        assert_eq!(hm[..], expected_hm[..]);
+        assert_eq!(hm[..], expected_hm[..], "{}", hex::encode(&hm));
         Ok(())
     }
 

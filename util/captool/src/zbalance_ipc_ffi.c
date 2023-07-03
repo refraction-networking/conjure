@@ -21,7 +21,7 @@ struct zbalance_ipc_runner
 struct zbalance_packet
 {
     int size;
-    int *bytes;
+    u_char *bytes;
 };
 
 /// @brief create a runner object that will maintain state for a pfring zbalance ipc ingest queue

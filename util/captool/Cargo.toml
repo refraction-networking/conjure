@@ -34,10 +34,16 @@ csv = "1.2"
 tempfile = "3.5.0"
 byteorder_slice = "3.0.0"
 hex = "0.4.3"
+criterion = "0.3"
+
 
 [build-dependencies]
 cc = "1.0.79"
 
+
+[[bench]]
+name = "format_v_append"
+harness = false
 
 [lib]
 name = "libcap"

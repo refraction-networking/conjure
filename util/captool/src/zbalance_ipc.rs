@@ -111,6 +111,7 @@ struct zbalance_packet {
     bytes: *const c_void,
 }
 
+#[link(name="pfring")]
 extern "C" {
     /// create a runner object that will maintain state for a pfring zbalance ipc ingest queue
     fn init_runner(runner: &mut zbalance_ipc_runner, cluster_id: c_int, queue_id: c_int, buf_len: c_int) -> ::std::os::raw::c_int;

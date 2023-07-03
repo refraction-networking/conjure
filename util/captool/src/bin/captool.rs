@@ -367,6 +367,7 @@ fn launch_captures<W>(
     let pool = ThreadPool::new(captures.len() + 2);
     let n_complete = Arc::new(AtomicU32::new(0_u32));
     let n_captures = captures.len();
+
     for sig in TERM_SIGNALS {
         register(*sig, Arc::clone(&term)).unwrap();
     }
@@ -374,13 +375,13 @@ fn launch_captures<W>(
     // print stats
     let h_display = Arc::clone(&handler);
     let t_display = Arc::clone(&term);
-    let ic_display = Arc::clone(&interfaces_complete);
+    let ic_display = Arc::clone(&n_complete);
     pool.execute(move || loop {
         if t_display.load(Ordering::Relaxed) {
             let _ = h_display.lock().unwrap().output_csv();
             break;
         }
-        if ic_display.load(Ordering::Relaxed) >= n_interfaces as u32 {
+        if ic_display.load(Ordering::Relaxed) >= n_captures as u32 {
             let _ = h_display.lock().unwrap().output_csv();
             break;
         }
