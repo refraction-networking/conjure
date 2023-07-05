@@ -22,7 +22,7 @@ test:
 
 app:
 	[ -d $(EXE_DIR) ] || mkdir -p $(EXE_DIR)
-	go build -o ${EXE_DIR}/application ./application
+	go build -o ${EXE_DIR}/application ./cmd/application
 
 libtd:
 	cd ./libtapdance/ && make libtapdance.a

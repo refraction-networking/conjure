@@ -87,24 +87,23 @@ message ClientConf {
     optional PubKey default_pubkey = 3;
     optional PhantomSubnetsList phantom_subnets_list = 4;
     optional PubKey conjure_pubkey = 5;
+    optional DnsRegConf dns_reg_conf = 6;
 }
 
 // Configuration for DNS registrar
 message DnsRegConf {
     required DnsRegMethod dns_reg_method = 1;
-    optional string udp_addr = 2;
-    optional string dot_addr = 3;
-    optional string doh_url = 4;
-    required string domain = 5;
-    optional bytes pubkey = 6;
-    optional string utls_distribution = 7;
-    optional string stun_server = 8;
+    optional string target = 2;
+    required string domain = 3;
+    optional bytes pubkey = 4;
+    optional string utls_distribution = 5;
+    optional string stun_server = 6;
 }
 
 enum DnsRegMethod {
-    UDP = 0;
-    DOT = 1;
-    DOH = 2;
+    UDP = 1;
+    DOT = 2;
+    DOH = 3;
 }
 
 message DecoyList {
@@ -160,7 +159,14 @@ enum ErrorReasonS2C {
 enum TransportType {
     Null = 0;
     Min = 1;   // Send a 32-byte HMAC id to let the station distinguish registrations to same host
-    Obfs4 = 2; // Not implemented yet?
+    Obfs4 = 2;
+    DTLS = 3; // UDP transport: DTLS
+    Prefix = 4; // dynamic prefix transport (and updated Min)
+    uTLS = 5; // uTLS based transport
+    Format = 6; // Formatting transport - format first, format all
+    WASM = 7; // WebAssembly
+    FTE = 8; // Format transforming encryption
+    Quic = 9; // quic transport?
     Webrtc = 99; // UDP transport: WebRTC DataChannel
 }
 
@@ -175,7 +181,7 @@ message WebRTCICECandidate {
 
 // Deflated SDP for WebRTC by seed2sdp package
 message WebRTCSDP {
-    required uint32 type = 1; 
+    required uint32 type = 1;
     repeated WebRTCICECandidate candidates = 2; // there could be multiple candidates
 }
 
@@ -236,6 +242,11 @@ message ClientToStation {
     // lack therof.
     optional uint32 client_lib_version = 5;
 
+    // Indicates whether the client will allow the registrar to provide alternative parameters that
+    // may work better in substitute for the deterministically selected parameters. This only works
+    // for bidirectional registration methods where the client receives a RegistrationResponse.
+    optional bool disable_registrar_overrides = 6;
+
     // List of decoys that client have unsuccessfully tried in current session.
     // Could be sent in chunks
     repeated string failed_decoys = 10;
@@ -273,10 +284,31 @@ message ClientToStation {
     optional bytes padding = 100;
 }
 
+
+message PrefixTransportParams {
+    // Prefix Identifier
+    optional int32 prefix_id = 1;
+
+    // Prefix bytes (optional - usually sent from station to client as override if allowed by C2S)
+    // as the station cannot take this into account when attempting to identify a connection.
+    optional bytes prefix = 2;
+    optional bool flush_after_prefix = 3;
+
+    // // potential future fields
+    // obfuscator ID
+    // tagEncoder ID (&params?, e.g. format-base64 / padding)
+    // streamEncoder ID (&params?, e.g. foramat-base64 / padding)
+
+    // Indicates whether the client has elected to use destination port randomization. Should be
+    // checked against selected transport to ensure that destination port randomization is
+    // supported.
+    optional bool randomize_dst_port = 13;
+}
+
 message GenericTransportParams {
-    // Indicates whether the client has elected to use destination port
-    // randomization. Should be checked against selected transport to ensure
-    // that destination port randomization is supported.
+    // Indicates whether the client has elected to use destination port randomization. Should be
+    // checked against selected transport to ensure that destination port randomization is
+    // supported.
     optional bool randomize_dst_port = 13;
 }
 
@@ -301,7 +333,19 @@ message C2SWrapper {
   // Decoy address used when registering over Decoy registrar
   optional bytes decoy_address = 7;
 
+  // The next three fields allow an independent registrar (trusted by a station w/ a zmq keypair) to
+  // share the registration overrides that it assigned to the client with the station(s).
+  // Registration Respose is here to allow a parsed object with direct access to the fields within.
+  // RegRespBytes provides a serialized verion of the Registration response so that the signature of
+  // the Bidirectional registrar can be validated before a station applies any overrides present in
+  // the Registration Response.
+  //
+  // If you are reading this in the future and you want to extend the functionality here it might
+  // make sense to make the RegistrationResponse that is sent to the client a distinct message from
+  // the one that gets sent to the stations.
   optional RegistrationResponse registration_response = 8;
+  optional bytes RegRespBytes = 9;
+  optional bytes RegRespSignature = 10;
 }
 
 message SessionStats {
@@ -362,6 +406,9 @@ message RegistrationResponse {
 
   // ClientConf field (optional)
   optional ClientConf clientConf = 6;
+
+  // Transport Params to if `allow_registrar_overrides` is set.
+  optional google.protobuf.Any transport_params = 10;
 }
 
 // response from dns

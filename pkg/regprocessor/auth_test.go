@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
-	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
+	pb "github.com/refraction-networking/conjure/proto"
 )
 
 // TODO: Add monitor to RegProcessor and metrics / logging for connections

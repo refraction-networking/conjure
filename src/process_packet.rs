@@ -3,6 +3,7 @@ use std::os::raw::c_void;
 use std::panic;
 use std::slice;
 use std::str;
+use std::u8;
 
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
 use pnet::packet::ip::IpNextHeaderProtocols;
@@ -13,7 +14,6 @@ use pnet::packet::udp::UdpPacket;
 use pnet::packet::Packet;
 // use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use std::u8;
 //use elligator;
 use flow_tracker::{Flow, FlowNoSrcPort};
 // use dd_selector::DDIpSelector;
@@ -374,16 +374,16 @@ impl PerCoreGlobal {
 mod tests {
     use std::env;
     use std::fs;
+    use std::path::PathBuf;
     use toml;
     use StationConfig;
 
     #[test]
     fn test_filter_station_traffic() {
-        env::set_var("CJ_STATION_CONFIG", "./application/app_config.toml");
+        let mut conf_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        conf_path.push("cmd/application/app_config.toml");
 
-        // --
-        let conf_path = env::var("CJ_STATION_CONFIG").unwrap();
-
+        print!("{}", conf_path.to_str().unwrap());
         let contents =
             fs::read_to_string(conf_path).expect("Something went wrong reading the file");
 

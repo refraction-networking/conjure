@@ -12,15 +12,16 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/refraction-networking/conjure/application/lib"
-	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
-	"github.com/refraction-networking/conjure/application/transports/wrapping/obfs4"
-	"github.com/refraction-networking/conjure/application/transports/wrapping/prefix"
-	"github.com/refraction-networking/conjure/pkg/apiregserver"
-	"github.com/refraction-networking/conjure/pkg/dnsregserver"
+
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regprocessor"
-	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"github.com/refraction-networking/conjure/pkg/regserver/apiregserver"
+	"github.com/refraction-networking/conjure/pkg/regserver/dnsregserver"
+	"github.com/refraction-networking/conjure/pkg/station/lib"
+	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
+	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
+	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
+	pb "github.com/refraction-networking/conjure/proto"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )

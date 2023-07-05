@@ -17,10 +17,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/refraction-networking/conjure/application/transports"
-	"github.com/refraction-networking/conjure/application/transports/wrapping/prefix"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
-	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"github.com/refraction-networking/conjure/pkg/transports"
+	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
+	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 

@@ -13,13 +13,13 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	zmq "github.com/pebbe/zmq4"
-	"github.com/refraction-networking/conjure/application/transports"
-	"github.com/refraction-networking/conjure/application/transports/wrapping/min"
-	"github.com/refraction-networking/conjure/application/transports/wrapping/prefix"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regserver/overrides"
-	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"github.com/refraction-networking/conjure/pkg/transports"
+	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
+	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
+	pb "github.com/refraction-networking/conjure/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
