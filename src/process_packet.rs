@@ -374,10 +374,9 @@ impl PerCoreGlobal {
 mod tests {
     use std::env;
     use std::fs;
+    use std::path::PathBuf;
     use toml;
     use StationConfig;
-    use std::path::PathBuf;
-
 
     #[test]
     fn test_filter_station_traffic() {
