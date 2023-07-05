@@ -26,16 +26,16 @@
 const _PROTOBUF_VERSION_CHECK: () = ::protobuf::VERSION_3_2_0;
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.PubKey)
+// @@protoc_insertion_point(message:tapdance.PubKey)
 pub struct PubKey {
     // message fields
     ///  A public key, as used by the station.
-    // @@protoc_insertion_point(field:conjure.PubKey.key)
+    // @@protoc_insertion_point(field:tapdance.PubKey.key)
     pub key: ::std::option::Option<::std::vec::Vec<u8>>,
-    // @@protoc_insertion_point(field:conjure.PubKey.type)
+    // @@protoc_insertion_point(field:tapdance.PubKey.type)
     pub type_: ::std::option::Option<::protobuf::EnumOrUnknown<KeyType>>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.PubKey.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.PubKey.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -86,7 +86,7 @@ impl PubKey {
         self.key.take().unwrap_or_else(|| ::std::vec::Vec::new())
     }
 
-    // optional .conjure.KeyType type = 2;
+    // optional .tapdance.KeyType type = 2;
 
     pub fn type_(&self) -> KeyType {
         match self.type_ {
@@ -225,37 +225,37 @@ impl ::protobuf::reflect::ProtobufValue for PubKey {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.TLSDecoySpec)
+// @@protoc_insertion_point(message:tapdance.TLSDecoySpec)
 pub struct TLSDecoySpec {
     // message fields
     ///  The hostname/SNI to use for this host
     ///
     ///  The hostname is the only required field, although other
     ///  fields are expected to be present in most cases.
-    // @@protoc_insertion_point(field:conjure.TLSDecoySpec.hostname)
+    // @@protoc_insertion_point(field:tapdance.TLSDecoySpec.hostname)
     pub hostname: ::std::option::Option<::std::string::String>,
     ///  The 32-bit ipv4 address, in network byte order
     ///
     ///  If the IPv4 address is absent, then it may be resolved via
     ///  DNS by the client, or the client may discard this decoy spec
     ///  if local DNS is untrusted, or the service may be multihomed.
-    // @@protoc_insertion_point(field:conjure.TLSDecoySpec.ipv4addr)
+    // @@protoc_insertion_point(field:tapdance.TLSDecoySpec.ipv4addr)
     pub ipv4addr: ::std::option::Option<u32>,
     ///  The 128-bit ipv6 address, in network byte order
-    // @@protoc_insertion_point(field:conjure.TLSDecoySpec.ipv6addr)
+    // @@protoc_insertion_point(field:tapdance.TLSDecoySpec.ipv6addr)
     pub ipv6addr: ::std::option::Option<::std::vec::Vec<u8>>,
     ///  The Tapdance station public key to use when contacting this
     ///  decoy
     ///
     ///  If omitted, the default station public key (if any) is used.
-    // @@protoc_insertion_point(field:conjure.TLSDecoySpec.pubkey)
+    // @@protoc_insertion_point(field:tapdance.TLSDecoySpec.pubkey)
     pub pubkey: ::protobuf::MessageField<PubKey>,
     ///  The maximum duration, in milliseconds, to maintain an open
     ///  connection to this decoy (because the decoy may close the
     ///  connection itself after this length of time)
     ///
     ///  If omitted, a default of 30,000 milliseconds is assumed.
-    // @@protoc_insertion_point(field:conjure.TLSDecoySpec.timeout)
+    // @@protoc_insertion_point(field:tapdance.TLSDecoySpec.timeout)
     pub timeout: ::std::option::Option<u32>,
     ///  The maximum TCP window size to attempt to use for this decoy.
     ///
@@ -264,10 +264,10 @@ pub struct TLSDecoySpec {
     ///  TODO: the default is based on the current heuristic of only
     ///  using decoys that permit windows of 15KB or larger.  If this
     ///  heuristic changes, then this default doesn't make sense.
-    // @@protoc_insertion_point(field:conjure.TLSDecoySpec.tcpwin)
+    // @@protoc_insertion_point(field:tapdance.TLSDecoySpec.tcpwin)
     pub tcpwin: ::std::option::Option<u32>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.TLSDecoySpec.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.TLSDecoySpec.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -593,23 +593,23 @@ impl ::protobuf::reflect::ProtobufValue for TLSDecoySpec {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.ClientConf)
+// @@protoc_insertion_point(message:tapdance.ClientConf)
 pub struct ClientConf {
     // message fields
-    // @@protoc_insertion_point(field:conjure.ClientConf.decoy_list)
+    // @@protoc_insertion_point(field:tapdance.ClientConf.decoy_list)
     pub decoy_list: ::protobuf::MessageField<DecoyList>,
-    // @@protoc_insertion_point(field:conjure.ClientConf.generation)
+    // @@protoc_insertion_point(field:tapdance.ClientConf.generation)
     pub generation: ::std::option::Option<u32>,
-    // @@protoc_insertion_point(field:conjure.ClientConf.default_pubkey)
+    // @@protoc_insertion_point(field:tapdance.ClientConf.default_pubkey)
     pub default_pubkey: ::protobuf::MessageField<PubKey>,
-    // @@protoc_insertion_point(field:conjure.ClientConf.phantom_subnets_list)
+    // @@protoc_insertion_point(field:tapdance.ClientConf.phantom_subnets_list)
     pub phantom_subnets_list: ::protobuf::MessageField<PhantomSubnetsList>,
-    // @@protoc_insertion_point(field:conjure.ClientConf.conjure_pubkey)
+    // @@protoc_insertion_point(field:tapdance.ClientConf.conjure_pubkey)
     pub conjure_pubkey: ::protobuf::MessageField<PubKey>,
-    // @@protoc_insertion_point(field:conjure.ClientConf.dns_reg_conf)
+    // @@protoc_insertion_point(field:tapdance.ClientConf.dns_reg_conf)
     pub dns_reg_conf: ::protobuf::MessageField<DnsRegConf>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.ClientConf.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.ClientConf.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -855,23 +855,23 @@ impl ::protobuf::reflect::ProtobufValue for ClientConf {
 
 ///  Configuration for DNS registrar
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.DnsRegConf)
+// @@protoc_insertion_point(message:tapdance.DnsRegConf)
 pub struct DnsRegConf {
     // message fields
-    // @@protoc_insertion_point(field:conjure.DnsRegConf.dns_reg_method)
+    // @@protoc_insertion_point(field:tapdance.DnsRegConf.dns_reg_method)
     pub dns_reg_method: ::std::option::Option<::protobuf::EnumOrUnknown<DnsRegMethod>>,
-    // @@protoc_insertion_point(field:conjure.DnsRegConf.target)
+    // @@protoc_insertion_point(field:tapdance.DnsRegConf.target)
     pub target: ::std::option::Option<::std::string::String>,
-    // @@protoc_insertion_point(field:conjure.DnsRegConf.domain)
+    // @@protoc_insertion_point(field:tapdance.DnsRegConf.domain)
     pub domain: ::std::option::Option<::std::string::String>,
-    // @@protoc_insertion_point(field:conjure.DnsRegConf.pubkey)
+    // @@protoc_insertion_point(field:tapdance.DnsRegConf.pubkey)
     pub pubkey: ::std::option::Option<::std::vec::Vec<u8>>,
-    // @@protoc_insertion_point(field:conjure.DnsRegConf.utls_distribution)
+    // @@protoc_insertion_point(field:tapdance.DnsRegConf.utls_distribution)
     pub utls_distribution: ::std::option::Option<::std::string::String>,
-    // @@protoc_insertion_point(field:conjure.DnsRegConf.stun_server)
+    // @@protoc_insertion_point(field:tapdance.DnsRegConf.stun_server)
     pub stun_server: ::std::option::Option<::std::string::String>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.DnsRegConf.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.DnsRegConf.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -886,7 +886,7 @@ impl DnsRegConf {
         ::std::default::Default::default()
     }
 
-    // required .conjure.DnsRegMethod dns_reg_method = 1;
+    // required .tapdance.DnsRegMethod dns_reg_method = 1;
 
     pub fn dns_reg_method(&self) -> DnsRegMethod {
         match self.dns_reg_method {
@@ -1275,13 +1275,13 @@ impl ::protobuf::reflect::ProtobufValue for DnsRegConf {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.DecoyList)
+// @@protoc_insertion_point(message:tapdance.DecoyList)
 pub struct DecoyList {
     // message fields
-    // @@protoc_insertion_point(field:conjure.DecoyList.tls_decoys)
+    // @@protoc_insertion_point(field:tapdance.DecoyList.tls_decoys)
     pub tls_decoys: ::std::vec::Vec<TLSDecoySpec>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.DecoyList.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.DecoyList.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -1398,13 +1398,13 @@ impl ::protobuf::reflect::ProtobufValue for DecoyList {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.PhantomSubnetsList)
+// @@protoc_insertion_point(message:tapdance.PhantomSubnetsList)
 pub struct PhantomSubnetsList {
     // message fields
-    // @@protoc_insertion_point(field:conjure.PhantomSubnetsList.weighted_subnets)
+    // @@protoc_insertion_point(field:tapdance.PhantomSubnetsList.weighted_subnets)
     pub weighted_subnets: ::std::vec::Vec<PhantomSubnets>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.PhantomSubnetsList.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.PhantomSubnetsList.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -1521,15 +1521,15 @@ impl ::protobuf::reflect::ProtobufValue for PhantomSubnetsList {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.PhantomSubnets)
+// @@protoc_insertion_point(message:tapdance.PhantomSubnets)
 pub struct PhantomSubnets {
     // message fields
-    // @@protoc_insertion_point(field:conjure.PhantomSubnets.weight)
+    // @@protoc_insertion_point(field:tapdance.PhantomSubnets.weight)
     pub weight: ::std::option::Option<u32>,
-    // @@protoc_insertion_point(field:conjure.PhantomSubnets.subnets)
+    // @@protoc_insertion_point(field:tapdance.PhantomSubnets.subnets)
     pub subnets: ::std::vec::Vec<::std::string::String>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.PhantomSubnets.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.PhantomSubnets.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -1681,19 +1681,19 @@ impl ::protobuf::reflect::ProtobufValue for PhantomSubnets {
 
 ///  Deflated ICE Candidate by seed2sdp package
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.WebRTCICECandidate)
+// @@protoc_insertion_point(message:tapdance.WebRTCICECandidate)
 pub struct WebRTCICECandidate {
     // message fields
     ///  IP is represented in its 16-byte form
-    // @@protoc_insertion_point(field:conjure.WebRTCICECandidate.ip_upper)
+    // @@protoc_insertion_point(field:tapdance.WebRTCICECandidate.ip_upper)
     pub ip_upper: ::std::option::Option<u64>,
-    // @@protoc_insertion_point(field:conjure.WebRTCICECandidate.ip_lower)
+    // @@protoc_insertion_point(field:tapdance.WebRTCICECandidate.ip_lower)
     pub ip_lower: ::std::option::Option<u64>,
     ///  Composed info includes port, tcptype (unset if not tcp), candidate type (host, srflx, prflx), protocol (TCP/UDP), and component (RTP/RTCP)
-    // @@protoc_insertion_point(field:conjure.WebRTCICECandidate.composed_info)
+    // @@protoc_insertion_point(field:tapdance.WebRTCICECandidate.composed_info)
     pub composed_info: ::std::option::Option<u32>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.WebRTCICECandidate.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.WebRTCICECandidate.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -1908,15 +1908,15 @@ impl ::protobuf::reflect::ProtobufValue for WebRTCICECandidate {
 
 ///  Deflated SDP for WebRTC by seed2sdp package
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.WebRTCSDP)
+// @@protoc_insertion_point(message:tapdance.WebRTCSDP)
 pub struct WebRTCSDP {
     // message fields
-    // @@protoc_insertion_point(field:conjure.WebRTCSDP.type)
+    // @@protoc_insertion_point(field:tapdance.WebRTCSDP.type)
     pub type_: ::std::option::Option<u32>,
-    // @@protoc_insertion_point(field:conjure.WebRTCSDP.candidates)
+    // @@protoc_insertion_point(field:tapdance.WebRTCSDP.candidates)
     pub candidates: ::std::vec::Vec<WebRTCICECandidate>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.WebRTCSDP.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.WebRTCSDP.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -2077,15 +2077,15 @@ impl ::protobuf::reflect::ProtobufValue for WebRTCSDP {
 
 ///  WebRTCSignal includes a deflated SDP and a seed
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.WebRTCSignal)
+// @@protoc_insertion_point(message:tapdance.WebRTCSignal)
 pub struct WebRTCSignal {
     // message fields
-    // @@protoc_insertion_point(field:conjure.WebRTCSignal.seed)
+    // @@protoc_insertion_point(field:tapdance.WebRTCSignal.seed)
     pub seed: ::std::option::Option<::std::string::String>,
-    // @@protoc_insertion_point(field:conjure.WebRTCSignal.sdp)
+    // @@protoc_insertion_point(field:tapdance.WebRTCSignal.sdp)
     pub sdp: ::protobuf::MessageField<WebRTCSDP>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.WebRTCSignal.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.WebRTCSignal.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -2265,34 +2265,34 @@ impl ::protobuf::reflect::ProtobufValue for WebRTCSignal {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.StationToClient)
+// @@protoc_insertion_point(message:tapdance.StationToClient)
 pub struct StationToClient {
     // message fields
     ///  Should accompany (at least) SESSION_INIT and CONFIRM_RECONNECT.
-    // @@protoc_insertion_point(field:conjure.StationToClient.protocol_version)
+    // @@protoc_insertion_point(field:tapdance.StationToClient.protocol_version)
     pub protocol_version: ::std::option::Option<u32>,
     ///  There might be a state transition. May be absent; absence should be
     ///  treated identically to NO_CHANGE.
-    // @@protoc_insertion_point(field:conjure.StationToClient.state_transition)
+    // @@protoc_insertion_point(field:tapdance.StationToClient.state_transition)
     pub state_transition: ::std::option::Option<::protobuf::EnumOrUnknown<S2C_Transition>>,
     ///  The station can send client config info piggybacked
     ///  on any message, as it sees fit
-    // @@protoc_insertion_point(field:conjure.StationToClient.config_info)
+    // @@protoc_insertion_point(field:tapdance.StationToClient.config_info)
     pub config_info: ::protobuf::MessageField<ClientConf>,
     ///  If state_transition == S2C_ERROR, this field is the explanation.
-    // @@protoc_insertion_point(field:conjure.StationToClient.err_reason)
+    // @@protoc_insertion_point(field:tapdance.StationToClient.err_reason)
     pub err_reason: ::std::option::Option<::protobuf::EnumOrUnknown<ErrorReasonS2C>>,
     ///  Signals client to stop connecting for following amount of seconds
-    // @@protoc_insertion_point(field:conjure.StationToClient.tmp_backoff)
+    // @@protoc_insertion_point(field:tapdance.StationToClient.tmp_backoff)
     pub tmp_backoff: ::std::option::Option<u32>,
     ///  Sent in SESSION_INIT, identifies the station that picked up
-    // @@protoc_insertion_point(field:conjure.StationToClient.station_id)
+    // @@protoc_insertion_point(field:tapdance.StationToClient.station_id)
     pub station_id: ::std::option::Option<::std::string::String>,
     ///  Random-sized junk to defeat packet size fingerprinting.
-    // @@protoc_insertion_point(field:conjure.StationToClient.padding)
+    // @@protoc_insertion_point(field:tapdance.StationToClient.padding)
     pub padding: ::std::option::Option<::std::vec::Vec<u8>>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.StationToClient.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.StationToClient.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -2326,7 +2326,7 @@ impl StationToClient {
         self.protocol_version = ::std::option::Option::Some(v);
     }
 
-    // optional .conjure.S2C_Transition state_transition = 2;
+    // optional .tapdance.S2C_Transition state_transition = 2;
 
     pub fn state_transition(&self) -> S2C_Transition {
         match self.state_transition {
@@ -2348,7 +2348,7 @@ impl StationToClient {
         self.state_transition = ::std::option::Option::Some(::protobuf::EnumOrUnknown::new(v));
     }
 
-    // optional .conjure.ErrorReasonS2C err_reason = 4;
+    // optional .tapdance.ErrorReasonS2C err_reason = 4;
 
     pub fn err_reason(&self) -> ErrorReasonS2C {
         match self.err_reason {
@@ -2664,21 +2664,21 @@ impl ::protobuf::reflect::ProtobufValue for StationToClient {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.RegistrationFlags)
+// @@protoc_insertion_point(message:tapdance.RegistrationFlags)
 pub struct RegistrationFlags {
     // message fields
-    // @@protoc_insertion_point(field:conjure.RegistrationFlags.upload_only)
+    // @@protoc_insertion_point(field:tapdance.RegistrationFlags.upload_only)
     pub upload_only: ::std::option::Option<bool>,
-    // @@protoc_insertion_point(field:conjure.RegistrationFlags.dark_decoy)
+    // @@protoc_insertion_point(field:tapdance.RegistrationFlags.dark_decoy)
     pub dark_decoy: ::std::option::Option<bool>,
-    // @@protoc_insertion_point(field:conjure.RegistrationFlags.proxy_header)
+    // @@protoc_insertion_point(field:tapdance.RegistrationFlags.proxy_header)
     pub proxy_header: ::std::option::Option<bool>,
-    // @@protoc_insertion_point(field:conjure.RegistrationFlags.use_TIL)
+    // @@protoc_insertion_point(field:tapdance.RegistrationFlags.use_TIL)
     pub use_TIL: ::std::option::Option<bool>,
-    // @@protoc_insertion_point(field:conjure.RegistrationFlags.prescanned)
+    // @@protoc_insertion_point(field:tapdance.RegistrationFlags.prescanned)
     pub prescanned: ::std::option::Option<bool>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.RegistrationFlags.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.RegistrationFlags.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -2953,41 +2953,41 @@ impl ::protobuf::reflect::ProtobufValue for RegistrationFlags {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.ClientToStation)
+// @@protoc_insertion_point(message:tapdance.ClientToStation)
 pub struct ClientToStation {
     // message fields
-    // @@protoc_insertion_point(field:conjure.ClientToStation.protocol_version)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.protocol_version)
     pub protocol_version: ::std::option::Option<u32>,
     ///  The client reports its decoy list's version number here, which the
     ///  station can use to decide whether to send an updated one. The station
     ///  should always send a list if this field is set to 0.
-    // @@protoc_insertion_point(field:conjure.ClientToStation.decoy_list_generation)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.decoy_list_generation)
     pub decoy_list_generation: ::std::option::Option<u32>,
-    // @@protoc_insertion_point(field:conjure.ClientToStation.state_transition)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.state_transition)
     pub state_transition: ::std::option::Option<::protobuf::EnumOrUnknown<C2S_Transition>>,
     ///  The position in the overall session's upload sequence where the current
     ///  YIELD=>ACQUIRE switchover is happening.
-    // @@protoc_insertion_point(field:conjure.ClientToStation.upload_sync)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.upload_sync)
     pub upload_sync: ::std::option::Option<u64>,
     ///  High level client library version used for indicating feature support, or
     ///  lack therof.
-    // @@protoc_insertion_point(field:conjure.ClientToStation.client_lib_version)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.client_lib_version)
     pub client_lib_version: ::std::option::Option<u32>,
     ///  Indicates whether the client will allow the registrar to provide alternative parameters that
     ///  may work better in substitute for the deterministically selected parameters. This only works
     ///  for bidirectional registration methods where the client receives a RegistrationResponse.
-    // @@protoc_insertion_point(field:conjure.ClientToStation.allow_registrar_overrides)
-    pub allow_registrar_overrides: ::std::option::Option<bool>,
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.disable_registrar_overrides)
+    pub disable_registrar_overrides: ::std::option::Option<bool>,
     ///  List of decoys that client have unsuccessfully tried in current session.
     ///  Could be sent in chunks
-    // @@protoc_insertion_point(field:conjure.ClientToStation.failed_decoys)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.failed_decoys)
     pub failed_decoys: ::std::vec::Vec<::std::string::String>,
-    // @@protoc_insertion_point(field:conjure.ClientToStation.stats)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.stats)
     pub stats: ::protobuf::MessageField<SessionStats>,
     ///  NullTransport, MinTransport, Obfs4Transport, etc. Transport type we want from phantom proxy
-    // @@protoc_insertion_point(field:conjure.ClientToStation.transport)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.transport)
     pub transport: ::std::option::Option<::protobuf::EnumOrUnknown<TransportType>>,
-    // @@protoc_insertion_point(field:conjure.ClientToStation.transport_params)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.transport_params)
     pub transport_params: ::protobuf::MessageField<::protobuf::well_known_types::any::Any>,
     ///  Station is only required to check this variable during session initialization.
     ///  If set, station must facilitate connection to said target by itself, i.e. write into squid
@@ -2995,28 +2995,28 @@ pub struct ClientToStation {
     ///  covert_address must have exactly one ':' colon, that separates host (literal IP address or
     ///  resolvable hostname) and port
     ///  TODO: make it required for initialization, and stop connecting any client straight to squid?
-    // @@protoc_insertion_point(field:conjure.ClientToStation.covert_address)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.covert_address)
     pub covert_address: ::std::option::Option<::std::string::String>,
     ///  Used in dark decoys to signal which dark decoy it will connect to.
-    // @@protoc_insertion_point(field:conjure.ClientToStation.masked_decoy_server_name)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.masked_decoy_server_name)
     pub masked_decoy_server_name: ::std::option::Option<::std::string::String>,
     ///  Used to indicate to server if client is registering v4, v6 or both
-    // @@protoc_insertion_point(field:conjure.ClientToStation.v6_support)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.v6_support)
     pub v6_support: ::std::option::Option<bool>,
-    // @@protoc_insertion_point(field:conjure.ClientToStation.v4_support)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.v4_support)
     pub v4_support: ::std::option::Option<bool>,
     ///  A collection of optional flags for the registration.
-    // @@protoc_insertion_point(field:conjure.ClientToStation.flags)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.flags)
     pub flags: ::protobuf::MessageField<RegistrationFlags>,
     ///  Transport Extensions
     ///  TODO(jmwample) - move to WebRTC specific transport params protobuf message.
-    // @@protoc_insertion_point(field:conjure.ClientToStation.webrtc_signal)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.webrtc_signal)
     pub webrtc_signal: ::protobuf::MessageField<WebRTCSignal>,
     ///  Random-sized junk to defeat packet size fingerprinting.
-    // @@protoc_insertion_point(field:conjure.ClientToStation.padding)
+    // @@protoc_insertion_point(field:tapdance.ClientToStation.padding)
     pub padding: ::std::option::Option<::std::vec::Vec<u8>>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.ClientToStation.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.ClientToStation.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -3069,7 +3069,7 @@ impl ClientToStation {
         self.decoy_list_generation = ::std::option::Option::Some(v);
     }
 
-    // optional .conjure.C2S_Transition state_transition = 3;
+    // optional .tapdance.C2S_Transition state_transition = 3;
 
     pub fn state_transition(&self) -> C2S_Transition {
         match self.state_transition {
@@ -3129,26 +3129,26 @@ impl ClientToStation {
         self.client_lib_version = ::std::option::Option::Some(v);
     }
 
-    // optional bool allow_registrar_overrides = 6;
+    // optional bool disable_registrar_overrides = 6;
 
-    pub fn allow_registrar_overrides(&self) -> bool {
-        self.allow_registrar_overrides.unwrap_or(false)
+    pub fn disable_registrar_overrides(&self) -> bool {
+        self.disable_registrar_overrides.unwrap_or(false)
     }
 
-    pub fn clear_allow_registrar_overrides(&mut self) {
-        self.allow_registrar_overrides = ::std::option::Option::None;
+    pub fn clear_disable_registrar_overrides(&mut self) {
+        self.disable_registrar_overrides = ::std::option::Option::None;
     }
 
-    pub fn has_allow_registrar_overrides(&self) -> bool {
-        self.allow_registrar_overrides.is_some()
+    pub fn has_disable_registrar_overrides(&self) -> bool {
+        self.disable_registrar_overrides.is_some()
     }
 
     // Param is passed by value, moved
-    pub fn set_allow_registrar_overrides(&mut self, v: bool) {
-        self.allow_registrar_overrides = ::std::option::Option::Some(v);
+    pub fn set_disable_registrar_overrides(&mut self, v: bool) {
+        self.disable_registrar_overrides = ::std::option::Option::Some(v);
     }
 
-    // optional .conjure.TransportType transport = 12;
+    // optional .tapdance.TransportType transport = 12;
 
     pub fn transport(&self) -> TransportType {
         match self.transport {
@@ -3345,9 +3345,9 @@ impl ClientToStation {
             |m: &mut ClientToStation| { &mut m.client_lib_version },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
-            "allow_registrar_overrides",
-            |m: &ClientToStation| { &m.allow_registrar_overrides },
-            |m: &mut ClientToStation| { &mut m.allow_registrar_overrides },
+            "disable_registrar_overrides",
+            |m: &ClientToStation| { &m.disable_registrar_overrides },
+            |m: &mut ClientToStation| { &mut m.disable_registrar_overrides },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
             "failed_decoys",
@@ -3458,7 +3458,7 @@ impl ::protobuf::Message for ClientToStation {
                     self.client_lib_version = ::std::option::Option::Some(is.read_uint32()?);
                 },
                 48 => {
-                    self.allow_registrar_overrides = ::std::option::Option::Some(is.read_bool()?);
+                    self.disable_registrar_overrides = ::std::option::Option::Some(is.read_bool()?);
                 },
                 82 => {
                     self.failed_decoys.push(is.read_string()?);
@@ -3520,7 +3520,7 @@ impl ::protobuf::Message for ClientToStation {
         if let Some(v) = self.client_lib_version {
             my_size += ::protobuf::rt::uint32_size(5, v);
         }
-        if let Some(v) = self.allow_registrar_overrides {
+        if let Some(v) = self.disable_registrar_overrides {
             my_size += 1 + 1;
         }
         for value in &self.failed_decoys {
@@ -3581,7 +3581,7 @@ impl ::protobuf::Message for ClientToStation {
         if let Some(v) = self.client_lib_version {
             os.write_uint32(5, v)?;
         }
-        if let Some(v) = self.allow_registrar_overrides {
+        if let Some(v) = self.disable_registrar_overrides {
             os.write_bool(6, v)?;
         }
         for v in &self.failed_decoys {
@@ -3639,7 +3639,7 @@ impl ::protobuf::Message for ClientToStation {
         self.state_transition = ::std::option::Option::None;
         self.upload_sync = ::std::option::Option::None;
         self.client_lib_version = ::std::option::Option::None;
-        self.allow_registrar_overrides = ::std::option::Option::None;
+        self.disable_registrar_overrides = ::std::option::Option::None;
         self.failed_decoys.clear();
         self.stats.clear();
         self.transport = ::std::option::Option::None;
@@ -3661,7 +3661,7 @@ impl ::protobuf::Message for ClientToStation {
             state_transition: ::std::option::Option::None,
             upload_sync: ::std::option::Option::None,
             client_lib_version: ::std::option::Option::None,
-            allow_registrar_overrides: ::std::option::Option::None,
+            disable_registrar_overrides: ::std::option::Option::None,
             failed_decoys: ::std::vec::Vec::new(),
             stats: ::protobuf::MessageField::none(),
             transport: ::std::option::Option::None,
@@ -3697,23 +3697,25 @@ impl ::protobuf::reflect::ProtobufValue for ClientToStation {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.PrefixTransportParams)
+// @@protoc_insertion_point(message:tapdance.PrefixTransportParams)
 pub struct PrefixTransportParams {
     // message fields
     ///  Prefix Identifier
-    // @@protoc_insertion_point(field:conjure.PrefixTransportParams.prefix_id)
+    // @@protoc_insertion_point(field:tapdance.PrefixTransportParams.prefix_id)
     pub prefix_id: ::std::option::Option<i32>,
     ///  Prefix bytes (optional - usually sent from station to client as override if allowed by C2S)
     ///  as the station cannot take this into account when attempting to identify a connection.
-    // @@protoc_insertion_point(field:conjure.PrefixTransportParams.prefix)
+    // @@protoc_insertion_point(field:tapdance.PrefixTransportParams.prefix)
     pub prefix: ::std::option::Option<::std::vec::Vec<u8>>,
+    // @@protoc_insertion_point(field:tapdance.PrefixTransportParams.flush_after_prefix)
+    pub flush_after_prefix: ::std::option::Option<bool>,
     ///  Indicates whether the client has elected to use destination port randomization. Should be
     ///  checked against selected transport to ensure that destination port randomization is
     ///  supported.
-    // @@protoc_insertion_point(field:conjure.PrefixTransportParams.randomize_dst_port)
+    // @@protoc_insertion_point(field:tapdance.PrefixTransportParams.randomize_dst_port)
     pub randomize_dst_port: ::std::option::Option<bool>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.PrefixTransportParams.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.PrefixTransportParams.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -3783,6 +3785,25 @@ impl PrefixTransportParams {
         self.prefix.take().unwrap_or_else(|| ::std::vec::Vec::new())
     }
 
+    // optional bool flush_after_prefix = 3;
+
+    pub fn flush_after_prefix(&self) -> bool {
+        self.flush_after_prefix.unwrap_or(false)
+    }
+
+    pub fn clear_flush_after_prefix(&mut self) {
+        self.flush_after_prefix = ::std::option::Option::None;
+    }
+
+    pub fn has_flush_after_prefix(&self) -> bool {
+        self.flush_after_prefix.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_flush_after_prefix(&mut self, v: bool) {
+        self.flush_after_prefix = ::std::option::Option::Some(v);
+    }
+
     // optional bool randomize_dst_port = 13;
 
     pub fn randomize_dst_port(&self) -> bool {
@@ -3803,7 +3824,7 @@ impl PrefixTransportParams {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(3);
+        let mut fields = ::std::vec::Vec::with_capacity(4);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "prefix_id",
@@ -3814,6 +3835,11 @@ impl PrefixTransportParams {
             "prefix",
             |m: &PrefixTransportParams| { &m.prefix },
             |m: &mut PrefixTransportParams| { &mut m.prefix },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "flush_after_prefix",
+            |m: &PrefixTransportParams| { &m.flush_after_prefix },
+            |m: &mut PrefixTransportParams| { &mut m.flush_after_prefix },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "randomize_dst_port",
@@ -3844,6 +3870,9 @@ impl ::protobuf::Message for PrefixTransportParams {
                 18 => {
                     self.prefix = ::std::option::Option::Some(is.read_bytes()?);
                 },
+                24 => {
+                    self.flush_after_prefix = ::std::option::Option::Some(is.read_bool()?);
+                },
                 104 => {
                     self.randomize_dst_port = ::std::option::Option::Some(is.read_bool()?);
                 },
@@ -3865,6 +3894,9 @@ impl ::protobuf::Message for PrefixTransportParams {
         if let Some(v) = self.prefix.as_ref() {
             my_size += ::protobuf::rt::bytes_size(2, &v);
         }
+        if let Some(v) = self.flush_after_prefix {
+            my_size += 1 + 1;
+        }
         if let Some(v) = self.randomize_dst_port {
             my_size += 1 + 1;
         }
@@ -3879,6 +3911,9 @@ impl ::protobuf::Message for PrefixTransportParams {
         }
         if let Some(v) = self.prefix.as_ref() {
             os.write_bytes(2, v)?;
+        }
+        if let Some(v) = self.flush_after_prefix {
+            os.write_bool(3, v)?;
         }
         if let Some(v) = self.randomize_dst_port {
             os.write_bool(13, v)?;
@@ -3902,6 +3937,7 @@ impl ::protobuf::Message for PrefixTransportParams {
     fn clear(&mut self) {
         self.prefix_id = ::std::option::Option::None;
         self.prefix = ::std::option::Option::None;
+        self.flush_after_prefix = ::std::option::Option::None;
         self.randomize_dst_port = ::std::option::Option::None;
         self.special_fields.clear();
     }
@@ -3910,6 +3946,7 @@ impl ::protobuf::Message for PrefixTransportParams {
         static instance: PrefixTransportParams = PrefixTransportParams {
             prefix_id: ::std::option::Option::None,
             prefix: ::std::option::Option::None,
+            flush_after_prefix: ::std::option::Option::None,
             randomize_dst_port: ::std::option::Option::None,
             special_fields: ::protobuf::SpecialFields::new(),
         };
@@ -3935,16 +3972,16 @@ impl ::protobuf::reflect::ProtobufValue for PrefixTransportParams {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.GenericTransportParams)
+// @@protoc_insertion_point(message:tapdance.GenericTransportParams)
 pub struct GenericTransportParams {
     // message fields
     ///  Indicates whether the client has elected to use destination port randomization. Should be
     ///  checked against selected transport to ensure that destination port randomization is
     ///  supported.
-    // @@protoc_insertion_point(field:conjure.GenericTransportParams.randomize_dst_port)
+    // @@protoc_insertion_point(field:tapdance.GenericTransportParams.randomize_dst_port)
     pub randomize_dst_port: ::std::option::Option<bool>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.GenericTransportParams.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.GenericTransportParams.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -4079,20 +4116,20 @@ impl ::protobuf::reflect::ProtobufValue for GenericTransportParams {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.C2SWrapper)
+// @@protoc_insertion_point(message:tapdance.C2SWrapper)
 pub struct C2SWrapper {
     // message fields
-    // @@protoc_insertion_point(field:conjure.C2SWrapper.shared_secret)
+    // @@protoc_insertion_point(field:tapdance.C2SWrapper.shared_secret)
     pub shared_secret: ::std::option::Option<::std::vec::Vec<u8>>,
-    // @@protoc_insertion_point(field:conjure.C2SWrapper.registration_payload)
+    // @@protoc_insertion_point(field:tapdance.C2SWrapper.registration_payload)
     pub registration_payload: ::protobuf::MessageField<ClientToStation>,
-    // @@protoc_insertion_point(field:conjure.C2SWrapper.registration_source)
+    // @@protoc_insertion_point(field:tapdance.C2SWrapper.registration_source)
     pub registration_source: ::std::option::Option<::protobuf::EnumOrUnknown<RegistrationSource>>,
     ///  client source address when receiving a registration
-    // @@protoc_insertion_point(field:conjure.C2SWrapper.registration_address)
+    // @@protoc_insertion_point(field:tapdance.C2SWrapper.registration_address)
     pub registration_address: ::std::option::Option<::std::vec::Vec<u8>>,
     ///  Decoy address used when registering over Decoy registrar
-    // @@protoc_insertion_point(field:conjure.C2SWrapper.decoy_address)
+    // @@protoc_insertion_point(field:tapdance.C2SWrapper.decoy_address)
     pub decoy_address: ::std::option::Option<::std::vec::Vec<u8>>,
     ///  The next three fields allow an independent registrar (trusted by a station w/ a zmq keypair) to
     ///  share the registration overrides that it assigned to the client with the station(s).
@@ -4104,14 +4141,14 @@ pub struct C2SWrapper {
     ///  If you are reading this in the future and you want to extend the functionality here it might
     ///  make sense to make the RegistrationResponse that is sent to the client a distinct message from
     ///  the one that gets sent to the stations.
-    // @@protoc_insertion_point(field:conjure.C2SWrapper.registration_response)
+    // @@protoc_insertion_point(field:tapdance.C2SWrapper.registration_response)
     pub registration_response: ::protobuf::MessageField<RegistrationResponse>,
-    // @@protoc_insertion_point(field:conjure.C2SWrapper.RegRespBytes)
+    // @@protoc_insertion_point(field:tapdance.C2SWrapper.RegRespBytes)
     pub RegRespBytes: ::std::option::Option<::std::vec::Vec<u8>>,
-    // @@protoc_insertion_point(field:conjure.C2SWrapper.RegRespSignature)
+    // @@protoc_insertion_point(field:tapdance.C2SWrapper.RegRespSignature)
     pub RegRespSignature: ::std::option::Option<::std::vec::Vec<u8>>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.C2SWrapper.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.C2SWrapper.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -4162,7 +4199,7 @@ impl C2SWrapper {
         self.shared_secret.take().unwrap_or_else(|| ::std::vec::Vec::new())
     }
 
-    // optional .conjure.RegistrationSource registration_source = 4;
+    // optional .tapdance.RegistrationSource registration_source = 4;
 
     pub fn registration_source(&self) -> RegistrationSource {
         match self.registration_source {
@@ -4553,23 +4590,23 @@ impl ::protobuf::reflect::ProtobufValue for C2SWrapper {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.SessionStats)
+// @@protoc_insertion_point(message:tapdance.SessionStats)
 pub struct SessionStats {
     // message fields
-    // @@protoc_insertion_point(field:conjure.SessionStats.failed_decoys_amount)
+    // @@protoc_insertion_point(field:tapdance.SessionStats.failed_decoys_amount)
     pub failed_decoys_amount: ::std::option::Option<u32>,
     ///  Applicable to whole session:
-    // @@protoc_insertion_point(field:conjure.SessionStats.total_time_to_connect)
+    // @@protoc_insertion_point(field:tapdance.SessionStats.total_time_to_connect)
     pub total_time_to_connect: ::std::option::Option<u32>,
     ///  Last (i.e. successful) decoy:
-    // @@protoc_insertion_point(field:conjure.SessionStats.rtt_to_station)
+    // @@protoc_insertion_point(field:tapdance.SessionStats.rtt_to_station)
     pub rtt_to_station: ::std::option::Option<u32>,
-    // @@protoc_insertion_point(field:conjure.SessionStats.tls_to_decoy)
+    // @@protoc_insertion_point(field:tapdance.SessionStats.tls_to_decoy)
     pub tls_to_decoy: ::std::option::Option<u32>,
-    // @@protoc_insertion_point(field:conjure.SessionStats.tcp_to_decoy)
+    // @@protoc_insertion_point(field:tapdance.SessionStats.tcp_to_decoy)
     pub tcp_to_decoy: ::std::option::Option<u32>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.SessionStats.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.SessionStats.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -4844,25 +4881,25 @@ impl ::protobuf::reflect::ProtobufValue for SessionStats {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.StationToDetector)
+// @@protoc_insertion_point(message:tapdance.StationToDetector)
 pub struct StationToDetector {
     // message fields
-    // @@protoc_insertion_point(field:conjure.StationToDetector.phantom_ip)
+    // @@protoc_insertion_point(field:tapdance.StationToDetector.phantom_ip)
     pub phantom_ip: ::std::option::Option<::std::string::String>,
-    // @@protoc_insertion_point(field:conjure.StationToDetector.client_ip)
+    // @@protoc_insertion_point(field:tapdance.StationToDetector.client_ip)
     pub client_ip: ::std::option::Option<::std::string::String>,
-    // @@protoc_insertion_point(field:conjure.StationToDetector.timeout_ns)
+    // @@protoc_insertion_point(field:tapdance.StationToDetector.timeout_ns)
     pub timeout_ns: ::std::option::Option<u64>,
-    // @@protoc_insertion_point(field:conjure.StationToDetector.operation)
+    // @@protoc_insertion_point(field:tapdance.StationToDetector.operation)
     pub operation: ::std::option::Option<::protobuf::EnumOrUnknown<StationOperations>>,
-    // @@protoc_insertion_point(field:conjure.StationToDetector.dst_port)
+    // @@protoc_insertion_point(field:tapdance.StationToDetector.dst_port)
     pub dst_port: ::std::option::Option<u32>,
-    // @@protoc_insertion_point(field:conjure.StationToDetector.src_port)
+    // @@protoc_insertion_point(field:tapdance.StationToDetector.src_port)
     pub src_port: ::std::option::Option<u32>,
-    // @@protoc_insertion_point(field:conjure.StationToDetector.proto)
+    // @@protoc_insertion_point(field:tapdance.StationToDetector.proto)
     pub proto: ::std::option::Option<::protobuf::EnumOrUnknown<IPProto>>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.StationToDetector.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.StationToDetector.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -4968,7 +5005,7 @@ impl StationToDetector {
         self.timeout_ns = ::std::option::Option::Some(v);
     }
 
-    // optional .conjure.StationOperations operation = 4;
+    // optional .tapdance.StationOperations operation = 4;
 
     pub fn operation(&self) -> StationOperations {
         match self.operation {
@@ -5028,7 +5065,7 @@ impl StationToDetector {
         self.src_port = ::std::option::Option::Some(v);
     }
 
-    // optional .conjure.IPProto proto = 12;
+    // optional .tapdance.IPProto proto = 12;
 
     pub fn proto(&self) -> IPProto {
         match self.proto {
@@ -5248,32 +5285,32 @@ impl ::protobuf::reflect::ProtobufValue for StationToDetector {
 
 ///  Adding message response from Station to Client for bidirectional API
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.RegistrationResponse)
+// @@protoc_insertion_point(message:tapdance.RegistrationResponse)
 pub struct RegistrationResponse {
     // message fields
-    // @@protoc_insertion_point(field:conjure.RegistrationResponse.ipv4addr)
+    // @@protoc_insertion_point(field:tapdance.RegistrationResponse.ipv4addr)
     pub ipv4addr: ::std::option::Option<u32>,
     ///  The 128-bit ipv6 address, in network byte order
-    // @@protoc_insertion_point(field:conjure.RegistrationResponse.ipv6addr)
+    // @@protoc_insertion_point(field:tapdance.RegistrationResponse.ipv6addr)
     pub ipv6addr: ::std::option::Option<::std::vec::Vec<u8>>,
     ///  Respond with randomized port
-    // @@protoc_insertion_point(field:conjure.RegistrationResponse.dst_port)
+    // @@protoc_insertion_point(field:tapdance.RegistrationResponse.dst_port)
     pub dst_port: ::std::option::Option<u32>,
     ///  Future: station provides client with secret, want chanel present
     ///  Leave null for now
-    // @@protoc_insertion_point(field:conjure.RegistrationResponse.serverRandom)
+    // @@protoc_insertion_point(field:tapdance.RegistrationResponse.serverRandom)
     pub serverRandom: ::std::option::Option<::std::vec::Vec<u8>>,
     ///  If registration wrong, populate this error string
-    // @@protoc_insertion_point(field:conjure.RegistrationResponse.error)
+    // @@protoc_insertion_point(field:tapdance.RegistrationResponse.error)
     pub error: ::std::option::Option<::std::string::String>,
     ///  ClientConf field (optional)
-    // @@protoc_insertion_point(field:conjure.RegistrationResponse.clientConf)
+    // @@protoc_insertion_point(field:tapdance.RegistrationResponse.clientConf)
     pub clientConf: ::protobuf::MessageField<ClientConf>,
     ///  Transport Params to if `allow_registrar_overrides` is set.
-    // @@protoc_insertion_point(field:conjure.RegistrationResponse.transport_params)
+    // @@protoc_insertion_point(field:tapdance.RegistrationResponse.transport_params)
     pub transport_params: ::protobuf::MessageField<::protobuf::well_known_types::any::Any>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.RegistrationResponse.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.RegistrationResponse.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -5644,17 +5681,17 @@ impl ::protobuf::reflect::ProtobufValue for RegistrationResponse {
 
 ///  response from dns
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:conjure.DnsResponse)
+// @@protoc_insertion_point(message:tapdance.DnsResponse)
 pub struct DnsResponse {
     // message fields
-    // @@protoc_insertion_point(field:conjure.DnsResponse.success)
+    // @@protoc_insertion_point(field:tapdance.DnsResponse.success)
     pub success: ::std::option::Option<bool>,
-    // @@protoc_insertion_point(field:conjure.DnsResponse.clientconf_outdated)
+    // @@protoc_insertion_point(field:tapdance.DnsResponse.clientconf_outdated)
     pub clientconf_outdated: ::std::option::Option<bool>,
-    // @@protoc_insertion_point(field:conjure.DnsResponse.bidirectional_response)
+    // @@protoc_insertion_point(field:tapdance.DnsResponse.bidirectional_response)
     pub bidirectional_response: ::protobuf::MessageField<RegistrationResponse>,
     // special fields
-    // @@protoc_insertion_point(special_field:conjure.DnsResponse.special_fields)
+    // @@protoc_insertion_point(special_field:tapdance.DnsResponse.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
@@ -5846,11 +5883,11 @@ impl ::protobuf::reflect::ProtobufValue for DnsResponse {
 }
 
 #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-// @@protoc_insertion_point(enum:conjure.KeyType)
+// @@protoc_insertion_point(enum:tapdance.KeyType)
 pub enum KeyType {
-    // @@protoc_insertion_point(enum_value:conjure.KeyType.AES_GCM_128)
+    // @@protoc_insertion_point(enum_value:tapdance.KeyType.AES_GCM_128)
     AES_GCM_128 = 90,
-    // @@protoc_insertion_point(enum_value:conjure.KeyType.AES_GCM_256)
+    // @@protoc_insertion_point(enum_value:tapdance.KeyType.AES_GCM_256)
     AES_GCM_256 = 91,
 }
 
@@ -5904,13 +5941,13 @@ impl KeyType {
 }
 
 #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-// @@protoc_insertion_point(enum:conjure.DnsRegMethod)
+// @@protoc_insertion_point(enum:tapdance.DnsRegMethod)
 pub enum DnsRegMethod {
-    // @@protoc_insertion_point(enum_value:conjure.DnsRegMethod.UDP)
+    // @@protoc_insertion_point(enum_value:tapdance.DnsRegMethod.UDP)
     UDP = 1,
-    // @@protoc_insertion_point(enum_value:conjure.DnsRegMethod.DOT)
+    // @@protoc_insertion_point(enum_value:tapdance.DnsRegMethod.DOT)
     DOT = 2,
-    // @@protoc_insertion_point(enum_value:conjure.DnsRegMethod.DOH)
+    // @@protoc_insertion_point(enum_value:tapdance.DnsRegMethod.DOH)
     DOH = 3,
 }
 
@@ -5968,25 +6005,25 @@ impl DnsRegMethod {
 
 ///  State transitions of the client
 #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-// @@protoc_insertion_point(enum:conjure.C2S_Transition)
+// @@protoc_insertion_point(enum:tapdance.C2S_Transition)
 pub enum C2S_Transition {
-    // @@protoc_insertion_point(enum_value:conjure.C2S_Transition.C2S_NO_CHANGE)
+    // @@protoc_insertion_point(enum_value:tapdance.C2S_Transition.C2S_NO_CHANGE)
     C2S_NO_CHANGE = 0,
-    // @@protoc_insertion_point(enum_value:conjure.C2S_Transition.C2S_SESSION_INIT)
+    // @@protoc_insertion_point(enum_value:tapdance.C2S_Transition.C2S_SESSION_INIT)
     C2S_SESSION_INIT = 1,
-    // @@protoc_insertion_point(enum_value:conjure.C2S_Transition.C2S_SESSION_COVERT_INIT)
+    // @@protoc_insertion_point(enum_value:tapdance.C2S_Transition.C2S_SESSION_COVERT_INIT)
     C2S_SESSION_COVERT_INIT = 11,
-    // @@protoc_insertion_point(enum_value:conjure.C2S_Transition.C2S_EXPECT_RECONNECT)
+    // @@protoc_insertion_point(enum_value:tapdance.C2S_Transition.C2S_EXPECT_RECONNECT)
     C2S_EXPECT_RECONNECT = 2,
-    // @@protoc_insertion_point(enum_value:conjure.C2S_Transition.C2S_SESSION_CLOSE)
+    // @@protoc_insertion_point(enum_value:tapdance.C2S_Transition.C2S_SESSION_CLOSE)
     C2S_SESSION_CLOSE = 3,
-    // @@protoc_insertion_point(enum_value:conjure.C2S_Transition.C2S_YIELD_UPLOAD)
+    // @@protoc_insertion_point(enum_value:tapdance.C2S_Transition.C2S_YIELD_UPLOAD)
     C2S_YIELD_UPLOAD = 4,
-    // @@protoc_insertion_point(enum_value:conjure.C2S_Transition.C2S_ACQUIRE_UPLOAD)
+    // @@protoc_insertion_point(enum_value:tapdance.C2S_Transition.C2S_ACQUIRE_UPLOAD)
     C2S_ACQUIRE_UPLOAD = 5,
-    // @@protoc_insertion_point(enum_value:conjure.C2S_Transition.C2S_EXPECT_UPLOADONLY_RECONN)
+    // @@protoc_insertion_point(enum_value:tapdance.C2S_Transition.C2S_EXPECT_UPLOADONLY_RECONN)
     C2S_EXPECT_UPLOADONLY_RECONN = 6,
-    // @@protoc_insertion_point(enum_value:conjure.C2S_Transition.C2S_ERROR)
+    // @@protoc_insertion_point(enum_value:tapdance.C2S_Transition.C2S_ERROR)
     C2S_ERROR = 255,
 }
 
@@ -6061,19 +6098,19 @@ impl C2S_Transition {
 
 ///  State transitions of the server
 #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-// @@protoc_insertion_point(enum:conjure.S2C_Transition)
+// @@protoc_insertion_point(enum:tapdance.S2C_Transition)
 pub enum S2C_Transition {
-    // @@protoc_insertion_point(enum_value:conjure.S2C_Transition.S2C_NO_CHANGE)
+    // @@protoc_insertion_point(enum_value:tapdance.S2C_Transition.S2C_NO_CHANGE)
     S2C_NO_CHANGE = 0,
-    // @@protoc_insertion_point(enum_value:conjure.S2C_Transition.S2C_SESSION_INIT)
+    // @@protoc_insertion_point(enum_value:tapdance.S2C_Transition.S2C_SESSION_INIT)
     S2C_SESSION_INIT = 1,
-    // @@protoc_insertion_point(enum_value:conjure.S2C_Transition.S2C_SESSION_COVERT_INIT)
+    // @@protoc_insertion_point(enum_value:tapdance.S2C_Transition.S2C_SESSION_COVERT_INIT)
     S2C_SESSION_COVERT_INIT = 11,
-    // @@protoc_insertion_point(enum_value:conjure.S2C_Transition.S2C_CONFIRM_RECONNECT)
+    // @@protoc_insertion_point(enum_value:tapdance.S2C_Transition.S2C_CONFIRM_RECONNECT)
     S2C_CONFIRM_RECONNECT = 2,
-    // @@protoc_insertion_point(enum_value:conjure.S2C_Transition.S2C_SESSION_CLOSE)
+    // @@protoc_insertion_point(enum_value:tapdance.S2C_Transition.S2C_SESSION_CLOSE)
     S2C_SESSION_CLOSE = 3,
-    // @@protoc_insertion_point(enum_value:conjure.S2C_Transition.S2C_ERROR)
+    // @@protoc_insertion_point(enum_value:tapdance.S2C_Transition.S2C_ERROR)
     S2C_ERROR = 255,
 }
 
@@ -6139,23 +6176,23 @@ impl S2C_Transition {
 
 ///  Should accompany all S2C_ERROR messages.
 #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-// @@protoc_insertion_point(enum:conjure.ErrorReasonS2C)
+// @@protoc_insertion_point(enum:tapdance.ErrorReasonS2C)
 pub enum ErrorReasonS2C {
-    // @@protoc_insertion_point(enum_value:conjure.ErrorReasonS2C.NO_ERROR)
+    // @@protoc_insertion_point(enum_value:tapdance.ErrorReasonS2C.NO_ERROR)
     NO_ERROR = 0,
-    // @@protoc_insertion_point(enum_value:conjure.ErrorReasonS2C.COVERT_STREAM)
+    // @@protoc_insertion_point(enum_value:tapdance.ErrorReasonS2C.COVERT_STREAM)
     COVERT_STREAM = 1,
-    // @@protoc_insertion_point(enum_value:conjure.ErrorReasonS2C.CLIENT_REPORTED)
+    // @@protoc_insertion_point(enum_value:tapdance.ErrorReasonS2C.CLIENT_REPORTED)
     CLIENT_REPORTED = 2,
-    // @@protoc_insertion_point(enum_value:conjure.ErrorReasonS2C.CLIENT_PROTOCOL)
+    // @@protoc_insertion_point(enum_value:tapdance.ErrorReasonS2C.CLIENT_PROTOCOL)
     CLIENT_PROTOCOL = 3,
-    // @@protoc_insertion_point(enum_value:conjure.ErrorReasonS2C.STATION_INTERNAL)
+    // @@protoc_insertion_point(enum_value:tapdance.ErrorReasonS2C.STATION_INTERNAL)
     STATION_INTERNAL = 4,
-    // @@protoc_insertion_point(enum_value:conjure.ErrorReasonS2C.DECOY_OVERLOAD)
+    // @@protoc_insertion_point(enum_value:tapdance.ErrorReasonS2C.DECOY_OVERLOAD)
     DECOY_OVERLOAD = 5,
-    // @@protoc_insertion_point(enum_value:conjure.ErrorReasonS2C.CLIENT_STREAM)
+    // @@protoc_insertion_point(enum_value:tapdance.ErrorReasonS2C.CLIENT_STREAM)
     CLIENT_STREAM = 100,
-    // @@protoc_insertion_point(enum_value:conjure.ErrorReasonS2C.CLIENT_TIMEOUT)
+    // @@protoc_insertion_point(enum_value:tapdance.ErrorReasonS2C.CLIENT_TIMEOUT)
     CLIENT_TIMEOUT = 101,
 }
 
@@ -6226,29 +6263,29 @@ impl ErrorReasonS2C {
 }
 
 #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-// @@protoc_insertion_point(enum:conjure.TransportType)
+// @@protoc_insertion_point(enum:tapdance.TransportType)
 pub enum TransportType {
-    // @@protoc_insertion_point(enum_value:conjure.TransportType.Null)
+    // @@protoc_insertion_point(enum_value:tapdance.TransportType.Null)
     Null = 0,
-    // @@protoc_insertion_point(enum_value:conjure.TransportType.Min)
+    // @@protoc_insertion_point(enum_value:tapdance.TransportType.Min)
     Min = 1,
-    // @@protoc_insertion_point(enum_value:conjure.TransportType.Obfs4)
+    // @@protoc_insertion_point(enum_value:tapdance.TransportType.Obfs4)
     Obfs4 = 2,
-    // @@protoc_insertion_point(enum_value:conjure.TransportType.DTLS)
+    // @@protoc_insertion_point(enum_value:tapdance.TransportType.DTLS)
     DTLS = 3,
-    // @@protoc_insertion_point(enum_value:conjure.TransportType.Prefix)
+    // @@protoc_insertion_point(enum_value:tapdance.TransportType.Prefix)
     Prefix = 4,
-    // @@protoc_insertion_point(enum_value:conjure.TransportType.uTLS)
+    // @@protoc_insertion_point(enum_value:tapdance.TransportType.uTLS)
     uTLS = 5,
-    // @@protoc_insertion_point(enum_value:conjure.TransportType.Format)
+    // @@protoc_insertion_point(enum_value:tapdance.TransportType.Format)
     Format = 6,
-    // @@protoc_insertion_point(enum_value:conjure.TransportType.WASM)
+    // @@protoc_insertion_point(enum_value:tapdance.TransportType.WASM)
     WASM = 7,
-    // @@protoc_insertion_point(enum_value:conjure.TransportType.FTE)
+    // @@protoc_insertion_point(enum_value:tapdance.TransportType.FTE)
     FTE = 8,
-    // @@protoc_insertion_point(enum_value:conjure.TransportType.Quic)
+    // @@protoc_insertion_point(enum_value:tapdance.TransportType.Quic)
     Quic = 9,
-    // @@protoc_insertion_point(enum_value:conjure.TransportType.Webrtc)
+    // @@protoc_insertion_point(enum_value:tapdance.TransportType.Webrtc)
     Webrtc = 99,
 }
 
@@ -6328,21 +6365,21 @@ impl TransportType {
 }
 
 #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-// @@protoc_insertion_point(enum:conjure.RegistrationSource)
+// @@protoc_insertion_point(enum:tapdance.RegistrationSource)
 pub enum RegistrationSource {
-    // @@protoc_insertion_point(enum_value:conjure.RegistrationSource.Unspecified)
+    // @@protoc_insertion_point(enum_value:tapdance.RegistrationSource.Unspecified)
     Unspecified = 0,
-    // @@protoc_insertion_point(enum_value:conjure.RegistrationSource.Detector)
+    // @@protoc_insertion_point(enum_value:tapdance.RegistrationSource.Detector)
     Detector = 1,
-    // @@protoc_insertion_point(enum_value:conjure.RegistrationSource.API)
+    // @@protoc_insertion_point(enum_value:tapdance.RegistrationSource.API)
     API = 2,
-    // @@protoc_insertion_point(enum_value:conjure.RegistrationSource.DetectorPrescan)
+    // @@protoc_insertion_point(enum_value:tapdance.RegistrationSource.DetectorPrescan)
     DetectorPrescan = 3,
-    // @@protoc_insertion_point(enum_value:conjure.RegistrationSource.BidirectionalAPI)
+    // @@protoc_insertion_point(enum_value:tapdance.RegistrationSource.BidirectionalAPI)
     BidirectionalAPI = 4,
-    // @@protoc_insertion_point(enum_value:conjure.RegistrationSource.DNS)
+    // @@protoc_insertion_point(enum_value:tapdance.RegistrationSource.DNS)
     DNS = 5,
-    // @@protoc_insertion_point(enum_value:conjure.RegistrationSource.BidirectionalDNS)
+    // @@protoc_insertion_point(enum_value:tapdance.RegistrationSource.BidirectionalDNS)
     BidirectionalDNS = 6,
 }
 
@@ -6402,15 +6439,15 @@ impl RegistrationSource {
 }
 
 #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-// @@protoc_insertion_point(enum:conjure.StationOperations)
+// @@protoc_insertion_point(enum:tapdance.StationOperations)
 pub enum StationOperations {
-    // @@protoc_insertion_point(enum_value:conjure.StationOperations.Unknown)
+    // @@protoc_insertion_point(enum_value:tapdance.StationOperations.Unknown)
     Unknown = 0,
-    // @@protoc_insertion_point(enum_value:conjure.StationOperations.New)
+    // @@protoc_insertion_point(enum_value:tapdance.StationOperations.New)
     New = 1,
-    // @@protoc_insertion_point(enum_value:conjure.StationOperations.Update)
+    // @@protoc_insertion_point(enum_value:tapdance.StationOperations.Update)
     Update = 2,
-    // @@protoc_insertion_point(enum_value:conjure.StationOperations.Clear)
+    // @@protoc_insertion_point(enum_value:tapdance.StationOperations.Clear)
     Clear = 3,
 }
 
@@ -6464,13 +6501,13 @@ impl StationOperations {
 }
 
 #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-// @@protoc_insertion_point(enum:conjure.IPProto)
+// @@protoc_insertion_point(enum:tapdance.IPProto)
 pub enum IPProto {
-    // @@protoc_insertion_point(enum_value:conjure.IPProto.Unk)
+    // @@protoc_insertion_point(enum_value:tapdance.IPProto.Unk)
     Unk = 0,
-    // @@protoc_insertion_point(enum_value:conjure.IPProto.Tcp)
+    // @@protoc_insertion_point(enum_value:tapdance.IPProto.Tcp)
     Tcp = 1,
-    // @@protoc_insertion_point(enum_value:conjure.IPProto.Udp)
+    // @@protoc_insertion_point(enum_value:tapdance.IPProto.Udp)
     Udp = 2,
 }
 
@@ -6522,240 +6559,241 @@ impl IPProto {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x10signalling.proto\x12\x07conjure\x1a\x19google/protobuf/any.proto\"\
-    @\n\x06PubKey\x12\x10\n\x03key\x18\x01\x20\x01(\x0cR\x03key\x12$\n\x04ty\
-    pe\x18\x02\x20\x01(\x0e2\x10.conjure.KeyTypeR\x04type\"\xbd\x01\n\x0cTLS\
-    DecoySpec\x12\x1a\n\x08hostname\x18\x01\x20\x01(\tR\x08hostname\x12\x1a\
-    \n\x08ipv4addr\x18\x02\x20\x01(\x07R\x08ipv4addr\x12\x1a\n\x08ipv6addr\
-    \x18\x06\x20\x01(\x0cR\x08ipv6addr\x12'\n\x06pubkey\x18\x03\x20\x01(\x0b\
-    2\x0f.conjure.PubKeyR\x06pubkey\x12\x18\n\x07timeout\x18\x04\x20\x01(\rR\
-    \x07timeout\x12\x16\n\x06tcpwin\x18\x05\x20\x01(\rR\x06tcpwin\"\xd5\x02\
-    \n\nClientConf\x121\n\ndecoy_list\x18\x01\x20\x01(\x0b2\x12.conjure.Deco\
-    yListR\tdecoyList\x12\x1e\n\ngeneration\x18\x02\x20\x01(\rR\ngeneration\
-    \x126\n\x0edefault_pubkey\x18\x03\x20\x01(\x0b2\x0f.conjure.PubKeyR\rdef\
-    aultPubkey\x12M\n\x14phantom_subnets_list\x18\x04\x20\x01(\x0b2\x1b.conj\
-    ure.PhantomSubnetsListR\x12phantomSubnetsList\x126\n\x0econjure_pubkey\
-    \x18\x05\x20\x01(\x0b2\x0f.conjure.PubKeyR\rconjurePubkey\x125\n\x0cdns_\
-    reg_conf\x18\x06\x20\x01(\x0b2\x13.conjure.DnsRegConfR\ndnsRegConf\"\xdf\
-    \x01\n\nDnsRegConf\x12;\n\x0edns_reg_method\x18\x01\x20\x02(\x0e2\x15.co\
-    njure.DnsRegMethodR\x0cdnsRegMethod\x12\x16\n\x06target\x18\x02\x20\x01(\
-    \tR\x06target\x12\x16\n\x06domain\x18\x03\x20\x02(\tR\x06domain\x12\x16\
-    \n\x06pubkey\x18\x04\x20\x01(\x0cR\x06pubkey\x12+\n\x11utls_distribution\
-    \x18\x05\x20\x01(\tR\x10utlsDistribution\x12\x1f\n\x0bstun_server\x18\
-    \x06\x20\x01(\tR\nstunServer\"A\n\tDecoyList\x124\n\ntls_decoys\x18\x01\
-    \x20\x03(\x0b2\x15.conjure.TLSDecoySpecR\ttlsDecoys\"X\n\x12PhantomSubne\
-    tsList\x12B\n\x10weighted_subnets\x18\x01\x20\x03(\x0b2\x17.conjure.Phan\
-    tomSubnetsR\x0fweightedSubnets\"B\n\x0ePhantomSubnets\x12\x16\n\x06weigh\
-    t\x18\x01\x20\x01(\rR\x06weight\x12\x18\n\x07subnets\x18\x02\x20\x03(\tR\
-    \x07subnets\"o\n\x12WebRTCICECandidate\x12\x19\n\x08ip_upper\x18\x01\x20\
-    \x02(\x04R\x07ipUpper\x12\x19\n\x08ip_lower\x18\x02\x20\x02(\x04R\x07ipL\
-    ower\x12#\n\rcomposed_info\x18\x03\x20\x02(\rR\x0ccomposedInfo\"\\\n\tWe\
-    bRTCSDP\x12\x12\n\x04type\x18\x01\x20\x02(\rR\x04type\x12;\n\ncandidates\
-    \x18\x02\x20\x03(\x0b2\x1b.conjure.WebRTCICECandidateR\ncandidates\"H\n\
-    \x0cWebRTCSignal\x12\x12\n\x04seed\x18\x01\x20\x02(\tR\x04seed\x12$\n\
-    \x03sdp\x18\x02\x20\x02(\x0b2\x12.conjure.WebRTCSDPR\x03sdp\"\xc8\x02\n\
-    \x0fStationToClient\x12)\n\x10protocol_version\x18\x01\x20\x01(\rR\x0fpr\
-    otocolVersion\x12B\n\x10state_transition\x18\x02\x20\x01(\x0e2\x17.conju\
-    re.S2C_TransitionR\x0fstateTransition\x124\n\x0bconfig_info\x18\x03\x20\
-    \x01(\x0b2\x13.conjure.ClientConfR\nconfigInfo\x126\n\nerr_reason\x18\
-    \x04\x20\x01(\x0e2\x17.conjure.ErrorReasonS2CR\terrReason\x12\x1f\n\x0bt\
-    mp_backoff\x18\x05\x20\x01(\rR\ntmpBackoff\x12\x1d\n\nstation_id\x18\x06\
-    \x20\x01(\tR\tstationId\x12\x18\n\x07padding\x18d\x20\x01(\x0cR\x07paddi\
-    ng\"\xaf\x01\n\x11RegistrationFlags\x12\x1f\n\x0bupload_only\x18\x01\x20\
-    \x01(\x08R\nuploadOnly\x12\x1d\n\ndark_decoy\x18\x02\x20\x01(\x08R\tdark\
-    Decoy\x12!\n\x0cproxy_header\x18\x03\x20\x01(\x08R\x0bproxyHeader\x12\
-    \x17\n\x07use_TIL\x18\x04\x20\x01(\x08R\x06useTIL\x12\x1e\n\nprescanned\
-    \x18\x05\x20\x01(\x08R\nprescanned\"\xae\x06\n\x0fClientToStation\x12)\n\
-    \x10protocol_version\x18\x01\x20\x01(\rR\x0fprotocolVersion\x122\n\x15de\
-    coy_list_generation\x18\x02\x20\x01(\rR\x13decoyListGeneration\x12B\n\
-    \x10state_transition\x18\x03\x20\x01(\x0e2\x17.conjure.C2S_TransitionR\
-    \x0fstateTransition\x12\x1f\n\x0bupload_sync\x18\x04\x20\x01(\x04R\nuplo\
-    adSync\x12,\n\x12client_lib_version\x18\x05\x20\x01(\rR\x10clientLibVers\
-    ion\x12:\n\x19allow_registrar_overrides\x18\x06\x20\x01(\x08R\x17allowRe\
-    gistrarOverrides\x12#\n\rfailed_decoys\x18\n\x20\x03(\tR\x0cfailedDecoys\
-    \x12+\n\x05stats\x18\x0b\x20\x01(\x0b2\x15.conjure.SessionStatsR\x05stat\
-    s\x124\n\ttransport\x18\x0c\x20\x01(\x0e2\x16.conjure.TransportTypeR\ttr\
-    ansport\x12?\n\x10transport_params\x18\r\x20\x01(\x0b2\x14.google.protob\
-    uf.AnyR\x0ftransportParams\x12%\n\x0ecovert_address\x18\x14\x20\x01(\tR\
-    \rcovertAddress\x127\n\x18masked_decoy_server_name\x18\x15\x20\x01(\tR\
-    \x15maskedDecoyServerName\x12\x1d\n\nv6_support\x18\x16\x20\x01(\x08R\tv\
-    6Support\x12\x1d\n\nv4_support\x18\x17\x20\x01(\x08R\tv4Support\x120\n\
-    \x05flags\x18\x18\x20\x01(\x0b2\x1a.conjure.RegistrationFlagsR\x05flags\
-    \x12:\n\rwebrtc_signal\x18\x1f\x20\x01(\x0b2\x15.conjure.WebRTCSignalR\
-    \x0cwebrtcSignal\x12\x18\n\x07padding\x18d\x20\x01(\x0cR\x07padding\"z\n\
-    \x15PrefixTransportParams\x12\x1b\n\tprefix_id\x18\x01\x20\x01(\x05R\x08\
-    prefixId\x12\x16\n\x06prefix\x18\x02\x20\x01(\x0cR\x06prefix\x12,\n\x12r\
-    andomize_dst_port\x18\r\x20\x01(\x08R\x10randomizeDstPort\"F\n\x16Generi\
-    cTransportParams\x12,\n\x12randomize_dst_port\x18\r\x20\x01(\x08R\x10ran\
-    domizeDstPort\"\xc8\x03\n\nC2SWrapper\x12#\n\rshared_secret\x18\x01\x20\
-    \x01(\x0cR\x0csharedSecret\x12K\n\x14registration_payload\x18\x03\x20\
-    \x01(\x0b2\x18.conjure.ClientToStationR\x13registrationPayload\x12L\n\
-    \x13registration_source\x18\x04\x20\x01(\x0e2\x1b.conjure.RegistrationSo\
-    urceR\x12registrationSource\x121\n\x14registration_address\x18\x06\x20\
-    \x01(\x0cR\x13registrationAddress\x12#\n\rdecoy_address\x18\x07\x20\x01(\
-    \x0cR\x0cdecoyAddress\x12R\n\x15registration_response\x18\x08\x20\x01(\
-    \x0b2\x1d.conjure.RegistrationResponseR\x14registrationResponse\x12\"\n\
-    \x0cRegRespBytes\x18\t\x20\x01(\x0cR\x0cRegRespBytes\x12*\n\x10RegRespSi\
-    gnature\x18\n\x20\x01(\x0cR\x10RegRespSignature\"\xdd\x01\n\x0cSessionSt\
-    ats\x120\n\x14failed_decoys_amount\x18\x14\x20\x01(\rR\x12failedDecoysAm\
-    ount\x121\n\x15total_time_to_connect\x18\x1f\x20\x01(\rR\x12totalTimeToC\
-    onnect\x12$\n\x0ertt_to_station\x18!\x20\x01(\rR\x0crttToStation\x12\x20\
-    \n\x0ctls_to_decoy\x18&\x20\x01(\rR\ntlsToDecoy\x12\x20\n\x0ctcp_to_deco\
-    y\x18'\x20\x01(\rR\ntcpToDecoy\"\x86\x02\n\x11StationToDetector\x12\x1d\
-    \n\nphantom_ip\x18\x01\x20\x01(\tR\tphantomIp\x12\x1b\n\tclient_ip\x18\
-    \x02\x20\x01(\tR\x08clientIp\x12\x1d\n\ntimeout_ns\x18\x03\x20\x01(\x04R\
-    \ttimeoutNs\x128\n\toperation\x18\x04\x20\x01(\x0e2\x1a.conjure.StationO\
-    perationsR\toperation\x12\x19\n\x08dst_port\x18\n\x20\x01(\rR\x07dstPort\
-    \x12\x19\n\x08src_port\x18\x0b\x20\x01(\rR\x07srcPort\x12&\n\x05proto\
-    \x18\x0c\x20\x01(\x0e2\x10.conjure.IPProtoR\x05proto\"\x99\x02\n\x14Regi\
-    strationResponse\x12\x1a\n\x08ipv4addr\x18\x01\x20\x01(\x07R\x08ipv4addr\
-    \x12\x1a\n\x08ipv6addr\x18\x02\x20\x01(\x0cR\x08ipv6addr\x12\x19\n\x08ds\
-    t_port\x18\x03\x20\x01(\rR\x07dstPort\x12\"\n\x0cserverRandom\x18\x04\
-    \x20\x01(\x0cR\x0cserverRandom\x12\x14\n\x05error\x18\x05\x20\x01(\tR\
-    \x05error\x123\n\nclientConf\x18\x06\x20\x01(\x0b2\x13.conjure.ClientCon\
-    fR\nclientConf\x12?\n\x10transport_params\x18\n\x20\x01(\x0b2\x14.google\
-    .protobuf.AnyR\x0ftransportParams\"\xae\x01\n\x0bDnsResponse\x12\x18\n\
-    \x07success\x18\x01\x20\x01(\x08R\x07success\x12/\n\x13clientconf_outdat\
-    ed\x18\x02\x20\x01(\x08R\x12clientconfOutdated\x12T\n\x16bidirectional_r\
-    esponse\x18\x03\x20\x01(\x0b2\x1d.conjure.RegistrationResponseR\x15bidir\
-    ectionalResponse*+\n\x07KeyType\x12\x0f\n\x0bAES_GCM_128\x10Z\x12\x0f\n\
-    \x0bAES_GCM_256\x10[*)\n\x0cDnsRegMethod\x12\x07\n\x03UDP\x10\x01\x12\
-    \x07\n\x03DOT\x10\x02\x12\x07\n\x03DOH\x10\x03*\xe7\x01\n\x0eC2S_Transit\
-    ion\x12\x11\n\rC2S_NO_CHANGE\x10\0\x12\x14\n\x10C2S_SESSION_INIT\x10\x01\
-    \x12\x1b\n\x17C2S_SESSION_COVERT_INIT\x10\x0b\x12\x18\n\x14C2S_EXPECT_RE\
-    CONNECT\x10\x02\x12\x15\n\x11C2S_SESSION_CLOSE\x10\x03\x12\x14\n\x10C2S_\
-    YIELD_UPLOAD\x10\x04\x12\x16\n\x12C2S_ACQUIRE_UPLOAD\x10\x05\x12\x20\n\
-    \x1cC2S_EXPECT_UPLOADONLY_RECONN\x10\x06\x12\x0e\n\tC2S_ERROR\x10\xff\
-    \x01*\x98\x01\n\x0eS2C_Transition\x12\x11\n\rS2C_NO_CHANGE\x10\0\x12\x14\
-    \n\x10S2C_SESSION_INIT\x10\x01\x12\x1b\n\x17S2C_SESSION_COVERT_INIT\x10\
-    \x0b\x12\x19\n\x15S2C_CONFIRM_RECONNECT\x10\x02\x12\x15\n\x11S2C_SESSION\
-    _CLOSE\x10\x03\x12\x0e\n\tS2C_ERROR\x10\xff\x01*\xac\x01\n\x0eErrorReaso\
-    nS2C\x12\x0c\n\x08NO_ERROR\x10\0\x12\x11\n\rCOVERT_STREAM\x10\x01\x12\
-    \x13\n\x0fCLIENT_REPORTED\x10\x02\x12\x13\n\x0fCLIENT_PROTOCOL\x10\x03\
-    \x12\x14\n\x10STATION_INTERNAL\x10\x04\x12\x12\n\x0eDECOY_OVERLOAD\x10\
-    \x05\x12\x11\n\rCLIENT_STREAM\x10d\x12\x12\n\x0eCLIENT_TIMEOUT\x10e*\x82\
-    \x01\n\rTransportType\x12\x08\n\x04Null\x10\0\x12\x07\n\x03Min\x10\x01\
-    \x12\t\n\x05Obfs4\x10\x02\x12\x08\n\x04DTLS\x10\x03\x12\n\n\x06Prefix\
-    \x10\x04\x12\x08\n\x04uTLS\x10\x05\x12\n\n\x06Format\x10\x06\x12\x08\n\
-    \x04WASM\x10\x07\x12\x07\n\x03FTE\x10\x08\x12\x08\n\x04Quic\x10\t\x12\n\
-    \n\x06Webrtc\x10c*\x86\x01\n\x12RegistrationSource\x12\x0f\n\x0bUnspecif\
-    ied\x10\0\x12\x0c\n\x08Detector\x10\x01\x12\x07\n\x03API\x10\x02\x12\x13\
-    \n\x0fDetectorPrescan\x10\x03\x12\x14\n\x10BidirectionalAPI\x10\x04\x12\
-    \x07\n\x03DNS\x10\x05\x12\x14\n\x10BidirectionalDNS\x10\x06*@\n\x11Stati\
-    onOperations\x12\x0b\n\x07Unknown\x10\0\x12\x07\n\x03New\x10\x01\x12\n\n\
-    \x06Update\x10\x02\x12\t\n\x05Clear\x10\x03*$\n\x07IPProto\x12\x07\n\x03\
-    Unk\x10\0\x12\x07\n\x03Tcp\x10\x01\x12\x07\n\x03Udp\x10\x02J\xc0\x8d\x01\
-    \n\x07\x12\x05\0\0\xa1\x03\x01\n\x08\n\x01\x0c\x12\x03\0\0\x12\n\xb0\x01\
-    \n\x01\x02\x12\x03\x06\0\x102\xa5\x01\x20TODO:\x20We're\x20using\x20prot\
-    o2\x20because\x20it's\x20the\x20default\x20on\x20Ubuntu\x2016.04.\n\x20A\
-    t\x20some\x20point\x20we\x20will\x20want\x20to\x20migrate\x20to\x20proto\
-    3,\x20but\x20we\x20are\x20not\n\x20using\x20any\x20proto3\x20features\
-    \x20yet.\n\n\t\n\x02\x03\0\x12\x03\x08\0#\n\n\n\x02\x05\0\x12\x04\n\0\r\
-    \x01\n\n\n\x03\x05\0\x01\x12\x03\n\x05\x0c\n\x0b\n\x04\x05\0\x02\0\x12\
-    \x03\x0b\x04\x15\n\x0c\n\x05\x05\0\x02\0\x01\x12\x03\x0b\x04\x0f\n\x0c\n\
-    \x05\x05\0\x02\0\x02\x12\x03\x0b\x12\x14\n\x20\n\x04\x05\0\x02\x01\x12\
-    \x03\x0c\x04\x15\"\x13\x20not\x20supported\x20atm\n\n\x0c\n\x05\x05\0\
-    \x02\x01\x01\x12\x03\x0c\x04\x0f\n\x0c\n\x05\x05\0\x02\x01\x02\x12\x03\
-    \x0c\x12\x14\n\n\n\x02\x04\0\x12\x04\x0f\0\x14\x01\n\n\n\x03\x04\0\x01\
-    \x12\x03\x0f\x08\x0e\n4\n\x04\x04\0\x02\0\x12\x03\x11\x04\x1b\x1a'\x20A\
-    \x20public\x20key,\x20as\x20used\x20by\x20the\x20station.\n\n\x0c\n\x05\
-    \x04\0\x02\0\x04\x12\x03\x11\x04\x0c\n\x0c\n\x05\x04\0\x02\0\x05\x12\x03\
-    \x11\r\x12\n\x0c\n\x05\x04\0\x02\0\x01\x12\x03\x11\x13\x16\n\x0c\n\x05\
-    \x04\0\x02\0\x03\x12\x03\x11\x19\x1a\n\x0b\n\x04\x04\0\x02\x01\x12\x03\
-    \x13\x04\x1e\n\x0c\n\x05\x04\0\x02\x01\x04\x12\x03\x13\x04\x0c\n\x0c\n\
-    \x05\x04\0\x02\x01\x06\x12\x03\x13\r\x14\n\x0c\n\x05\x04\0\x02\x01\x01\
-    \x12\x03\x13\x15\x19\n\x0c\n\x05\x04\0\x02\x01\x03\x12\x03\x13\x1c\x1d\n\
-    \n\n\x02\x04\x01\x12\x04\x16\0<\x01\n\n\n\x03\x04\x01\x01\x12\x03\x16\
-    \x08\x14\n\xa1\x01\n\x04\x04\x01\x02\0\x12\x03\x1b\x04!\x1a\x93\x01\x20T\
-    he\x20hostname/SNI\x20to\x20use\x20for\x20this\x20host\n\n\x20The\x20hos\
-    tname\x20is\x20the\x20only\x20required\x20field,\x20although\x20other\n\
-    \x20fields\x20are\x20expected\x20to\x20be\x20present\x20in\x20most\x20ca\
-    ses.\n\n\x0c\n\x05\x04\x01\x02\0\x04\x12\x03\x1b\x04\x0c\n\x0c\n\x05\x04\
-    \x01\x02\0\x05\x12\x03\x1b\r\x13\n\x0c\n\x05\x04\x01\x02\0\x01\x12\x03\
-    \x1b\x14\x1c\n\x0c\n\x05\x04\x01\x02\0\x03\x12\x03\x1b\x1f\x20\n\xf7\x01\
-    \n\x04\x04\x01\x02\x01\x12\x03\"\x04\"\x1a\xe9\x01\x20The\x2032-bit\x20i\
-    pv4\x20address,\x20in\x20network\x20byte\x20order\n\n\x20If\x20the\x20IP\
-    v4\x20address\x20is\x20absent,\x20then\x20it\x20may\x20be\x20resolved\
-    \x20via\n\x20DNS\x20by\x20the\x20client,\x20or\x20the\x20client\x20may\
-    \x20discard\x20this\x20decoy\x20spec\n\x20if\x20local\x20DNS\x20is\x20un\
-    trusted,\x20or\x20the\x20service\x20may\x20be\x20multihomed.\n\n\x0c\n\
-    \x05\x04\x01\x02\x01\x04\x12\x03\"\x04\x0c\n\x0c\n\x05\x04\x01\x02\x01\
-    \x05\x12\x03\"\r\x14\n\x0c\n\x05\x04\x01\x02\x01\x01\x12\x03\"\x15\x1d\n\
-    \x0c\n\x05\x04\x01\x02\x01\x03\x12\x03\"\x20!\n>\n\x04\x04\x01\x02\x02\
-    \x12\x03%\x04\x20\x1a1\x20The\x20128-bit\x20ipv6\x20address,\x20in\x20ne\
-    twork\x20byte\x20order\n\n\x0c\n\x05\x04\x01\x02\x02\x04\x12\x03%\x04\
-    \x0c\n\x0c\n\x05\x04\x01\x02\x02\x05\x12\x03%\r\x12\n\x0c\n\x05\x04\x01\
-    \x02\x02\x01\x12\x03%\x13\x1b\n\x0c\n\x05\x04\x01\x02\x02\x03\x12\x03%\
-    \x1e\x1f\n\x91\x01\n\x04\x04\x01\x02\x03\x12\x03+\x04\x1f\x1a\x83\x01\
-    \x20The\x20Tapdance\x20station\x20public\x20key\x20to\x20use\x20when\x20\
-    contacting\x20this\n\x20decoy\n\n\x20If\x20omitted,\x20the\x20default\
-    \x20station\x20public\x20key\x20(if\x20any)\x20is\x20used.\n\n\x0c\n\x05\
-    \x04\x01\x02\x03\x04\x12\x03+\x04\x0c\n\x0c\n\x05\x04\x01\x02\x03\x06\
-    \x12\x03+\r\x13\n\x0c\n\x05\x04\x01\x02\x03\x01\x12\x03+\x14\x1a\n\x0c\n\
-    \x05\x04\x01\x02\x03\x03\x12\x03+\x1d\x1e\n\xee\x01\n\x04\x04\x01\x02\
-    \x04\x12\x032\x04\x20\x1a\xe0\x01\x20The\x20maximum\x20duration,\x20in\
-    \x20milliseconds,\x20to\x20maintain\x20an\x20open\n\x20connection\x20to\
-    \x20this\x20decoy\x20(because\x20the\x20decoy\x20may\x20close\x20the\n\
-    \x20connection\x20itself\x20after\x20this\x20length\x20of\x20time)\n\n\
-    \x20If\x20omitted,\x20a\x20default\x20of\x2030,000\x20milliseconds\x20is\
-    \x20assumed.\n\n\x0c\n\x05\x04\x01\x02\x04\x04\x12\x032\x04\x0c\n\x0c\n\
-    \x05\x04\x01\x02\x04\x05\x12\x032\r\x13\n\x0c\n\x05\x04\x01\x02\x04\x01\
-    \x12\x032\x14\x1b\n\x0c\n\x05\x04\x01\x02\x04\x03\x12\x032\x1e\x1f\n\xb0\
-    \x02\n\x04\x04\x01\x02\x05\x12\x03;\x04\x1f\x1a\xa2\x02\x20The\x20maximu\
-    m\x20TCP\x20window\x20size\x20to\x20attempt\x20to\x20use\x20for\x20this\
-    \x20decoy.\n\n\x20If\x20omitted,\x20a\x20default\x20of\x2015360\x20is\
-    \x20assumed.\n\n\x20TODO:\x20the\x20default\x20is\x20based\x20on\x20the\
-    \x20current\x20heuristic\x20of\x20only\n\x20using\x20decoys\x20that\x20p\
-    ermit\x20windows\x20of\x2015KB\x20or\x20larger.\x20\x20If\x20this\n\x20h\
-    euristic\x20changes,\x20then\x20this\x20default\x20doesn't\x20make\x20se\
-    nse.\n\n\x0c\n\x05\x04\x01\x02\x05\x04\x12\x03;\x04\x0c\n\x0c\n\x05\x04\
-    \x01\x02\x05\x05\x12\x03;\r\x13\n\x0c\n\x05\x04\x01\x02\x05\x01\x12\x03;\
-    \x14\x1a\n\x0c\n\x05\x04\x01\x02\x05\x03\x12\x03;\x1d\x1e\n\x83\x08\n\
-    \x02\x04\x02\x12\x04S\0Z\x012\xf6\x07\x20In\x20version\x201,\x20the\x20r\
-    equest\x20is\x20very\x20simple:\x20when\n\x20the\x20client\x20sends\x20a\
-    \x20MSG_PROTO\x20to\x20the\x20station,\x20if\x20the\n\x20generation\x20n\
-    umber\x20is\x20present,\x20then\x20this\x20request\x20includes\n\x20(in\
-    \x20addition\x20to\x20whatever\x20other\x20operations\x20are\x20part\x20\
-    of\x20the\n\x20request)\x20a\x20request\x20for\x20the\x20station\x20to\
-    \x20send\x20a\x20copy\x20of\n\x20the\x20current\x20decoy\x20set\x20that\
-    \x20has\x20a\x20generation\x20number\x20greater\n\x20than\x20the\x20gene\
-    ration\x20number\x20in\x20its\x20request.\n\n\x20If\x20the\x20response\
-    \x20contains\x20a\x20DecoyListUpdate\x20with\x20a\x20generation\x20numbe\
-    r\x20equal\n\x20to\x20that\x20which\x20the\x20client\x20sent,\x20then\
-    \x20the\x20client\x20is\x20\"caught\x20up\"\x20with\n\x20the\x20station\
-    \x20and\x20the\x20response\x20contains\x20no\x20new\x20information\n\x20\
-    (and\x20all\x20other\x20fields\x20may\x20be\x20omitted\x20or\x20empty).\
-    \x20\x20Otherwise,\n\x20the\x20station\x20will\x20send\x20the\x20latest\
-    \x20configuration\x20information,\n\x20along\x20with\x20its\x20generatio\
-    n\x20number.\n\n\x20The\x20station\x20can\x20also\x20send\x20ClientConf\
-    \x20messages\n\x20(as\x20part\x20of\x20Station2Client\x20messages)\x20wh\
-    enever\x20it\x20wants.\n\x20The\x20client\x20is\x20expected\x20to\x20rea\
-    ct\x20as\x20if\x20it\x20had\x20requested\n\x20such\x20messages\x20--\x20\
-    possibly\x20by\x20ignoring\x20them,\x20if\x20the\x20client\n\x20is\x20al\
-    ready\x20up-to-date\x20according\x20to\x20the\x20generation\x20number.\n\
-    \n\n\n\x03\x04\x02\x01\x12\x03S\x08\x12\n\x0b\n\x04\x04\x02\x02\0\x12\
-    \x03T\x04&\n\x0c\n\x05\x04\x02\x02\0\x04\x12\x03T\x04\x0c\n\x0c\n\x05\
-    \x04\x02\x02\0\x06\x12\x03T\r\x16\n\x0c\n\x05\x04\x02\x02\0\x01\x12\x03T\
-    \x17!\n\x0c\n\x05\x04\x02\x02\0\x03\x12\x03T$%\n\x0b\n\x04\x04\x02\x02\
-    \x01\x12\x03U\x04#\n\x0c\n\x05\x04\x02\x02\x01\x04\x12\x03U\x04\x0c\n\
-    \x0c\n\x05\x04\x02\x02\x01\x05\x12\x03U\r\x13\n\x0c\n\x05\x04\x02\x02\
-    \x01\x01\x12\x03U\x14\x1e\n\x0c\n\x05\x04\x02\x02\x01\x03\x12\x03U!\"\n\
-    \x0b\n\x04\x04\x02\x02\x02\x12\x03V\x04'\n\x0c\n\x05\x04\x02\x02\x02\x04\
-    \x12\x03V\x04\x0c\n\x0c\n\x05\x04\x02\x02\x02\x06\x12\x03V\r\x13\n\x0c\n\
-    \x05\x04\x02\x02\x02\x01\x12\x03V\x14\"\n\x0c\n\x05\x04\x02\x02\x02\x03\
-    \x12\x03V%&\n\x0b\n\x04\x04\x02\x02\x03\x12\x03W\x049\n\x0c\n\x05\x04\
-    \x02\x02\x03\x04\x12\x03W\x04\x0c\n\x0c\n\x05\x04\x02\x02\x03\x06\x12\
-    \x03W\r\x1f\n\x0c\n\x05\x04\x02\x02\x03\x01\x12\x03W\x204\n\x0c\n\x05\
-    \x04\x02\x02\x03\x03\x12\x03W78\n\x0b\n\x04\x04\x02\x02\x04\x12\x03X\x04\
-    '\n\x0c\n\x05\x04\x02\x02\x04\x04\x12\x03X\x04\x0c\n\x0c\n\x05\x04\x02\
-    \x02\x04\x06\x12\x03X\r\x13\n\x0c\n\x05\x04\x02\x02\x04\x01\x12\x03X\x14\
-    \"\n\x0c\n\x05\x04\x02\x02\x04\x03\x12\x03X%&\n\x0b\n\x04\x04\x02\x02\
-    \x05\x12\x03Y\x04)\n\x0c\n\x05\x04\x02\x02\x05\x04\x12\x03Y\x04\x0c\n\
-    \x0c\n\x05\x04\x02\x02\x05\x06\x12\x03Y\r\x17\n\x0c\n\x05\x04\x02\x02\
-    \x05\x01\x12\x03Y\x18$\n\x0c\n\x05\x04\x02\x02\x05\x03\x12\x03Y'(\n-\n\
-    \x02\x04\x03\x12\x04]\0d\x01\x1a!\x20Configuration\x20for\x20DNS\x20regi\
-    strar\n\n\n\n\x03\x04\x03\x01\x12\x03]\x08\x12\n\x0b\n\x04\x04\x03\x02\0\
-    \x12\x03^\x04-\n\x0c\n\x05\x04\x03\x02\0\x04\x12\x03^\x04\x0c\n\x0c\n\
+    \n\x10signalling.proto\x12\x08tapdance\x1a\x19google/protobuf/any.proto\
+    \"A\n\x06PubKey\x12\x10\n\x03key\x18\x01\x20\x01(\x0cR\x03key\x12%\n\x04\
+    type\x18\x02\x20\x01(\x0e2\x11.tapdance.KeyTypeR\x04type\"\xbe\x01\n\x0c\
+    TLSDecoySpec\x12\x1a\n\x08hostname\x18\x01\x20\x01(\tR\x08hostname\x12\
+    \x1a\n\x08ipv4addr\x18\x02\x20\x01(\x07R\x08ipv4addr\x12\x1a\n\x08ipv6ad\
+    dr\x18\x06\x20\x01(\x0cR\x08ipv6addr\x12(\n\x06pubkey\x18\x03\x20\x01(\
+    \x0b2\x10.tapdance.PubKeyR\x06pubkey\x12\x18\n\x07timeout\x18\x04\x20\
+    \x01(\rR\x07timeout\x12\x16\n\x06tcpwin\x18\x05\x20\x01(\rR\x06tcpwin\"\
+    \xda\x02\n\nClientConf\x122\n\ndecoy_list\x18\x01\x20\x01(\x0b2\x13.tapd\
+    ance.DecoyListR\tdecoyList\x12\x1e\n\ngeneration\x18\x02\x20\x01(\rR\nge\
+    neration\x127\n\x0edefault_pubkey\x18\x03\x20\x01(\x0b2\x10.tapdance.Pub\
+    KeyR\rdefaultPubkey\x12N\n\x14phantom_subnets_list\x18\x04\x20\x01(\x0b2\
+    \x1c.tapdance.PhantomSubnetsListR\x12phantomSubnetsList\x127\n\x0econjur\
+    e_pubkey\x18\x05\x20\x01(\x0b2\x10.tapdance.PubKeyR\rconjurePubkey\x126\
+    \n\x0cdns_reg_conf\x18\x06\x20\x01(\x0b2\x14.tapdance.DnsRegConfR\ndnsRe\
+    gConf\"\xe0\x01\n\nDnsRegConf\x12<\n\x0edns_reg_method\x18\x01\x20\x02(\
+    \x0e2\x16.tapdance.DnsRegMethodR\x0cdnsRegMethod\x12\x16\n\x06target\x18\
+    \x02\x20\x01(\tR\x06target\x12\x16\n\x06domain\x18\x03\x20\x02(\tR\x06do\
+    main\x12\x16\n\x06pubkey\x18\x04\x20\x01(\x0cR\x06pubkey\x12+\n\x11utls_\
+    distribution\x18\x05\x20\x01(\tR\x10utlsDistribution\x12\x1f\n\x0bstun_s\
+    erver\x18\x06\x20\x01(\tR\nstunServer\"B\n\tDecoyList\x125\n\ntls_decoys\
+    \x18\x01\x20\x03(\x0b2\x16.tapdance.TLSDecoySpecR\ttlsDecoys\"Y\n\x12Pha\
+    ntomSubnetsList\x12C\n\x10weighted_subnets\x18\x01\x20\x03(\x0b2\x18.tap\
+    dance.PhantomSubnetsR\x0fweightedSubnets\"B\n\x0ePhantomSubnets\x12\x16\
+    \n\x06weight\x18\x01\x20\x01(\rR\x06weight\x12\x18\n\x07subnets\x18\x02\
+    \x20\x03(\tR\x07subnets\"o\n\x12WebRTCICECandidate\x12\x19\n\x08ip_upper\
+    \x18\x01\x20\x02(\x04R\x07ipUpper\x12\x19\n\x08ip_lower\x18\x02\x20\x02(\
+    \x04R\x07ipLower\x12#\n\rcomposed_info\x18\x03\x20\x02(\rR\x0ccomposedIn\
+    fo\"]\n\tWebRTCSDP\x12\x12\n\x04type\x18\x01\x20\x02(\rR\x04type\x12<\n\
+    \ncandidates\x18\x02\x20\x03(\x0b2\x1c.tapdance.WebRTCICECandidateR\ncan\
+    didates\"I\n\x0cWebRTCSignal\x12\x12\n\x04seed\x18\x01\x20\x02(\tR\x04se\
+    ed\x12%\n\x03sdp\x18\x02\x20\x02(\x0b2\x13.tapdance.WebRTCSDPR\x03sdp\"\
+    \xcb\x02\n\x0fStationToClient\x12)\n\x10protocol_version\x18\x01\x20\x01\
+    (\rR\x0fprotocolVersion\x12C\n\x10state_transition\x18\x02\x20\x01(\x0e2\
+    \x18.tapdance.S2C_TransitionR\x0fstateTransition\x125\n\x0bconfig_info\
+    \x18\x03\x20\x01(\x0b2\x14.tapdance.ClientConfR\nconfigInfo\x127\n\nerr_\
+    reason\x18\x04\x20\x01(\x0e2\x18.tapdance.ErrorReasonS2CR\terrReason\x12\
+    \x1f\n\x0btmp_backoff\x18\x05\x20\x01(\rR\ntmpBackoff\x12\x1d\n\nstation\
+    _id\x18\x06\x20\x01(\tR\tstationId\x12\x18\n\x07padding\x18d\x20\x01(\
+    \x0cR\x07padding\"\xaf\x01\n\x11RegistrationFlags\x12\x1f\n\x0bupload_on\
+    ly\x18\x01\x20\x01(\x08R\nuploadOnly\x12\x1d\n\ndark_decoy\x18\x02\x20\
+    \x01(\x08R\tdarkDecoy\x12!\n\x0cproxy_header\x18\x03\x20\x01(\x08R\x0bpr\
+    oxyHeader\x12\x17\n\x07use_TIL\x18\x04\x20\x01(\x08R\x06useTIL\x12\x1e\n\
+    \nprescanned\x18\x05\x20\x01(\x08R\nprescanned\"\xb7\x06\n\x0fClientToSt\
+    ation\x12)\n\x10protocol_version\x18\x01\x20\x01(\rR\x0fprotocolVersion\
+    \x122\n\x15decoy_list_generation\x18\x02\x20\x01(\rR\x13decoyListGenerat\
+    ion\x12C\n\x10state_transition\x18\x03\x20\x01(\x0e2\x18.tapdance.C2S_Tr\
+    ansitionR\x0fstateTransition\x12\x1f\n\x0bupload_sync\x18\x04\x20\x01(\
+    \x04R\nuploadSync\x12,\n\x12client_lib_version\x18\x05\x20\x01(\rR\x10cl\
+    ientLibVersion\x12>\n\x1bdisable_registrar_overrides\x18\x06\x20\x01(\
+    \x08R\x19disableRegistrarOverrides\x12#\n\rfailed_decoys\x18\n\x20\x03(\
+    \tR\x0cfailedDecoys\x12,\n\x05stats\x18\x0b\x20\x01(\x0b2\x16.tapdance.S\
+    essionStatsR\x05stats\x125\n\ttransport\x18\x0c\x20\x01(\x0e2\x17.tapdan\
+    ce.TransportTypeR\ttransport\x12?\n\x10transport_params\x18\r\x20\x01(\
+    \x0b2\x14.google.protobuf.AnyR\x0ftransportParams\x12%\n\x0ecovert_addre\
+    ss\x18\x14\x20\x01(\tR\rcovertAddress\x127\n\x18masked_decoy_server_name\
+    \x18\x15\x20\x01(\tR\x15maskedDecoyServerName\x12\x1d\n\nv6_support\x18\
+    \x16\x20\x01(\x08R\tv6Support\x12\x1d\n\nv4_support\x18\x17\x20\x01(\x08\
+    R\tv4Support\x121\n\x05flags\x18\x18\x20\x01(\x0b2\x1b.tapdance.Registra\
+    tionFlagsR\x05flags\x12;\n\rwebrtc_signal\x18\x1f\x20\x01(\x0b2\x16.tapd\
+    ance.WebRTCSignalR\x0cwebrtcSignal\x12\x18\n\x07padding\x18d\x20\x01(\
+    \x0cR\x07padding\"\xa8\x01\n\x15PrefixTransportParams\x12\x1b\n\tprefix_\
+    id\x18\x01\x20\x01(\x05R\x08prefixId\x12\x16\n\x06prefix\x18\x02\x20\x01\
+    (\x0cR\x06prefix\x12,\n\x12flush_after_prefix\x18\x03\x20\x01(\x08R\x10f\
+    lushAfterPrefix\x12,\n\x12randomize_dst_port\x18\r\x20\x01(\x08R\x10rand\
+    omizeDstPort\"F\n\x16GenericTransportParams\x12,\n\x12randomize_dst_port\
+    \x18\r\x20\x01(\x08R\x10randomizeDstPort\"\xcb\x03\n\nC2SWrapper\x12#\n\
+    \rshared_secret\x18\x01\x20\x01(\x0cR\x0csharedSecret\x12L\n\x14registra\
+    tion_payload\x18\x03\x20\x01(\x0b2\x19.tapdance.ClientToStationR\x13regi\
+    strationPayload\x12M\n\x13registration_source\x18\x04\x20\x01(\x0e2\x1c.\
+    tapdance.RegistrationSourceR\x12registrationSource\x121\n\x14registratio\
+    n_address\x18\x06\x20\x01(\x0cR\x13registrationAddress\x12#\n\rdecoy_add\
+    ress\x18\x07\x20\x01(\x0cR\x0cdecoyAddress\x12S\n\x15registration_respon\
+    se\x18\x08\x20\x01(\x0b2\x1e.tapdance.RegistrationResponseR\x14registrat\
+    ionResponse\x12\"\n\x0cRegRespBytes\x18\t\x20\x01(\x0cR\x0cRegRespBytes\
+    \x12*\n\x10RegRespSignature\x18\n\x20\x01(\x0cR\x10RegRespSignature\"\
+    \xdd\x01\n\x0cSessionStats\x120\n\x14failed_decoys_amount\x18\x14\x20\
+    \x01(\rR\x12failedDecoysAmount\x121\n\x15total_time_to_connect\x18\x1f\
+    \x20\x01(\rR\x12totalTimeToConnect\x12$\n\x0ertt_to_station\x18!\x20\x01\
+    (\rR\x0crttToStation\x12\x20\n\x0ctls_to_decoy\x18&\x20\x01(\rR\ntlsToDe\
+    coy\x12\x20\n\x0ctcp_to_decoy\x18'\x20\x01(\rR\ntcpToDecoy\"\x88\x02\n\
+    \x11StationToDetector\x12\x1d\n\nphantom_ip\x18\x01\x20\x01(\tR\tphantom\
+    Ip\x12\x1b\n\tclient_ip\x18\x02\x20\x01(\tR\x08clientIp\x12\x1d\n\ntimeo\
+    ut_ns\x18\x03\x20\x01(\x04R\ttimeoutNs\x129\n\toperation\x18\x04\x20\x01\
+    (\x0e2\x1b.tapdance.StationOperationsR\toperation\x12\x19\n\x08dst_port\
+    \x18\n\x20\x01(\rR\x07dstPort\x12\x19\n\x08src_port\x18\x0b\x20\x01(\rR\
+    \x07srcPort\x12'\n\x05proto\x18\x0c\x20\x01(\x0e2\x11.tapdance.IPProtoR\
+    \x05proto\"\x9a\x02\n\x14RegistrationResponse\x12\x1a\n\x08ipv4addr\x18\
+    \x01\x20\x01(\x07R\x08ipv4addr\x12\x1a\n\x08ipv6addr\x18\x02\x20\x01(\
+    \x0cR\x08ipv6addr\x12\x19\n\x08dst_port\x18\x03\x20\x01(\rR\x07dstPort\
+    \x12\"\n\x0cserverRandom\x18\x04\x20\x01(\x0cR\x0cserverRandom\x12\x14\n\
+    \x05error\x18\x05\x20\x01(\tR\x05error\x124\n\nclientConf\x18\x06\x20\
+    \x01(\x0b2\x14.tapdance.ClientConfR\nclientConf\x12?\n\x10transport_para\
+    ms\x18\n\x20\x01(\x0b2\x14.google.protobuf.AnyR\x0ftransportParams\"\xaf\
+    \x01\n\x0bDnsResponse\x12\x18\n\x07success\x18\x01\x20\x01(\x08R\x07succ\
+    ess\x12/\n\x13clientconf_outdated\x18\x02\x20\x01(\x08R\x12clientconfOut\
+    dated\x12U\n\x16bidirectional_response\x18\x03\x20\x01(\x0b2\x1e.tapdanc\
+    e.RegistrationResponseR\x15bidirectionalResponse*+\n\x07KeyType\x12\x0f\
+    \n\x0bAES_GCM_128\x10Z\x12\x0f\n\x0bAES_GCM_256\x10[*)\n\x0cDnsRegMethod\
+    \x12\x07\n\x03UDP\x10\x01\x12\x07\n\x03DOT\x10\x02\x12\x07\n\x03DOH\x10\
+    \x03*\xe7\x01\n\x0eC2S_Transition\x12\x11\n\rC2S_NO_CHANGE\x10\0\x12\x14\
+    \n\x10C2S_SESSION_INIT\x10\x01\x12\x1b\n\x17C2S_SESSION_COVERT_INIT\x10\
+    \x0b\x12\x18\n\x14C2S_EXPECT_RECONNECT\x10\x02\x12\x15\n\x11C2S_SESSION_\
+    CLOSE\x10\x03\x12\x14\n\x10C2S_YIELD_UPLOAD\x10\x04\x12\x16\n\x12C2S_ACQ\
+    UIRE_UPLOAD\x10\x05\x12\x20\n\x1cC2S_EXPECT_UPLOADONLY_RECONN\x10\x06\
+    \x12\x0e\n\tC2S_ERROR\x10\xff\x01*\x98\x01\n\x0eS2C_Transition\x12\x11\n\
+    \rS2C_NO_CHANGE\x10\0\x12\x14\n\x10S2C_SESSION_INIT\x10\x01\x12\x1b\n\
+    \x17S2C_SESSION_COVERT_INIT\x10\x0b\x12\x19\n\x15S2C_CONFIRM_RECONNECT\
+    \x10\x02\x12\x15\n\x11S2C_SESSION_CLOSE\x10\x03\x12\x0e\n\tS2C_ERROR\x10\
+    \xff\x01*\xac\x01\n\x0eErrorReasonS2C\x12\x0c\n\x08NO_ERROR\x10\0\x12\
+    \x11\n\rCOVERT_STREAM\x10\x01\x12\x13\n\x0fCLIENT_REPORTED\x10\x02\x12\
+    \x13\n\x0fCLIENT_PROTOCOL\x10\x03\x12\x14\n\x10STATION_INTERNAL\x10\x04\
+    \x12\x12\n\x0eDECOY_OVERLOAD\x10\x05\x12\x11\n\rCLIENT_STREAM\x10d\x12\
+    \x12\n\x0eCLIENT_TIMEOUT\x10e*\x82\x01\n\rTransportType\x12\x08\n\x04Nul\
+    l\x10\0\x12\x07\n\x03Min\x10\x01\x12\t\n\x05Obfs4\x10\x02\x12\x08\n\x04D\
+    TLS\x10\x03\x12\n\n\x06Prefix\x10\x04\x12\x08\n\x04uTLS\x10\x05\x12\n\n\
+    \x06Format\x10\x06\x12\x08\n\x04WASM\x10\x07\x12\x07\n\x03FTE\x10\x08\
+    \x12\x08\n\x04Quic\x10\t\x12\n\n\x06Webrtc\x10c*\x86\x01\n\x12Registrati\
+    onSource\x12\x0f\n\x0bUnspecified\x10\0\x12\x0c\n\x08Detector\x10\x01\
+    \x12\x07\n\x03API\x10\x02\x12\x13\n\x0fDetectorPrescan\x10\x03\x12\x14\n\
+    \x10BidirectionalAPI\x10\x04\x12\x07\n\x03DNS\x10\x05\x12\x14\n\x10Bidir\
+    ectionalDNS\x10\x06*@\n\x11StationOperations\x12\x0b\n\x07Unknown\x10\0\
+    \x12\x07\n\x03New\x10\x01\x12\n\n\x06Update\x10\x02\x12\t\n\x05Clear\x10\
+    \x03*$\n\x07IPProto\x12\x07\n\x03Unk\x10\0\x12\x07\n\x03Tcp\x10\x01\x12\
+    \x07\n\x03Udp\x10\x02J\x8a\x8e\x01\n\x07\x12\x05\0\0\xa2\x03\x01\n\x08\n\
+    \x01\x0c\x12\x03\0\0\x12\n\xb0\x01\n\x01\x02\x12\x03\x06\0\x112\xa5\x01\
+    \x20TODO:\x20We're\x20using\x20proto2\x20because\x20it's\x20the\x20defau\
+    lt\x20on\x20Ubuntu\x2016.04.\n\x20At\x20some\x20point\x20we\x20will\x20w\
+    ant\x20to\x20migrate\x20to\x20proto3,\x20but\x20we\x20are\x20not\n\x20us\
+    ing\x20any\x20proto3\x20features\x20yet.\n\n\t\n\x02\x03\0\x12\x03\x08\0\
+    #\n\n\n\x02\x05\0\x12\x04\n\0\r\x01\n\n\n\x03\x05\0\x01\x12\x03\n\x05\
+    \x0c\n\x0b\n\x04\x05\0\x02\0\x12\x03\x0b\x04\x15\n\x0c\n\x05\x05\0\x02\0\
+    \x01\x12\x03\x0b\x04\x0f\n\x0c\n\x05\x05\0\x02\0\x02\x12\x03\x0b\x12\x14\
+    \n\x20\n\x04\x05\0\x02\x01\x12\x03\x0c\x04\x15\"\x13\x20not\x20supported\
+    \x20atm\n\n\x0c\n\x05\x05\0\x02\x01\x01\x12\x03\x0c\x04\x0f\n\x0c\n\x05\
+    \x05\0\x02\x01\x02\x12\x03\x0c\x12\x14\n\n\n\x02\x04\0\x12\x04\x0f\0\x14\
+    \x01\n\n\n\x03\x04\0\x01\x12\x03\x0f\x08\x0e\n4\n\x04\x04\0\x02\0\x12\
+    \x03\x11\x04\x1b\x1a'\x20A\x20public\x20key,\x20as\x20used\x20by\x20the\
+    \x20station.\n\n\x0c\n\x05\x04\0\x02\0\x04\x12\x03\x11\x04\x0c\n\x0c\n\
+    \x05\x04\0\x02\0\x05\x12\x03\x11\r\x12\n\x0c\n\x05\x04\0\x02\0\x01\x12\
+    \x03\x11\x13\x16\n\x0c\n\x05\x04\0\x02\0\x03\x12\x03\x11\x19\x1a\n\x0b\n\
+    \x04\x04\0\x02\x01\x12\x03\x13\x04\x1e\n\x0c\n\x05\x04\0\x02\x01\x04\x12\
+    \x03\x13\x04\x0c\n\x0c\n\x05\x04\0\x02\x01\x06\x12\x03\x13\r\x14\n\x0c\n\
+    \x05\x04\0\x02\x01\x01\x12\x03\x13\x15\x19\n\x0c\n\x05\x04\0\x02\x01\x03\
+    \x12\x03\x13\x1c\x1d\n\n\n\x02\x04\x01\x12\x04\x16\0<\x01\n\n\n\x03\x04\
+    \x01\x01\x12\x03\x16\x08\x14\n\xa1\x01\n\x04\x04\x01\x02\0\x12\x03\x1b\
+    \x04!\x1a\x93\x01\x20The\x20hostname/SNI\x20to\x20use\x20for\x20this\x20\
+    host\n\n\x20The\x20hostname\x20is\x20the\x20only\x20required\x20field,\
+    \x20although\x20other\n\x20fields\x20are\x20expected\x20to\x20be\x20pres\
+    ent\x20in\x20most\x20cases.\n\n\x0c\n\x05\x04\x01\x02\0\x04\x12\x03\x1b\
+    \x04\x0c\n\x0c\n\x05\x04\x01\x02\0\x05\x12\x03\x1b\r\x13\n\x0c\n\x05\x04\
+    \x01\x02\0\x01\x12\x03\x1b\x14\x1c\n\x0c\n\x05\x04\x01\x02\0\x03\x12\x03\
+    \x1b\x1f\x20\n\xf7\x01\n\x04\x04\x01\x02\x01\x12\x03\"\x04\"\x1a\xe9\x01\
+    \x20The\x2032-bit\x20ipv4\x20address,\x20in\x20network\x20byte\x20order\
+    \n\n\x20If\x20the\x20IPv4\x20address\x20is\x20absent,\x20then\x20it\x20m\
+    ay\x20be\x20resolved\x20via\n\x20DNS\x20by\x20the\x20client,\x20or\x20th\
+    e\x20client\x20may\x20discard\x20this\x20decoy\x20spec\n\x20if\x20local\
+    \x20DNS\x20is\x20untrusted,\x20or\x20the\x20service\x20may\x20be\x20mult\
+    ihomed.\n\n\x0c\n\x05\x04\x01\x02\x01\x04\x12\x03\"\x04\x0c\n\x0c\n\x05\
+    \x04\x01\x02\x01\x05\x12\x03\"\r\x14\n\x0c\n\x05\x04\x01\x02\x01\x01\x12\
+    \x03\"\x15\x1d\n\x0c\n\x05\x04\x01\x02\x01\x03\x12\x03\"\x20!\n>\n\x04\
+    \x04\x01\x02\x02\x12\x03%\x04\x20\x1a1\x20The\x20128-bit\x20ipv6\x20addr\
+    ess,\x20in\x20network\x20byte\x20order\n\n\x0c\n\x05\x04\x01\x02\x02\x04\
+    \x12\x03%\x04\x0c\n\x0c\n\x05\x04\x01\x02\x02\x05\x12\x03%\r\x12\n\x0c\n\
+    \x05\x04\x01\x02\x02\x01\x12\x03%\x13\x1b\n\x0c\n\x05\x04\x01\x02\x02\
+    \x03\x12\x03%\x1e\x1f\n\x91\x01\n\x04\x04\x01\x02\x03\x12\x03+\x04\x1f\
+    \x1a\x83\x01\x20The\x20Tapdance\x20station\x20public\x20key\x20to\x20use\
+    \x20when\x20contacting\x20this\n\x20decoy\n\n\x20If\x20omitted,\x20the\
+    \x20default\x20station\x20public\x20key\x20(if\x20any)\x20is\x20used.\n\
+    \n\x0c\n\x05\x04\x01\x02\x03\x04\x12\x03+\x04\x0c\n\x0c\n\x05\x04\x01\
+    \x02\x03\x06\x12\x03+\r\x13\n\x0c\n\x05\x04\x01\x02\x03\x01\x12\x03+\x14\
+    \x1a\n\x0c\n\x05\x04\x01\x02\x03\x03\x12\x03+\x1d\x1e\n\xee\x01\n\x04\
+    \x04\x01\x02\x04\x12\x032\x04\x20\x1a\xe0\x01\x20The\x20maximum\x20durat\
+    ion,\x20in\x20milliseconds,\x20to\x20maintain\x20an\x20open\n\x20connect\
+    ion\x20to\x20this\x20decoy\x20(because\x20the\x20decoy\x20may\x20close\
+    \x20the\n\x20connection\x20itself\x20after\x20this\x20length\x20of\x20ti\
+    me)\n\n\x20If\x20omitted,\x20a\x20default\x20of\x2030,000\x20millisecond\
+    s\x20is\x20assumed.\n\n\x0c\n\x05\x04\x01\x02\x04\x04\x12\x032\x04\x0c\n\
+    \x0c\n\x05\x04\x01\x02\x04\x05\x12\x032\r\x13\n\x0c\n\x05\x04\x01\x02\
+    \x04\x01\x12\x032\x14\x1b\n\x0c\n\x05\x04\x01\x02\x04\x03\x12\x032\x1e\
+    \x1f\n\xb0\x02\n\x04\x04\x01\x02\x05\x12\x03;\x04\x1f\x1a\xa2\x02\x20The\
+    \x20maximum\x20TCP\x20window\x20size\x20to\x20attempt\x20to\x20use\x20fo\
+    r\x20this\x20decoy.\n\n\x20If\x20omitted,\x20a\x20default\x20of\x2015360\
+    \x20is\x20assumed.\n\n\x20TODO:\x20the\x20default\x20is\x20based\x20on\
+    \x20the\x20current\x20heuristic\x20of\x20only\n\x20using\x20decoys\x20th\
+    at\x20permit\x20windows\x20of\x2015KB\x20or\x20larger.\x20\x20If\x20this\
+    \n\x20heuristic\x20changes,\x20then\x20this\x20default\x20doesn't\x20mak\
+    e\x20sense.\n\n\x0c\n\x05\x04\x01\x02\x05\x04\x12\x03;\x04\x0c\n\x0c\n\
+    \x05\x04\x01\x02\x05\x05\x12\x03;\r\x13\n\x0c\n\x05\x04\x01\x02\x05\x01\
+    \x12\x03;\x14\x1a\n\x0c\n\x05\x04\x01\x02\x05\x03\x12\x03;\x1d\x1e\n\x83\
+    \x08\n\x02\x04\x02\x12\x04S\0Z\x012\xf6\x07\x20In\x20version\x201,\x20th\
+    e\x20request\x20is\x20very\x20simple:\x20when\n\x20the\x20client\x20send\
+    s\x20a\x20MSG_PROTO\x20to\x20the\x20station,\x20if\x20the\n\x20generatio\
+    n\x20number\x20is\x20present,\x20then\x20this\x20request\x20includes\n\
+    \x20(in\x20addition\x20to\x20whatever\x20other\x20operations\x20are\x20p\
+    art\x20of\x20the\n\x20request)\x20a\x20request\x20for\x20the\x20station\
+    \x20to\x20send\x20a\x20copy\x20of\n\x20the\x20current\x20decoy\x20set\
+    \x20that\x20has\x20a\x20generation\x20number\x20greater\n\x20than\x20the\
+    \x20generation\x20number\x20in\x20its\x20request.\n\n\x20If\x20the\x20re\
+    sponse\x20contains\x20a\x20DecoyListUpdate\x20with\x20a\x20generation\
+    \x20number\x20equal\n\x20to\x20that\x20which\x20the\x20client\x20sent,\
+    \x20then\x20the\x20client\x20is\x20\"caught\x20up\"\x20with\n\x20the\x20\
+    station\x20and\x20the\x20response\x20contains\x20no\x20new\x20informatio\
+    n\n\x20(and\x20all\x20other\x20fields\x20may\x20be\x20omitted\x20or\x20e\
+    mpty).\x20\x20Otherwise,\n\x20the\x20station\x20will\x20send\x20the\x20l\
+    atest\x20configuration\x20information,\n\x20along\x20with\x20its\x20gene\
+    ration\x20number.\n\n\x20The\x20station\x20can\x20also\x20send\x20Client\
+    Conf\x20messages\n\x20(as\x20part\x20of\x20Station2Client\x20messages)\
+    \x20whenever\x20it\x20wants.\n\x20The\x20client\x20is\x20expected\x20to\
+    \x20react\x20as\x20if\x20it\x20had\x20requested\n\x20such\x20messages\
+    \x20--\x20possibly\x20by\x20ignoring\x20them,\x20if\x20the\x20client\n\
+    \x20is\x20already\x20up-to-date\x20according\x20to\x20the\x20generation\
+    \x20number.\n\n\n\n\x03\x04\x02\x01\x12\x03S\x08\x12\n\x0b\n\x04\x04\x02\
+    \x02\0\x12\x03T\x04&\n\x0c\n\x05\x04\x02\x02\0\x04\x12\x03T\x04\x0c\n\
+    \x0c\n\x05\x04\x02\x02\0\x06\x12\x03T\r\x16\n\x0c\n\x05\x04\x02\x02\0\
+    \x01\x12\x03T\x17!\n\x0c\n\x05\x04\x02\x02\0\x03\x12\x03T$%\n\x0b\n\x04\
+    \x04\x02\x02\x01\x12\x03U\x04#\n\x0c\n\x05\x04\x02\x02\x01\x04\x12\x03U\
+    \x04\x0c\n\x0c\n\x05\x04\x02\x02\x01\x05\x12\x03U\r\x13\n\x0c\n\x05\x04\
+    \x02\x02\x01\x01\x12\x03U\x14\x1e\n\x0c\n\x05\x04\x02\x02\x01\x03\x12\
+    \x03U!\"\n\x0b\n\x04\x04\x02\x02\x02\x12\x03V\x04'\n\x0c\n\x05\x04\x02\
+    \x02\x02\x04\x12\x03V\x04\x0c\n\x0c\n\x05\x04\x02\x02\x02\x06\x12\x03V\r\
+    \x13\n\x0c\n\x05\x04\x02\x02\x02\x01\x12\x03V\x14\"\n\x0c\n\x05\x04\x02\
+    \x02\x02\x03\x12\x03V%&\n\x0b\n\x04\x04\x02\x02\x03\x12\x03W\x049\n\x0c\
+    \n\x05\x04\x02\x02\x03\x04\x12\x03W\x04\x0c\n\x0c\n\x05\x04\x02\x02\x03\
+    \x06\x12\x03W\r\x1f\n\x0c\n\x05\x04\x02\x02\x03\x01\x12\x03W\x204\n\x0c\
+    \n\x05\x04\x02\x02\x03\x03\x12\x03W78\n\x0b\n\x04\x04\x02\x02\x04\x12\
+    \x03X\x04'\n\x0c\n\x05\x04\x02\x02\x04\x04\x12\x03X\x04\x0c\n\x0c\n\x05\
+    \x04\x02\x02\x04\x06\x12\x03X\r\x13\n\x0c\n\x05\x04\x02\x02\x04\x01\x12\
+    \x03X\x14\"\n\x0c\n\x05\x04\x02\x02\x04\x03\x12\x03X%&\n\x0b\n\x04\x04\
+    \x02\x02\x05\x12\x03Y\x04)\n\x0c\n\x05\x04\x02\x02\x05\x04\x12\x03Y\x04\
+    \x0c\n\x0c\n\x05\x04\x02\x02\x05\x06\x12\x03Y\r\x17\n\x0c\n\x05\x04\x02\
+    \x02\x05\x01\x12\x03Y\x18$\n\x0c\n\x05\x04\x02\x02\x05\x03\x12\x03Y'(\n-\
+    \n\x02\x04\x03\x12\x04]\0d\x01\x1a!\x20Configuration\x20for\x20DNS\x20re\
+    gistrar\n\n\n\n\x03\x04\x03\x01\x12\x03]\x08\x12\n\x0b\n\x04\x04\x03\x02\
+    \0\x12\x03^\x04-\n\x0c\n\x05\x04\x03\x02\0\x04\x12\x03^\x04\x0c\n\x0c\n\
     \x05\x04\x03\x02\0\x06\x12\x03^\r\x19\n\x0c\n\x05\x04\x03\x02\0\x01\x12\
     \x03^\x1a(\n\x0c\n\x05\x04\x03\x02\0\x03\x12\x03^+,\n\x0b\n\x04\x04\x03\
     \x02\x01\x12\x03_\x04\x1f\n\x0c\n\x05\x04\x03\x02\x01\x04\x12\x03_\x04\
@@ -7017,15 +7055,15 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \xf2\x01\x04\x0c\n\r\n\x05\x04\x0c\x02\x04\x05\x12\x04\xf2\x01\r\x13\n\r\
     \n\x05\x04\x0c\x02\x04\x01\x12\x04\xf2\x01\x14&\n\r\n\x05\x04\x0c\x02\
     \x04\x03\x12\x04\xf2\x01)*\n\xa5\x02\n\x04\x04\x0c\x02\x05\x12\x04\xf7\
-    \x01\x040\x1a\x96\x02\x20Indicates\x20whether\x20the\x20client\x20will\
+    \x01\x042\x1a\x96\x02\x20Indicates\x20whether\x20the\x20client\x20will\
     \x20allow\x20the\x20registrar\x20to\x20provide\x20alternative\x20paramet\
     ers\x20that\n\x20may\x20work\x20better\x20in\x20substitute\x20for\x20the\
     \x20deterministically\x20selected\x20parameters.\x20This\x20only\x20work\
     s\n\x20for\x20bidirectional\x20registration\x20methods\x20where\x20the\
     \x20client\x20receives\x20a\x20RegistrationResponse.\n\n\r\n\x05\x04\x0c\
     \x02\x05\x04\x12\x04\xf7\x01\x04\x0c\n\r\n\x05\x04\x0c\x02\x05\x05\x12\
-    \x04\xf7\x01\r\x11\n\r\n\x05\x04\x0c\x02\x05\x01\x12\x04\xf7\x01\x12+\n\
-    \r\n\x05\x04\x0c\x02\x05\x03\x12\x04\xf7\x01./\nq\n\x04\x04\x0c\x02\x06\
+    \x04\xf7\x01\r\x11\n\r\n\x05\x04\x0c\x02\x05\x01\x12\x04\xf7\x01\x12-\n\
+    \r\n\x05\x04\x0c\x02\x05\x03\x12\x04\xf7\x0101\nq\n\x04\x04\x0c\x02\x06\
     \x12\x04\xfb\x01\x04'\x1ac\x20List\x20of\x20decoys\x20that\x20client\x20\
     have\x20unsuccessfully\x20tried\x20in\x20current\x20session.\n\x20Could\
     \x20be\x20sent\x20in\x20chunks\n\n\r\n\x05\x04\x0c\x02\x06\x04\x12\x04\
@@ -7085,7 +7123,7 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x20fingerprinting.\n\n\r\n\x05\x04\x0c\x02\x10\x04\x12\x04\x9b\x02\x04\
     \x0c\n\r\n\x05\x04\x0c\x02\x10\x05\x12\x04\x9b\x02\r\x12\n\r\n\x05\x04\
     \x0c\x02\x10\x01\x12\x04\x9b\x02\x13\x1a\n\r\n\x05\x04\x0c\x02\x10\x03\
-    \x12\x04\x9b\x02\x1d\x20\n\x0c\n\x02\x04\r\x12\x06\x9f\x02\0\xb0\x02\x01\
+    \x12\x04\x9b\x02\x1d\x20\n\x0c\n\x02\x04\r\x12\x06\x9f\x02\0\xb1\x02\x01\
     \n\x0b\n\x03\x04\r\x01\x12\x04\x9f\x02\x08\x1d\n!\n\x04\x04\r\x02\0\x12\
     \x04\xa1\x02\x04!\x1a\x13\x20Prefix\x20Identifier\n\n\r\n\x05\x04\r\x02\
     \0\x04\x12\x04\xa1\x02\x04\x0c\n\r\n\x05\x04\r\x02\0\x05\x12\x04\xa1\x02\
@@ -7098,209 +7136,212 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x20connection.\n\n\r\n\x05\x04\r\x02\x01\x04\x12\x04\xa5\x02\x04\x0c\n\
     \r\n\x05\x04\r\x02\x01\x05\x12\x04\xa5\x02\r\x12\n\r\n\x05\x04\r\x02\x01\
     \x01\x12\x04\xa5\x02\x13\x19\n\r\n\x05\x04\r\x02\x01\x03\x12\x04\xa5\x02\
-    \x1c\x1d\n\xed\x02\n\x04\x04\r\x02\x02\x12\x04\xaf\x02\x04*\x1a\xbc\x01\
-    \x20Indicates\x20whether\x20the\x20client\x20has\x20elected\x20to\x20use\
-    \x20destination\x20port\x20randomization.\x20Should\x20be\n\x20checked\
-    \x20against\x20selected\x20transport\x20to\x20ensure\x20that\x20destinat\
-    ion\x20port\x20randomization\x20is\n\x20supported.\n2\x9f\x01\x20//\x20p\
-    otential\x20future\x20fields\n\x20obfuscator\x20ID\n\x20tagEncoder\x20ID\
-    \x20(&params?,\x20e.g.\x20format-base64\x20/\x20padding)\n\x20streamEnco\
-    der\x20ID\x20(&params?,\x20e.g.\x20foramat-base64\x20/\x20padding)\n\n\r\
-    \n\x05\x04\r\x02\x02\x04\x12\x04\xaf\x02\x04\x0c\n\r\n\x05\x04\r\x02\x02\
-    \x05\x12\x04\xaf\x02\r\x11\n\r\n\x05\x04\r\x02\x02\x01\x12\x04\xaf\x02\
-    \x12$\n\r\n\x05\x04\r\x02\x02\x03\x12\x04\xaf\x02')\n\x0c\n\x02\x04\x0e\
-    \x12\x06\xb2\x02\0\xb7\x02\x01\n\x0b\n\x03\x04\x0e\x01\x12\x04\xb2\x02\
-    \x08\x1e\n\xcb\x01\n\x04\x04\x0e\x02\0\x12\x04\xb6\x02\x04*\x1a\xbc\x01\
-    \x20Indicates\x20whether\x20the\x20client\x20has\x20elected\x20to\x20use\
-    \x20destination\x20port\x20randomization.\x20Should\x20be\n\x20checked\
-    \x20against\x20selected\x20transport\x20to\x20ensure\x20that\x20destinat\
-    ion\x20port\x20randomization\x20is\n\x20supported.\n\n\r\n\x05\x04\x0e\
-    \x02\0\x04\x12\x04\xb6\x02\x04\x0c\n\r\n\x05\x04\x0e\x02\0\x05\x12\x04\
-    \xb6\x02\r\x11\n\r\n\x05\x04\x0e\x02\0\x01\x12\x04\xb6\x02\x12$\n\r\n\
-    \x05\x04\x0e\x02\0\x03\x12\x04\xb6\x02')\n\x0c\n\x02\x05\x06\x12\x06\xb9\
-    \x02\0\xc1\x02\x01\n\x0b\n\x03\x05\x06\x01\x12\x04\xb9\x02\x05\x17\n\x0c\
-    \n\x04\x05\x06\x02\0\x12\x04\xba\x02\x02\x12\n\r\n\x05\x05\x06\x02\0\x01\
-    \x12\x04\xba\x02\x02\r\n\r\n\x05\x05\x06\x02\0\x02\x12\x04\xba\x02\x10\
-    \x11\n\x0c\n\x04\x05\x06\x02\x01\x12\x04\xbb\x02\x08\x15\n\r\n\x05\x05\
-    \x06\x02\x01\x01\x12\x04\xbb\x02\x08\x10\n\r\n\x05\x05\x06\x02\x01\x02\
-    \x12\x04\xbb\x02\x13\x14\n\x0c\n\x04\x05\x06\x02\x02\x12\x04\xbc\x02\x08\
-    \x10\n\r\n\x05\x05\x06\x02\x02\x01\x12\x04\xbc\x02\x08\x0b\n\r\n\x05\x05\
-    \x06\x02\x02\x02\x12\x04\xbc\x02\x0e\x0f\n\x0c\n\x04\x05\x06\x02\x03\x12\
-    \x04\xbd\x02\x02\x16\n\r\n\x05\x05\x06\x02\x03\x01\x12\x04\xbd\x02\x02\
-    \x11\n\r\n\x05\x05\x06\x02\x03\x02\x12\x04\xbd\x02\x14\x15\n\x0c\n\x04\
-    \x05\x06\x02\x04\x12\x04\xbe\x02\x02\x17\n\r\n\x05\x05\x06\x02\x04\x01\
-    \x12\x04\xbe\x02\x02\x12\n\r\n\x05\x05\x06\x02\x04\x02\x12\x04\xbe\x02\
-    \x15\x16\n\x0c\n\x04\x05\x06\x02\x05\x12\x04\xbf\x02\x02\n\n\r\n\x05\x05\
-    \x06\x02\x05\x01\x12\x04\xbf\x02\x02\x05\n\r\n\x05\x05\x06\x02\x05\x02\
-    \x12\x04\xbf\x02\x08\t\n\x0c\n\x04\x05\x06\x02\x06\x12\x04\xc0\x02\x02\
-    \x17\n\r\n\x05\x05\x06\x02\x06\x01\x12\x04\xc0\x02\x02\x12\n\r\n\x05\x05\
-    \x06\x02\x06\x02\x12\x04\xc0\x02\x15\x16\n\x0c\n\x02\x04\x0f\x12\x06\xc3\
-    \x02\0\xdb\x02\x01\n\x0b\n\x03\x04\x0f\x01\x12\x04\xc3\x02\x08\x12\n\x0c\
-    \n\x04\x04\x0f\x02\0\x12\x04\xc4\x02\x02#\n\r\n\x05\x04\x0f\x02\0\x04\
-    \x12\x04\xc4\x02\x02\n\n\r\n\x05\x04\x0f\x02\0\x05\x12\x04\xc4\x02\x0b\
-    \x10\n\r\n\x05\x04\x0f\x02\0\x01\x12\x04\xc4\x02\x11\x1e\n\r\n\x05\x04\
-    \x0f\x02\0\x03\x12\x04\xc4\x02!\"\n\x0c\n\x04\x04\x0f\x02\x01\x12\x04\
-    \xc5\x02\x024\n\r\n\x05\x04\x0f\x02\x01\x04\x12\x04\xc5\x02\x02\n\n\r\n\
-    \x05\x04\x0f\x02\x01\x06\x12\x04\xc5\x02\x0b\x1a\n\r\n\x05\x04\x0f\x02\
-    \x01\x01\x12\x04\xc5\x02\x1b/\n\r\n\x05\x04\x0f\x02\x01\x03\x12\x04\xc5\
-    \x0223\n\x0c\n\x04\x04\x0f\x02\x02\x12\x04\xc6\x02\x026\n\r\n\x05\x04\
-    \x0f\x02\x02\x04\x12\x04\xc6\x02\x02\n\n\r\n\x05\x04\x0f\x02\x02\x06\x12\
-    \x04\xc6\x02\x0b\x1d\n\r\n\x05\x04\x0f\x02\x02\x01\x12\x04\xc6\x02\x1e1\
-    \n\r\n\x05\x04\x0f\x02\x02\x03\x12\x04\xc6\x0245\nC\n\x04\x04\x0f\x02\
-    \x03\x12\x04\xc9\x02\x02*\x1a5\x20client\x20source\x20address\x20when\
-    \x20receiving\x20a\x20registration\n\n\r\n\x05\x04\x0f\x02\x03\x04\x12\
-    \x04\xc9\x02\x02\n\n\r\n\x05\x04\x0f\x02\x03\x05\x12\x04\xc9\x02\x0b\x10\
-    \n\r\n\x05\x04\x0f\x02\x03\x01\x12\x04\xc9\x02\x11%\n\r\n\x05\x04\x0f\
-    \x02\x03\x03\x12\x04\xc9\x02()\nH\n\x04\x04\x0f\x02\x04\x12\x04\xcc\x02\
-    \x02#\x1a:\x20Decoy\x20address\x20used\x20when\x20registering\x20over\
-    \x20Decoy\x20registrar\n\n\r\n\x05\x04\x0f\x02\x04\x04\x12\x04\xcc\x02\
-    \x02\n\n\r\n\x05\x04\x0f\x02\x04\x05\x12\x04\xcc\x02\x0b\x10\n\r\n\x05\
-    \x04\x0f\x02\x04\x01\x12\x04\xcc\x02\x11\x1e\n\r\n\x05\x04\x0f\x02\x04\
-    \x03\x12\x04\xcc\x02!\"\n\xeb\x05\n\x04\x04\x0f\x02\x05\x12\x04\xd8\x02\
-    \x02:\x1a\xdc\x05\x20The\x20next\x20three\x20fields\x20allow\x20an\x20in\
-    dependent\x20registrar\x20(trusted\x20by\x20a\x20station\x20w/\x20a\x20z\
-    mq\x20keypair)\x20to\n\x20share\x20the\x20registration\x20overrides\x20t\
-    hat\x20it\x20assigned\x20to\x20the\x20client\x20with\x20the\x20station(s\
-    ).\n\x20Registration\x20Respose\x20is\x20here\x20to\x20allow\x20a\x20par\
-    sed\x20object\x20with\x20direct\x20access\x20to\x20the\x20fields\x20with\
-    in.\n\x20RegRespBytes\x20provides\x20a\x20serialized\x20verion\x20of\x20\
-    the\x20Registration\x20response\x20so\x20that\x20the\x20signature\x20of\
-    \n\x20the\x20Bidirectional\x20registrar\x20can\x20be\x20validated\x20bef\
-    ore\x20a\x20station\x20applies\x20any\x20overrides\x20present\x20in\n\
-    \x20the\x20Registration\x20Response.\n\n\x20If\x20you\x20are\x20reading\
-    \x20this\x20in\x20the\x20future\x20and\x20you\x20want\x20to\x20extend\
-    \x20the\x20functionality\x20here\x20it\x20might\n\x20make\x20sense\x20to\
-    \x20make\x20the\x20RegistrationResponse\x20that\x20is\x20sent\x20to\x20t\
-    he\x20client\x20a\x20distinct\x20message\x20from\n\x20the\x20one\x20that\
-    \x20gets\x20sent\x20to\x20the\x20stations.\n\n\r\n\x05\x04\x0f\x02\x05\
-    \x04\x12\x04\xd8\x02\x02\n\n\r\n\x05\x04\x0f\x02\x05\x06\x12\x04\xd8\x02\
-    \x0b\x1f\n\r\n\x05\x04\x0f\x02\x05\x01\x12\x04\xd8\x02\x205\n\r\n\x05\
-    \x04\x0f\x02\x05\x03\x12\x04\xd8\x0289\n\x0c\n\x04\x04\x0f\x02\x06\x12\
-    \x04\xd9\x02\x02\"\n\r\n\x05\x04\x0f\x02\x06\x04\x12\x04\xd9\x02\x02\n\n\
-    \r\n\x05\x04\x0f\x02\x06\x05\x12\x04\xd9\x02\x0b\x10\n\r\n\x05\x04\x0f\
-    \x02\x06\x01\x12\x04\xd9\x02\x11\x1d\n\r\n\x05\x04\x0f\x02\x06\x03\x12\
-    \x04\xd9\x02\x20!\n\x0c\n\x04\x04\x0f\x02\x07\x12\x04\xda\x02\x02'\n\r\n\
-    \x05\x04\x0f\x02\x07\x04\x12\x04\xda\x02\x02\n\n\r\n\x05\x04\x0f\x02\x07\
-    \x05\x12\x04\xda\x02\x0b\x10\n\r\n\x05\x04\x0f\x02\x07\x01\x12\x04\xda\
-    \x02\x11!\n\r\n\x05\x04\x0f\x02\x07\x03\x12\x04\xda\x02$&\n\x0c\n\x02\
-    \x04\x10\x12\x06\xdd\x02\0\xe9\x02\x01\n\x0b\n\x03\x04\x10\x01\x12\x04\
-    \xdd\x02\x08\x14\n9\n\x04\x04\x10\x02\0\x12\x04\xde\x02\x04.\"+\x20how\
-    \x20many\x20decoys\x20were\x20tried\x20before\x20success\n\n\r\n\x05\x04\
-    \x10\x02\0\x04\x12\x04\xde\x02\x04\x0c\n\r\n\x05\x04\x10\x02\0\x05\x12\
-    \x04\xde\x02\r\x13\n\r\n\x05\x04\x10\x02\0\x01\x12\x04\xde\x02\x14(\n\r\
-    \n\x05\x04\x10\x02\0\x03\x12\x04\xde\x02+-\nm\n\x04\x04\x10\x02\x01\x12\
-    \x04\xe3\x02\x04/\x1a\x1e\x20Applicable\x20to\x20whole\x20session:\n\"\
-    \x1a\x20includes\x20failed\x20attempts\n2#\x20Timings\x20below\x20are\
-    \x20in\x20milliseconds\n\n\r\n\x05\x04\x10\x02\x01\x04\x12\x04\xe3\x02\
-    \x04\x0c\n\r\n\x05\x04\x10\x02\x01\x05\x12\x04\xe3\x02\r\x13\n\r\n\x05\
-    \x04\x10\x02\x01\x01\x12\x04\xe3\x02\x14)\n\r\n\x05\x04\x10\x02\x01\x03\
-    \x12\x04\xe3\x02,.\nR\n\x04\x04\x10\x02\x02\x12\x04\xe6\x02\x04(\x1a\x1f\
-    \x20Last\x20(i.e.\x20successful)\x20decoy:\n\"#\x20measured\x20during\
-    \x20initial\x20handshake\n\n\r\n\x05\x04\x10\x02\x02\x04\x12\x04\xe6\x02\
-    \x04\x0c\n\r\n\x05\x04\x10\x02\x02\x05\x12\x04\xe6\x02\r\x13\n\r\n\x05\
-    \x04\x10\x02\x02\x01\x12\x04\xe6\x02\x14\"\n\r\n\x05\x04\x10\x02\x02\x03\
-    \x12\x04\xe6\x02%'\n%\n\x04\x04\x10\x02\x03\x12\x04\xe7\x02\x04&\"\x17\
-    \x20includes\x20tcp\x20to\x20decoy\n\n\r\n\x05\x04\x10\x02\x03\x04\x12\
-    \x04\xe7\x02\x04\x0c\n\r\n\x05\x04\x10\x02\x03\x05\x12\x04\xe7\x02\r\x13\
-    \n\r\n\x05\x04\x10\x02\x03\x01\x12\x04\xe7\x02\x14\x20\n\r\n\x05\x04\x10\
-    \x02\x03\x03\x12\x04\xe7\x02#%\nB\n\x04\x04\x10\x02\x04\x12\x04\xe8\x02\
-    \x04&\"4\x20measured\x20when\x20establishing\x20tcp\x20connection\x20to\
-    \x20decot\n\n\r\n\x05\x04\x10\x02\x04\x04\x12\x04\xe8\x02\x04\x0c\n\r\n\
-    \x05\x04\x10\x02\x04\x05\x12\x04\xe8\x02\r\x13\n\r\n\x05\x04\x10\x02\x04\
-    \x01\x12\x04\xe8\x02\x14\x20\n\r\n\x05\x04\x10\x02\x04\x03\x12\x04\xe8\
-    \x02#%\n\x0c\n\x02\x05\x07\x12\x06\xeb\x02\0\xf0\x02\x01\n\x0b\n\x03\x05\
-    \x07\x01\x12\x04\xeb\x02\x05\x16\n\x0c\n\x04\x05\x07\x02\0\x12\x04\xec\
-    \x02\x04\x10\n\r\n\x05\x05\x07\x02\0\x01\x12\x04\xec\x02\x04\x0b\n\r\n\
-    \x05\x05\x07\x02\0\x02\x12\x04\xec\x02\x0e\x0f\n\x0c\n\x04\x05\x07\x02\
-    \x01\x12\x04\xed\x02\x04\x0c\n\r\n\x05\x05\x07\x02\x01\x01\x12\x04\xed\
-    \x02\x04\x07\n\r\n\x05\x05\x07\x02\x01\x02\x12\x04\xed\x02\n\x0b\n\x0c\n\
-    \x04\x05\x07\x02\x02\x12\x04\xee\x02\x04\x0f\n\r\n\x05\x05\x07\x02\x02\
-    \x01\x12\x04\xee\x02\x04\n\n\r\n\x05\x05\x07\x02\x02\x02\x12\x04\xee\x02\
-    \r\x0e\n\x0c\n\x04\x05\x07\x02\x03\x12\x04\xef\x02\x04\x0e\n\r\n\x05\x05\
-    \x07\x02\x03\x01\x12\x04\xef\x02\x04\t\n\r\n\x05\x05\x07\x02\x03\x02\x12\
-    \x04\xef\x02\x0c\r\n\x0c\n\x02\x05\x08\x12\x06\xf2\x02\0\xf6\x02\x01\n\
-    \x0b\n\x03\x05\x08\x01\x12\x04\xf2\x02\x05\x0c\n\x0c\n\x04\x05\x08\x02\0\
-    \x12\x04\xf3\x02\x04\x0c\n\r\n\x05\x05\x08\x02\0\x01\x12\x04\xf3\x02\x04\
-    \x07\n\r\n\x05\x05\x08\x02\0\x02\x12\x04\xf3\x02\n\x0b\n\x0c\n\x04\x05\
-    \x08\x02\x01\x12\x04\xf4\x02\x04\x0c\n\r\n\x05\x05\x08\x02\x01\x01\x12\
-    \x04\xf4\x02\x04\x07\n\r\n\x05\x05\x08\x02\x01\x02\x12\x04\xf4\x02\n\x0b\
-    \n\x0c\n\x04\x05\x08\x02\x02\x12\x04\xf5\x02\x04\x0c\n\r\n\x05\x05\x08\
-    \x02\x02\x01\x12\x04\xf5\x02\x04\x07\n\r\n\x05\x05\x08\x02\x02\x02\x12\
-    \x04\xf5\x02\n\x0b\n\x0c\n\x02\x04\x11\x12\x06\xf8\x02\0\x83\x03\x01\n\
-    \x0b\n\x03\x04\x11\x01\x12\x04\xf8\x02\x08\x19\n\x0c\n\x04\x04\x11\x02\0\
-    \x12\x04\xf9\x02\x04#\n\r\n\x05\x04\x11\x02\0\x04\x12\x04\xf9\x02\x04\
-    \x0c\n\r\n\x05\x04\x11\x02\0\x05\x12\x04\xf9\x02\r\x13\n\r\n\x05\x04\x11\
-    \x02\0\x01\x12\x04\xf9\x02\x14\x1e\n\r\n\x05\x04\x11\x02\0\x03\x12\x04\
-    \xf9\x02!\"\n\x0c\n\x04\x04\x11\x02\x01\x12\x04\xfa\x02\x04\"\n\r\n\x05\
-    \x04\x11\x02\x01\x04\x12\x04\xfa\x02\x04\x0c\n\r\n\x05\x04\x11\x02\x01\
-    \x05\x12\x04\xfa\x02\r\x13\n\r\n\x05\x04\x11\x02\x01\x01\x12\x04\xfa\x02\
-    \x14\x1d\n\r\n\x05\x04\x11\x02\x01\x03\x12\x04\xfa\x02\x20!\n\x0c\n\x04\
-    \x04\x11\x02\x02\x12\x04\xfc\x02\x04#\n\r\n\x05\x04\x11\x02\x02\x04\x12\
-    \x04\xfc\x02\x04\x0c\n\r\n\x05\x04\x11\x02\x02\x05\x12\x04\xfc\x02\r\x13\
-    \n\r\n\x05\x04\x11\x02\x02\x01\x12\x04\xfc\x02\x14\x1e\n\r\n\x05\x04\x11\
-    \x02\x02\x03\x12\x04\xfc\x02!\"\n\x0c\n\x04\x04\x11\x02\x03\x12\x04\xfe\
-    \x02\x04-\n\r\n\x05\x04\x11\x02\x03\x04\x12\x04\xfe\x02\x04\x0c\n\r\n\
-    \x05\x04\x11\x02\x03\x06\x12\x04\xfe\x02\r\x1e\n\r\n\x05\x04\x11\x02\x03\
-    \x01\x12\x04\xfe\x02\x1f(\n\r\n\x05\x04\x11\x02\x03\x03\x12\x04\xfe\x02+\
-    ,\n\x0c\n\x04\x04\x11\x02\x04\x12\x04\x80\x03\x04\"\n\r\n\x05\x04\x11\
-    \x02\x04\x04\x12\x04\x80\x03\x04\x0c\n\r\n\x05\x04\x11\x02\x04\x05\x12\
-    \x04\x80\x03\r\x13\n\r\n\x05\x04\x11\x02\x04\x01\x12\x04\x80\x03\x14\x1c\
-    \n\r\n\x05\x04\x11\x02\x04\x03\x12\x04\x80\x03\x1f!\n\x0c\n\x04\x04\x11\
-    \x02\x05\x12\x04\x81\x03\x04\"\n\r\n\x05\x04\x11\x02\x05\x04\x12\x04\x81\
-    \x03\x04\x0c\n\r\n\x05\x04\x11\x02\x05\x05\x12\x04\x81\x03\r\x13\n\r\n\
-    \x05\x04\x11\x02\x05\x01\x12\x04\x81\x03\x14\x1c\n\r\n\x05\x04\x11\x02\
-    \x05\x03\x12\x04\x81\x03\x1f!\n\x0c\n\x04\x04\x11\x02\x06\x12\x04\x82\
-    \x03\x04\x20\n\r\n\x05\x04\x11\x02\x06\x04\x12\x04\x82\x03\x04\x0c\n\r\n\
-    \x05\x04\x11\x02\x06\x06\x12\x04\x82\x03\r\x14\n\r\n\x05\x04\x11\x02\x06\
-    \x01\x12\x04\x82\x03\x15\x1a\n\r\n\x05\x04\x11\x02\x06\x03\x12\x04\x82\
-    \x03\x1d\x1f\nT\n\x02\x04\x12\x12\x06\x86\x03\0\x9a\x03\x01\x1aF\x20Addi\
+    \x1c\x1d\n\x0c\n\x04\x04\r\x02\x02\x12\x04\xa6\x02\x04)\n\r\n\x05\x04\r\
+    \x02\x02\x04\x12\x04\xa6\x02\x04\x0c\n\r\n\x05\x04\r\x02\x02\x05\x12\x04\
+    \xa6\x02\r\x11\n\r\n\x05\x04\r\x02\x02\x01\x12\x04\xa6\x02\x12$\n\r\n\
+    \x05\x04\r\x02\x02\x03\x12\x04\xa6\x02'(\n\xed\x02\n\x04\x04\r\x02\x03\
+    \x12\x04\xb0\x02\x04*\x1a\xbc\x01\x20Indicates\x20whether\x20the\x20clie\
+    nt\x20has\x20elected\x20to\x20use\x20destination\x20port\x20randomizatio\
+    n.\x20Should\x20be\n\x20checked\x20against\x20selected\x20transport\x20t\
+    o\x20ensure\x20that\x20destination\x20port\x20randomization\x20is\n\x20s\
+    upported.\n2\x9f\x01\x20//\x20potential\x20future\x20fields\n\x20obfusca\
+    tor\x20ID\n\x20tagEncoder\x20ID\x20(&params?,\x20e.g.\x20format-base64\
+    \x20/\x20padding)\n\x20streamEncoder\x20ID\x20(&params?,\x20e.g.\x20fora\
+    mat-base64\x20/\x20padding)\n\n\r\n\x05\x04\r\x02\x03\x04\x12\x04\xb0\
+    \x02\x04\x0c\n\r\n\x05\x04\r\x02\x03\x05\x12\x04\xb0\x02\r\x11\n\r\n\x05\
+    \x04\r\x02\x03\x01\x12\x04\xb0\x02\x12$\n\r\n\x05\x04\r\x02\x03\x03\x12\
+    \x04\xb0\x02')\n\x0c\n\x02\x04\x0e\x12\x06\xb3\x02\0\xb8\x02\x01\n\x0b\n\
+    \x03\x04\x0e\x01\x12\x04\xb3\x02\x08\x1e\n\xcb\x01\n\x04\x04\x0e\x02\0\
+    \x12\x04\xb7\x02\x04*\x1a\xbc\x01\x20Indicates\x20whether\x20the\x20clie\
+    nt\x20has\x20elected\x20to\x20use\x20destination\x20port\x20randomizatio\
+    n.\x20Should\x20be\n\x20checked\x20against\x20selected\x20transport\x20t\
+    o\x20ensure\x20that\x20destination\x20port\x20randomization\x20is\n\x20s\
+    upported.\n\n\r\n\x05\x04\x0e\x02\0\x04\x12\x04\xb7\x02\x04\x0c\n\r\n\
+    \x05\x04\x0e\x02\0\x05\x12\x04\xb7\x02\r\x11\n\r\n\x05\x04\x0e\x02\0\x01\
+    \x12\x04\xb7\x02\x12$\n\r\n\x05\x04\x0e\x02\0\x03\x12\x04\xb7\x02')\n\
+    \x0c\n\x02\x05\x06\x12\x06\xba\x02\0\xc2\x02\x01\n\x0b\n\x03\x05\x06\x01\
+    \x12\x04\xba\x02\x05\x17\n\x0c\n\x04\x05\x06\x02\0\x12\x04\xbb\x02\x02\
+    \x12\n\r\n\x05\x05\x06\x02\0\x01\x12\x04\xbb\x02\x02\r\n\r\n\x05\x05\x06\
+    \x02\0\x02\x12\x04\xbb\x02\x10\x11\n\x0c\n\x04\x05\x06\x02\x01\x12\x04\
+    \xbc\x02\x08\x15\n\r\n\x05\x05\x06\x02\x01\x01\x12\x04\xbc\x02\x08\x10\n\
+    \r\n\x05\x05\x06\x02\x01\x02\x12\x04\xbc\x02\x13\x14\n\x0c\n\x04\x05\x06\
+    \x02\x02\x12\x04\xbd\x02\x08\x10\n\r\n\x05\x05\x06\x02\x02\x01\x12\x04\
+    \xbd\x02\x08\x0b\n\r\n\x05\x05\x06\x02\x02\x02\x12\x04\xbd\x02\x0e\x0f\n\
+    \x0c\n\x04\x05\x06\x02\x03\x12\x04\xbe\x02\x02\x16\n\r\n\x05\x05\x06\x02\
+    \x03\x01\x12\x04\xbe\x02\x02\x11\n\r\n\x05\x05\x06\x02\x03\x02\x12\x04\
+    \xbe\x02\x14\x15\n\x0c\n\x04\x05\x06\x02\x04\x12\x04\xbf\x02\x02\x17\n\r\
+    \n\x05\x05\x06\x02\x04\x01\x12\x04\xbf\x02\x02\x12\n\r\n\x05\x05\x06\x02\
+    \x04\x02\x12\x04\xbf\x02\x15\x16\n\x0c\n\x04\x05\x06\x02\x05\x12\x04\xc0\
+    \x02\x02\n\n\r\n\x05\x05\x06\x02\x05\x01\x12\x04\xc0\x02\x02\x05\n\r\n\
+    \x05\x05\x06\x02\x05\x02\x12\x04\xc0\x02\x08\t\n\x0c\n\x04\x05\x06\x02\
+    \x06\x12\x04\xc1\x02\x02\x17\n\r\n\x05\x05\x06\x02\x06\x01\x12\x04\xc1\
+    \x02\x02\x12\n\r\n\x05\x05\x06\x02\x06\x02\x12\x04\xc1\x02\x15\x16\n\x0c\
+    \n\x02\x04\x0f\x12\x06\xc4\x02\0\xdc\x02\x01\n\x0b\n\x03\x04\x0f\x01\x12\
+    \x04\xc4\x02\x08\x12\n\x0c\n\x04\x04\x0f\x02\0\x12\x04\xc5\x02\x02#\n\r\
+    \n\x05\x04\x0f\x02\0\x04\x12\x04\xc5\x02\x02\n\n\r\n\x05\x04\x0f\x02\0\
+    \x05\x12\x04\xc5\x02\x0b\x10\n\r\n\x05\x04\x0f\x02\0\x01\x12\x04\xc5\x02\
+    \x11\x1e\n\r\n\x05\x04\x0f\x02\0\x03\x12\x04\xc5\x02!\"\n\x0c\n\x04\x04\
+    \x0f\x02\x01\x12\x04\xc6\x02\x024\n\r\n\x05\x04\x0f\x02\x01\x04\x12\x04\
+    \xc6\x02\x02\n\n\r\n\x05\x04\x0f\x02\x01\x06\x12\x04\xc6\x02\x0b\x1a\n\r\
+    \n\x05\x04\x0f\x02\x01\x01\x12\x04\xc6\x02\x1b/\n\r\n\x05\x04\x0f\x02\
+    \x01\x03\x12\x04\xc6\x0223\n\x0c\n\x04\x04\x0f\x02\x02\x12\x04\xc7\x02\
+    \x026\n\r\n\x05\x04\x0f\x02\x02\x04\x12\x04\xc7\x02\x02\n\n\r\n\x05\x04\
+    \x0f\x02\x02\x06\x12\x04\xc7\x02\x0b\x1d\n\r\n\x05\x04\x0f\x02\x02\x01\
+    \x12\x04\xc7\x02\x1e1\n\r\n\x05\x04\x0f\x02\x02\x03\x12\x04\xc7\x0245\nC\
+    \n\x04\x04\x0f\x02\x03\x12\x04\xca\x02\x02*\x1a5\x20client\x20source\x20\
+    address\x20when\x20receiving\x20a\x20registration\n\n\r\n\x05\x04\x0f\
+    \x02\x03\x04\x12\x04\xca\x02\x02\n\n\r\n\x05\x04\x0f\x02\x03\x05\x12\x04\
+    \xca\x02\x0b\x10\n\r\n\x05\x04\x0f\x02\x03\x01\x12\x04\xca\x02\x11%\n\r\
+    \n\x05\x04\x0f\x02\x03\x03\x12\x04\xca\x02()\nH\n\x04\x04\x0f\x02\x04\
+    \x12\x04\xcd\x02\x02#\x1a:\x20Decoy\x20address\x20used\x20when\x20regist\
+    ering\x20over\x20Decoy\x20registrar\n\n\r\n\x05\x04\x0f\x02\x04\x04\x12\
+    \x04\xcd\x02\x02\n\n\r\n\x05\x04\x0f\x02\x04\x05\x12\x04\xcd\x02\x0b\x10\
+    \n\r\n\x05\x04\x0f\x02\x04\x01\x12\x04\xcd\x02\x11\x1e\n\r\n\x05\x04\x0f\
+    \x02\x04\x03\x12\x04\xcd\x02!\"\n\xeb\x05\n\x04\x04\x0f\x02\x05\x12\x04\
+    \xd9\x02\x02:\x1a\xdc\x05\x20The\x20next\x20three\x20fields\x20allow\x20\
+    an\x20independent\x20registrar\x20(trusted\x20by\x20a\x20station\x20w/\
+    \x20a\x20zmq\x20keypair)\x20to\n\x20share\x20the\x20registration\x20over\
+    rides\x20that\x20it\x20assigned\x20to\x20the\x20client\x20with\x20the\
+    \x20station(s).\n\x20Registration\x20Respose\x20is\x20here\x20to\x20allo\
+    w\x20a\x20parsed\x20object\x20with\x20direct\x20access\x20to\x20the\x20f\
+    ields\x20within.\n\x20RegRespBytes\x20provides\x20a\x20serialized\x20ver\
+    ion\x20of\x20the\x20Registration\x20response\x20so\x20that\x20the\x20sig\
+    nature\x20of\n\x20the\x20Bidirectional\x20registrar\x20can\x20be\x20vali\
+    dated\x20before\x20a\x20station\x20applies\x20any\x20overrides\x20presen\
+    t\x20in\n\x20the\x20Registration\x20Response.\n\n\x20If\x20you\x20are\
+    \x20reading\x20this\x20in\x20the\x20future\x20and\x20you\x20want\x20to\
+    \x20extend\x20the\x20functionality\x20here\x20it\x20might\n\x20make\x20s\
+    ense\x20to\x20make\x20the\x20RegistrationResponse\x20that\x20is\x20sent\
+    \x20to\x20the\x20client\x20a\x20distinct\x20message\x20from\n\x20the\x20\
+    one\x20that\x20gets\x20sent\x20to\x20the\x20stations.\n\n\r\n\x05\x04\
+    \x0f\x02\x05\x04\x12\x04\xd9\x02\x02\n\n\r\n\x05\x04\x0f\x02\x05\x06\x12\
+    \x04\xd9\x02\x0b\x1f\n\r\n\x05\x04\x0f\x02\x05\x01\x12\x04\xd9\x02\x205\
+    \n\r\n\x05\x04\x0f\x02\x05\x03\x12\x04\xd9\x0289\n\x0c\n\x04\x04\x0f\x02\
+    \x06\x12\x04\xda\x02\x02\"\n\r\n\x05\x04\x0f\x02\x06\x04\x12\x04\xda\x02\
+    \x02\n\n\r\n\x05\x04\x0f\x02\x06\x05\x12\x04\xda\x02\x0b\x10\n\r\n\x05\
+    \x04\x0f\x02\x06\x01\x12\x04\xda\x02\x11\x1d\n\r\n\x05\x04\x0f\x02\x06\
+    \x03\x12\x04\xda\x02\x20!\n\x0c\n\x04\x04\x0f\x02\x07\x12\x04\xdb\x02\
+    \x02'\n\r\n\x05\x04\x0f\x02\x07\x04\x12\x04\xdb\x02\x02\n\n\r\n\x05\x04\
+    \x0f\x02\x07\x05\x12\x04\xdb\x02\x0b\x10\n\r\n\x05\x04\x0f\x02\x07\x01\
+    \x12\x04\xdb\x02\x11!\n\r\n\x05\x04\x0f\x02\x07\x03\x12\x04\xdb\x02$&\n\
+    \x0c\n\x02\x04\x10\x12\x06\xde\x02\0\xea\x02\x01\n\x0b\n\x03\x04\x10\x01\
+    \x12\x04\xde\x02\x08\x14\n9\n\x04\x04\x10\x02\0\x12\x04\xdf\x02\x04.\"+\
+    \x20how\x20many\x20decoys\x20were\x20tried\x20before\x20success\n\n\r\n\
+    \x05\x04\x10\x02\0\x04\x12\x04\xdf\x02\x04\x0c\n\r\n\x05\x04\x10\x02\0\
+    \x05\x12\x04\xdf\x02\r\x13\n\r\n\x05\x04\x10\x02\0\x01\x12\x04\xdf\x02\
+    \x14(\n\r\n\x05\x04\x10\x02\0\x03\x12\x04\xdf\x02+-\nm\n\x04\x04\x10\x02\
+    \x01\x12\x04\xe4\x02\x04/\x1a\x1e\x20Applicable\x20to\x20whole\x20sessio\
+    n:\n\"\x1a\x20includes\x20failed\x20attempts\n2#\x20Timings\x20below\x20\
+    are\x20in\x20milliseconds\n\n\r\n\x05\x04\x10\x02\x01\x04\x12\x04\xe4\
+    \x02\x04\x0c\n\r\n\x05\x04\x10\x02\x01\x05\x12\x04\xe4\x02\r\x13\n\r\n\
+    \x05\x04\x10\x02\x01\x01\x12\x04\xe4\x02\x14)\n\r\n\x05\x04\x10\x02\x01\
+    \x03\x12\x04\xe4\x02,.\nR\n\x04\x04\x10\x02\x02\x12\x04\xe7\x02\x04(\x1a\
+    \x1f\x20Last\x20(i.e.\x20successful)\x20decoy:\n\"#\x20measured\x20durin\
+    g\x20initial\x20handshake\n\n\r\n\x05\x04\x10\x02\x02\x04\x12\x04\xe7\
+    \x02\x04\x0c\n\r\n\x05\x04\x10\x02\x02\x05\x12\x04\xe7\x02\r\x13\n\r\n\
+    \x05\x04\x10\x02\x02\x01\x12\x04\xe7\x02\x14\"\n\r\n\x05\x04\x10\x02\x02\
+    \x03\x12\x04\xe7\x02%'\n%\n\x04\x04\x10\x02\x03\x12\x04\xe8\x02\x04&\"\
+    \x17\x20includes\x20tcp\x20to\x20decoy\n\n\r\n\x05\x04\x10\x02\x03\x04\
+    \x12\x04\xe8\x02\x04\x0c\n\r\n\x05\x04\x10\x02\x03\x05\x12\x04\xe8\x02\r\
+    \x13\n\r\n\x05\x04\x10\x02\x03\x01\x12\x04\xe8\x02\x14\x20\n\r\n\x05\x04\
+    \x10\x02\x03\x03\x12\x04\xe8\x02#%\nB\n\x04\x04\x10\x02\x04\x12\x04\xe9\
+    \x02\x04&\"4\x20measured\x20when\x20establishing\x20tcp\x20connection\
+    \x20to\x20decot\n\n\r\n\x05\x04\x10\x02\x04\x04\x12\x04\xe9\x02\x04\x0c\
+    \n\r\n\x05\x04\x10\x02\x04\x05\x12\x04\xe9\x02\r\x13\n\r\n\x05\x04\x10\
+    \x02\x04\x01\x12\x04\xe9\x02\x14\x20\n\r\n\x05\x04\x10\x02\x04\x03\x12\
+    \x04\xe9\x02#%\n\x0c\n\x02\x05\x07\x12\x06\xec\x02\0\xf1\x02\x01\n\x0b\n\
+    \x03\x05\x07\x01\x12\x04\xec\x02\x05\x16\n\x0c\n\x04\x05\x07\x02\0\x12\
+    \x04\xed\x02\x04\x10\n\r\n\x05\x05\x07\x02\0\x01\x12\x04\xed\x02\x04\x0b\
+    \n\r\n\x05\x05\x07\x02\0\x02\x12\x04\xed\x02\x0e\x0f\n\x0c\n\x04\x05\x07\
+    \x02\x01\x12\x04\xee\x02\x04\x0c\n\r\n\x05\x05\x07\x02\x01\x01\x12\x04\
+    \xee\x02\x04\x07\n\r\n\x05\x05\x07\x02\x01\x02\x12\x04\xee\x02\n\x0b\n\
+    \x0c\n\x04\x05\x07\x02\x02\x12\x04\xef\x02\x04\x0f\n\r\n\x05\x05\x07\x02\
+    \x02\x01\x12\x04\xef\x02\x04\n\n\r\n\x05\x05\x07\x02\x02\x02\x12\x04\xef\
+    \x02\r\x0e\n\x0c\n\x04\x05\x07\x02\x03\x12\x04\xf0\x02\x04\x0e\n\r\n\x05\
+    \x05\x07\x02\x03\x01\x12\x04\xf0\x02\x04\t\n\r\n\x05\x05\x07\x02\x03\x02\
+    \x12\x04\xf0\x02\x0c\r\n\x0c\n\x02\x05\x08\x12\x06\xf3\x02\0\xf7\x02\x01\
+    \n\x0b\n\x03\x05\x08\x01\x12\x04\xf3\x02\x05\x0c\n\x0c\n\x04\x05\x08\x02\
+    \0\x12\x04\xf4\x02\x04\x0c\n\r\n\x05\x05\x08\x02\0\x01\x12\x04\xf4\x02\
+    \x04\x07\n\r\n\x05\x05\x08\x02\0\x02\x12\x04\xf4\x02\n\x0b\n\x0c\n\x04\
+    \x05\x08\x02\x01\x12\x04\xf5\x02\x04\x0c\n\r\n\x05\x05\x08\x02\x01\x01\
+    \x12\x04\xf5\x02\x04\x07\n\r\n\x05\x05\x08\x02\x01\x02\x12\x04\xf5\x02\n\
+    \x0b\n\x0c\n\x04\x05\x08\x02\x02\x12\x04\xf6\x02\x04\x0c\n\r\n\x05\x05\
+    \x08\x02\x02\x01\x12\x04\xf6\x02\x04\x07\n\r\n\x05\x05\x08\x02\x02\x02\
+    \x12\x04\xf6\x02\n\x0b\n\x0c\n\x02\x04\x11\x12\x06\xf9\x02\0\x84\x03\x01\
+    \n\x0b\n\x03\x04\x11\x01\x12\x04\xf9\x02\x08\x19\n\x0c\n\x04\x04\x11\x02\
+    \0\x12\x04\xfa\x02\x04#\n\r\n\x05\x04\x11\x02\0\x04\x12\x04\xfa\x02\x04\
+    \x0c\n\r\n\x05\x04\x11\x02\0\x05\x12\x04\xfa\x02\r\x13\n\r\n\x05\x04\x11\
+    \x02\0\x01\x12\x04\xfa\x02\x14\x1e\n\r\n\x05\x04\x11\x02\0\x03\x12\x04\
+    \xfa\x02!\"\n\x0c\n\x04\x04\x11\x02\x01\x12\x04\xfb\x02\x04\"\n\r\n\x05\
+    \x04\x11\x02\x01\x04\x12\x04\xfb\x02\x04\x0c\n\r\n\x05\x04\x11\x02\x01\
+    \x05\x12\x04\xfb\x02\r\x13\n\r\n\x05\x04\x11\x02\x01\x01\x12\x04\xfb\x02\
+    \x14\x1d\n\r\n\x05\x04\x11\x02\x01\x03\x12\x04\xfb\x02\x20!\n\x0c\n\x04\
+    \x04\x11\x02\x02\x12\x04\xfd\x02\x04#\n\r\n\x05\x04\x11\x02\x02\x04\x12\
+    \x04\xfd\x02\x04\x0c\n\r\n\x05\x04\x11\x02\x02\x05\x12\x04\xfd\x02\r\x13\
+    \n\r\n\x05\x04\x11\x02\x02\x01\x12\x04\xfd\x02\x14\x1e\n\r\n\x05\x04\x11\
+    \x02\x02\x03\x12\x04\xfd\x02!\"\n\x0c\n\x04\x04\x11\x02\x03\x12\x04\xff\
+    \x02\x04-\n\r\n\x05\x04\x11\x02\x03\x04\x12\x04\xff\x02\x04\x0c\n\r\n\
+    \x05\x04\x11\x02\x03\x06\x12\x04\xff\x02\r\x1e\n\r\n\x05\x04\x11\x02\x03\
+    \x01\x12\x04\xff\x02\x1f(\n\r\n\x05\x04\x11\x02\x03\x03\x12\x04\xff\x02+\
+    ,\n\x0c\n\x04\x04\x11\x02\x04\x12\x04\x81\x03\x04\"\n\r\n\x05\x04\x11\
+    \x02\x04\x04\x12\x04\x81\x03\x04\x0c\n\r\n\x05\x04\x11\x02\x04\x05\x12\
+    \x04\x81\x03\r\x13\n\r\n\x05\x04\x11\x02\x04\x01\x12\x04\x81\x03\x14\x1c\
+    \n\r\n\x05\x04\x11\x02\x04\x03\x12\x04\x81\x03\x1f!\n\x0c\n\x04\x04\x11\
+    \x02\x05\x12\x04\x82\x03\x04\"\n\r\n\x05\x04\x11\x02\x05\x04\x12\x04\x82\
+    \x03\x04\x0c\n\r\n\x05\x04\x11\x02\x05\x05\x12\x04\x82\x03\r\x13\n\r\n\
+    \x05\x04\x11\x02\x05\x01\x12\x04\x82\x03\x14\x1c\n\r\n\x05\x04\x11\x02\
+    \x05\x03\x12\x04\x82\x03\x1f!\n\x0c\n\x04\x04\x11\x02\x06\x12\x04\x83\
+    \x03\x04\x20\n\r\n\x05\x04\x11\x02\x06\x04\x12\x04\x83\x03\x04\x0c\n\r\n\
+    \x05\x04\x11\x02\x06\x06\x12\x04\x83\x03\r\x14\n\r\n\x05\x04\x11\x02\x06\
+    \x01\x12\x04\x83\x03\x15\x1a\n\r\n\x05\x04\x11\x02\x06\x03\x12\x04\x83\
+    \x03\x1d\x1f\nT\n\x02\x04\x12\x12\x06\x87\x03\0\x9b\x03\x01\x1aF\x20Addi\
     ng\x20message\x20response\x20from\x20Station\x20to\x20Client\x20for\x20b\
-    idirectional\x20API\n\n\x0b\n\x03\x04\x12\x01\x12\x04\x86\x03\x08\x1c\n\
-    \x0c\n\x04\x04\x12\x02\0\x12\x04\x87\x03\x02\x20\n\r\n\x05\x04\x12\x02\0\
-    \x04\x12\x04\x87\x03\x02\n\n\r\n\x05\x04\x12\x02\0\x05\x12\x04\x87\x03\
-    \x0b\x12\n\r\n\x05\x04\x12\x02\0\x01\x12\x04\x87\x03\x13\x1b\n\r\n\x05\
-    \x04\x12\x02\0\x03\x12\x04\x87\x03\x1e\x1f\n?\n\x04\x04\x12\x02\x01\x12\
-    \x04\x89\x03\x02\x1e\x1a1\x20The\x20128-bit\x20ipv6\x20address,\x20in\
-    \x20network\x20byte\x20order\n\n\r\n\x05\x04\x12\x02\x01\x04\x12\x04\x89\
-    \x03\x02\n\n\r\n\x05\x04\x12\x02\x01\x05\x12\x04\x89\x03\x0b\x10\n\r\n\
-    \x05\x04\x12\x02\x01\x01\x12\x04\x89\x03\x11\x19\n\r\n\x05\x04\x12\x02\
-    \x01\x03\x12\x04\x89\x03\x1c\x1d\n,\n\x04\x04\x12\x02\x02\x12\x04\x8c\
+    idirectional\x20API\n\n\x0b\n\x03\x04\x12\x01\x12\x04\x87\x03\x08\x1c\n\
+    \x0c\n\x04\x04\x12\x02\0\x12\x04\x88\x03\x02\x20\n\r\n\x05\x04\x12\x02\0\
+    \x04\x12\x04\x88\x03\x02\n\n\r\n\x05\x04\x12\x02\0\x05\x12\x04\x88\x03\
+    \x0b\x12\n\r\n\x05\x04\x12\x02\0\x01\x12\x04\x88\x03\x13\x1b\n\r\n\x05\
+    \x04\x12\x02\0\x03\x12\x04\x88\x03\x1e\x1f\n?\n\x04\x04\x12\x02\x01\x12\
+    \x04\x8a\x03\x02\x1e\x1a1\x20The\x20128-bit\x20ipv6\x20address,\x20in\
+    \x20network\x20byte\x20order\n\n\r\n\x05\x04\x12\x02\x01\x04\x12\x04\x8a\
+    \x03\x02\n\n\r\n\x05\x04\x12\x02\x01\x05\x12\x04\x8a\x03\x0b\x10\n\r\n\
+    \x05\x04\x12\x02\x01\x01\x12\x04\x8a\x03\x11\x19\n\r\n\x05\x04\x12\x02\
+    \x01\x03\x12\x04\x8a\x03\x1c\x1d\n,\n\x04\x04\x12\x02\x02\x12\x04\x8d\
     \x03\x02\x1f\x1a\x1e\x20Respond\x20with\x20randomized\x20port\n\n\r\n\
-    \x05\x04\x12\x02\x02\x04\x12\x04\x8c\x03\x02\n\n\r\n\x05\x04\x12\x02\x02\
-    \x05\x12\x04\x8c\x03\x0b\x11\n\r\n\x05\x04\x12\x02\x02\x01\x12\x04\x8c\
-    \x03\x12\x1a\n\r\n\x05\x04\x12\x02\x02\x03\x12\x04\x8c\x03\x1d\x1e\nd\n\
-    \x04\x04\x12\x02\x03\x12\x04\x90\x03\x02\"\x1aV\x20Future:\x20station\
+    \x05\x04\x12\x02\x02\x04\x12\x04\x8d\x03\x02\n\n\r\n\x05\x04\x12\x02\x02\
+    \x05\x12\x04\x8d\x03\x0b\x11\n\r\n\x05\x04\x12\x02\x02\x01\x12\x04\x8d\
+    \x03\x12\x1a\n\r\n\x05\x04\x12\x02\x02\x03\x12\x04\x8d\x03\x1d\x1e\nd\n\
+    \x04\x04\x12\x02\x03\x12\x04\x91\x03\x02\"\x1aV\x20Future:\x20station\
     \x20provides\x20client\x20with\x20secret,\x20want\x20chanel\x20present\n\
     \x20Leave\x20null\x20for\x20now\n\n\r\n\x05\x04\x12\x02\x03\x04\x12\x04\
-    \x90\x03\x02\n\n\r\n\x05\x04\x12\x02\x03\x05\x12\x04\x90\x03\x0b\x10\n\r\
-    \n\x05\x04\x12\x02\x03\x01\x12\x04\x90\x03\x11\x1d\n\r\n\x05\x04\x12\x02\
-    \x03\x03\x12\x04\x90\x03\x20!\nA\n\x04\x04\x12\x02\x04\x12\x04\x93\x03\
+    \x91\x03\x02\n\n\r\n\x05\x04\x12\x02\x03\x05\x12\x04\x91\x03\x0b\x10\n\r\
+    \n\x05\x04\x12\x02\x03\x01\x12\x04\x91\x03\x11\x1d\n\r\n\x05\x04\x12\x02\
+    \x03\x03\x12\x04\x91\x03\x20!\nA\n\x04\x04\x12\x02\x04\x12\x04\x94\x03\
     \x02\x1c\x1a3\x20If\x20registration\x20wrong,\x20populate\x20this\x20err\
-    or\x20string\n\n\r\n\x05\x04\x12\x02\x04\x04\x12\x04\x93\x03\x02\n\n\r\n\
-    \x05\x04\x12\x02\x04\x05\x12\x04\x93\x03\x0b\x11\n\r\n\x05\x04\x12\x02\
-    \x04\x01\x12\x04\x93\x03\x12\x17\n\r\n\x05\x04\x12\x02\x04\x03\x12\x04\
-    \x93\x03\x1a\x1b\n+\n\x04\x04\x12\x02\x05\x12\x04\x96\x03\x02%\x1a\x1d\
+    or\x20string\n\n\r\n\x05\x04\x12\x02\x04\x04\x12\x04\x94\x03\x02\n\n\r\n\
+    \x05\x04\x12\x02\x04\x05\x12\x04\x94\x03\x0b\x11\n\r\n\x05\x04\x12\x02\
+    \x04\x01\x12\x04\x94\x03\x12\x17\n\r\n\x05\x04\x12\x02\x04\x03\x12\x04\
+    \x94\x03\x1a\x1b\n+\n\x04\x04\x12\x02\x05\x12\x04\x97\x03\x02%\x1a\x1d\
     \x20ClientConf\x20field\x20(optional)\n\n\r\n\x05\x04\x12\x02\x05\x04\
-    \x12\x04\x96\x03\x02\n\n\r\n\x05\x04\x12\x02\x05\x06\x12\x04\x96\x03\x0b\
-    \x15\n\r\n\x05\x04\x12\x02\x05\x01\x12\x04\x96\x03\x16\x20\n\r\n\x05\x04\
-    \x12\x02\x05\x03\x12\x04\x96\x03#$\nJ\n\x04\x04\x12\x02\x06\x12\x04\x99\
+    \x12\x04\x97\x03\x02\n\n\r\n\x05\x04\x12\x02\x05\x06\x12\x04\x97\x03\x0b\
+    \x15\n\r\n\x05\x04\x12\x02\x05\x01\x12\x04\x97\x03\x16\x20\n\r\n\x05\x04\
+    \x12\x02\x05\x03\x12\x04\x97\x03#$\nJ\n\x04\x04\x12\x02\x06\x12\x04\x9a\
     \x03\x025\x1a<\x20Transport\x20Params\x20to\x20if\x20`allow_registrar_ov\
-    errides`\x20is\x20set.\n\n\r\n\x05\x04\x12\x02\x06\x04\x12\x04\x99\x03\
-    \x02\n\n\r\n\x05\x04\x12\x02\x06\x06\x12\x04\x99\x03\x0b\x1e\n\r\n\x05\
-    \x04\x12\x02\x06\x01\x12\x04\x99\x03\x1f/\n\r\n\x05\x04\x12\x02\x06\x03\
-    \x12\x04\x99\x0324\n!\n\x02\x04\x13\x12\x06\x9d\x03\0\xa1\x03\x01\x1a\
-    \x13\x20response\x20from\x20dns\n\n\x0b\n\x03\x04\x13\x01\x12\x04\x9d\
-    \x03\x08\x13\n\x0c\n\x04\x04\x13\x02\0\x12\x04\x9e\x03\x04\x1e\n\r\n\x05\
-    \x04\x13\x02\0\x04\x12\x04\x9e\x03\x04\x0c\n\r\n\x05\x04\x13\x02\0\x05\
-    \x12\x04\x9e\x03\r\x11\n\r\n\x05\x04\x13\x02\0\x01\x12\x04\x9e\x03\x12\
-    \x19\n\r\n\x05\x04\x13\x02\0\x03\x12\x04\x9e\x03\x1c\x1d\n\x0c\n\x04\x04\
-    \x13\x02\x01\x12\x04\x9f\x03\x04*\n\r\n\x05\x04\x13\x02\x01\x04\x12\x04\
-    \x9f\x03\x04\x0c\n\r\n\x05\x04\x13\x02\x01\x05\x12\x04\x9f\x03\r\x11\n\r\
-    \n\x05\x04\x13\x02\x01\x01\x12\x04\x9f\x03\x12%\n\r\n\x05\x04\x13\x02\
-    \x01\x03\x12\x04\x9f\x03()\n\x0c\n\x04\x04\x13\x02\x02\x12\x04\xa0\x03\
-    \x04=\n\r\n\x05\x04\x13\x02\x02\x04\x12\x04\xa0\x03\x04\x0c\n\r\n\x05\
-    \x04\x13\x02\x02\x06\x12\x04\xa0\x03\r!\n\r\n\x05\x04\x13\x02\x02\x01\
-    \x12\x04\xa0\x03\"8\n\r\n\x05\x04\x13\x02\x02\x03\x12\x04\xa0\x03;<\
+    errides`\x20is\x20set.\n\n\r\n\x05\x04\x12\x02\x06\x04\x12\x04\x9a\x03\
+    \x02\n\n\r\n\x05\x04\x12\x02\x06\x06\x12\x04\x9a\x03\x0b\x1e\n\r\n\x05\
+    \x04\x12\x02\x06\x01\x12\x04\x9a\x03\x1f/\n\r\n\x05\x04\x12\x02\x06\x03\
+    \x12\x04\x9a\x0324\n!\n\x02\x04\x13\x12\x06\x9e\x03\0\xa2\x03\x01\x1a\
+    \x13\x20response\x20from\x20dns\n\n\x0b\n\x03\x04\x13\x01\x12\x04\x9e\
+    \x03\x08\x13\n\x0c\n\x04\x04\x13\x02\0\x12\x04\x9f\x03\x04\x1e\n\r\n\x05\
+    \x04\x13\x02\0\x04\x12\x04\x9f\x03\x04\x0c\n\r\n\x05\x04\x13\x02\0\x05\
+    \x12\x04\x9f\x03\r\x11\n\r\n\x05\x04\x13\x02\0\x01\x12\x04\x9f\x03\x12\
+    \x19\n\r\n\x05\x04\x13\x02\0\x03\x12\x04\x9f\x03\x1c\x1d\n\x0c\n\x04\x04\
+    \x13\x02\x01\x12\x04\xa0\x03\x04*\n\r\n\x05\x04\x13\x02\x01\x04\x12\x04\
+    \xa0\x03\x04\x0c\n\r\n\x05\x04\x13\x02\x01\x05\x12\x04\xa0\x03\r\x11\n\r\
+    \n\x05\x04\x13\x02\x01\x01\x12\x04\xa0\x03\x12%\n\r\n\x05\x04\x13\x02\
+    \x01\x03\x12\x04\xa0\x03()\n\x0c\n\x04\x04\x13\x02\x02\x12\x04\xa1\x03\
+    \x04=\n\r\n\x05\x04\x13\x02\x02\x04\x12\x04\xa1\x03\x04\x0c\n\r\n\x05\
+    \x04\x13\x02\x02\x06\x12\x04\xa1\x03\r!\n\r\n\x05\x04\x13\x02\x02\x01\
+    \x12\x04\xa1\x03\"8\n\r\n\x05\x04\x13\x02\x02\x03\x12\x04\xa1\x03;<\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

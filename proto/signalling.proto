@@ -4,7 +4,7 @@ syntax = "proto2";
 // At some point we will want to migrate to proto3, but we are not
 // using any proto3 features yet.
 
-package conjure;
+package tapdance;
 
 import "google/protobuf/any.proto";
 
@@ -245,7 +245,7 @@ message ClientToStation {
     // Indicates whether the client will allow the registrar to provide alternative parameters that
     // may work better in substitute for the deterministically selected parameters. This only works
     // for bidirectional registration methods where the client receives a RegistrationResponse.
-    optional bool allow_registrar_overrides = 6;
+    optional bool disable_registrar_overrides = 6;
 
     // List of decoys that client have unsuccessfully tried in current session.
     // Could be sent in chunks
@@ -292,6 +292,7 @@ message PrefixTransportParams {
     // Prefix bytes (optional - usually sent from station to client as override if allowed by C2S)
     // as the station cannot take this into account when attempting to identify a connection.
     optional bytes prefix = 2;
+    optional bool flush_after_prefix = 3;
 
     // // potential future fields
     // obfuscator ID

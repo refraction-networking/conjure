@@ -6,6 +6,7 @@ import (
 
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // Transport provides a generic interface for utilities that allow the client to dial and connect to
@@ -24,9 +25,16 @@ type Transport interface {
 	// transport.
 	GetParams() (proto.Message, error)
 
+	// ParseParams gives the specific transport an option to parse a generic object into parameters
+	// provided by the station in the registration response during registration.
+	ParseParams(data *anypb.Any) (any, error)
+
 	// SetParams allows the caller to set parameters associated with the transport, returning an
-	// error if the provided generic message is not compatible.
-	SetParams(any) error
+	// error if the provided generic message is not compatible. the variadic bool parameter is used
+	// to indicate whether the client should sanity check the params or just apply them. This is
+	// useful in cases where the registrar may provide options to the client that it is able to
+	// handle, but are outside of the clients sanity checks. (see prefix transport for an example)
+	SetParams(any, ...bool) error
 
 	// GetDstPort returns the destination port that the client should open the phantom connection with.
 	GetDstPort(seed []byte) (uint16, error)
