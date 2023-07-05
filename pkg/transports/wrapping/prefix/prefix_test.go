@@ -31,47 +31,57 @@ func TestSuccessfulWrap(t *testing.T) {
 	extra25519.PrivateKeyToCurve25519(&curve25519Private, private)
 	curve25519.ScalarBaseMult(&curve25519Public, &curve25519Private)
 
-	var p int32 = int32(Min)
-	params := &pb.PrefixTransportParams{PrefixId: &p}
-
 	var transport = Transport{
 		TagObfuscator:     transports.CTRObfuscator{},
 		Privkey:           curve25519Private,
 		SupportedPrefixes: defaultPrefixes,
 	}
-	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, params, randomizeDstPortMinVersion)
-	defer c2p.Close()
-	defer sfp.Close()
-	require.NotNil(t, reg)
-
-	hmacID := core.ConjureHMAC(reg.Keys.SharedSecret, "PrefixTransportHMACString")
 	message := []byte(`test message!`)
 
-	for _, prefix := range defaultPrefixes {
-		// if prefix.fn != nil {
-		// 	// skip prefixes that do a special decoding for this test
-		// 	continue
-		// }
+	for idx := range defaultPrefixes {
 
-		obfuscatedID, err := transport.TagObfuscator.Obfuscate(hmacID, curve25519Public[:])
-		require.Nil(t, err)
-		// t.Logf("hmacid - %s\nobfuscated id - %s", hex.EncodeToString(hmacID), hex.EncodeToString(obfuscatedID))
-		_, err = c2p.Write(append(prefix.StaticMatch, append(obfuscatedID, message...)...))
-		require.Nil(t, err)
+		func() {
+			var p int32 = int32(idx)
+			params := &pb.PrefixTransportParams{PrefixId: &p}
+			manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
+			c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, params, randomizeDstPortMinVersion)
+			defer c2p.Close()
+			defer sfp.Close()
+			require.NotNil(t, reg)
 
-		var buf [4096]byte
-		var buffer bytes.Buffer
-		n, _ := sfp.Read(buf[:])
-		buffer.Write(buf[:n])
+			hmacID := core.ConjureHMAC(reg.Keys.SharedSecret, "PrefixTransportHMACString")
 
-		_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
-		require.Nil(t, err, "error getting wrapped connection")
+			for id, prefix := range defaultPrefixes {
+				// if prefix.fn != nil {
+				// 	// skip prefixes that do a special decoding for this test
+				// 	continue
+				// }
 
-		received := make([]byte, len(message))
-		_, err = io.ReadFull(wrapped, received)
-		require.Nil(t, err, "failed reading from connection")
-		require.True(t, bytes.Equal(message, received), "%s\n%s\n%s", string(message), string(received), prefix.StaticMatch)
+				obfuscatedID, err := transport.TagObfuscator.Obfuscate(hmacID, curve25519Public[:])
+				require.Nil(t, err)
+				// t.Logf("hmacid - %s\nobfuscated id - %s", hex.EncodeToString(hmacID), hex.EncodeToString(obfuscatedID))
+				_, err = c2p.Write(append(prefix.StaticMatch, append(obfuscatedID, message...)...))
+				require.Nil(t, err)
+
+				var buf [4096]byte
+				var buffer bytes.Buffer
+				n, _ := sfp.Read(buf[:])
+				buffer.Write(buf[:n])
+
+				_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+				if id != idx {
+					require.ErrorIs(t, err, ErrIncorrectPrefix)
+					continue
+				} else {
+					require.Nil(t, err)
+				}
+
+				received := make([]byte, len(message))
+				_, err = io.ReadFull(wrapped, received)
+				require.Nil(t, err, "failed reading from connection")
+				require.True(t, bytes.Equal(message, received), "%s\n%s\n%s", string(message), string(received), prefix.StaticMatch)
+			}
+		}()
 	}
 }
 
@@ -180,28 +190,28 @@ var _cases = []struct {
 
 	// because the Prefix object is defined the client doesn't care that the id isn't in the
 	// set of defaults, because the Prefix can give the dst port.
-	{"3", &clientPrefix{[]byte{}, 22, 1025}, &ptp{RandomizeDstPort: &f, PrefixId: &i22}, 1025, 0, nil, ErrUnknownPrefix, ErrUnknownPrefix},
-	{"4", &clientPrefix{[]byte{}, 22, 1025}, &ptp{RandomizeDstPort: &t, PrefixId: &i22}, 58047, 0, nil, ErrUnknownPrefix, ErrBadParams},
+	{"3", &clientPrefix{[]byte{}, 22, 1025, false}, &ptp{RandomizeDstPort: &f, PrefixId: &i22}, 1025, 0, nil, ErrUnknownPrefix, ErrUnknownPrefix},
+	{"4", &clientPrefix{[]byte{}, 22, 1025, false}, &ptp{RandomizeDstPort: &t, PrefixId: &i22}, 58047, 0, nil, ErrUnknownPrefix, ErrBadParams},
 
 	// Properly working examples
-	{"5", &clientPrefix{[]byte{}, 0, 443}, &ptp{RandomizeDstPort: &t}, 58047, 58047, nil, nil, nil},
-	{"6", &clientPrefix{[]byte{}, 0, 443}, &ptp{RandomizeDstPort: &f}, 443, 443, nil, nil, nil},
+	{"5", &clientPrefix{[]byte{}, 0, 443, false}, &ptp{RandomizeDstPort: &t}, 58047, 58047, nil, nil, nil},
+	{"6", &clientPrefix{[]byte{}, 0, 443, false}, &ptp{RandomizeDstPort: &f}, 443, 443, nil, nil, nil},
 
 	// // This will result in a broken connection, valid for both client and server. but unable to
 	// // connect since they will disagree about the expected port. This is not taking into account
 	// // the overrides system which could also cause this, but will be valid and applied properly
 	// // so as not to cause something like this from happening.
-	{"7", &clientPrefix{[]byte{}, 0, 1025}, &ptp{RandomizeDstPort: &f}, 1025, 443, nil, nil, nil},
-	{"8", &clientPrefix{[]byte{}, 1, 1025}, &ptp{RandomizeDstPort: &f, PrefixId: &i1}, 1025, 80, nil, nil, ErrBadParams},
+	{"7", &clientPrefix{[]byte{}, 0, 1025, false}, &ptp{RandomizeDstPort: &f}, 1025, 443, nil, nil, nil},
+	{"8", &clientPrefix{[]byte{}, 1, 1025, false}, &ptp{RandomizeDstPort: &f, PrefixId: &i1}, 1025, 80, nil, nil, ErrBadParams},
 
 	// Params nil. Prefix not nil
-	{"9", &clientPrefix{[]byte{}, -2, 1025}, nil, 1025, 0, nil, ErrBadParams, ErrUnknownPrefix},
-	{"10", &clientPrefix{[]byte{}, -2, 443}, nil, 443, 0, nil, ErrBadParams, nil},
+	{"9", &clientPrefix{[]byte{}, -2, 1025, false}, nil, 1025, 0, nil, ErrBadParams, ErrUnknownPrefix},
+	{"10", &clientPrefix{[]byte{}, -2, 443, false}, nil, 443, 0, nil, ErrBadParams, nil},
 
 	// Random prefix, resolved by client into another prefix BEFORE calling GetParams. This means
 	// that none of ClientTransport.GetParams, ClientTransport.DstPort, or Transport.GetDstPort are
 	// aware of a PrefixID of -1 (Rand)
-	{"11", &clientPrefix{[]byte{}, -1, 1025}, &ptp{RandomizeDstPort: &t, PrefixId: &in1}, 0, 0, ErrUnknownPrefix, ErrUnknownPrefix, ErrUnknownPrefix},
+	{"11", &clientPrefix{[]byte{}, -1, 1025, false}, &ptp{RandomizeDstPort: &t, PrefixId: &in1}, 0, 0, ErrUnknownPrefix, ErrUnknownPrefix, ErrUnknownPrefix},
 }
 
 func TestPrefixGetDstPortServer(t *testing.T) {
@@ -322,17 +332,17 @@ func TestClientTransportFromID(t *testing.T) {
 
 	p, err := TryFromID(Min)
 	require.Nil(t, err)
-	require.Equal(t, &clientPrefix{defaultPrefixes[0].StaticMatch, 0, 443}, p)
+	require.Equal(t, &clientPrefix{defaultPrefixes[0].StaticMatch, 0, 443, false}, p)
 
 	p, err = TryFromID(OpenSSH2)
 	require.Nil(t, err)
-	require.Equal(t, &clientPrefix{defaultPrefixes[OpenSSH2].StaticMatch, OpenSSH2, 22}, p)
+	require.Equal(t, &clientPrefix{defaultPrefixes[OpenSSH2].StaticMatch, OpenSSH2, 22, false}, p)
 
 	b, _ := hex.DecodeString("010000")
 	r := bytes.NewReader(b)
 	p, err = pickRandomPrefix(r)
 	require.Nil(t, err)
-	require.Equal(t, &clientPrefix{defaultPrefixes[1].StaticMatch, 1, 80}, p)
+	require.Equal(t, &clientPrefix{defaultPrefixes[1].StaticMatch, 1, 80, false}, p)
 }
 
 /*

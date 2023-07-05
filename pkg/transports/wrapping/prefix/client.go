@@ -1,6 +1,7 @@
 package prefix
 
 import (
+	"bufio"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // ClientTransport implements the client side transport interface for the Min transport. The
@@ -42,6 +44,7 @@ type ClientParams struct {
 // behavior like a rand prefix for example.
 type Prefix interface {
 	Bytes() []byte
+	FlushAfterPrefix() bool
 	ID() PrefixID
 	DstPort([]byte) uint16
 }
@@ -91,16 +94,42 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 	return t.parameters, nil
 }
 
+// ParseParams gives the specific transport an option to parse a generic object into parameters
+// provided by the station in the registration response during registration.
+func (t ClientTransport) ParseParams(data *anypb.Any) (any, error) {
+	if data == nil {
+		return nil, nil
+	}
+
+	var m = &pb.PrefixTransportParams{}
+	err := transports.UnmarshalAnypbTo(data, m)
+	return m, err
+}
+
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible or the parameters are otherwise invalid
-func (t *ClientTransport) SetParams(p any) error {
+func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 	prefixParams, ok := p.(*pb.PrefixTransportParams)
 	if !ok {
-		return ErrBadParams
+		return fmt.Errorf("%w, incorrect param type", ErrBadParams)
 	}
 
 	if prefixParams == nil {
-		return ErrBadParams
+		return fmt.Errorf("%w, nil params", ErrBadParams)
+	}
+
+	if len(unchecked) != 0 && unchecked[0] {
+		// Overwrite the prefix bytes and type without checking the default set. This is used for
+		// RegResponse where the registrar may override the chosen prefix with a prefix outside of
+		// the prefixes that the client known about.
+		t.parameters = prefixParams
+		t.Prefix = &clientPrefix{
+			bytes:            prefixParams.GetPrefix(),
+			id:               PrefixID(prefixParams.GetPrefixId()),
+			flushAfterPrefix: prefixParams.GetFlushAfterPrefix(),
+		}
+
+		return nil
 	}
 
 	if prefix, ok := DefaultPrefixes[PrefixID(prefixParams.GetPrefixId())]; ok {
@@ -163,26 +192,6 @@ func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 	return t.Prefix.DstPort(seed), nil
 }
 
-// Build is specific to the Prefix transport, providing a utility function for building the
-// prefix that the client should write to the wire before sending any client bytes.
-func (t *ClientTransport) Build() ([]byte, error) {
-	if t.Prefix == nil {
-		return nil, ErrBadParams
-	}
-
-	// Send hmac(seed, str) bytes to indicate to station (min transport)
-	prefix := t.Prefix.Bytes()
-
-	if t.TagObfuscator == nil {
-		t.TagObfuscator = transports.CTRObfuscator{}
-	}
-	obfuscatedID, err := t.TagObfuscator.Obfuscate(t.connectTag, t.stationPublicKey[:])
-	if err != nil {
-		return nil, err
-	}
-	return append(prefix, obfuscatedID...), nil
-}
-
 // PrepareKeys provides an opportunity for the transport to integrate the station public key
 // as well as bytes from the deterministic random generator associated with the registration
 // that this ClientTransport is attached to.
@@ -195,29 +204,52 @@ func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, hkdf
 // WrapConn gives the transport the opportunity to perform a handshake and wrap / transform the
 // incoming and outgoing bytes send by the implementing client.
 func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
-	// Send hmac(seed, str) bytes to indicate to station (min transport) generated during Prepare(...)
-
-	// // Send hmac(seed, str) bytes to indicate to station (min transport)
-	// connectTag := core.ConjureHMAC(reg.keys.SharedSecret, "PrefixTransportHMACString")
-
-	prefix, err := t.Build()
-	if err != nil {
-		return nil, fmt.Errorf("failed to build prefix: %w", err)
+	if t.Prefix == nil {
+		return nil, ErrBadParams
 	}
 
-	_, err = conn.Write(prefix)
+	if t.TagObfuscator == nil {
+		t.TagObfuscator = transports.CTRObfuscator{}
+	}
+
+	obfuscatedID, err := t.TagObfuscator.Obfuscate(t.connectTag, t.stationPublicKey[:])
 	if err != nil {
 		return nil, err
 	}
+
+	w := bufio.NewWriter(conn)
+
+	var msg []byte = t.Prefix.Bytes()
+	if t.Prefix.FlushAfterPrefix() {
+		if _, err := w.Write(msg); err != nil {
+			return nil, err
+		}
+
+		w.Flush()
+		if _, err := w.Write(obfuscatedID); err != nil {
+			return nil, err
+		}
+
+		w.Flush()
+	} else {
+		msg = append(msg, obfuscatedID...)
+		if _, err := w.Write(msg); err != nil {
+			return nil, err
+		}
+
+		w.Flush()
+	}
+
 	return conn, nil
 }
 
 // ---
 
 type clientPrefix struct {
-	bytes []byte
-	id    PrefixID
-	port  uint16
+	bytes            []byte
+	id               PrefixID
+	port             uint16
+	flushAfterPrefix bool
 
 	// // Function allowing encoding / transformation of obfuscated ID bytes after they have been
 	// // obfuscated. Examples - base64 encode, padding
@@ -240,6 +272,10 @@ func (c *clientPrefix) ID() PrefixID {
 
 func (c *clientPrefix) DstPort([]byte) uint16 {
 	return c.port
+}
+
+func (c *clientPrefix) FlushAfterPrefix() bool {
+	return c.flushAfterPrefix
 }
 
 // ---

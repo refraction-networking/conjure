@@ -62,6 +62,10 @@ type prefix struct {
 	// Default DST Port for this prefix. We are not bound by client_lib_version (yet) so we can set the
 	// default destination port for each prefix individually
 	DefaultDstPort uint16
+
+	// Flush Indicates whether the client is expected to flush the write buffer after the prefix
+	// before writing the tag. This would allow the whole first packet to be a prefix (with no tag).
+	Flush bool
 }
 
 // PrefixID provide an integer Identifier for each individual prefixes allowing clients to indicate
@@ -80,6 +84,9 @@ const (
 	TLSAlertFatal
 	DNSOverTCP
 	OpenSSH2
+	TLSCompleteCHNoSNI
+	TLSCompleteCHSNI
+	HTTPGetComplete
 	// GetShortBase64
 )
 
@@ -90,6 +97,16 @@ var (
 	// ErrBadParams indicates that the parameters provided to a call on the server side do not make
 	// sense in the context that they are provided and the registration will be ignored.
 	ErrBadParams = errors.New("bad parameters provided")
+
+	// ErrIncorrectPrefix indicates that tryFindRegistration found a valid registration based on
+	// the obfuscated tag, however the prefix that it matched was not the prefix indicated in the
+	// registration.
+	ErrIncorrectPrefix = errors.New("found connection for unexpected prefix")
+
+	// ErrIncorrectTransport indicates that tryFindRegistration found a valid registration based on
+	// the obfuscated tag, however the prefix that it matched was not the prefix indicated in the
+	// registration.
+	ErrIncorrectTransport = errors.New("found registration w/ incorrect transport type")
 )
 
 // Name returns the human-friendly name of the prefix.
@@ -115,6 +132,12 @@ func (id PrefixID) Name() string {
 		return "DNSOverTCP"
 	case OpenSSH2:
 		return "OpenSSH2"
+	case TLSCompleteCHNoSNI:
+		return "TLSFullCHNoSNI"
+	case TLSCompleteCHSNI:
+		return "TLSFullCH"
+	case HTTPGetComplete:
+		return "HTTPFull"
 	// case GetShort:
 	// 	return "GetShort"
 	default:
@@ -126,25 +149,32 @@ func (id PrefixID) Name() string {
 // initializing the prefix transport.
 var defaultPrefixes = map[PrefixID]prefix{
 	//Min - Empty prefix
-	Min: {[]byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion, 443},
+	Min: {[]byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion, 443, false},
 	// HTTP GET
-	GetLong: {[]byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion, 80},
+	GetLong: {[]byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion, 80, false},
 	// HTTP POST
-	PostLong: {[]byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion, 80},
+	PostLong: {[]byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion, 80, false},
 	// HTTP Response
-	HTTPResp: {[]byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion, 80},
+	HTTPResp: {[]byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion, 80, false},
 	// TLS Client Hello
-	TLSClientHello: {[]byte("\x16\x03\x01\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 443},
+	TLSClientHello: {[]byte("\x16\x03\x03\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 443, false},
 	// TLS Server Hello
-	TLSServerHello: {[]byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion, 443},
+	TLSServerHello: {[]byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion, 443, false},
 	// TLS Alert Warning
-	TLSAlertWarning: {[]byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443},
+	TLSAlertWarning: {[]byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443, false},
 	// TLS Alert Fatal
-	TLSAlertFatal: {[]byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443},
+	TLSAlertFatal: {[]byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443, false},
 	// DNS over TCP
-	DNSOverTCP: {[]byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 53},
+	DNSOverTCP: {[]byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 53, false},
 	// SSH-2.0-OpenSSH_8.9p1
-	OpenSSH2: {[]byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion, 22},
+	OpenSSH2: {[]byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion, 22, false},
+	// TLS 1.3 ClientHello complete without an SNI. Flushes after Prefix
+	TLSCompleteCHNoSNI: {tlsCompleteCHNoSNI, len(tlsCompleteCHNoSNI), len(tlsCompleteCHNoSNI) + minTagLength, len(tlsCompleteCHNoSNI) + minTagLength, randomizeDstPortMinVersion, 443, true},
+	// TLS 1.3 ClientHello complete with an SNI. Flushes after Prefix
+	TLSCompleteCHSNI: {tlsCompleteCHSNI, len(tlsCompleteCHSNI), len(tlsCompleteCHSNI) + minTagLength, len(tlsCompleteCHSNI) + minTagLength, randomizeDstPortMinVersion, 443, true},
+	// HTTP Get complete packet. Flushes after the prefix before the tag.
+	HTTPGetComplete: {httpGetComplete, len(httpGetComplete), len(httpGetComplete) + minTagLength, len(httpGetComplete) + minTagLength, randomizeDstPortMinVersion, 80, true},
+
 	// // HTTP GET base64 in url min tag length 88 because 64 bytes base64 encoded should be length 88
 	// GetShort: {base64TagDecode, []byte("GET /"), 5, 5 + 88, 5 + 88, randomizeDstPortMinVersion},
 }
@@ -225,11 +255,11 @@ func (t Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16,
 	}
 	parameters, ok := params.(*pb.PrefixTransportParams)
 	if !ok {
-		return 0, ErrBadParams
+		return 0, fmt.Errorf("%w: incorrect type", ErrBadParams)
 	}
 
 	if parameters == nil {
-		return 0, ErrBadParams
+		return 0, fmt.Errorf("%w: nil params", ErrBadParams)
 	}
 
 	prefix := parameters.GetPrefixId()
@@ -270,8 +300,9 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 		return nil, transports.ErrTryAgain
 	}
 
+	var eWrongPrefix error = nil
 	err := transports.ErrNotTransport
-	for _, prefix := range t.SupportedPrefixes {
+	for id, prefix := range t.SupportedPrefixes {
 		if len(prefix.StaticMatch) > 0 {
 			matchLen := min(len(prefix.StaticMatch), data.Len())
 			if !bytes.Equal(prefix.StaticMatch[:matchLen], data.Bytes()[:matchLen]) {
@@ -317,11 +348,30 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 			continue
 		}
 
+		if reg.Transport != pb.TransportType_Prefix {
+			return nil, ErrIncorrectTransport
+		} else if params, ok := reg.TransportParams.(*pb.PrefixTransportParams); ok {
+			if params == nil || params.GetPrefixId() != int32(id) {
+				// If the registration we found has no params specified (invalid and shouldn't have
+				// been ingested) or if the prefix ID does not match the expected prefix, set the
+				// err to return if we can't match any other prefixes.
+				eWrongPrefix = ErrIncorrectPrefix
+				continue
+			}
+		}
+
 		// We don't want to forward the prefix or Tag bytes, but if any message
 		// remains we do want to forward it.
 		data.Next(prefix.Offset + forwardBy)
 
 		return reg, nil
+	}
+
+	if err == transports.ErrNotTransport && eWrongPrefix == ErrIncorrectPrefix {
+		// If we found a match and it was the only one that matched (i.e. none of the other prefixes
+		// could possibly match even if we read more bytes). Then something went wrong and the
+		// client is attempting to connect with the wrong prefix.
+		return nil, ErrIncorrectPrefix
 	}
 
 	return nil, err
@@ -366,6 +416,21 @@ func Default(privkey [32]byte, filepath ...string) (*Transport, error) {
 	return t, nil
 }
 
+// DefaultSet builds a hollow version of the transport with the DEFAULT set of supported
+// prefixes. This is useful in instances where we just need to check whether the prefix ID is known,
+// not actually handle any major operations (tryFindReg / WrapConn)
+func DefaultSet() *Transport {
+	var prefixes map[PrefixID]prefix = make(map[PrefixID]prefix)
+	for k, v := range defaultPrefixes {
+		if _, ok := prefixes[k]; !ok {
+			prefixes[k] = v
+		}
+	}
+	return &Transport{
+		SupportedPrefixes: prefixes,
+	}
+}
+
 func tryParsePrefixes(filepath string) (map[PrefixID]prefix, error) {
 	return nil, nil
 }
@@ -374,7 +439,7 @@ func applyDefaultPrefixes() {
 	// if at any point we need to do init on the prefixes (i.e compiling regular expressions) it
 	// should happen here.
 	for ID, p := range defaultPrefixes {
-		DefaultPrefixes[ID] = &clientPrefix{p.StaticMatch, ID, p.DefaultDstPort}
+		DefaultPrefixes[ID] = &clientPrefix{p.StaticMatch, ID, p.DefaultDstPort, p.Flush}
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -371,12 +372,16 @@ type asnCounts struct {
 }
 
 type connStats struct {
+	m          sync.RWMutex
 	epochStart time.Time
 	statCounts
 	geoIPMap map[uint]*asnCounts
 }
 
 func (c *connStats) PrintAndReset(logger *log.Logger) {
+	c.m.Lock() // protect both read for print and write for reset.
+	defer c.m.Unlock()
+
 	// prevent div by 0 if thread starvation happens
 	var epochDur float64 = math.Max(float64(time.Since(c.epochStart).Milliseconds()), 1)
 
@@ -443,10 +448,16 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 		)
 	}
 
-	c.Reset()
+	c.reset()
 }
 
 func (c *connStats) Reset() {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.reset()
+}
+
+func (c *connStats) reset() {
 	atomic.StoreInt64(&c.numFound, 0)
 	atomic.StoreInt64(&c.numErr, 0)
 	atomic.StoreInt64(&c.numTimeout, 0)
@@ -483,6 +494,8 @@ func (c *connStats) addCreated(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -501,6 +514,8 @@ func (c *connStats) createdToDiscard(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -522,6 +537,8 @@ func (c *connStats) createdToCheck(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -543,6 +560,8 @@ func (c *connStats) createdToReset(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -564,6 +583,8 @@ func (c *connStats) createdToTimeout(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -585,6 +606,8 @@ func (c *connStats) createdToError(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -606,6 +629,8 @@ func (c *connStats) readToCheck(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -627,6 +652,8 @@ func (c *connStats) readToTimeout(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -648,6 +675,8 @@ func (c *connStats) readToReset(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -669,6 +698,8 @@ func (c *connStats) readToError(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -690,6 +721,8 @@ func (c *connStats) checkToCreated(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -711,6 +744,8 @@ func (c *connStats) checkToRead(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -732,6 +767,8 @@ func (c *connStats) checkToFound(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -753,6 +790,8 @@ func (c *connStats) checkToError(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -774,6 +813,8 @@ func (c *connStats) checkToDiscard(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -795,6 +836,8 @@ func (c *connStats) discardToReset(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -816,6 +859,8 @@ func (c *connStats) discardToTimeout(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -837,6 +882,8 @@ func (c *connStats) discardToError(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}
@@ -858,6 +905,8 @@ func (c *connStats) discardToClose(asn uint, cc string) {
 
 	// GeoIP tracking
 	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
 		if _, ok := c.geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
 			c.geoIPMap[asn] = &asnCounts{}

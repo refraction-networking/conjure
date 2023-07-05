@@ -300,9 +300,6 @@ impl PerCoreGlobal {
                 zmq_msg.set_decoy_address(decoy);
                 zmq_msg.set_registration_address(src);
 
-                let repr_str = hex::encode(res.0);
-                debug!("New registration {}, {}", flow, repr_str);
-
                 let zmq_payload = match zmq_msg.write_to_bytes() {
                     Ok(b) => b,
                     Err(e) => {
