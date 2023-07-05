@@ -129,7 +129,7 @@ func TestConnHandleConcurrent(t *testing.T) {
 	// We don't actually care about what gets written
 	logger := log.New(ioutil.Discard, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
 
-	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	testSubnetPath := conjurepath.Root + "/pkg/station/lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	rm := cj.NewRegistrationManager(&cj.RegConfig{})
