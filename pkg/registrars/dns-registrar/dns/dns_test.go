@@ -552,7 +552,7 @@ func TestEncodeRDataTXT(t *testing.T) {
 	// zero, not an empty slice.
 	p := make([]byte, 0)
 	encoded := EncodeRDataTXT(p)
-	if len(encoded) < 0 {
+	if len(encoded) != 1 || encoded[0] != 0 {
 		t.Errorf("EncodeRDataTXT(%v) returned %v", p, encoded)
 	}
 

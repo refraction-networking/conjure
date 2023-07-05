@@ -86,7 +86,10 @@ func NewName(labels [][]byte) (Name, error) {
 	}
 	// Check the total length.
 	builder := newMessageBuilder()
-	builder.WriteName(name)
+	err := builder.WriteName(name)
+	if err != nil {
+		return name, err
+	}
 	if len(builder.Bytes()) > 255 {
 		return nil, fmt.Errorf("%w, current length: %v", ErrNameTooLong, len(builder.Bytes()))
 	}
@@ -423,14 +426,13 @@ func (builder *messageBuilder) Bytes() []byte {
 
 // WriteName appends name to the in-progress messageBuilder, employing
 // compression pointers to previously written names if possible.
-func (builder *messageBuilder) WriteName(name Name) {
+func (builder *messageBuilder) WriteName(name Name) error {
 	// https://tools.ietf.org/html/rfc1035#section-3.1
 	for i := range name {
 		// Has this suffix already been encoded in the message?
 		if ptr, ok := builder.nameCache[name[i:].String()]; ok && ptr&0x3fff == ptr {
 			// If so, we can write a compression pointer.
-			binary.Write(&builder.w, binary.BigEndian, uint16(0xc000|ptr))
-			return
+			return binary.Write(&builder.w, binary.BigEndian, uint16(0xc000|ptr))
 		}
 		// Not cached; we must encode this label verbatim. Store a cache
 		// entry pointing to the beginning of it.
@@ -439,36 +441,63 @@ func (builder *messageBuilder) WriteName(name Name) {
 		if length == 0 || length > 63 {
 			panic(length)
 		}
-		builder.w.WriteByte(byte(length))
-		builder.w.Write(name[i])
+		err := builder.w.WriteByte(byte(length))
+		if err != nil {
+			return err
+		}
+		_, err = builder.w.Write(name[i])
+		if err != nil {
+			return err
+		}
 	}
-	builder.w.WriteByte(0)
+	return builder.w.WriteByte(0)
 }
 
 // WriteQuestion appends a Question section entry to the in-progress
 // messageBuilder.
-func (builder *messageBuilder) WriteQuestion(question *Question) {
+func (builder *messageBuilder) WriteQuestion(question *Question) error {
 	// https://tools.ietf.org/html/rfc1035#section-4.1.2
-	builder.WriteName(question.Name)
-	binary.Write(&builder.w, binary.BigEndian, question.Type)
-	binary.Write(&builder.w, binary.BigEndian, question.Class)
+	err := builder.WriteName(question.Name)
+	if err != nil {
+		return err
+	}
+	err = binary.Write(&builder.w, binary.BigEndian, question.Type)
+	if err != nil {
+		return err
+	}
+	return binary.Write(&builder.w, binary.BigEndian, question.Class)
 }
 
 // WriteRR appends a resource record to the in-progress messageBuilder. It
 // returns ErrIntegerOverflow if the length of rr.Data does not fit in 16 bits.
 func (builder *messageBuilder) WriteRR(rr *RR) error {
 	// https://tools.ietf.org/html/rfc1035#section-4.1.3
-	builder.WriteName(rr.Name)
-	binary.Write(&builder.w, binary.BigEndian, rr.Type)
-	binary.Write(&builder.w, binary.BigEndian, rr.Class)
-	binary.Write(&builder.w, binary.BigEndian, rr.TTL)
+	err := builder.WriteName(rr.Name)
+	if err != nil {
+		return err
+	}
+	err = binary.Write(&builder.w, binary.BigEndian, rr.Type)
+	if err != nil {
+		return err
+	}
+	err = binary.Write(&builder.w, binary.BigEndian, rr.Class)
+	if err != nil {
+		return err
+	}
+	err = binary.Write(&builder.w, binary.BigEndian, rr.TTL)
+	if err != nil {
+		return err
+	}
 	rdLength := uint16(len(rr.Data))
 	if int(rdLength) != len(rr.Data) {
 		return ErrIntegerOverflow
 	}
-	binary.Write(&builder.w, binary.BigEndian, rdLength)
-	builder.w.Write(rr.Data)
-	return nil
+	err = binary.Write(&builder.w, binary.BigEndian, rdLength)
+	if err != nil {
+		return err
+	}
+	_, err = builder.w.Write(rr.Data)
+	return err
 }
 
 // WriteMessage appends a complete DNS message to the in-progress
@@ -478,8 +507,14 @@ func (builder *messageBuilder) WriteRR(rr *RR) error {
 func (builder *messageBuilder) WriteMessage(message *Message) error {
 	// Header section
 	// https://tools.ietf.org/html/rfc1035#section-4.1.1
-	binary.Write(&builder.w, binary.BigEndian, message.ID)
-	binary.Write(&builder.w, binary.BigEndian, message.Flags)
+	err := binary.Write(&builder.w, binary.BigEndian, message.ID)
+	if err != nil {
+		return err
+	}
+	err = binary.Write(&builder.w, binary.BigEndian, message.Flags)
+	if err != nil {
+		return err
+	}
 	for _, count := range []int{
 		len(message.Question),
 		len(message.Answer),
@@ -490,13 +525,19 @@ func (builder *messageBuilder) WriteMessage(message *Message) error {
 		if int(count16) != count {
 			return ErrIntegerOverflow
 		}
-		binary.Write(&builder.w, binary.BigEndian, count16)
+		err = binary.Write(&builder.w, binary.BigEndian, count16)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Question section
 	// https://tools.ietf.org/html/rfc1035#section-4.1.2
 	for _, question := range message.Question {
-		builder.WriteQuestion(&question)
+		err := builder.WriteQuestion(&question)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Answer, Authority, and Additional sections

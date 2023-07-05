@@ -29,6 +29,7 @@ func TestCurve25519Conversion(t *testing.T) {
 	}
 }
 
+//nolint:errcheck
 func TestElligator(t *testing.T) {
 	var publicKey, publicKey2, publicKey3, representative, privateKey [32]byte
 
@@ -50,6 +51,7 @@ func TestElligator(t *testing.T) {
 	}
 }
 
+//nolint:errcheck
 func BenchmarkKeyGeneration(b *testing.B) {
 	var publicKey, representative, privateKey [32]byte
 
@@ -67,6 +69,7 @@ func BenchmarkKeyGeneration(b *testing.B) {
 	}
 }
 
+//nolint:errcheck
 func BenchmarkMap(b *testing.B) {
 	var publicKey, representative [32]byte
 	rand.Reader.Read(representative[:])

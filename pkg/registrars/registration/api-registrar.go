@@ -132,7 +132,11 @@ func (r *APIRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession,
 			continue
 		}
 
-		reg.UnpackRegResp(regResp)
+		err = reg.UnpackRegResp(regResp)
+		if err != nil {
+			return nil, err
+		}
+
 		return reg, nil
 	}
 

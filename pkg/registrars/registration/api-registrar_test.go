@@ -19,9 +19,8 @@ import (
 )
 
 func TestAPIRegistrar(t *testing.T) {
-	tapdance.AssetsSetDir("./assets")
+	_ = transports.EnableDefaultTransports()
 
-	transports.EnableDefaultTransports()
 	transport, err := transports.New("min")
 	require.Nil(t, err)
 
@@ -59,14 +58,15 @@ func TestAPIRegistrar(t *testing.T) {
 		logger:        logrus.New(),
 	}
 
-	registrar.Register(session, context.TODO())
+	_, err = registrar.Register(session, context.TODO())
+	require.Nil(t, err)
 
 	server.Close()
 }
 
 func TestAPIRegistrarBidirectional(t *testing.T) {
-	tapdance.AssetsSetDir("./assets")
-	transports.EnableDefaultTransports()
+	_ = transports.EnableDefaultTransports()
+
 	transport, err := transports.New("min")
 	require.Nil(t, err)
 	// Make Conjure session with covert address
@@ -112,7 +112,8 @@ func TestAPIRegistrarBidirectional(t *testing.T) {
 		t.Logf("IPv6 address %v -----> %v", addr6, regResp.Ipv6Addr)
 
 		body, _ = proto.Marshal(regResp)
-		w.Write(body)
+		_, err = w.Write(body)
+		require.Nil(t, err)
 	}))
 
 	registrar := APIRegistrar{

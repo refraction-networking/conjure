@@ -52,6 +52,7 @@ const (
 	UDP
 )
 
+//nolint:unused
 func validateConfig(config *Config) error {
 	if config == nil {
 		return fmt.Errorf("no config provided")

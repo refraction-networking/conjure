@@ -54,7 +54,7 @@ func TestSelectWeightedMany(t *testing.T) {
 
 	count := []int{0, 0}
 	loops := 1000
-	rand.Seed(12345)
+	r := rand.New(rand.NewSource(12345))
 	_, net1, err := net.ParseCIDR("192.122.190.0/24")
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +73,7 @@ func TestSelectWeightedMany(t *testing.T) {
 
 	for i := 1; i <= loops; i++ {
 		seed := make([]byte, 16)
-		_, err := rand.Read(seed)
+		_, err := r.Read(seed)
 		if err != nil {
 			t.Fatalf("Failed to generate seed: %v", err)
 		}
@@ -98,7 +98,7 @@ func TestWeightedSelection(t *testing.T) {
 
 	count := []int{0, 0}
 	loops := 1000
-	rand.Seed(5421212341231)
+	r := rand.New(rand.NewSource(5421212341231))
 	w := uint32(1)
 	var ps = &pb.PhantomSubnetsList{
 		WeightedSubnets: []*pb.PhantomSubnets{
@@ -109,7 +109,7 @@ func TestWeightedSelection(t *testing.T) {
 
 	for i := 1; i <= loops; i++ {
 		seed := make([]byte, 16)
-		_, err := rand.Read(seed)
+		_, err := r.Read(seed)
 		if err != nil {
 			t.Fatalf("Failed to generate seed: %v", err)
 		}

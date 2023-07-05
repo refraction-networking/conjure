@@ -158,7 +158,11 @@ func (c *DNSPacketConn) send(transport net.Conn, p []byte) error {
 	}
 
 	var id uint16
-	binary.Read(rand.Reader, binary.BigEndian, &id)
+	err = binary.Read(rand.Reader, binary.BigEndian, &id)
+	if err != nil {
+		return err
+	}
+
 	query := &dns.Message{
 		ID:    id,
 		Flags: 0x0100, // QR = 0, RD = 1

@@ -92,7 +92,10 @@ func EnableDefaultTransports() error {
 }
 
 func init() {
-	EnableDefaultTransports()
+	err := EnableDefaultTransports()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func ConfigFromTransportType(transportType pb.TransportType, randomizePortDefault bool) (cj.Transport, error) {
