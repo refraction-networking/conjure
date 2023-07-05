@@ -21,7 +21,13 @@ const (
 	portRangeMax = 65535
 )
 
-const minTagLength = 32
+const (
+	minTagLength = 32
+
+	// This is a misspelling that cannot be changed without also adding checks for client Library
+	// version otherwise the min transport will not be backwards compatible.
+	hmacString = "MinTrasportHMACString"
+)
 
 // Transport provides a struct implementing the Transport, WrappingTransport,
 // PortRandomizingTransport, and FixedPortTransport interfaces.
@@ -39,7 +45,7 @@ func (Transport) LogPrefix() string { return "MIN" }
 // identifier should be unique for each registration on a given phantom;
 // registrations on different phantoms can have the same identifier.
 func (Transport) GetIdentifier(d *cj.DecoyRegistration) string {
-	return string(core.ConjureHMAC(d.Keys.SharedSecret, "MinTrasportHMACString"))
+	return string(core.ConjureHMAC(d.Keys.SharedSecret, hmacString))
 }
 
 // GetProto returns the next layer protocol that the transport uses. Implements
