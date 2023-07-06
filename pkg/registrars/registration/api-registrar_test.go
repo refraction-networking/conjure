@@ -24,6 +24,8 @@ func TestAPIRegistrar(t *testing.T) {
 	transport, err := transports.New("min")
 	require.Nil(t, err)
 
+	_, err = tapdance.AssetsSetDir("./tests/assets")
+	require.Nil(t, err)
 	session := tapdance.MakeConjureSession("1.2.3.4:1234", transport)
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
