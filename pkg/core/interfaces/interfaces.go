@@ -1,6 +1,7 @@
 package interfaces
 
 import (
+	"context"
 	"io"
 	"net"
 
@@ -8,6 +9,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
+
+type dialFunc func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)
 
 // Transport provides a generic interface for utilities that allow the client to dial and connect to
 // a phantom address when creating a Conjure connection.
@@ -43,9 +46,19 @@ type Transport interface {
 	// as well as bytes from the deterministic random generator associated with the registration
 	// that this ClientTransport is attached to.
 	PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error
+}
+
+type WrappingTransport interface {
+	Transport
 
 	// Connect returns a net.Conn connection given a context and ConjureReg
 	WrapConn(conn net.Conn) (net.Conn, error)
+}
+
+type ConnectingTransport interface {
+	Transport
+
+	WrapDial(dialer dialFunc) (dialFunc, error)
 }
 
 // Overrides makes it possible to treat an array of overrides as a single override note that the
