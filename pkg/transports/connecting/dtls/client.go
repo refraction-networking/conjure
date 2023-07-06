@@ -14,7 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-type dialFunc func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)
+type dialFunc = func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)
 
 const (
 	// port range boundaries for min when randomizing

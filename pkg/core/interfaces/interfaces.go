@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-type dialFunc func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)
+type dialFunc = func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)
 
 // Transport provides a generic interface for utilities that allow the client to dial and connect to
 // a phantom address when creating a Conjure connection.
