@@ -56,3 +56,5 @@ require (
 	golang.org/x/text v0.9.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/refraction-networking/gotapdance => github.com/mingyech/gotapdance v1.2.1-0.20230706182532-7a7e47085f2c
