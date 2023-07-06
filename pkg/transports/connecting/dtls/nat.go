@@ -64,48 +64,6 @@ var (
 	pubPortSingle  int
 )
 
-func reconnectUDPAddr(conn *net.UDPConn, addr *net.UDPAddr) (net.Conn, error) {
-	file, err := conn.File()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get file descriptor: %v", err)
-	}
-	// defer file.Close()
-	conn.Close()
-
-	sa := &syscall.SockaddrInet4{Port: addr.Port}
-	copy(sa.Addr[:], addr.IP.To4())
-
-	err = syscall.Connect(int(file.Fd()), sa)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect: %v", err)
-	}
-
-	return net.FileConn(file)
-}
-
-func dialReuseUDP(addr *net.UDPAddr) (net.Conn, error) {
-	if dialedConn != nil {
-		conn, err := reconnectUDPAddr(dialedConn, addr)
-		if err != nil {
-			return nil, fmt.Errorf("error reconnecting addr: %v", err)
-		}
-
-		dialedConn = conn.(*net.UDPConn)
-		return dialedConn, nil
-		// return &reuseUDPConn{conn: dialedConn, raddr: addr}, err
-	}
-
-	conn, err := net.DialUDP("udp", nil, addr)
-	if err != nil {
-		return nil, err
-	}
-
-	dialedConn = conn
-	return dialedConn, err
-}
-
-var dialedConn *net.UDPConn
-
 func publicAddr(stunServer string, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) (privatePort int, publicPort int, err error) {
 
 	if privPortSingle != 0 && pubPortSingle != 0 {

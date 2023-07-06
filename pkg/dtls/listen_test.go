@@ -16,7 +16,8 @@ func TestSend(t *testing.T) {
 	size := 65535
 	toSend := make([]byte, size)
 
-	rand.Read(toSend)
+	_, err := rand.Read(toSend)
+	require.Nil(t, err)
 
 	server, client := net.Pipe()
 
