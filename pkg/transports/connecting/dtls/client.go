@@ -95,40 +95,61 @@ func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 
 func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 	dtlsDialer := func(ctx context.Context, network, localAddr, address string) (net.Conn, error) {
-		laddr := &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: t.privPort}
-		err := openUDP(ctx, laddr.String(), address, dialer)
-		if err != nil {
-			return nil, fmt.Errorf("error opening UDP port from gateway: %v", err)
-		}
-
 		// Create a context that will automatically cancel after 5 seconds or when the existing context is cancelled, whichever comes first.
 		parentctx, parentcancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer parentcancel()
 		ctxtimeout, cancel := context.WithTimeout(parentctx, 5*time.Second)
 		defer cancel()
 
-		udpConn, err := dialer(ctxtimeout, "udp", laddr.String(), address)
+		conn, err := t.listen(ctxtimeout, dialer, address)
 		if err != nil {
-			return nil, fmt.Errorf("error dialing udp: %v", err)
-		}
+			// fallback to dial
+			conn, errDial := t.dial(parentctx, dialer, address)
+			if err != nil {
+				return nil, fmt.Errorf("error listening: %v, error dialing: %v", err, errDial)
+			}
 
-		conn, err := dtls.ServerWithContext(ctxtimeout, udpConn, &dtls.Config{PSK: t.psk, SCTP: dtls.ClientOpen})
-		if err != nil {
-			// If an error occurred, fall back to dtls.Dial
-			udpConn, err := dialer(ctxtimeout, "udp", "", address)
-			if err != nil {
-				return nil, fmt.Errorf("error dialing udp: %v", err)
-			}
-			conn, err = dtls.ClientWithContext(parentctx, udpConn, &dtls.Config{PSK: t.psk, SCTP: dtls.ClientOpen})
-			if err != nil {
-				return nil, fmt.Errorf("error dialing as client: %v", err)
-			}
+			return conn, nil
 		}
 
 		return conn, nil
 	}
 
 	return dtlsDialer, nil
+}
+
+func (t *ClientTransport) listen(ctx context.Context, dialer dialFunc, address string) (net.Conn, error) {
+	laddr := &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: t.privPort}
+	err := openUDP(ctx, laddr.String(), address, dialer)
+	if err != nil {
+		return nil, fmt.Errorf("error opening UDP port from gateway: %v", err)
+	}
+
+	udpConn, err := dialer(ctx, "udp", laddr.String(), address)
+	if err != nil {
+		return nil, fmt.Errorf("error dialing udp: %v", err)
+	}
+
+	conn, err := dtls.ServerWithContext(ctx, udpConn, &dtls.Config{PSK: t.psk, SCTP: dtls.ClientOpen})
+	if err != nil {
+		return nil, fmt.Errorf("error listening for phantom: %v", err)
+	}
+
+	return conn, err
+}
+
+func (t *ClientTransport) dial(ctx context.Context, dialer dialFunc, address string) (net.Conn, error) {
+	udpConn, err := dialer(ctx, "udp", "", address)
+	if err != nil {
+		return nil, fmt.Errorf("error dialing udp: %v", err)
+	}
+
+	conn, err := dtls.ClientWithContext(ctx, udpConn, &dtls.Config{PSK: t.psk, SCTP: dtls.ClientOpen})
+	if err != nil {
+		return nil, fmt.Errorf("error dialing as client: %v", err)
+	}
+
+	return conn, err
 }
 
 // PrepareKeys provides an opportunity for the transport to integrate the station public key
