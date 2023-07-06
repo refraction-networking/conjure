@@ -11,6 +11,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type dialFunc func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)
@@ -56,19 +57,15 @@ func (*ClientTransport) ID() pb.TransportType {
 
 // GetParams returns a generic protobuf with any parameters from both the registration and the
 // transport.
-func (t *ClientTransport) GetParams() proto.Message {
-	return t.Parameters
+func (t *ClientTransport) GetParams() (proto.Message, error) {
+	return t.Parameters, nil
 }
 
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible.
-func (t *ClientTransport) SetParams(p any) error {
-	params, ok := p.(*pb.DTLSTransportParams)
-	if !ok {
-		return fmt.Errorf("unable to parse params")
-	}
-	t.Parameters = params
-
+//
+// DTLS transport currently has no caller controlled params
+func (*ClientTransport) SetParams(any, ...bool) error {
 	return nil
 }
 
@@ -92,7 +89,7 @@ func (*ClientTransport) DisableRegDelay() bool {
 }
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
-func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
+func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
 
@@ -140,4 +137,10 @@ func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
 	t.psk = sharedSecret
 	return nil
+}
+
+// ParseParams gives the specific transport an option to parse a generic object into parameters
+// provided by the station in the registration response during registration.
+func (ClientTransport) ParseParams(*anypb.Any) (any, error) {
+	return nil, nil
 }
