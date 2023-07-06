@@ -1,6 +1,7 @@
 package min
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -36,6 +37,10 @@ func (*ClientTransport) String() string {
 // that the station knows what transport to expect connecting to the chosen phantom.
 func (*ClientTransport) ID() pb.TransportType {
 	return pb.TransportType_Min
+}
+
+func (*ClientTransport) Prepare(dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
+	return nil
 }
 
 // GetParams returns a generic protobuf with any parameters from both the registration and the

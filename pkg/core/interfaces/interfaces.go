@@ -39,6 +39,10 @@ type Transport interface {
 	// handle, but are outside of the clients sanity checks. (see prefix transport for an example)
 	SetParams(any, ...bool) error
 
+	// Prepare lets the transport use the dialer to prepare. This is called before GetParams to let the
+	// transport prepare stuff such as nat traversal.
+	Prepare(dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error
+
 	// GetDstPort returns the destination port that the client should open the phantom connection with.
 	GetDstPort(seed []byte) (uint16, error)
 
@@ -59,6 +63,8 @@ type ConnectingTransport interface {
 	Transport
 
 	WrapDial(dialer dialFunc) (dialFunc, error)
+
+	DisableRegDelay() bool
 }
 
 // Overrides makes it possible to treat an array of overrides as a single override note that the
