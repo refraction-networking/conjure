@@ -279,6 +279,7 @@ type DecoyRegistration struct {
 	DecoyListVersion   uint32
 	regCount           int32
 	clientLibVer       uint32
+	clientPort         uint16
 
 	tunnelCount int64
 
@@ -420,11 +421,9 @@ func (reg *DecoyRegistration) GetDstPort() uint16 {
 	return reg.PhantomPort
 }
 
-// GetSrcPort returns a source port if one was registered. Currently this is not
-// supported -- for now  this is intended as plumbing for potentially supporting
-// seeded source port selection for the client.
+// GetSrcPort returns a source port if one was registered.
 func (reg *DecoyRegistration) GetSrcPort() uint16 {
-	return 0
+	return reg.clientPort
 }
 
 type regStatus int
@@ -830,4 +829,21 @@ func clearDetector() {
 
 	ctx := context.Background()
 	client.Publish(ctx, DETECTOR_REG_CHANNEL, string(s2d))
+}
+
+// GetConnectingTransports Returns a map of the connecting transport types to their transports. This return value
+// can be mutated freely.
+func (regManager *RegistrationManager) GetConnectingTransports() map[pb.TransportType]ConnectingTransport {
+	m := make(map[pb.TransportType]ConnectingTransport)
+	regManager.registeredDecoys.m.RLock()
+	defer regManager.registeredDecoys.m.RUnlock()
+
+	for k, v := range regManager.registeredDecoys.transports {
+		ct, ok := v.(ConnectingTransport)
+		if ok {
+			m[k] = ct
+		}
+	}
+
+	return m
 }

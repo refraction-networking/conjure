@@ -132,7 +132,7 @@ build_or_rebuild_iptables filter CJ_INPUT INPUT
 # The tunnel numbers do not match the core index per the OS,
 # but instead match the count of cores being used by conjure.
 echo "Setting up devices tun{${OFFSET}..$((OFFSET + CORE_COUNT -1 ))}, adding rules for them, and turning off RP filters."
-for CORE in `seq $OFFSET $((OFFSET + CORE_COUNT -1 ))`
+for CORE in `seq $OFFSET $((OFFSET + CORE_COUNT -1 +1 ))` # +1 for connecting transport DNAT injection
 do
     tun_setup_fn ${CORE} ${rule_table_name}
 done

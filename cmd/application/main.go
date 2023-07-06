@@ -12,6 +12,7 @@ import (
 
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/transports/connecting/dtls"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
@@ -32,6 +33,12 @@ func main() {
 	var zmqAddress string
 	flag.StringVar(&zmqAddress, "zmq-address", "ipc://@zmq-proxy", "Address of ZMQ proxy")
 	flag.Parse()
+
+	dtlsTransport, err := dtls.NewTransport()
+	if err != nil {
+		log.Fatalf("failed to setup dtls: %v", err)
+	}
+	enabledTransports[pb.TransportType_DTLS] = dtlsTransport
 
 	// Init stats
 	cj.Stat()
