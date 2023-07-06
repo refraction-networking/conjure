@@ -191,6 +191,10 @@ message WebRTCSignal {
     required WebRTCSDP sdp = 2;
 }
 
+message DTLSTransportParams {
+    optional uint32 src_port = 1;
+}
+
 message StationToClient {
     // Should accompany (at least) SESSION_INIT and CONFIRM_RECONNECT.
     optional uint32 protocol_version = 1;

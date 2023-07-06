@@ -1,0 +1,143 @@
+package dtls
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net"
+	"time"
+
+	"github.com/refraction-networking/conjure/pkg/dtls"
+	"github.com/refraction-networking/conjure/pkg/transports"
+	pb "github.com/refraction-networking/conjure/proto"
+	"google.golang.org/protobuf/proto"
+)
+
+type dialFunc func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)
+
+const (
+	// port range boundaries for min when randomizing
+	portRangeMin      = 1024
+	portRangeMax      = 65535
+	defaultPort       = 443
+	defaultSTUNServer = "stun.voip.blackberry.com:3478"
+)
+
+// ClientTransport implements the client side transport interface for the DTLS transport. The
+// significant difference is that there is an instance of this structure per client session, where
+// the station side Transport struct has one instance to be re-used for all sessions.
+type ClientTransport struct {
+	// Parameters are fields that will be shared with the station in the registration
+	Parameters *pb.DTLSTransportParams
+
+	// // state tracks fields internal to the registrar that survive for the lifetime
+	// // of the transport session without being shared - i.e. local derived keys.
+	// state any
+	privPort int
+	pubPort  int
+	psk      []byte
+}
+
+// Name returns a string identifier for the Transport for logging
+func (*ClientTransport) Name() string {
+	return "dtls"
+}
+
+// String returns a string identifier for the Transport for logging (including string formatters)
+func (*ClientTransport) String() string {
+	return "dtls"
+}
+
+// ID provides an identifier that will be sent to the conjure station during the registration so
+// that the station knows what transport to expect connecting to the chosen phantom.
+func (*ClientTransport) ID() pb.TransportType {
+	return pb.TransportType_DTLS
+}
+
+// GetParams returns a generic protobuf with any parameters from both the registration and the
+// transport.
+func (t *ClientTransport) GetParams() proto.Message {
+	return t.Parameters
+}
+
+// SetParams allows the caller to set parameters associated with the transport, returning an
+// error if the provided generic message is not compatible.
+func (t *ClientTransport) SetParams(p any) error {
+	params, ok := p.(*pb.DTLSTransportParams)
+	if !ok {
+		return fmt.Errorf("unable to parse params")
+	}
+	t.Parameters = params
+
+	return nil
+}
+
+// Prepare lets the transport use the dialer to prepare. This is called before GetParams to let the
+// transport prepare stuff such as nat traversal.
+func (t *ClientTransport) Prepare(dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
+	privePort, pubPort, err := publicAddr(defaultSTUNServer, dialer)
+	if err != nil {
+		return fmt.Errorf("error finding public port: %v", err)
+	}
+
+	t.privPort = privePort
+	t.pubPort = pubPort
+	t.Parameters = &pb.DTLSTransportParams{SrcPort: proto.Uint32(uint32(pubPort))}
+
+	return nil
+}
+
+func (*ClientTransport) DisableRegDelay() bool {
+	return true
+}
+
+// GetDstPort returns the destination port that the client should open the phantom connection to
+func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
+	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
+}
+
+func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
+	dtlsDialer := func(ctx context.Context, network, localAddr, address string) (net.Conn, error) {
+		laddr := &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: t.privPort}
+		err := openUDP(ctx, laddr.String(), address, dialer)
+		if err != nil {
+			return nil, fmt.Errorf("error opening UDP port from gateway: %v", err)
+		}
+
+		// Create a context that will automatically cancel after 5 seconds or when the existing context is cancelled, whichever comes first.
+		parentctx, parentcancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer parentcancel()
+		ctxtimeout, cancel := context.WithTimeout(parentctx, 5*time.Second)
+		defer cancel()
+
+		udpConn, err := dialer(ctxtimeout, "udp", laddr.String(), address)
+		if err != nil {
+			return nil, fmt.Errorf("error dialing udp: %v", err)
+		}
+
+		conn, err := dtls.ServerWithContext(ctxtimeout, udpConn, &dtls.Config{PSK: t.psk, SCTP: dtls.ClientOpen})
+		if err != nil {
+			// If an error occurred, fall back to dtls.Dial
+			udpConn, err := dialer(ctxtimeout, "udp", "", address)
+			if err != nil {
+				return nil, fmt.Errorf("error dialing udp: %v", err)
+			}
+			conn, err = dtls.ClientWithContext(parentctx, udpConn, &dtls.Config{PSK: t.psk, SCTP: dtls.ClientOpen})
+			if err != nil {
+				return nil, fmt.Errorf("error dialing as client: %v", err)
+			}
+		}
+
+		return conn, nil
+	}
+
+	return dtlsDialer, nil
+}
+
+// PrepareKeys provides an opportunity for the transport to integrate the station public key
+// as well as bytes from the deterministic random generator associated with the registration
+// that this ClientTransport is attached t
+func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+	t.psk = sharedSecret
+	return nil
+}
