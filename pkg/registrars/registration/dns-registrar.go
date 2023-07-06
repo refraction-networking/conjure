@@ -193,8 +193,6 @@ func (r *DNSRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession)
 // Register prepares and sends the registration request.
 func (r *DNSRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
 
-	defer sleepWithContext(ctx, r.connectionDelay)
-
 	if r.bidirectional {
 		return r.registerBidirectional(cjSession)
 	}
@@ -232,13 +230,4 @@ func getPublicIp(server string) ([]byte, error) {
 	}
 
 	return ip.To4(), nil
-}
-
-func sleepWithContext(ctx context.Context, duration time.Duration) {
-	timer := time.NewTimer(duration)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-	case <-ctx.Done():
-	}
 }

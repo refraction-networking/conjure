@@ -101,10 +101,5 @@ func (r DecoyRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context
 		return nil, tapdance.NewRegError(tapdance.Unreachable, "All decoys failed to register -- Dial Unreachable")
 	}
 
-	// randomized sleeping here to break the intraflow signal
-	toSleep := reg.GetRandomDuration(3000, 212, 3449)
-	logger.Debugf("Successfully sent registrations, sleeping for: %v", toSleep)
-	sleepWithContext(ctx, toSleep)
-
 	return reg, nil
 }
