@@ -15,7 +15,7 @@ import (
 	utls "github.com/refraction-networking/utls"
 )
 
-type dialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
+type dialFunc = func(ctx context.Context, network, addr string) (net.Conn, error)
 
 type Requester struct {
 	// transport is the underlying transport used for the dns request
