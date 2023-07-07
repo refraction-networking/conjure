@@ -363,6 +363,7 @@ type statCounts struct {
 	numDiscardToClose   int64 // Number of times connections have moved from Discard to Close
 
 	totalTransitions int64 // Number of all transitions tracked
+	numConns         int64 // Number of connections from this connManager
 }
 
 type asnCounts struct {
@@ -400,7 +401,7 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 	for asn, counts := range c.geoIPMap {
 		var tt float64 = math.Max(1, float64(atomic.LoadInt64(&counts.totalTransitions)))
 
-		logger.Infof("conn-stats-verbose: %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f",
+		logger.Infof("conn-stats-verbose: %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f",
 			asn,
 			counts.cc,
 			atomic.LoadInt64(&counts.numCreatedToDiscard),
@@ -422,6 +423,7 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 			atomic.LoadInt64(&counts.numDiscardToError),
 			atomic.LoadInt64(&counts.numDiscardToClose),
 			atomic.LoadInt64(&counts.totalTransitions),
+			atomic.LoadInt64(&c.numConns),
 			float64(atomic.LoadInt64(&counts.numCreatedToDiscard))/tt,
 			float64(atomic.LoadInt64(&counts.numCreatedToCheck))/tt,
 			float64(atomic.LoadInt64(&counts.numCreatedToReset))/tt,
@@ -471,6 +473,7 @@ func (c *connStats) Reset() {
 	atomic.StoreInt64(&c.numDiscardToError, 0)
 	atomic.StoreInt64(&c.numDiscardToClose, 0)
 	atomic.StoreInt64(&c.totalTransitions, 0)
+	atomic.StoreInt64(&c.numConns, 0)
 
 	c.geoIPMap = make(map[uint]*asnCounts)
 
@@ -480,6 +483,7 @@ func (c *connStats) Reset() {
 func (c *connStats) addCreated(asn uint, cc string) {
 	// Overall tracking
 	atomic.AddInt64(&c.numCreated, 1)
+	atomic.AddInt64(&c.numConns, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
