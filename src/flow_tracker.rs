@@ -74,24 +74,45 @@ impl Flow {
         }
     }
 
-    pub fn new_udp(ip_pkt: &IpPacket, udp_pkt: &UdpPacket) -> Flow {
-        match ip_pkt {
-            IpPacket::V4(pkt) => Flow {
+pub fn new_udp(ip_pkt: &IpPacket, udp_pkt: &UdpPacket) -> Flow {
+    match ip_pkt {
+        IpPacket::V4(pkt) => {
+            let flow = Flow {
                 src_ip: IpAddr::V4(pkt.get_source()),
                 dst_ip: IpAddr::V4(pkt.get_destination()),
                 src_port: udp_pkt.get_source(),
                 dst_port: udp_pkt.get_destination(),
                 proto: IpNextHeaderProtocols::Udp,
-            },
-            IpPacket::V6(pkt) => Flow {
+            };
+            debug!(
+                "UdpPacket: source_ip: {}, destination_ip: {}, source_port: {}, destination_port: {}",
+                flow.src_ip, 
+                flow.dst_ip,
+                flow.src_port,
+                flow.dst_port
+            );
+            flow
+        },
+        IpPacket::V6(pkt) => {
+            let flow = Flow {
                 src_ip: IpAddr::V6(pkt.get_source()),
                 dst_ip: IpAddr::V6(pkt.get_destination()),
                 src_port: udp_pkt.get_source(),
                 dst_port: udp_pkt.get_destination(),
                 proto: IpNextHeaderProtocols::Udp,
-            },
-        }
+            };
+            debug!(
+                "UdpPacket: source_ip: {}, destination_ip: {}, source_port: {}, destination_port: {}",
+                flow.src_ip, 
+                flow.dst_ip,
+                flow.src_port,
+                flow.dst_port
+            );
+            flow
+        },
     }
+}
+
 
     pub fn from_parts(
         sip: IpAddr,
