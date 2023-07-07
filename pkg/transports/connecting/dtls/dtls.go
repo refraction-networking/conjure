@@ -107,8 +107,6 @@ func (t *Transport) Connect(ctx context.Context, reg *dd.DecoyRegistration) (net
 		select {
 		case conn := <-connCh:
 			if conn != nil {
-				fmt.Printf("**********returning connj****************\n")
-
 				return conn, nil // success, so return the connection
 			}
 		case err := <-errCh:

@@ -76,7 +76,7 @@ func openSCTP(conn net.Conn) (net.Conn, error) {
 
 	sctpConn := newSCTPConn(sctpStream, conn)
 
-	err = heartbeatClient(sctpConn, nil)
+	err = heartbeatClient(sctpConn, &heartbeatConfig{Interval: 10 * time.Second})
 	if err != nil {
 		return nil, fmt.Errorf("error opening heartbeat client: %v", err)
 	}
