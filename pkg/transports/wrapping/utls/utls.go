@@ -10,9 +10,10 @@ import (
 	"net"
 	"regexp"
 
-	dd "github.com/refraction-networking/conjure/application/lib"
-	"github.com/refraction-networking/conjure/application/transports"
-	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"github.com/refraction-networking/conjure/pkg/core"
+	dd "github.com/refraction-networking/conjure/pkg/station/lib"
+	"github.com/refraction-networking/conjure/pkg/transports"
+	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -58,7 +59,7 @@ func (Transport) LogPrefix() string { return "UTLS" }
 // identifier should be unique for each registration on a given phantom;
 // registrations on different phantoms can have the same identifier.
 func (Transport) GetIdentifier(d *dd.DecoyRegistration) string {
-	return string(d.Keys.ConjureHMAC(hmacString))
+	return string(core.ConjureHMAC(d.Keys.SharedSecret, hmacString))
 }
 
 // GetProto returns the next layer protocol that the transport uses. Implements

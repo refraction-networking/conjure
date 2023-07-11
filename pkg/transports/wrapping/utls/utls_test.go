@@ -21,10 +21,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	cj "github.com/refraction-networking/conjure/application/lib"
-	"github.com/refraction-networking/conjure/application/transports"
-	"github.com/refraction-networking/conjure/application/transports/wrapping/internal/tests"
-	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"github.com/refraction-networking/conjure/pkg/core"
+	cj "github.com/refraction-networking/conjure/pkg/station/lib"
+	"github.com/refraction-networking/conjure/pkg/transports"
+	"github.com/refraction-networking/conjure/pkg/transports/wrapping/internal/tests"
+	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
 )
 
@@ -34,7 +35,7 @@ func connect(conn net.Conn, reg *cj.DecoyRegistration) (net.Conn, error) {
 	config := tls.Config{ServerName: "", InsecureSkipVerify: true}
 
 	uTLSConn := tls.UClient(conn, &config, helloID)
-	hmacID := reg.Keys.ConjureHMAC(hmacString)
+	hmacID := core.ConjureHMAC(reg.Keys.SharedSecret, hmacString)
 
 	newRand := make([]byte, 32)
 	_, err := rand.Read(newRand)
@@ -97,7 +98,7 @@ func TestByteRegex(t *testing.T) {
 }
 
 func TestSuccessfulWrap(t *testing.T) {
-	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/pkg/lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	var transport Transport
@@ -156,7 +157,7 @@ func TestSuccessfulWrap(t *testing.T) {
 func TestUnsuccessfulWrap(t *testing.T) {
 	var transport Transport
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, nil, randomizeDstPortMinVersion)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -183,7 +184,7 @@ func TestTryAgain(t *testing.T) {
 	var transport Transport
 	var err error
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, nil, randomizeDstPortMinVersion)
 	defer c2p.Close()
 	defer sfp.Close()
 
@@ -212,12 +213,12 @@ func TestTryAgain(t *testing.T) {
 }
 
 func TestSuccessfulWrapLargeMessage(t *testing.T) {
-	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/pkg/lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	var transport Transport
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, nil, randomizeDstPortMinVersion)
 	defer c2p.Close()
 	defer sfp.Close()
 	require.NotNil(t, reg)
@@ -296,7 +297,7 @@ func TestTryParamsToDstPort(t *testing.T) {
 }
 
 func TestUtlsSessionResumption(t *testing.T) {
-	// testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/application/lib/test/phantom_subnets.toml"
+	// testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/pkg/lib/test/phantom_subnets.toml"
 	// os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	// var transport Transport

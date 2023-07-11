@@ -19,7 +19,7 @@ require (
 	github.com/pelletier/go-toml v1.9.5
 	github.com/pion/stun v0.3.5
 	github.com/refraction-networking/gotapdance v1.5.5
-	github.com/refraction-networking/utls v1.2.0
+	github.com/refraction-networking/utls v1.3.2
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.1
 	gitlab.com/yawning/obfs4.git v0.0.0-20230519154740-645026c2ada4
@@ -31,13 +31,15 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.0.0 // indirect
-	github.com/andybalholm/brotli v1.0.4 // indirect
+	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/flynn/noise v1.0.0 // indirect
+	github.com/gaukas/godicttls v0.0.3 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/klauspost/compress v1.15.12 // indirect
+	github.com/klauspost/compress v1.16.5 // indirect
 	github.com/oschwald/maxminddb-golang v1.10.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sergeyfrolov/bsbuffer v0.0.0-20180903213811-94e85abb8507 // indirect

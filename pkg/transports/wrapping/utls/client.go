@@ -3,8 +3,8 @@ package utls
 import (
 	"fmt"
 
-	"github.com/refraction-networking/conjure/application/transports"
-	pb "github.com/refraction-networking/gotapdance/protobuf"
+	"github.com/refraction-networking/conjure/pkg/transports"
+	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
 )
 

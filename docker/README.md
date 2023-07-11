@@ -154,7 +154,7 @@ CJ_IP4_ADDR=127.0.0.1
 CJ_IP6_ADDR=[::1]
 
 # application
-CJ_STATION_CONFIG=/var/lib/conjure/application_config.toml
+CJ_STATION_CONFIG=/var/lib/conjure/app_config.toml
 PHANTOM_SUBNET_LOCATION=/var/lib/conjure/phantom_subnets.toml
 
 # registration server
@@ -269,4 +269,4 @@ For detailed and up-to-date installation instructions refer to official ntop doc
 
 - Encountered err when creating Reg: Failed to select phantom IP address: generation number not recognized
   - Make sure conjure/docker/phantom_subnets.toml contains the client's generations
-  - Can be caused by clients using API trying to connect, since API is enabled by default. Can be disabled by removing `[[connect_sockets]]` entry for the API from `conjure/application/config.toml`
+  - Can be caused by clients using API trying to connect, since API is enabled by default. Can be disabled by removing `[[connect_sockets]]` entry for the API from `cmd/application/app_config.toml`
