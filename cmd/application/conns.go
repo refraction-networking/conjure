@@ -417,7 +417,7 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 	for asn, counts := range c.geoIPMap {
 		var tt float64 = math.Max(1, float64(atomic.LoadInt64(&counts.totalTransitions)))
 
-		logger.Infof("conn-stats-verbose: %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d %d",
+		logger.Infof("conn-stats-verbose: %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d %d %d %d",
 			asn,
 			counts.cc,
 			atomic.LoadInt64(&counts.numCreatedToDiscard),
@@ -458,7 +458,9 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 			float64(atomic.LoadInt64(&counts.numDiscardToError))/tt,
 			float64(atomic.LoadInt64(&counts.numDiscardToClose))/tt,
 			atomic.LoadInt64(&c.numNewConns),
+			atomic.LoadInt64(&counts.numNewConns),
 			atomic.LoadInt64(&c.numResolved),
+			atomic.LoadInt64(&counts.numResolved),
 		)
 	}
 
@@ -519,6 +521,7 @@ func (c *connStats) addCreated(asn uint, cc string) {
 			c.geoIPMap[asn].cc = cc
 		}
 		atomic.AddInt64(&c.geoIPMap[asn].numCreated, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numNewConns, 1)
 	}
 }
 
@@ -574,6 +577,7 @@ func (c *connStats) createdToReset(asn uint, cc string) {
 	atomic.AddInt64(&c.numReset, 1)
 	atomic.AddInt64(&c.numCreatedToReset, 1)
 	atomic.AddInt64(&c.totalTransitions, 1)
+	atomic.AddInt64(&c.numResolved, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -598,6 +602,7 @@ func (c *connStats) createdToTimeout(asn uint, cc string) {
 	atomic.AddInt64(&c.numTimeout, 1)
 	atomic.AddInt64(&c.numCreatedToTimeout, 1)
 	atomic.AddInt64(&c.totalTransitions, 1)
+	atomic.AddInt64(&c.numResolved, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -622,6 +627,7 @@ func (c *connStats) createdToError(asn uint, cc string) {
 	atomic.AddInt64(&c.numErr, 1)
 	atomic.AddInt64(&c.numCreatedToError, 1)
 	atomic.AddInt64(&c.totalTransitions, 1)
+	atomic.AddInt64(&c.numResolved, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -669,6 +675,7 @@ func (c *connStats) readToTimeout(asn uint, cc string) {
 	atomic.AddInt64(&c.numTimeout, 1)
 	atomic.AddInt64(&c.numReadToTimeout, 1)
 	atomic.AddInt64(&c.totalTransitions, 1)
+	atomic.AddInt64(&c.numResolved, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -693,6 +700,7 @@ func (c *connStats) readToReset(asn uint, cc string) {
 	atomic.AddInt64(&c.numReset, 1)
 	atomic.AddInt64(&c.numReadToReset, 1)
 	atomic.AddInt64(&c.totalTransitions, 1)
+	atomic.AddInt64(&c.numResolved, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -717,6 +725,7 @@ func (c *connStats) readToError(asn uint, cc string) {
 	atomic.AddInt64(&c.numErr, 1)
 	atomic.AddInt64(&c.numReadToError, 1)
 	atomic.AddInt64(&c.totalTransitions, 1)
+	atomic.AddInt64(&c.numResolved, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -787,6 +796,7 @@ func (c *connStats) checkToFound(asn uint, cc string) {
 	atomic.AddInt64(&c.numFound, 1)
 	atomic.AddInt64(&c.numCheckToFound, 1)
 	atomic.AddInt64(&c.totalTransitions, 1)
+	atomic.AddInt64(&c.numResolved, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -811,6 +821,7 @@ func (c *connStats) checkToError(asn uint, cc string) {
 	atomic.AddInt64(&c.numErr, 1)
 	atomic.AddInt64(&c.numCheckToError, 1)
 	atomic.AddInt64(&c.totalTransitions, 1)
+	atomic.AddInt64(&c.numResolved, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -858,6 +869,7 @@ func (c *connStats) discardToReset(asn uint, cc string) {
 	atomic.AddInt64(&c.numReset, 1)
 	atomic.AddInt64(&c.numDiscardToReset, 1)
 	atomic.AddInt64(&c.totalTransitions, 1)
+	atomic.AddInt64(&c.numResolved, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -882,6 +894,7 @@ func (c *connStats) discardToTimeout(asn uint, cc string) {
 	atomic.AddInt64(&c.numTimeout, 1)
 	atomic.AddInt64(&c.numDiscardToTimeout, 1)
 	atomic.AddInt64(&c.totalTransitions, 1)
+	atomic.AddInt64(&c.numResolved, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -906,6 +919,7 @@ func (c *connStats) discardToError(asn uint, cc string) {
 	atomic.AddInt64(&c.numErr, 1)
 	atomic.AddInt64(&c.numDiscardToError, 1)
 	atomic.AddInt64(&c.totalTransitions, 1)
+	atomic.AddInt64(&c.numResolved, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -930,6 +944,7 @@ func (c *connStats) discardToClose(asn uint, cc string) {
 	atomic.AddInt64(&c.numClosed, 1)
 	atomic.AddInt64(&c.numDiscardToClose, 1)
 	atomic.AddInt64(&c.totalTransitions, 1)
+	atomic.AddInt64(&c.numResolved, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
