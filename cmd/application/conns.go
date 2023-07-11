@@ -190,11 +190,12 @@ func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clie
 		// buffer fill up and stopped ACKing after 8192 + (buffer size)
 		// bytes for obfs4, as an example, that would be quite clear.
 		_, err = io.Copy(io.Discard, clientConn)
-		if errors.Is(err, syscall.ECONNRESET) {
+		err = generalizeErr(err)
+		if errors.Is(err, errConnReset) {
 			// log reset error without client ip
 			logger.Errorln("error occurred discarding data (read 0 B): rst")
 			cm.discardToReset(asn, cc)
-		} else if et, ok := err.(net.Error); ok && et.Timeout() {
+		} else if errors.Is(err, errConnTimeout) {
 			logger.Errorln("error occurred discarding data (read 0 B): timeout")
 			cm.discardToTimeout(asn, cc)
 		} else if err != nil {
@@ -222,11 +223,12 @@ readLoop:
 			cj.Stat().ConnErr()
 
 			_, err = io.Copy(io.Discard, clientConn)
-			if errors.Is(err, syscall.ECONNRESET) {
+			err = generalizeErr(err)
+			if errors.Is(err, errConnReset) {
 				// log reset error without client ip
 				logger.Errorf("error occurred discarding data (read %d B): rst\n", received.Len())
 				cm.discardToReset(asn, cc)
-			} else if et, ok := err.(net.Error); ok && et.Timeout() {
+			} else if errors.Is(err, errConnTimeout) {
 				logger.Errorf("error occurred discarding data (read %d B): timeout\n", received.Len())
 				cm.discardToTimeout(asn, cc)
 			} else if err != nil {
@@ -241,15 +243,16 @@ readLoop:
 		}
 
 		n, err := clientConn.Read(buf[:])
+		err = generalizeErr(err)
 		if err != nil {
-			if errors.Is(err, syscall.ECONNRESET) {
+			if errors.Is(err, errConnReset) {
 				logger.Errorf("got error while reading from connection, giving up after %d bytes: rst\n", received.Len()+n)
 				if received.Len() == 0 {
 					cm.createdToReset(asn, cc)
 				} else {
 					cm.readToReset(asn, cc)
 				}
-			} else if et, ok := err.(net.Error); ok && et.Timeout() {
+			} else if errors.Is(err, errConnTimeout) {
 				logger.Errorf("got error while reading from connection, giving up after %d bytes: timeout\n", received.Len()+n)
 				if received.Len() == 0 {
 					cm.createdToTimeout(asn, cc)
@@ -280,6 +283,7 @@ readLoop:
 	transports:
 		for i, t := range possibleTransports {
 			reg, wrapped, err = t.WrapConnection(&received, clientConn, originalDstIP, regManager)
+			err = generalizeErr(err)
 			if errors.Is(err, transports.ErrTryAgain) {
 				continue transports
 			} else if errors.Is(err, transports.ErrNotTransport) {
@@ -364,7 +368,8 @@ type statCounts struct {
 	numDiscardToClose   int64 // Number of times connections have moved from Discard to Close
 
 	totalTransitions int64 // Number of all transitions tracked
-	numConns         int64 // Number of connections from this connManager
+	numNewConns      int64 // Number new connections potentially handshaking
+	numResolved      int64 // Number connections that have reached a terminal state.
 }
 
 type asnCounts struct {
@@ -386,7 +391,12 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 	// prevent div by 0 if thread starvation happens
 	var epochDur float64 = math.Max(float64(time.Since(c.epochStart).Milliseconds()), 1)
 
-	logger.Infof("conn-stats: %d %d %d %d %d %.3f %d %.3f %d %.3f %d %.3f %d %.3f",
+	numASNs := 0
+	if c.geoIPMap != nil {
+		numASNs = len(c.geoIPMap)
+	}
+
+	logger.Infof("conn-stats: %d %d %d %d %d %.3f %d %.3f %d %.3f %d %.3f %d %.3f %d",
 		atomic.LoadInt64(&c.numCreated),
 		atomic.LoadInt64(&c.numReading),
 		atomic.LoadInt64(&c.numChecking),
@@ -401,12 +411,13 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 		1000*float64(atomic.LoadInt64(&c.numErr))/epochDur,
 		atomic.LoadInt64(&c.numClosed),
 		1000*float64(atomic.LoadInt64(&c.numClosed))/epochDur,
+		numASNs,
 	)
 
 	for asn, counts := range c.geoIPMap {
 		var tt float64 = math.Max(1, float64(atomic.LoadInt64(&counts.totalTransitions)))
 
-		logger.Infof("conn-stats-verbose: %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f",
+		logger.Infof("conn-stats-verbose: %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d %d",
 			asn,
 			counts.cc,
 			atomic.LoadInt64(&counts.numCreatedToDiscard),
@@ -428,7 +439,6 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 			atomic.LoadInt64(&counts.numDiscardToError),
 			atomic.LoadInt64(&counts.numDiscardToClose),
 			atomic.LoadInt64(&counts.totalTransitions),
-			atomic.LoadInt64(&c.numConns),
 			float64(atomic.LoadInt64(&counts.numCreatedToDiscard))/tt,
 			float64(atomic.LoadInt64(&counts.numCreatedToCheck))/tt,
 			float64(atomic.LoadInt64(&counts.numCreatedToReset))/tt,
@@ -447,6 +457,8 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 			float64(atomic.LoadInt64(&counts.numDiscardToTimeout))/tt,
 			float64(atomic.LoadInt64(&counts.numDiscardToError))/tt,
 			float64(atomic.LoadInt64(&counts.numDiscardToClose))/tt,
+			atomic.LoadInt64(&c.numNewConns),
+			atomic.LoadInt64(&c.numResolved),
 		)
 	}
 
@@ -484,7 +496,8 @@ func (c *connStats) reset() {
 	atomic.StoreInt64(&c.numDiscardToError, 0)
 	atomic.StoreInt64(&c.numDiscardToClose, 0)
 	atomic.StoreInt64(&c.totalTransitions, 0)
-	atomic.StoreInt64(&c.numConns, 0)
+	atomic.StoreInt64(&c.numNewConns, 0)
+	atomic.StoreInt64(&c.numResolved, 0)
 
 	c.geoIPMap = make(map[uint]*asnCounts)
 
@@ -494,7 +507,7 @@ func (c *connStats) reset() {
 func (c *connStats) addCreated(asn uint, cc string) {
 	// Overall tracking
 	atomic.AddInt64(&c.numCreated, 1)
-	atomic.AddInt64(&c.numConns, 1)
+	atomic.AddInt64(&c.numNewConns, 1)
 
 	// GeoIP tracking
 	if isValidCC(cc) {
@@ -575,6 +588,7 @@ func (c *connStats) createdToReset(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToReset, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numResolved, 1)
 	}
 }
 
@@ -598,6 +612,7 @@ func (c *connStats) createdToTimeout(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToTimeout, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numResolved, 1)
 	}
 }
 
@@ -621,6 +636,7 @@ func (c *connStats) createdToError(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToError, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numResolved, 1)
 	}
 }
 
@@ -667,6 +683,7 @@ func (c *connStats) readToTimeout(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numReadToTimeout, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numResolved, 1)
 	}
 }
 
@@ -690,6 +707,7 @@ func (c *connStats) readToReset(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numReadToReset, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numResolved, 1)
 	}
 }
 
@@ -713,6 +731,7 @@ func (c *connStats) readToError(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numReadToError, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numResolved, 1)
 	}
 }
 
@@ -782,6 +801,7 @@ func (c *connStats) checkToFound(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numFound, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCheckToFound, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numResolved, 1)
 	}
 }
 
@@ -805,6 +825,7 @@ func (c *connStats) checkToError(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCheckToError, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numResolved, 1)
 	}
 }
 
@@ -851,6 +872,7 @@ func (c *connStats) discardToReset(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numReset, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numDiscardToReset, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numResolved, 1)
 	}
 }
 
@@ -874,6 +896,7 @@ func (c *connStats) discardToTimeout(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numTimeout, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numDiscardToTimeout, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numResolved, 1)
 	}
 }
 
@@ -897,6 +920,7 @@ func (c *connStats) discardToError(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numErr, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numDiscardToError, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numResolved, 1)
 	}
 }
 
@@ -920,9 +944,55 @@ func (c *connStats) discardToClose(asn uint, cc string) {
 		atomic.AddInt64(&c.geoIPMap[asn].numClosed, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].numDiscardToClose, 1)
 		atomic.AddInt64(&c.geoIPMap[asn].totalTransitions, 1)
+		atomic.AddInt64(&c.geoIPMap[asn].numResolved, 1)
 	}
 }
 
 func isValidCC(cc string) bool {
 	return cc != ""
+}
+
+var (
+	// errConnReset replaces the reset error in the halfpipe to remove ips and extra bytes
+	errConnReset = errors.New("rst")
+
+	// errConnTimeout replaces the ip.timeout error in the halfpipe to remove ips and extra bytes
+	errConnTimeout = errors.New("timeout")
+
+	// replaces refused error to prevent client IP logging
+	errConnRefused = errors.New("refused")
+
+	// errUnreachable replaces unreachable error to prevent client IP logging
+	errUnreachable = errors.New("unreachable")
+
+	// errConnAborted replaces aborted error to prevent client IP logging
+	errConnAborted = errors.New("aborted")
+)
+
+func generalizeErr(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case
+		errors.Is(err, net.ErrClosed), // Errors indicating operation on something already closed.
+		errors.Is(err, io.EOF),
+		errors.Is(err, syscall.EPIPE),
+		errors.Is(err, os.ErrClosed):
+		return nil
+	case errors.Is(err, syscall.ECONNRESET):
+		return errConnReset
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return errConnRefused
+	case errors.Is(err, syscall.ECONNABORTED):
+		return errConnAborted
+	case errors.Is(err, syscall.EHOSTUNREACH):
+		return errUnreachable
+	default:
+		if errN, ok := err.(net.Error); ok && errN.Timeout() {
+			return errConnTimeout
+		}
+	}
+
+	// if it is not a well known error, return it
+	return err
 }
