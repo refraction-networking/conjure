@@ -22,10 +22,6 @@ type ClientTransport struct {
 	connectTag []byte
 }
 
-const (
-	HMACString = "MinTrasportHMACString"
-)
-
 // Name returns a string identifier for the Transport for logging
 func (*ClientTransport) Name() string {
 	return "min"
@@ -96,6 +92,6 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 // as well as bytes from the deterministic random generator associated with the registration
 // that this ClientTransport is attached t
 func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
-	t.connectTag = core.ConjureHMAC(sharedSecret, HMACString)
+	t.connectTag = core.ConjureHMAC(sharedSecret, hmacString)
 	return nil
 }

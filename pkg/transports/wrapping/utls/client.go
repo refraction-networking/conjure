@@ -2,6 +2,8 @@ package utls
 
 import (
 	"fmt"
+	"io"
+	"net"
 
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
@@ -63,17 +65,14 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
 
-// // Connect creates the connection to the phantom address negotiated in the registration phase of
-// // Conjure connection establishment.
-// func (t *ClientTransport) Connect(ctx context.Context, reg *cj.ConjureReg) (net.Conn, error) {
-// 	// conn, err := reg.getFirstConnection(ctx, reg.TcpDialer, phantoms)
-// 	// if err != nil {
-// 	// 	return nil, err
-// 	// }
+// PrepareKeys provides an opportunity for the transport to integrate the station public key
+// as well as bytes from the deterministic random generator associated with the registration
+// that this ClientTransport is attached to.
+func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+	return nil
+}
 
-// 	// // Send hmac(seed, str) bytes to indicate to station (min transport)
-// 	// connectTag := conjureHMAC(reg.keys.SharedSecret, "MinTrasportHMACString")
-// 	// conn.Write(connectTag)
-// 	// return conn, nil
-// 	return nil, nil
-// }
+// WrapConn returns a net.Conn connection given a context and ConjureReg
+func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
+	return nil, nil
+}

@@ -2,11 +2,7 @@ package utls
 
 import (
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -21,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	"github.com/refraction-networking/conjure/internal/conjurepath"
 	"github.com/refraction-networking/conjure/pkg/core"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
@@ -28,6 +25,8 @@ import (
 	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
 )
+
+var testSubnetPath = conjurepath.Root + "/pkg/transports/wrapping/internal/tests/phantom_subnets.toml"
 
 func connect(conn net.Conn, reg *cj.DecoyRegistration) (net.Conn, error) {
 	// TODO: put these in params
@@ -98,12 +97,11 @@ func TestByteRegex(t *testing.T) {
 }
 
 func TestSuccessfulWrap(t *testing.T) {
-	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/pkg/lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	var transport Transport
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix)
+	c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, nil, randomizeDstPortMinVersion)
 	defer c2p.Close()
 	defer sfp.Close()
 	require.NotNil(t, reg)
@@ -213,7 +211,6 @@ func TestTryAgain(t *testing.T) {
 }
 
 func TestSuccessfulWrapLargeMessage(t *testing.T) {
-	testSubnetPath := os.Getenv("GOPATH") + "/src/github.com/refraction-networking/conjure/pkg/lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	var transport Transport
@@ -312,8 +309,11 @@ func TestUtlsSessionResumption(t *testing.T) {
 	message := []byte(`test message!`)
 
 	randVal := [32]byte{}
-	rand.Read(randVal[:])
+	n, err := rand.Read(randVal[:])
+	require.Nil(t, err)
+	require.Equal(t, 32, n)
 
+	t.Log(hex.EncodeToString(randVal[:]))
 	go func() {
 
 		config := &tls.Config{
@@ -344,9 +344,7 @@ func TestUtlsSessionResumption(t *testing.T) {
 		}
 	}()
 
-	sessionTicket := []uint8(`Here goes phony session ticket: phony enough to get into ASCII range
-Ticket could be of any length, but for camouflage purposes it's better to use uniformly random contents
-and common length. See https://tlsfingerprint.io/session-tickets`)
+	sessionTicket := []uint8(`Here goes phony session ticket: phony enough to get into ASCII range. Ticket could be of any length, but for camouflage purposes it's better to use uniformly random contents and common length. See https://tlsfingerprint.io/session-tickets`)
 
 	// clientConn, err := connect(c2p, reg)
 	config := &tls.Config{ServerName: "", InsecureSkipVerify: true}
@@ -375,44 +373,44 @@ and common length. See https://tlsfingerprint.io/session-tickets`)
 	require.True(t, bytes.Equal(message, received))
 }
 
-const (
-	// ticketKeyNameLen is the number of bytes of identifier that is prepended to
-	// an encrypted session ticket in order to identify the key used to encrypt it.
-	ticketKeyNameLen = 16
-)
+// const (
+// 	// ticketKeyNameLen is the number of bytes of identifier that is prepended to
+// 	// an encrypted session ticket in order to identify the key used to encrypt it.
+// 	ticketKeyNameLen = 16
+// )
 
-// returns the session state and the marshalled sessionTicket, or an error should one occur.
-func forgeSession(secret [32]byte) (*tls.ClientSessionState, []byte, error) {
-	serverState := tls.ForgeServerState(secret)
-	stateBytes := serverState.Marshal()
+// // returns the session state and the marshalled sessionTicket, or an error should one occur.
+// func forgeSession(secret [32]byte) (*tls.ClientSessionState, []byte, error) {
+// 	serverState := tls.ForgeServerState(secret)
+// 	stateBytes := serverState.Marshal()
 
-	encrypted := make([]byte, ticketKeyNameLen+aes.BlockSize+len(stateBytes)+sha256.Size)
-	keyName := encrypted[:ticketKeyNameLen]
-	iv := encrypted[ticketKeyNameLen : ticketKeyNameLen+aes.BlockSize]
-	macBytes := encrypted[len(encrypted)-sha256.Size:]
+// 	encrypted := make([]byte, ticketKeyNameLen+aes.BlockSize+len(stateBytes)+sha256.Size)
+// 	keyName := encrypted[:ticketKeyNameLen]
+// 	iv := encrypted[ticketKeyNameLen : ticketKeyNameLen+aes.BlockSize]
+// 	macBytes := encrypted[len(encrypted)-sha256.Size:]
 
-	if _, err := io.ReadFull(c.config.rand(), iv); err != nil {
-		return nil, nil, err
-	}
+// 	if _, err := io.ReadFull(c.config.rand(), iv); err != nil {
+// 		return nil, nil, err
+// 	}
 
-	copy(keyName, key.KeyName[:])
-	block, err := aes.NewCipher(key.AesKey[:])
-	if err != nil {
-		return nil, nil, errors.New("tls: failed to create cipher while encrypting ticket: " + err.Error())
-	}
-	cipher.NewCTR(block, iv).XORKeyStream(encrypted[ticketKeyNameLen+aes.BlockSize:], stateBytes)
+// 	copy(keyName, key.KeyName[:])
+// 	block, err := aes.NewCipher(key.AesKey[:])
+// 	if err != nil {
+// 		return nil, nil, errors.New("tls: failed to create cipher while encrypting ticket: " + err.Error())
+// 	}
+// 	cipher.NewCTR(block, iv).XORKeyStream(encrypted[ticketKeyNameLen+aes.BlockSize:], stateBytes)
 
-	mac := hmac.New(sha256.New, key.HmacKey[:])
-	mac.Write(encrypted[:len(encrypted)-sha256.Size])
-	mac.Sum(macBytes[:0])
+// 	mac := hmac.New(sha256.New, key.HmacKey[:])
+// 	mac.Write(encrypted[:len(encrypted)-sha256.Size])
+// 	mac.Sum(macBytes[:0])
 
-	state := tls.MakeClientSessionState(encrypted, uint16(tls.VersionTLS12),
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		masterSecret,
-		nil, nil)
+// 	state := tls.MakeClientSessionState(encrypted, uint16(tls.VersionTLS12),
+// 		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+// 		masterSecret,
+// 		nil, nil)
 
-	return state, encrypted, nil
-}
+// 	return state, encrypted, nil
+// }
 
 // https://github.com/refraction-networking/utls/blob/c785bd3a1e8dd394d36526a2f3f118a21fc002c5/handshake_server_tls13.go#L736
 // https://github.com/refraction-networking/utls/blob/c785bd3a1e8dd394d36526a2f3f118a21fc002c5/handshake_server.go#L769
