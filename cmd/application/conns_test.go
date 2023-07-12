@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	golog "log"
 	"math"
 	"net"
@@ -127,7 +126,7 @@ func TestConnPrintAndReset(t *testing.T) {
 
 func TestConnHandleConcurrent(t *testing.T) {
 	// We don't actually care about what gets written
-	logger := log.New(ioutil.Discard, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
+	logger := log.New(io.Discard, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
 
 	testSubnetPath := conjurepath.Root + "/pkg/station/lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
@@ -194,7 +193,7 @@ func TestConnHandleConcurrent(t *testing.T) {
 
 func TestConnForceRace(t *testing.T) {
 	// We don't actually care about what gets written
-	logger := log.New(ioutil.Discard, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
+	logger := log.New(io.Discard, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
 	cs := &connStats{geoIPMap: make(map[uint]*asnCounts)}
 	exit := make(chan struct{})
 

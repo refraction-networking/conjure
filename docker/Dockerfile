@@ -59,8 +59,8 @@ RUN PATH="$HOME/.cargo/bin:$PATH" make conjure
 
 COPY go.* /opt/conjure/
 COPY cmd/ /opt/conjure/cmd
-COPY application/ /opt/conjure/application
 COPY pkg/ /opt/conjure/pkg
+COPY proto/ /opt/conjure/proto
 
 RUN PATH="$HOME/.go/bin/:$PATH" make app
 RUN PATH="$HOME/.go/bin/:$PATH" make registration-server
@@ -91,7 +91,7 @@ FROM base_pfring as conjure_det
 COPY sysconfig/conjure.conf /opt/conjure/sysconfig
 COPY scripts/ /opt/conjure/scripts
 
-RUN apt update && apt install -yq libzmq3-dev
+RUN apt update && apt install -yq libzmq3-dev iproute2
 COPY --from=dev_img /opt/conjure/bin/conjure /opt/conjure/bin/
 
 # ------------------------------------------------------------------------------
@@ -102,7 +102,7 @@ FROM ubuntu:20.04 as conjure_app
 COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
 COPY scripts/ /opt/conjure/scripts
 
-RUN apt update && apt install -yq libzmq3-dev
+RUN apt update && apt install -yq libzmq3-dev iproute2
 COPY --from=dev_img /opt/conjure/bin/application /opt/conjure/bin/
 
 # ------------------------------------------------------------------------------
@@ -113,7 +113,7 @@ FROM ubuntu:20.04 as conjure_reg
 COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
 COPY scripts/ /opt/conjure/scripts/
 
-RUN apt update && apt install -yq libzmq3-dev
+RUN apt update && apt install -yq libzmq3-dev iproute2
 COPY --from=dev_img /opt/conjure/bin/registration-server /opt/conjure/bin/
 
 # ------------------------------------------------------------------------------
@@ -124,7 +124,7 @@ FROM ubuntu:20.04 as conjure_sim
 COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
 COPY scripts/ /opt/conjure/scripts/
 
-RUN apt update && apt install -yq libzmq3-dev
+RUN apt update && apt install -yq libzmq3-dev iproute2
 COPY --from=dev_img /opt/conjure/bin/conjure-sim /opt/conjure/bin/conjure
 COPY --from=dev_img /opt/conjure/bin/registration-server /opt/conjure/bin/
 
@@ -136,7 +136,7 @@ FROM base_pfring as conjure
 COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
 COPY scripts/ /opt/conjure/scripts/
 
-RUN apt update && apt install -yq libzmq3-dev
+RUN apt update && apt install -yq libzmq3-dev iproute2
 COPY --from=dev_img /opt/conjure/bin/ /opt/conjure/bin/
 
 # ENTRYPOINT /bin/bash
