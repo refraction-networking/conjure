@@ -12,16 +12,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Copied from dns-registrar
-var (
-	ErrRegFailed = errors.New("registration failed")
-)
-
-type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
-
 type DecoyRegistrar struct {
 
-	// dialContex is a custom dailer to use when establishing TCP connections
+	// dialContex is a custom dialer to use when establishing TCP connections
 	// to decoys. When nil, Dialer.dialContex will be used.
 	dialContex DialFunc
 
@@ -78,8 +71,7 @@ func (r DecoyRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context
 	for _, decoy := range decoys {
 		logger.Debugf("Sending Reg: %v, %v", decoy.GetHostname(), decoy.GetIpAddrStr())
 		//decoyAddr := decoy.GetIpAddrStr()
-		// r.Send()
-		go reg.Send(ctx, decoy, dialErrors)
+		go r.Send(ctx, reg, decoy, dialErrors)
 	}
 
 	//[reference] Dial errors happen immediately so block until all N dials complete
@@ -115,13 +107,13 @@ func (r DecoyRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context
 	return reg, nil
 }
 
-func (r DecoyRegistrar) Send(ctx context.Context, decoy *pb.TLSDecoySpec, dialErrors chan error) {
+func (r DecoyRegistrar) Send(ctx context.Context, reg *tapdance.ConjureReg, decoy *pb.TLSDecoySpec, dialErrors chan error) {
 	deadline, deadlineAlreadySet := ctx.Deadline()
 
 	if !deadlineAlreadySet {
 		deadline = time.Now().Add(tapdance.GetRandomDuration(tapdance.deadlineTCPtoDecoyMin, tapdance.deadlineTCPtoDecoyMax))
 	}
-
+	
 	childCtx, childCancelFunc := context.WithDeadline(ctx, deadline)
 	defer childCancelFunc()
 
