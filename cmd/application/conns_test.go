@@ -98,17 +98,24 @@ func TestConnPrintAndReset(t *testing.T) {
 	newGeoIPMap := make(map[uint]*asnCounts)
 	newGeoIPMap[0] = &asnCounts{
 		cc: "unk",
-		statCounts: statCounts{
+		ipv4: statCounts{
 			numCreatedToDiscard: 1,
 			numCreatedToCheck:   2,
 			numCreatedToReset:   3,
 			numCreatedToTimeout: 4,
 			numCreatedToError:   5,
 		},
+		ipv6: statCounts{
+			numCreatedToDiscard: 71,
+			numCreatedToCheck:   72,
+			numCreatedToReset:   73,
+			numCreatedToTimeout: 74,
+			numCreatedToError:   75,
+		},
 	}
 	newGeoIPMap[1] = &asnCounts{
 		cc: "US",
-		statCounts: statCounts{
+		ipv6: statCounts{
 			numCreatedToDiscard: 6,
 			numCreatedToCheck:   7,
 			numCreatedToReset:   8,
@@ -117,9 +124,9 @@ func TestConnPrintAndReset(t *testing.T) {
 			totalTransitions:    2,
 		},
 	}
-	connManager.connStats.numCreated = 55
-	connManager.connStats.numCheckToError = 1
-	connManager.connStats.numReset = 17
+	connManager.connStats.ipv4.numCreated = 55
+	connManager.connStats.ipv4.numCheckToError = 1
+	connManager.connStats.ipv6.numReset = 17
 	connManager.connStats.geoIPMap = newGeoIPMap
 	connManager.connStats.PrintAndReset(logger)
 }
@@ -217,25 +224,25 @@ func TestConnForceRace(t *testing.T) {
 				im := int(math.Max(float64(il), 1)) // prevent div by 0
 				asn := uint(j % im)
 				cc := fmt.Sprintf("%d", uint(j/im))
-				cs.addCreated(asn, cc)
-				cs.createdToDiscard(asn, cc)
-				cs.createdToCheck(asn, cc)
-				cs.createdToReset(asn, cc)
-				cs.createdToTimeout(asn, cc)
-				cs.createdToError(asn, cc)
-				cs.readToCheck(asn, cc)
-				cs.readToTimeout(asn, cc)
-				cs.readToReset(asn, cc)
-				cs.readToError(asn, cc)
-				cs.checkToCreated(asn, cc)
-				cs.checkToRead(asn, cc)
-				cs.checkToFound(asn, cc)
-				cs.checkToError(asn, cc)
-				cs.checkToDiscard(asn, cc)
-				cs.discardToReset(asn, cc)
-				cs.discardToTimeout(asn, cc)
-				cs.discardToError(asn, cc)
-				cs.discardToClose(asn, cc)
+				cs.addCreated(asn, cc, true)
+				cs.createdToDiscard(asn, cc, true)
+				cs.createdToCheck(asn, cc, true)
+				cs.createdToReset(asn, cc, true)
+				cs.createdToTimeout(asn, cc, true)
+				cs.createdToError(asn, cc, true)
+				cs.readToCheck(asn, cc, true)
+				cs.readToTimeout(asn, cc, true)
+				cs.readToReset(asn, cc, true)
+				cs.readToError(asn, cc, true)
+				cs.checkToCreated(asn, cc, true)
+				cs.checkToRead(asn, cc, true)
+				cs.checkToFound(asn, cc, true)
+				cs.checkToError(asn, cc, true)
+				cs.checkToDiscard(asn, cc, true)
+				cs.discardToReset(asn, cc, true)
+				cs.discardToTimeout(asn, cc, true)
+				cs.discardToError(asn, cc, true)
+				cs.discardToClose(asn, cc, true)
 			}
 			wg.Done()
 		}(i)
