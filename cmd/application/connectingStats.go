@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sync/atomic"
 
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
@@ -83,4 +84,9 @@ func (c *connStats) AddSuccessfulToDiscardedConnecting(asn uint, cc string, tp s
 
 func (c *connStats) resetConnecting() {
 	c.connectingCounts = connectingCounts{}
+}
+
+func (c *connectingCounts) string() string {
+	return fmt.Sprintf("%d %d %d %d ", c.numCreatedConnecting, c.numCreatedToSuccessfulConnecting, c.numCreatedToFailedConnecting, c.numSuccessfulToDiscardedConnecting)
+
 }

@@ -508,6 +508,8 @@ func (c *connStats) reset() {
 	c.geoIPMap = make(map[uint]*asnCounts)
 
 	c.epochStart = time.Now()
+
+	c.resetConnecting()
 }
 
 func (c *connStats) addCreated(asn uint, cc string) {
