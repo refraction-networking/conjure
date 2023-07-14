@@ -537,3 +537,9 @@ func handleConnectingTpReg(regManager *RegistrationManager, reg *DecoyRegistrati
 		}
 	}
 }
+
+type ConnectingTpStats interface {
+	AddCreated(asn uint, cc string)
+	AddSuccess(asn uint, cc string)
+	AddFail(asn uint, cc string, err error)
+}
