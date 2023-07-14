@@ -45,10 +45,11 @@ func Listen(addr *net.UDPAddr) (*Listener, error) {
 
 	// Prepare the configuration of the DTLS connection
 	config := &dtls.Config{
-		ExtendedMasterSecret: dtls.RequireExtendedMasterSecret,
-		ClientAuth:           dtls.RequireAnyClientCert,
-		GetCertificate:       newDTLSListner.getCertificateFromClientHello,
-		VerifyConnection:     newDTLSListner.verifyConnection,
+		ExtendedMasterSecret:    dtls.RequireExtendedMasterSecret,
+		ClientAuth:              dtls.RequireAnyClientCert,
+		GetCertificate:          newDTLSListner.getCertificateFromClientHello,
+		VerifyConnection:        newDTLSListner.verifyConnection,
+		InsecureSkipVerifyHello: true,
 	}
 
 	listener, err := dtls.Listen("udp", addr, config)
@@ -121,10 +122,11 @@ func ServerWithContext(ctx context.Context, conn net.Conn, config *Config) (net.
 	}
 
 	dtlsConf := &dtls.Config{
-		ExtendedMasterSecret:  dtls.RequireExtendedMasterSecret,
-		ClientAuth:            dtls.RequireAnyClientCert,
-		Certificates:          []tls.Certificate{*serverCert},
-		VerifyPeerCertificate: VerifyPeerCertificate,
+		ExtendedMasterSecret:    dtls.RequireExtendedMasterSecret,
+		ClientAuth:              dtls.RequireAnyClientCert,
+		Certificates:            []tls.Certificate{*serverCert},
+		VerifyPeerCertificate:   VerifyPeerCertificate,
+		InsecureSkipVerifyHello: true,
 	}
 
 	dtlsConn, err := dtls.ServerWithContext(ctx, conn, dtlsConf)
