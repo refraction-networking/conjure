@@ -60,6 +60,10 @@ func main() {
 	}
 	log.SetLevel(logLevel)
 
+	connManager := newConnManager(nil)
+
+	conf.RegConfig.ConnectingStats = connManager
+
 	regManager := cj.NewRegistrationManager(conf.RegConfig)
 	sharedLogger = regManager.Logger
 	logger := sharedLogger
@@ -104,8 +108,6 @@ func main() {
 	if err != nil {
 		logger.Fatal("error creating ZMQ Ingest: %w", err)
 	}
-
-	connManager := newConnManager(nil)
 
 	cj.Stat().AddStatsModule(zmqIngester, false)
 	cj.Stat().AddStatsModule(regManager.LivenessTester, false)
