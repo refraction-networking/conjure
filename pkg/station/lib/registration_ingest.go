@@ -545,15 +545,18 @@ func handleConnectingTpReg(regManager *RegistrationManager, reg *DecoyRegistrati
 
 				conn, err := transport.Connect(ctx, reg)
 				if err != nil {
-					regManager.connectingStats.AddFailConnecting(asn, cc, transport.Name(), err)
+					regManager.connectingStats.AddCreatedToFailConnecting(asn, cc, transport.Name(), err)
 					return
 				}
 
-				regManager.connectingStats.AddSuccessConnecting(asn, cc, transport.Name())
+				regManager.connectingStats.AddCreatedToSuccessConnecting(asn, cc, transport.Name())
 
 				Stat().AddConn()
 				Proxy(reg, conn, logger)
 				Stat().CloseConn()
+
+				regManager.connectingStats.AddSuccessToDiscardConnecting(asn, cc, transport.Name())
+
 			}(tp)
 		}
 	}
@@ -561,6 +564,7 @@ func handleConnectingTpReg(regManager *RegistrationManager, reg *DecoyRegistrati
 
 type ConnectingTpStats interface {
 	AddCreatedConnecting(asn uint, cc string, tp string)
-	AddSuccessConnecting(asn uint, cc string, tp string)
-	AddFailConnecting(asn uint, cc string, tp string, err error)
+	AddCreatedToSuccessConnecting(asn uint, cc string, tp string)
+	AddCreatedToFailConnecting(asn uint, cc string, tp string, err error)
+	AddSuccessToDiscardConnecting(asn uint, cc string, tp string)
 }
