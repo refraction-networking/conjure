@@ -41,7 +41,7 @@ func newConnManager(conf *connManagerConfig) *connManager {
 			TraceDebugRate:  0,
 		}
 	}
-	return &connManager{&connStats{geoIPMap: make(map[uint]*asnCounts)}, conf}
+	return &connManager{&connStats{v4geoIPMap: make(map[uint]*asnCounts), v6geoIPMap: make(map[uint]*asnCounts)}, conf}
 }
 
 func (cm *connManager) acceptConnections(ctx context.Context, rm *cj.RegistrationManager, logger *log.Logger) {
@@ -374,9 +374,8 @@ type statCounts struct {
 }
 
 type asnCounts struct {
-	cc   string
-	ipv4 statCounts
-	ipv6 statCounts
+	cc string
+	statCounts
 }
 
 type connStats struct {
@@ -384,7 +383,8 @@ type connStats struct {
 	epochStart time.Time
 	ipv4       statCounts
 	ipv6       statCounts
-	geoIPMap   map[uint]*asnCounts
+	v4geoIPMap map[uint]*asnCounts
+	v6geoIPMap map[uint]*asnCounts
 }
 
 func (c *connStats) PrintAndReset(logger *log.Logger) {
@@ -395,140 +395,109 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 	var epochDur float64 = math.Max(float64(time.Since(c.epochStart).Milliseconds()), 1)
 
 	numASNs := 0
-	if c.geoIPMap != nil {
-		numASNs = len(c.geoIPMap)
+	if c.v4geoIPMap != nil {
+		numASNs = len(c.v4geoIPMap)
 	}
 
-	logger.Infof("conn-stats (IPv4): %d %d %d %d %d %.3f %d %.3f %d %.3f %d %.3f %d %.3f %d",
-		atomic.LoadInt64(&c.ipv4.numCreated),
-		atomic.LoadInt64(&c.ipv4.numReading),
-		atomic.LoadInt64(&c.ipv4.numChecking),
-		atomic.LoadInt64(&c.ipv4.numIODiscarding),
-		atomic.LoadInt64(&c.ipv4.numFound),
-		1000*float64(atomic.LoadInt64(&c.ipv4.numFound))/epochDur,
-		atomic.LoadInt64(&c.ipv4.numReset),
-		1000*float64(atomic.LoadInt64(&c.ipv4.numReset))/epochDur,
-		atomic.LoadInt64(&c.ipv4.numTimeout),
-		1000*float64(atomic.LoadInt64(&c.ipv4.numTimeout))/epochDur,
-		atomic.LoadInt64(&c.ipv4.numErr),
-		1000*float64(atomic.LoadInt64(&c.ipv4.numErr))/epochDur,
-		atomic.LoadInt64(&c.ipv4.numClosed),
-		1000*float64(atomic.LoadInt64(&c.ipv4.numClosed))/epochDur,
-		numASNs,
-	)
-
-	logger.Infof("conn-stats (IPv6): %d %d %d %d %d %.3f %d %.3f %d %.3f %d %.3f %d %.3f %d",
-		atomic.LoadInt64(&c.ipv6.numCreated),
-		atomic.LoadInt64(&c.ipv6.numReading),
-		atomic.LoadInt64(&c.ipv6.numChecking),
-		atomic.LoadInt64(&c.ipv6.numIODiscarding),
-		atomic.LoadInt64(&c.ipv6.numFound),
-		1000*float64(atomic.LoadInt64(&c.ipv6.numFound))/epochDur,
-		atomic.LoadInt64(&c.ipv6.numReset),
-		1000*float64(atomic.LoadInt64(&c.ipv6.numReset))/epochDur,
-		atomic.LoadInt64(&c.ipv6.numTimeout),
-		1000*float64(atomic.LoadInt64(&c.ipv6.numTimeout))/epochDur,
-		atomic.LoadInt64(&c.ipv6.numErr),
-		1000*float64(atomic.LoadInt64(&c.ipv6.numErr))/epochDur,
-		atomic.LoadInt64(&c.ipv6.numClosed),
-		1000*float64(atomic.LoadInt64(&c.ipv6.numClosed))/epochDur,
-		numASNs,
-	)
-
-	for asn, counts := range c.geoIPMap {
-		var tt float64 = math.Max(1, float64(atomic.LoadInt64(&counts.ipv4.totalTransitions)))
-		logger.Infof("conn-stats-verbose (IPv4): %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d %d %d %d",
-			asn,
-			counts.cc,
-			atomic.LoadInt64(&counts.ipv4.numCreatedToDiscard),
-			atomic.LoadInt64(&counts.ipv4.numCreatedToCheck),
-			atomic.LoadInt64(&counts.ipv4.numCreatedToReset),
-			atomic.LoadInt64(&counts.ipv4.numCreatedToTimeout),
-			atomic.LoadInt64(&counts.ipv4.numCreatedToError),
-			atomic.LoadInt64(&counts.ipv4.numReadToCheck),
-			atomic.LoadInt64(&counts.ipv4.numReadToTimeout),
-			atomic.LoadInt64(&counts.ipv4.numReadToReset),
-			atomic.LoadInt64(&counts.ipv4.numReadToError),
-			atomic.LoadInt64(&counts.ipv4.numCheckToCreated),
-			atomic.LoadInt64(&counts.ipv4.numCheckToRead),
-			atomic.LoadInt64(&counts.ipv4.numCheckToFound),
-			atomic.LoadInt64(&counts.ipv4.numCheckToError),
-			atomic.LoadInt64(&counts.ipv4.numCheckToDiscard),
-			atomic.LoadInt64(&counts.ipv4.numDiscardToReset),
-			atomic.LoadInt64(&counts.ipv4.numDiscardToTimeout),
-			atomic.LoadInt64(&counts.ipv4.numDiscardToError),
-			atomic.LoadInt64(&counts.ipv4.numDiscardToClose),
-			atomic.LoadInt64(&counts.ipv4.totalTransitions),
-			float64(atomic.LoadInt64(&counts.ipv4.numCreatedToDiscard))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numCreatedToCheck))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numCreatedToReset))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numCreatedToTimeout))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numCreatedToError))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numReadToCheck))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numReadToTimeout))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numReadToReset))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numReadToError))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numCheckToCreated))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numCheckToRead))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numCheckToFound))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numCheckToError))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numCheckToDiscard))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numDiscardToReset))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numDiscardToTimeout))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numDiscardToError))/tt,
-			float64(atomic.LoadInt64(&counts.ipv4.numDiscardToClose))/tt,
-			atomic.LoadInt64(&c.ipv4.numNewConns),
-			atomic.LoadInt64(&counts.ipv4.numNewConns),
-			atomic.LoadInt64(&c.ipv4.numResolved),
-			atomic.LoadInt64(&counts.ipv4.numResolved),
+	if numASNs > 0 {
+		logger.Infof("conn-stats (IPv4): %d %d %d %d %d %.3f %d %.3f %d %.3f %d %.3f %d %.3f %d",
+			atomic.LoadInt64(&c.ipv4.numCreated),
+			atomic.LoadInt64(&c.ipv4.numReading),
+			atomic.LoadInt64(&c.ipv4.numChecking),
+			atomic.LoadInt64(&c.ipv4.numIODiscarding),
+			atomic.LoadInt64(&c.ipv4.numFound),
+			1000*float64(atomic.LoadInt64(&c.ipv4.numFound))/epochDur,
+			atomic.LoadInt64(&c.ipv4.numReset),
+			1000*float64(atomic.LoadInt64(&c.ipv4.numReset))/epochDur,
+			atomic.LoadInt64(&c.ipv4.numTimeout),
+			1000*float64(atomic.LoadInt64(&c.ipv4.numTimeout))/epochDur,
+			atomic.LoadInt64(&c.ipv4.numErr),
+			1000*float64(atomic.LoadInt64(&c.ipv4.numErr))/epochDur,
+			atomic.LoadInt64(&c.ipv4.numClosed),
+			1000*float64(atomic.LoadInt64(&c.ipv4.numClosed))/epochDur,
+			numASNs,
 		)
+	}
 
-		tt = math.Max(1, float64(atomic.LoadInt64(&counts.ipv6.totalTransitions)))
-		logger.Infof("conn-stats-verbose (IPv6): %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d %d %d %d",
-			asn,
-			counts.cc,
-			atomic.LoadInt64(&counts.ipv6.numCreatedToDiscard),
-			atomic.LoadInt64(&counts.ipv6.numCreatedToCheck),
-			atomic.LoadInt64(&counts.ipv6.numCreatedToReset),
-			atomic.LoadInt64(&counts.ipv6.numCreatedToTimeout),
-			atomic.LoadInt64(&counts.ipv6.numCreatedToError),
-			atomic.LoadInt64(&counts.ipv6.numReadToCheck),
-			atomic.LoadInt64(&counts.ipv6.numReadToTimeout),
-			atomic.LoadInt64(&counts.ipv6.numReadToReset),
-			atomic.LoadInt64(&counts.ipv6.numReadToError),
-			atomic.LoadInt64(&counts.ipv6.numCheckToCreated),
-			atomic.LoadInt64(&counts.ipv6.numCheckToRead),
-			atomic.LoadInt64(&counts.ipv6.numCheckToFound),
-			atomic.LoadInt64(&counts.ipv6.numCheckToError),
-			atomic.LoadInt64(&counts.ipv6.numCheckToDiscard),
-			atomic.LoadInt64(&counts.ipv6.numDiscardToReset),
-			atomic.LoadInt64(&counts.ipv6.numDiscardToTimeout),
-			atomic.LoadInt64(&counts.ipv6.numDiscardToError),
-			atomic.LoadInt64(&counts.ipv6.numDiscardToClose),
-			atomic.LoadInt64(&counts.ipv6.totalTransitions),
-			float64(atomic.LoadInt64(&counts.ipv6.numCreatedToDiscard))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numCreatedToCheck))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numCreatedToReset))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numCreatedToTimeout))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numCreatedToError))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numReadToCheck))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numReadToTimeout))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numReadToReset))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numReadToError))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numCheckToCreated))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numCheckToRead))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numCheckToFound))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numCheckToError))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numCheckToDiscard))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numDiscardToReset))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numDiscardToTimeout))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numDiscardToError))/tt,
-			float64(atomic.LoadInt64(&counts.ipv6.numDiscardToClose))/tt,
-			atomic.LoadInt64(&c.ipv6.numNewConns),
-			atomic.LoadInt64(&counts.ipv6.numNewConns),
-			atomic.LoadInt64(&c.ipv6.numResolved),
-			atomic.LoadInt64(&counts.ipv6.numResolved),
+	numASNs = 0
+	if c.v6geoIPMap != nil {
+		numASNs = len(c.v6geoIPMap)
+	}
+
+	if numASNs > 0 {
+		logger.Infof("conn-stats (IPv6): %d %d %d %d %d %.3f %d %.3f %d %.3f %d %.3f %d %.3f %d",
+			atomic.LoadInt64(&c.ipv6.numCreated),
+			atomic.LoadInt64(&c.ipv6.numReading),
+			atomic.LoadInt64(&c.ipv6.numChecking),
+			atomic.LoadInt64(&c.ipv6.numIODiscarding),
+			atomic.LoadInt64(&c.ipv6.numFound),
+			1000*float64(atomic.LoadInt64(&c.ipv6.numFound))/epochDur,
+			atomic.LoadInt64(&c.ipv6.numReset),
+			1000*float64(atomic.LoadInt64(&c.ipv6.numReset))/epochDur,
+			atomic.LoadInt64(&c.ipv6.numTimeout),
+			1000*float64(atomic.LoadInt64(&c.ipv6.numTimeout))/epochDur,
+			atomic.LoadInt64(&c.ipv6.numErr),
+			1000*float64(atomic.LoadInt64(&c.ipv6.numErr))/epochDur,
+			atomic.LoadInt64(&c.ipv6.numClosed),
+			1000*float64(atomic.LoadInt64(&c.ipv6.numClosed))/epochDur,
+			numASNs,
 		)
+	}
+
+	for i, val := range [2]map[uint]*asnCounts{c.v4geoIPMap, c.v6geoIPMap} {
+		ip_ver := 4
+		if i == 1 {
+			ip_ver = 6
+		}
+		for asn, counts := range val {
+			var tt = math.Max(1, float64(atomic.LoadInt64(&counts.totalTransitions)))
+			logger.Infof("conn-stats-verbose (IPv%d): %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d %d %d %d",
+				ip_ver,
+				asn,
+				counts.cc,
+				atomic.LoadInt64(&counts.numCreatedToDiscard),
+				atomic.LoadInt64(&counts.numCreatedToCheck),
+				atomic.LoadInt64(&counts.numCreatedToReset),
+				atomic.LoadInt64(&counts.numCreatedToTimeout),
+				atomic.LoadInt64(&counts.numCreatedToError),
+				atomic.LoadInt64(&counts.numReadToCheck),
+				atomic.LoadInt64(&counts.numReadToTimeout),
+				atomic.LoadInt64(&counts.numReadToReset),
+				atomic.LoadInt64(&counts.numReadToError),
+				atomic.LoadInt64(&counts.numCheckToCreated),
+				atomic.LoadInt64(&counts.numCheckToRead),
+				atomic.LoadInt64(&counts.numCheckToFound),
+				atomic.LoadInt64(&counts.numCheckToError),
+				atomic.LoadInt64(&counts.numCheckToDiscard),
+				atomic.LoadInt64(&counts.numDiscardToReset),
+				atomic.LoadInt64(&counts.numDiscardToTimeout),
+				atomic.LoadInt64(&counts.numDiscardToError),
+				atomic.LoadInt64(&counts.numDiscardToClose),
+				atomic.LoadInt64(&counts.totalTransitions),
+				float64(atomic.LoadInt64(&counts.numCreatedToDiscard))/tt,
+				float64(atomic.LoadInt64(&counts.numCreatedToCheck))/tt,
+				float64(atomic.LoadInt64(&counts.numCreatedToReset))/tt,
+				float64(atomic.LoadInt64(&counts.numCreatedToTimeout))/tt,
+				float64(atomic.LoadInt64(&counts.numCreatedToError))/tt,
+				float64(atomic.LoadInt64(&counts.numReadToCheck))/tt,
+				float64(atomic.LoadInt64(&counts.numReadToTimeout))/tt,
+				float64(atomic.LoadInt64(&counts.numReadToReset))/tt,
+				float64(atomic.LoadInt64(&counts.numReadToError))/tt,
+				float64(atomic.LoadInt64(&counts.numCheckToCreated))/tt,
+				float64(atomic.LoadInt64(&counts.numCheckToRead))/tt,
+				float64(atomic.LoadInt64(&counts.numCheckToFound))/tt,
+				float64(atomic.LoadInt64(&counts.numCheckToError))/tt,
+				float64(atomic.LoadInt64(&counts.numCheckToDiscard))/tt,
+				float64(atomic.LoadInt64(&counts.numDiscardToReset))/tt,
+				float64(atomic.LoadInt64(&counts.numDiscardToTimeout))/tt,
+				float64(atomic.LoadInt64(&counts.numDiscardToError))/tt,
+				float64(atomic.LoadInt64(&counts.numDiscardToClose))/tt,
+				atomic.LoadInt64(&c.ipv6.numNewConns),
+				atomic.LoadInt64(&counts.numNewConns),
+				atomic.LoadInt64(&c.ipv6.numResolved),
+				atomic.LoadInt64(&counts.numResolved),
+			)
+		}
 	}
 
 	c.reset()
@@ -595,7 +564,8 @@ func (c *connStats) reset() {
 	atomic.StoreInt64(&c.ipv6.numNewConns, 0)
 	atomic.StoreInt64(&c.ipv6.numResolved, 0)
 
-	c.geoIPMap = make(map[uint]*asnCounts)
+	c.v4geoIPMap = make(map[uint]*asnCounts)
+	c.v6geoIPMap = make(map[uint]*asnCounts)
 
 	c.epochStart = time.Now()
 }
@@ -610,13 +580,13 @@ func (c *connStats) addCreated(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCreated, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numNewConns, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreated, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numNewConns, 1)
 		}
 	} else {
 		// Overall tracking
@@ -627,13 +597,13 @@ func (c *connStats) addCreated(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCreated, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numNewConns, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreated, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numNewConns, 1)
 		}
 	}
 }
@@ -650,15 +620,15 @@ func (c *connStats) createdToDiscard(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCreated, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numIODiscarding, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCreatedToDiscard, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreated, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numIODiscarding, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreatedToDiscard, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
 		}
 	} else {
 		// Overall tracking
@@ -671,15 +641,15 @@ func (c *connStats) createdToDiscard(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCreated, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numIODiscarding, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCreatedToDiscard, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreated, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numIODiscarding, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreatedToDiscard, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
 		}
 	}
 }
@@ -696,15 +666,15 @@ func (c *connStats) createdToCheck(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCreated, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numChecking, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCreatedToCheck, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreated, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numChecking, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreatedToCheck, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
 		}
 	} else {
 		// Overall tracking
@@ -717,15 +687,15 @@ func (c *connStats) createdToCheck(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCreated, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numChecking, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCreatedToCheck, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreated, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numChecking, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreatedToCheck, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
 		}
 	}
 }
@@ -743,16 +713,16 @@ func (c *connStats) createdToReset(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCreated, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numReset, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCreatedToReset, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numResolved, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreated, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numReset, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreatedToReset, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
 		}
 	} else {
 		// Overall tracking
@@ -766,16 +736,16 @@ func (c *connStats) createdToReset(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCreated, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numReset, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCreatedToReset, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numResolved, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreated, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numReset, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreatedToReset, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
 	}
 }
@@ -793,16 +763,16 @@ func (c *connStats) createdToTimeout(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCreated, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numTimeout, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCreatedToTimeout, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numResolved, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreated, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numTimeout, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreatedToTimeout, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
 		}
 	} else {
 		// Overall tracking
@@ -816,16 +786,16 @@ func (c *connStats) createdToTimeout(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCreated, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numTimeout, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCreatedToTimeout, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numResolved, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreated, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numTimeout, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreatedToTimeout, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
 	}
 }
@@ -843,16 +813,16 @@ func (c *connStats) createdToError(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCreated, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numErr, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCreatedToError, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numResolved, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreated, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numErr, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreatedToError, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
 		}
 	} else {
 		// Overall tracking
@@ -866,16 +836,16 @@ func (c *connStats) createdToError(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCreated, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numErr, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCreatedToError, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numResolved, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreated, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numErr, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreatedToError, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
 	}
 }
@@ -892,15 +862,15 @@ func (c *connStats) readToCheck(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numReading, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numChecking, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numReadToCheck, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numReading, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numChecking, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numReadToCheck, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
 		}
 	} else {
 		// Overall tracking
@@ -913,15 +883,15 @@ func (c *connStats) readToCheck(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numReading, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numChecking, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numReadToCheck, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numReading, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numChecking, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numReadToCheck, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
 		}
 	}
 }
@@ -939,16 +909,16 @@ func (c *connStats) readToTimeout(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numReading, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numTimeout, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numReadToTimeout, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numResolved, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numReading, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numTimeout, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numReadToTimeout, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
 		}
 	} else {
 		// Overall tracking
@@ -962,16 +932,16 @@ func (c *connStats) readToTimeout(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numReading, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numTimeout, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numReadToTimeout, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numResolved, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numReading, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numTimeout, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numReadToTimeout, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
 	}
 }
@@ -989,16 +959,16 @@ func (c *connStats) readToReset(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numReading, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numReset, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numReadToReset, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numResolved, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numReading, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numReset, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numReadToReset, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
 		}
 	} else {
 		// Overall tracking
@@ -1012,16 +982,16 @@ func (c *connStats) readToReset(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numReading, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numReset, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numReadToReset, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numResolved, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numReading, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numReset, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numReadToReset, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
 	}
 }
@@ -1039,16 +1009,16 @@ func (c *connStats) readToError(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numReading, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numErr, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numReadToError, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numResolved, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numReading, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numErr, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numReadToError, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
 		}
 	} else {
 		// Overall tracking
@@ -1062,16 +1032,16 @@ func (c *connStats) readToError(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numReading, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numErr, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numReadToError, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numResolved, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numReading, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numErr, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numReadToError, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
 	}
 }
@@ -1088,15 +1058,15 @@ func (c *connStats) checkToCreated(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numChecking, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCreated, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCheckToCreated, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numChecking, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreated, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCheckToCreated, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
 		}
 	} else {
 		// Overall tracking
@@ -1109,15 +1079,15 @@ func (c *connStats) checkToCreated(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numChecking, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCreated, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCheckToCreated, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numChecking, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreated, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCheckToCreated, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
 		}
 	}
 }
@@ -1134,15 +1104,15 @@ func (c *connStats) checkToRead(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numChecking, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numReading, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCheckToRead, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numChecking, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numReading, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCheckToRead, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
 		}
 	} else {
 		// Overall tracking
@@ -1155,15 +1125,15 @@ func (c *connStats) checkToRead(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numChecking, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numReading, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCheckToRead, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numChecking, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numReading, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCheckToRead, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
 		}
 	}
 }
@@ -1181,16 +1151,16 @@ func (c *connStats) checkToFound(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numChecking, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numFound, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCheckToFound, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numResolved, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numChecking, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numFound, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCheckToFound, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
 		}
 	} else {
 		// Overall tracking
@@ -1204,16 +1174,16 @@ func (c *connStats) checkToFound(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numChecking, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numFound, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCheckToFound, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numResolved, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numChecking, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numFound, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCheckToFound, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
 	}
 }
@@ -1231,16 +1201,16 @@ func (c *connStats) checkToError(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numChecking, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numErr, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCheckToError, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numResolved, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numChecking, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numErr, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCheckToError, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
 		}
 	} else {
 		// Overall tracking
@@ -1254,16 +1224,16 @@ func (c *connStats) checkToError(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numChecking, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numErr, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCheckToError, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numResolved, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numChecking, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numErr, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCheckToError, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
 	}
 }
@@ -1280,15 +1250,15 @@ func (c *connStats) checkToDiscard(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numChecking, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numIODiscarding, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numCheckToDiscard, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numChecking, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numIODiscarding, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCheckToDiscard, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
 		}
 	} else {
 		// Overall tracking
@@ -1301,15 +1271,15 @@ func (c *connStats) checkToDiscard(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numChecking, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numIODiscarding, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numCheckToDiscard, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numChecking, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numIODiscarding, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCheckToDiscard, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
 		}
 	}
 }
@@ -1327,16 +1297,16 @@ func (c *connStats) discardToReset(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numIODiscarding, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numReset, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numDiscardToReset, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numResolved, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numIODiscarding, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numReset, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numDiscardToReset, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
 		}
 	} else {
 		// Overall tracking
@@ -1350,16 +1320,16 @@ func (c *connStats) discardToReset(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numIODiscarding, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numReset, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numDiscardToReset, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numResolved, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numIODiscarding, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numReset, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numDiscardToReset, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
 	}
 }
@@ -1377,16 +1347,16 @@ func (c *connStats) discardToTimeout(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numIODiscarding, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numTimeout, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numDiscardToTimeout, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numResolved, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numIODiscarding, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numTimeout, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numDiscardToTimeout, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
 		}
 	} else {
 		// Overall tracking
@@ -1400,16 +1370,16 @@ func (c *connStats) discardToTimeout(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numIODiscarding, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numTimeout, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numDiscardToTimeout, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numResolved, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numIODiscarding, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numTimeout, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numDiscardToTimeout, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
 	}
 }
@@ -1427,16 +1397,16 @@ func (c *connStats) discardToError(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numIODiscarding, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numErr, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numDiscardToError, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numResolved, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numIODiscarding, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numErr, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numDiscardToError, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
 		}
 	} else {
 		// Overall tracking
@@ -1450,16 +1420,16 @@ func (c *connStats) discardToError(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numIODiscarding, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numErr, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numDiscardToError, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numResolved, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numIODiscarding, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numErr, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numDiscardToError, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
 	}
 }
@@ -1477,16 +1447,16 @@ func (c *connStats) discardToClose(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v4geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numIODiscarding, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numClosed, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numDiscardToClose, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv4.numResolved, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numIODiscarding, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numClosed, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numDiscardToClose, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
 		}
 	} else {
 		// Overall tracking
@@ -1500,16 +1470,16 @@ func (c *connStats) discardToClose(asn uint, cc string, isIPv4 bool) {
 		if isValidCC(cc) {
 			c.m.Lock()
 			defer c.m.Unlock()
-			if _, ok := c.geoIPMap[asn]; !ok {
+			if _, ok := c.v6geoIPMap[asn]; !ok {
 				// We haven't seen asn before, so add it to the map
-				c.geoIPMap[asn] = &asnCounts{}
-				c.geoIPMap[asn].cc = cc
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
 			}
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numIODiscarding, -1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numClosed, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numDiscardToClose, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.totalTransitions, 1)
-			atomic.AddInt64(&c.geoIPMap[asn].ipv6.numResolved, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numIODiscarding, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numClosed, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numDiscardToClose, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
 	}
 }

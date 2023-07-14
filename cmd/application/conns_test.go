@@ -95,27 +95,20 @@ func TestConnHandleNewTCPConn(t *testing.T) {
 func TestConnPrintAndReset(t *testing.T) {
 	logger := log.New(os.Stdout, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
 	connManager := newConnManager(nil)
-	newGeoIPMap := make(map[uint]*asnCounts)
-	newGeoIPMap[0] = &asnCounts{
+	v4GeoIPMap := make(map[uint]*asnCounts)
+	v4GeoIPMap[0] = &asnCounts{
 		cc: "unk",
-		ipv4: statCounts{
+		statCounts: statCounts{
 			numCreatedToDiscard: 1,
 			numCreatedToCheck:   2,
 			numCreatedToReset:   3,
 			numCreatedToTimeout: 4,
 			numCreatedToError:   5,
 		},
-		ipv6: statCounts{
-			numCreatedToDiscard: 71,
-			numCreatedToCheck:   72,
-			numCreatedToReset:   73,
-			numCreatedToTimeout: 74,
-			numCreatedToError:   75,
-		},
 	}
-	newGeoIPMap[1] = &asnCounts{
+	v4GeoIPMap[1] = &asnCounts{
 		cc: "US",
-		ipv6: statCounts{
+		statCounts: statCounts{
 			numCreatedToDiscard: 6,
 			numCreatedToCheck:   7,
 			numCreatedToReset:   8,
@@ -124,10 +117,25 @@ func TestConnPrintAndReset(t *testing.T) {
 			totalTransitions:    2,
 		},
 	}
+
+	v6GeoIPMap := make(map[uint]*asnCounts)
+	v6GeoIPMap[3] = &asnCounts{
+		cc: "IN",
+		statCounts: statCounts{
+			numCreatedToDiscard: 71,
+			numCreatedToCheck:   72,
+			numCreatedToReset:   73,
+			numCreatedToTimeout: 74,
+			numCreatedToError:   75,
+		},
+	}
+
 	connManager.connStats.ipv4.numCreated = 55
 	connManager.connStats.ipv4.numCheckToError = 1
 	connManager.connStats.ipv6.numReset = 17
-	connManager.connStats.geoIPMap = newGeoIPMap
+	connManager.connStats.v4geoIPMap = v4GeoIPMap
+	connManager.connStats.v6geoIPMap = v6GeoIPMap
+	// connManager.connStats.v6geoIPMap = make(map[uint]*asnCounts)
 	connManager.connStats.PrintAndReset(logger)
 }
 
@@ -201,7 +209,7 @@ func TestConnHandleConcurrent(t *testing.T) {
 func TestConnForceRace(t *testing.T) {
 	// We don't actually care about what gets written
 	logger := log.New(io.Discard, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
-	cs := &connStats{geoIPMap: make(map[uint]*asnCounts)}
+	cs := &connStats{v4geoIPMap: make(map[uint]*asnCounts), v6geoIPMap: make(map[uint]*asnCounts)}
 	exit := make(chan struct{})
 
 	go func() {
