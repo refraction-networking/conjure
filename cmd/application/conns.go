@@ -370,6 +370,8 @@ type statCounts struct {
 	totalTransitions int64 // Number of all transitions tracked
 	numNewConns      int64 // Number new connections potentially handshaking
 	numResolved      int64 // Number connections that have reached a terminal state.
+
+	connectingCounts
 }
 
 type asnCounts struct {
