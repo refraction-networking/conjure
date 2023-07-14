@@ -525,11 +525,32 @@ func handleConnectingTpReg(regManager *RegistrationManager, reg *DecoyRegistrati
 			ctx, cancelFunc := context.WithTimeout(context.Background(), 15*time.Second)
 			go func(transport ConnectingTransport) {
 				defer cancelFunc()
-				conn, err := transport.Connect(ctx, reg)
+
+				cc, err := regManager.GeoIP.CC(reg.registrationAddr)
 				if err != nil {
-					logger.Printf("error handling Connecting Transport Registration: %v\n", err)
+					logger.Errorln("Failed to get CC:", err)
 					return
 				}
+
+				var asn uint = 0
+				if cc != "unk" {
+					asn, err = regManager.GeoIP.ASN(reg.registrationAddr)
+					if err != nil {
+						logger.Errorln("Failed to get ASN:", err)
+						return
+					}
+				}
+
+				regManager.connectingStats.AddCreated(asn, cc, transport.Name())
+
+				conn, err := transport.Connect(ctx, reg)
+				if err != nil {
+					regManager.connectingStats.AddFail(asn, cc, transport.Name(), err)
+					return
+				}
+
+				regManager.connectingStats.AddSuccess(asn, cc, transport.Name())
+
 				Stat().AddConn()
 				Proxy(reg, conn, logger)
 				Stat().CloseConn()
@@ -539,7 +560,7 @@ func handleConnectingTpReg(regManager *RegistrationManager, reg *DecoyRegistrati
 }
 
 type ConnectingTpStats interface {
-	AddCreated(asn uint, cc string)
-	AddSuccess(asn uint, cc string)
-	AddFail(asn uint, cc string, err error)
+	AddCreated(asn uint, cc string, tp string)
+	AddSuccess(asn uint, cc string, tp string)
+	AddFail(asn uint, cc string, tp string, err error)
 }
