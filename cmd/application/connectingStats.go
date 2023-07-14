@@ -31,6 +31,7 @@ func (c *connStats) AddCreatedConnecting(asn uint, cc string, tp string) {
 }
 
 func (c *connStats) AddCreatedToSuccessfulConnecting(asn uint, cc string, tp string) {
+	atomic.AddInt64(&c.numCreatedConnecting, -1)
 	atomic.AddInt64(&c.numCreatedToSuccessfulConnecting, 1)
 
 	if isValidCC(cc) {
@@ -41,11 +42,13 @@ func (c *connStats) AddCreatedToSuccessfulConnecting(asn uint, cc string, tp str
 			c.geoIPMap[asn] = &asnCounts{}
 			c.geoIPMap[asn].cc = cc
 		}
+		atomic.AddInt64(&c.geoIPMap[asn].numCreatedConnecting, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToSuccessfulConnecting, 1)
 	}
 }
 
 func (c *connStats) AddCreatedToFailedConnecting(asn uint, cc string, tp string, err error) {
+	atomic.AddInt64(&c.numCreatedConnecting, -1)
 	atomic.AddInt64(&c.numCreatedToFailedConnecting, 1)
 
 	if isValidCC(cc) {
@@ -56,11 +59,13 @@ func (c *connStats) AddCreatedToFailedConnecting(asn uint, cc string, tp string,
 			c.geoIPMap[asn] = &asnCounts{}
 			c.geoIPMap[asn].cc = cc
 		}
+		atomic.AddInt64(&c.geoIPMap[asn].numCreatedConnecting, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToFailedConnecting, 1)
 	}
 }
 
 func (c *connStats) AddSuccessfulToDiscardedConnecting(asn uint, cc string, tp string) {
+	atomic.AddInt64(&c.numCreatedToSuccessfulConnecting, -1)
 	atomic.AddInt64(&c.numSuccessfulToDiscardedConnecting, 1)
 
 	if isValidCC(cc) {
@@ -71,6 +76,11 @@ func (c *connStats) AddSuccessfulToDiscardedConnecting(asn uint, cc string, tp s
 			c.geoIPMap[asn] = &asnCounts{}
 			c.geoIPMap[asn].cc = cc
 		}
+		atomic.AddInt64(&c.geoIPMap[asn].numCreatedToSuccessfulConnecting, -1)
 		atomic.AddInt64(&c.geoIPMap[asn].numSuccessfulToDiscardedConnecting, 1)
 	}
+}
+
+func (c *connStats) resetConnecting() {
+	c.connectingCounts = connectingCounts{}
 }

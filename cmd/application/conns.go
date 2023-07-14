@@ -384,6 +384,8 @@ type connStats struct {
 	epochStart time.Time
 	statCounts
 	geoIPMap map[uint]*asnCounts
+
+	connectingCounts
 }
 
 func (c *connStats) PrintAndReset(logger *log.Logger) {
