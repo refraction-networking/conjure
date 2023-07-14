@@ -41,6 +41,9 @@ type RegistrationManager struct {
 	LivenessTester   liveness.Tester
 	GeoIP            geoip.Database
 
+	// ConnectingStats records stats related to connecting transports
+	connectingStats ConnectingTpStats
+
 	// ingestChan is included here so that the capacity and use is available to
 	// stats
 	ingestChan <-chan interface{}
@@ -79,6 +82,7 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 		PhantomSelector:   p,
 		LivenessTester:    lt,
 		GeoIP:             geoipDB,
+		connectingStats:   conf.ConnectingStats,
 	}
 }
 
