@@ -313,25 +313,26 @@ func TestUtlsSessionResumption(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, 32, n)
 
-	t.Log(hex.EncodeToString(randVal[:]))
-	go func() {
+	serverConfig := &tls.Config{
+		Certificates:           make([]tls.Certificate, 2),
+		InsecureSkipVerify:     true,
+		MinVersion:             tls.VersionTLS10,
+		MaxVersion:             tls.VersionTLS12,
+		SessionTicketsDisabled: false,
+		ClientAuth:             tls.NoClientCert,
+	}
 
-		config := &tls.Config{
-			Certificates:           make([]tls.Certificate, 2),
-			InsecureSkipVerify:     true,
-			MinVersion:             tls.VersionTLS10,
-			MaxVersion:             tls.VersionTLS13,
-			SessionTicketsDisabled: false,
-			ClientAuth:             tls.NoClientCert,
-		}
-		// config.Certificates[0].Certificate = [][]byte{testRSACertificate}
-		// config.Certificates[0].PrivateKey = testRSAPrivateKey
-		// config.Certificates[1].Certificate = [][]byte{testSNICertificate}
-		// config.Certificates[1].PrivateKey = testRSAPrivateKey
-		// config.BuildNameToCertificate()
+	go func() {
+		config := *serverConfig
+
+		config.Certificates[0].Certificate = [][]byte{testRSACertificate}
+		config.Certificates[0].PrivateKey = testRSAPrivateKey
+		config.Certificates[1].Certificate = [][]byte{testSNICertificate}
+		config.Certificates[1].PrivateKey = testRSAPrivateKey
+		config.BuildNameToCertificate()
 		config.SetSessionTicketKeys([][32]byte{randVal})
 
-		wrapped := tls.Server(sfp, config)
+		wrapped := tls.Server(sfp, &config)
 
 		stationReceived := make([]byte, len(message))
 		_, err := io.ReadFull(wrapped, stationReceived)
@@ -344,10 +345,12 @@ func TestUtlsSessionResumption(t *testing.T) {
 		}
 	}()
 
-	sessionTicket := []uint8(`Here goes phony session ticket: phony enough to get into ASCII range. Ticket could be of any length, but for camouflage purposes it's better to use uniformly random contents and common length. See https://tlsfingerprint.io/session-tickets`)
+	serverSession, err := tls.ForgeServerSessionState(randVal[:], serverConfig, tls.HelloChrome_Auto)
+
+	sessionTicket, err := serverSession.MakeEncryptedTicket(randVal, &tls.Config{})
 
 	// clientConn, err := connect(c2p, reg)
-	config := &tls.Config{ServerName: "", InsecureSkipVerify: true}
+	config := &tls.Config{ServerName: "abc.def.com"}
 
 	// Create a session ticket that wasn't actually issued by the server.
 	sessionState := tls.MakeClientSessionState(sessionTicket, uint16(tls.VersionTLS12),
@@ -361,6 +364,7 @@ func TestUtlsSessionResumption(t *testing.T) {
 	err = clientTLSConn.BuildHandshakeState()
 	require.Nil(t, err)
 
+	// SetSessionState sets the session ticket, which may be preshared or fake.
 	err = clientTLSConn.SetSessionState(sessionState)
 	require.Nil(t, err)
 
@@ -373,23 +377,30 @@ func TestUtlsSessionResumption(t *testing.T) {
 	require.True(t, bytes.Equal(message, received))
 }
 
-// const (
-// 	// ticketKeyNameLen is the number of bytes of identifier that is prepended to
-// 	// an encrypted session ticket in order to identify the key used to encrypt it.
-// 	ticketKeyNameLen = 16
-// )
+const (
+	// ticketKeyNameLen is the number of bytes of identifier that is prepended to
+	// an encrypted session ticket in order to identify the key used to encrypt it.
+	ticketKeyNameLen = 16
+)
 
 // // returns the session state and the marshalled sessionTicket, or an error should one occur.
-// func forgeSession(secret [32]byte) (*tls.ClientSessionState, []byte, error) {
-// 	serverState := tls.ForgeServerState(secret)
-// 	stateBytes := serverState.Marshal()
+// func forgeSession(secret [32]byte, chID tls.ClientHelloID, r io.Reader) (*tls.ClientSessionState, []byte, error) {
+// 	key := tls.TicketKeyFromBytes(secret)
+// 	serverState, err := tls.ForgeServerSessionState(secret[:], chID)
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
+// 	stateBytes, err := serverState.Marshal()
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
 
 // 	encrypted := make([]byte, ticketKeyNameLen+aes.BlockSize+len(stateBytes)+sha256.Size)
 // 	keyName := encrypted[:ticketKeyNameLen]
 // 	iv := encrypted[ticketKeyNameLen : ticketKeyNameLen+aes.BlockSize]
 // 	macBytes := encrypted[len(encrypted)-sha256.Size:]
 
-// 	if _, err := io.ReadFull(c.config.rand(), iv); err != nil {
+// 	if _, err := io.ReadFull(r, iv); err != nil {
 // 		return nil, nil, err
 // 	}
 
@@ -406,7 +417,7 @@ func TestUtlsSessionResumption(t *testing.T) {
 
 // 	state := tls.MakeClientSessionState(encrypted, uint16(tls.VersionTLS12),
 // 		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-// 		masterSecret,
+// 		secret[:],
 // 		nil, nil)
 
 // 	return state, encrypted, nil

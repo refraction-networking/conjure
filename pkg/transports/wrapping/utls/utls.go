@@ -178,7 +178,7 @@ func (t *Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst n
 		Certificates:       make([]tls.Certificate, 2),
 		InsecureSkipVerify: true,
 		MinVersion:         tls.VersionTLS10,
-		MaxVersion:         tls.VersionTLS13,
+		MaxVersion:         tls.VersionTLS12,
 	}
 	config.Certificates[0].Certificate = [][]byte{testRSACertificate}
 	config.Certificates[0].PrivateKey = testRSAPrivateKey
