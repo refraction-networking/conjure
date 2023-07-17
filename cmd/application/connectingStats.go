@@ -87,6 +87,6 @@ func (c *connStats) resetConnecting() {
 }
 
 func (c *connectingCounts) string() string {
-	return fmt.Sprintf("%d %d %d %d ", c.numCreatedConnecting, c.numCreatedToSuccessfulConnecting, c.numCreatedToFailedConnecting, c.numSuccessfulToDiscardedConnecting)
+	return fmt.Sprintf("%d %d %d %d ", atomic.LoadInt64(&c.numCreatedConnecting), atomic.LoadInt64(&c.numCreatedToSuccessfulConnecting), atomic.LoadInt64(&c.numCreatedToFailedConnecting), atomic.LoadInt64(&c.numSuccessfulToDiscardedConnecting))
 
 }
