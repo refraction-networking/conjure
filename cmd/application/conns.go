@@ -400,7 +400,7 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 		numASNs = len(c.geoIPMap)
 	}
 
-	logger.Infof("conn-stats: %d %d %d %d %d %.3f %d %.3f %d %.3f %d %.3f %d %.3f %d",
+	logger.Infof("conn-stats: %d %d %d %d %d %.3f %d %.3f %d %.3f %d %.3f %d %.3f %d %s",
 		atomic.LoadInt64(&c.numCreated),
 		atomic.LoadInt64(&c.numReading),
 		atomic.LoadInt64(&c.numChecking),
@@ -416,12 +416,13 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 		atomic.LoadInt64(&c.numClosed),
 		1000*float64(atomic.LoadInt64(&c.numClosed))/epochDur,
 		numASNs,
+		c.connectingCounts.string(),
 	)
 
 	for asn, counts := range c.geoIPMap {
 		var tt float64 = math.Max(1, float64(atomic.LoadInt64(&counts.totalTransitions)))
 
-		logger.Infof("conn-stats-verbose: %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d %d %d %d",
+		logger.Infof("conn-stats-verbose: %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d %d %d %d %s",
 			asn,
 			counts.cc,
 			atomic.LoadInt64(&counts.numCreatedToDiscard),
@@ -465,6 +466,7 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 			atomic.LoadInt64(&counts.numNewConns),
 			atomic.LoadInt64(&c.numResolved),
 			atomic.LoadInt64(&counts.numResolved),
+			counts.connectingCounts.string(),
 		)
 	}
 
