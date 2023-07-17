@@ -21,6 +21,7 @@ type Listener struct {
 	connToCert      map[[handshake.RandomBytesLength]byte]*certPair
 	connToCertMutex sync.RWMutex
 	defaultCert     *tls.Certificate
+	logUnregistered func(*net.IP)
 }
 
 type certPair struct {
@@ -29,7 +30,7 @@ type certPair struct {
 }
 
 // Listen creates a listener and starts listening
-func Listen(addr *net.UDPAddr) (*Listener, error) {
+func Listen(addr *net.UDPAddr, conf *Config) (*Listener, error) {
 
 	// the default cert is only used for checking avaliable cipher suites
 	defaultCert, err := randomCertificate()
@@ -38,9 +39,10 @@ func Listen(addr *net.UDPAddr) (*Listener, error) {
 	}
 
 	newDTLSListner := Listener{
-		connMap:     map[[handshake.RandomBytesLength]byte](chan net.Conn){},
-		connToCert:  map[[handshake.RandomBytesLength]byte]*certPair{},
-		defaultCert: defaultCert,
+		connMap:         map[[handshake.RandomBytesLength]byte](chan net.Conn){},
+		connToCert:      map[[handshake.RandomBytesLength]byte]*certPair{},
+		defaultCert:     defaultCert,
+		logUnregistered: conf.LogUnregistered,
 	}
 
 	// Prepare the configuration of the DTLS connection
