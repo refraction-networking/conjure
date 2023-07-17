@@ -99,7 +99,7 @@ func initStats() {
 	}()
 
 	// Periodic verbose PrintStats()
-	verbose_ticker := time.NewTicker(60 * time.Second)
+	verbose_ticker := time.NewTicker(5 * time.Second)
 	go func() {
 		for range verbose_ticker.C {
 			statInstance.PrintStats(true)
