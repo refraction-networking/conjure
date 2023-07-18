@@ -20,6 +20,7 @@ const listenPort = 41245
 type Transport struct {
 	dnat         *dnat
 	dtlsListener *dtls.Listener
+	unregLogger  func(*net.IP)
 }
 
 // Name returns name of the transport
@@ -38,10 +39,10 @@ func (Transport) GetIdentifier(reg *dd.DecoyRegistration) string {
 }
 
 // NewTransport creates a new dtls transport
-func NewTransport() (*Transport, error) {
+func NewTransport(logUnreg func(*net.IP)) (*Transport, error) {
 	addr := &net.UDPAddr{Port: listenPort}
 
-	listener, err := dtls.Listen(addr)
+	listener, err := dtls.Listen("udp", addr, &dtls.Config{LogUnregistered: logUnreg})
 	if err != nil {
 		return nil, fmt.Errorf("error creating dtls listner: %v", err)
 	}
@@ -55,6 +56,7 @@ func NewTransport() (*Transport, error) {
 	return &Transport{
 		dnat:         dnat,
 		dtlsListener: listener,
+		unregLogger:  logUnreg,
 	}, nil
 }
 

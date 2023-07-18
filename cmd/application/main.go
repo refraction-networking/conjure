@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"net"
 	"os"
 	"os/signal"
 	"strconv"
@@ -34,12 +35,6 @@ func main() {
 	flag.StringVar(&zmqAddress, "zmq-address", "ipc://@zmq-proxy", "Address of ZMQ proxy")
 	flag.Parse()
 
-	dtlsTransport, err := dtls.NewTransport()
-	if err != nil {
-		log.Fatalf("failed to setup dtls: %v", err)
-	}
-	enabledTransports[pb.TransportType_DTLS] = dtlsTransport
-
 	// Init stats
 	cj.Stat()
 
@@ -60,7 +55,34 @@ func main() {
 	}
 	log.SetLevel(logLevel)
 
+	connManager := newConnManager(nil)
+
+	conf.RegConfig.ConnectingStats = connManager
+
 	regManager := cj.NewRegistrationManager(conf.RegConfig)
+
+	dtlsTransport, err := dtls.NewTransport(func(ip *net.IP) {
+		cc, err := regManager.GeoIP.CC(*ip)
+		if err != nil {
+			return
+		}
+
+		var asn uint = 0
+		if cc != "unk" {
+			asn, err = regManager.GeoIP.ASN(*ip)
+			if err != nil {
+				return
+			}
+		}
+
+		connManager.AddNoRegConnecting(asn, cc, "dtls")
+	})
+
+	if err != nil {
+		log.Fatalf("failed to setup dtls: %v", err)
+	}
+	enabledTransports[pb.TransportType_DTLS] = dtlsTransport
+
 	sharedLogger = regManager.Logger
 	logger := sharedLogger
 	defer regManager.Cleanup()
@@ -104,8 +126,6 @@ func main() {
 	if err != nil {
 		logger.Fatal("error creating ZMQ Ingest: %w", err)
 	}
-
-	connManager := newConnManager(nil)
 
 	cj.Stat().AddStatsModule(zmqIngester, false)
 	cj.Stat().AddStatsModule(regManager.LivenessTester, false)
