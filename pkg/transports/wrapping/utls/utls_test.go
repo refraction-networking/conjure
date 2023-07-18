@@ -320,6 +320,7 @@ func TestUtlsSessionResumption(t *testing.T) {
 		MaxVersion:             tls.VersionTLS12,
 		SessionTicketsDisabled: false,
 		ClientAuth:             tls.NoClientCert,
+		CipherSuites:           []uint16{tls.TLS_RSA_WITH_AES_256_GCM_SHA384},
 	}
 
 	go func() {
