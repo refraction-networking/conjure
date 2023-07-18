@@ -42,7 +42,7 @@ func (Transport) GetIdentifier(reg *dd.DecoyRegistration) string {
 func NewTransport(logUnreg func(*net.IP)) (*Transport, error) {
 	addr := &net.UDPAddr{Port: listenPort}
 
-	listener, err := dtls.Listen(addr, &dtls.Config{LogUnregistered: logUnreg})
+	listener, err := dtls.Listen("udp", addr, &dtls.Config{LogUnregistered: logUnreg})
 	if err != nil {
 		return nil, fmt.Errorf("error creating dtls listner: %v", err)
 	}

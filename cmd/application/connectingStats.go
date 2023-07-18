@@ -14,6 +14,7 @@ type connectingCounts struct {
 	numSuccessfulConnecting int64
 	numFailedConnecting     int64
 	numDiscardedConnecting  int64
+	numNoReg                int64
 }
 
 func (c *connStats) AddCreatedConnecting(asn uint, cc string, tp string) {
@@ -82,11 +83,27 @@ func (c *connStats) AddSuccessfulToDiscardedConnecting(asn uint, cc string, tp s
 	}
 }
 
+func (c *connStats) AddNoRegConnecting(asn uint, cc string, tp string) {
+	atomic.AddInt64(&c.numNoReg, 1)
+
+	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
+		if _, ok := c.geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.geoIPMap[asn] = &asnCounts{}
+			c.geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.geoIPMap[asn].numNoReg, 1)
+	}
+
+}
+
 func (c *connStats) resetConnecting() {
 	c.connectingCounts = connectingCounts{}
 }
 
 func (c *connectingCounts) string() string {
-	return fmt.Sprintf("%d %d %d %d ", atomic.LoadInt64(&c.numCreatedConnecting), atomic.LoadInt64(&c.numSuccessfulConnecting), atomic.LoadInt64(&c.numFailedConnecting), atomic.LoadInt64(&c.numDiscardedConnecting))
+	return fmt.Sprintf("%d %d %d %d %d", atomic.LoadInt64(&c.numCreatedConnecting), atomic.LoadInt64(&c.numSuccessfulConnecting), atomic.LoadInt64(&c.numFailedConnecting), atomic.LoadInt64(&c.numDiscardedConnecting), atomic.LoadInt64(&c.numNoReg))
 
 }
