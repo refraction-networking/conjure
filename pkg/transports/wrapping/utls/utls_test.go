@@ -312,24 +312,26 @@ func TestUtlsSessionResumption(t *testing.T) {
 	n, err := rand.Read(randVal[:])
 	require.Nil(t, err)
 	require.Equal(t, 32, n)
+	domainName := "abc.def.com"
+
+	certPem, certKey, err := generateKeyAndCert(rand.Reader, randVal, []string{domainName})
+	require.Nil(t, err)
+	cert, err := tls.X509KeyPair(certPem, certKey)
+	require.Nil(t, err)
 
 	serverConfig := &tls.Config{
-		Certificates:           make([]tls.Certificate, 2),
+		Certificates:           []tls.Certificate{cert},
 		InsecureSkipVerify:     true,
 		MinVersion:             tls.VersionTLS10,
 		MaxVersion:             tls.VersionTLS12,
 		SessionTicketsDisabled: false,
 		ClientAuth:             tls.NoClientCert,
-		CipherSuites:           []uint16{tls.TLS_RSA_WITH_AES_256_GCM_SHA384},
+		CipherSuites:           []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384},
 	}
 
 	go func() {
 		config := *serverConfig
 
-		config.Certificates[0].Certificate = [][]byte{testRSACertificate}
-		config.Certificates[0].PrivateKey = testRSAPrivateKey
-		config.Certificates[1].Certificate = [][]byte{testSNICertificate}
-		config.Certificates[1].PrivateKey = testRSAPrivateKey
 		config.BuildNameToCertificate()
 		config.SetSessionTicketKeys([][32]byte{randVal})
 
@@ -338,11 +340,16 @@ func TestUtlsSessionResumption(t *testing.T) {
 		stationReceived := make([]byte, len(message))
 		_, err := io.ReadFull(wrapped, stationReceived)
 		if err != nil {
-			panic(fmt.Sprintf("failed ReadFull: %s %s", stationReceived, err))
+			t.Logf("failed ReadFull: %s %s", stationReceived, err)
+			t.Logf("%v", config.CipherSuites)
+			t.Fail()
+			return
 		}
 		_, err = wrapped.Write(stationReceived)
 		if err != nil {
-			panic("failed Write")
+			t.Logf("failed Write")
+			t.Fail()
+			return
 		}
 	}()
 
@@ -351,11 +358,11 @@ func TestUtlsSessionResumption(t *testing.T) {
 	sessionTicket, err := serverSession.MakeEncryptedTicket(randVal, &tls.Config{})
 
 	// clientConn, err := connect(c2p, reg)
-	config := &tls.Config{ServerName: "abc.def.com"}
+	config := &tls.Config{ServerName: domainName}
 
 	// Create a session ticket that wasn't actually issued by the server.
 	sessionState := tls.MakeClientSessionState(sessionTicket, uint16(tls.VersionTLS12),
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 		randVal[:],
 		nil, nil)
 
@@ -364,6 +371,8 @@ func TestUtlsSessionResumption(t *testing.T) {
 
 	err = clientTLSConn.BuildHandshakeState()
 	require.Nil(t, err)
+
+	t.Logf("%v", clientTLSConn.HandshakeState.Hello.CipherSuites)
 
 	// SetSessionState sets the session ticket, which may be preshared or fake.
 	err = clientTLSConn.SetSessionState(sessionState)

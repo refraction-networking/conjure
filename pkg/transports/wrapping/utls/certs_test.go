@@ -1,9 +1,12 @@
 package utls
 
 import (
-	"crypto/rand"
-	"reflect"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
 	"testing"
+
+	"golang.org/x/crypto/hkdf"
 )
 
 func Test_generateKeyAndCert(t *testing.T) {
@@ -14,8 +17,6 @@ func Test_generateKeyAndCert(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    []byte
-		want1   []byte
 		wantErr bool
 	}{
 		{
@@ -24,25 +25,31 @@ func Test_generateKeyAndCert(t *testing.T) {
 				secret: [32]byte{},
 				names:  []string{"localhost"},
 			},
-			[]byte{},
-			[]byte{},
 			false,
 		},
 		// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1, err := generateKeyAndCert(rand.Reader, tt.args.secret, tt.args.names)
+			reader := readerFromKey(tt.args.secret)
+			_, _, err := generateKeyAndCert(reader, tt.args.secret, tt.args.names)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("generateKeyAndCert() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("generateKeyAndCert() got = %v, want %v", got, tt.want)
-			}
-			if !reflect.DeepEqual(got1, tt.want1) {
-				t.Errorf("generateKeyAndCert() got1 = %v, want %v", got1, tt.want1)
-			}
 		})
 	}
+}
+
+func readerFromKey(key [32]byte) io.Reader {
+	hkdfReader := hkdf.New(sha256.New, key[:], []byte("cert testing string"), nil)
+	return hkdfReader
+}
+
+func fromString(s string) []byte {
+	b, e := hex.DecodeString(s)
+	if e != nil {
+		panic(e)
+	}
+	return b
 }

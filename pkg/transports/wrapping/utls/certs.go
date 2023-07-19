@@ -31,9 +31,8 @@ func publicKey(priv any) any {
 	}
 }
 
-func generateKeyAndCert(r io.Reader, secret [32]byte, names []string, validFrom ...string) ([]byte, []byte, error) {
+func generateKeyAndCert(r io.Reader, secret [32]byte, names []string, validFrom ...string) (cert []byte, key []byte, err error) {
 	var priv any
-	var err error
 	var ecdsaCurve string = "P384"
 	var ed25519Key bool = false
 	var rsaBits int = 4096
@@ -91,7 +90,7 @@ func generateKeyAndCert(r io.Reader, secret [32]byte, names []string, validFrom 
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"Acme Co"},
+			Organization: []string{"refraction-networking"},
 		},
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
@@ -131,5 +130,7 @@ func generateKeyAndCert(r io.Reader, secret [32]byte, names []string, validFrom 
 		return nil, nil, fmt.Errorf("failed to write data to key.pem: %w", err)
 	}
 
-	return certOut.Bytes(), keyOut.Bytes(), nil
+	cert = certOut.Bytes()
+	key = keyOut.Bytes()
+	return
 }
