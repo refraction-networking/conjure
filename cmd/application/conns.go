@@ -113,6 +113,30 @@ func (cm *connManager) handleNewConn(regManager *cj.RegistrationManager, clientC
 	cm.handleNewTCPConn(regManager, clientConn, originalDstIP)
 }
 
+func getRemoteAsIP(conn net.Conn) (remoteIP net.IP) {
+	remoteAddr := conn.RemoteAddr()
+	switch addr := remoteAddr.(type) {
+	case *net.TCPAddr:
+		remoteIP = addr.IP
+	case *net.UDPAddr:
+		remoteIP = addr.IP
+	default:
+		a := remoteAddr.String()
+		// try parsing the returned address string as host:port
+		host, _, err := net.SplitHostPort(a)
+		if err != nil {
+			// try parsing the returned address string as just an IP address
+			remoteIP = net.ParseIP(a)
+			break
+		} else {
+			// try parsing the returned host portion of the address as an IP address as opposed to a
+			// domain name or other string.
+			remoteIP = net.ParseIP(host)
+		}
+	}
+	return
+}
+
 func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clientConn net.Conn, originalDstIP net.IP) {
 	isIPv4 := originalDstIP.To4() != nil
 	var originalDst, originalSrc string
@@ -125,15 +149,13 @@ func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clie
 	flowDescription := fmt.Sprintf("%s -> %s ", originalSrc, originalDst)
 	logger := log.New(os.Stdout, "[CONN] "+flowDescription, golog.Ldate|golog.Lmicroseconds)
 
-	remoteAddr := clientConn.RemoteAddr()
-	var remoteIP net.IP
-	if addr, ok := remoteAddr.(*net.TCPAddr); ok {
-		remoteIP = addr.IP
-	} else if addr, ok := remoteAddr.(*net.UDPAddr); ok {
-		remoteIP = addr.IP
-	} else {
+	remoteIP := getRemoteAsIP(clientConn)
+	if remoteIP == nil {
+		// Socket returned non-IP Remote Address - we can't really use that. If testing w/ pipe try
+		// wrapping with struct to provide mock RemoteAddr which return a real IP address.
 		return
 	}
+
 	var asn uint = 0
 	var cc string
 	var err error
