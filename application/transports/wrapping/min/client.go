@@ -2,8 +2,11 @@ package min
 
 import (
 	"fmt"
+	"io"
+	"net"
 
 	"github.com/refraction-networking/conjure/application/transports"
+	"github.com/refraction-networking/conjure/pkg/core"
 	pb "github.com/refraction-networking/gotapdance/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -15,9 +18,7 @@ type ClientTransport struct {
 	// Parameters are fields that will be shared with the station in the registration
 	Parameters *pb.GenericTransportParams
 
-	// // state tracks fields internal to the registrar that survive for the lifetime
-	// // of the transport session without being shared - i.e. local derived keys.
-	// state any
+	connectTag []byte
 }
 
 // Name returns a string identifier for the Transport for logging
@@ -38,8 +39,8 @@ func (*ClientTransport) ID() pb.TransportType {
 
 // GetParams returns a generic protobuf with any parameters from both the registration and the
 // transport.
-func (t *ClientTransport) GetParams() proto.Message {
-	return t.Parameters
+func (t *ClientTransport) GetParams() (proto.Message, error) {
+	return t.Parameters, nil
 }
 
 // SetParams allows the caller to set parameters associated with the transport, returning an
@@ -55,7 +56,7 @@ func (t *ClientTransport) SetParams(p any) error {
 }
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
-func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
+func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 	if t.Parameters == nil || !t.Parameters.GetRandomizeDstPort() {
 		return 443, nil
 	}
@@ -63,17 +64,21 @@ func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
 
-// // Connect creates the connection to the phantom address negotiated in the registration phase of
-// // Conjure connection establishment.
-// func (t *ClientTransport) Connect(ctx context.Context, reg *cj.ConjureReg) (net.Conn, error) {
-// 	// conn, err := reg.getFirstConnection(ctx, reg.TcpDialer, phantoms)
-// 	// if err != nil {
-// 	// 	return nil, err
-// 	// }
+// WrapConn creates the connection to the phantom address negotiated in the registration phase of
+// Conjure connection establishment.
+func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
+	// Send hmac(seed, str) bytes to indicate to station (min transport) generated during Prepare(...)
+	_, err := conn.Write(t.connectTag)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
 
-// 	// // Send hmac(seed, str) bytes to indicate to station (min transport)
-// 	// connectTag := conjureHMAC(reg.keys.SharedSecret, "MinTrasportHMACString")
-// 	// conn.Write(connectTag)
-// 	// return conn, nil
-// 	return nil, nil
-// }
+// PrepareKeys provides an opportunity for the transport to integrate the station public key
+// as well as bytes from the deterministic random generator associated with the registration
+// that this ClientTransport is attached t
+func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error {
+	t.connectTag = core.ConjureHMAC(sharedSecret, "MinTransportHMACString")
+	return nil
+}

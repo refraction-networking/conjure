@@ -10,13 +10,10 @@ Type=simple
 WorkingDirectory=/opt/conjure/
 
 SyslogIdentifier=conjure
-EnvironmentFile=/opt/conjure/sysconfig/conjure.conf
 
-# # makes if binary doesn't exist
-# ExecStartPre=/bin/bash /opt/conjure/build.sh
 # Ensure zbalance finished starting (else pfring_zc_ipc_attach can give Invalid argument)
 ExecStartPre=/bin/sleep 10
-ExecStart=/opt/conjure/application/application
+ExecStart=/bin/bash /opt/conjure/scripts/start_application.sh
 
 # send SIGHUP to the station process
 ExecReload=/bin/kill -HUP $MAINPID

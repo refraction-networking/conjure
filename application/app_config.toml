@@ -1,12 +1,5 @@
 
-# Bool to enable or disable sharing of registrations over API when received over decoy registrar
-enable_share_over_api = false
-
-# REST endpoint to share decoy registrations.
-preshare_endpoint = ""
-
-# Name of abstract socket to bind proxy to
-socket_name = "zmq-proxy"
+## ------ Application General ------
 
 # Absolute path to private key to use when authenticating with servers.
 # Can be either privkey or privkey || pubkey; only first 32 bytes will
@@ -15,16 +8,16 @@ socket_name = "zmq-proxy"
 # the station will shutdown).
 privkey_path = ""
 
-# Time in milliseconds to wait between sending heartbeats.
-# Heartbeats are only sent when other traffic doesn't come through;
-# i.e. normal messages can "act" as a heartbeat by confirming
-# that the connection is alive.
-heartbeat_interval = 30000
+# Log level, one of the following: info, error, warn, debug, trace
+log_level = "error"
 
-# Time in milliseconds after sending a heartbeat to wait for
-# a response before the connection is assumed to be dead.
-heartbeat_timeout = 1000
+# Path to a file containing supplemental prefix specifications for the prefix transport.
+supplemental_prefix_path = ""
 
+# Do not include Default prefixes and rely entirely on the prefixes in supplemental_prefix_path
+disable_default_prefixes = false
+
+## ------ Liveness Probing ------
 
 # Duration that a phantom IP identified as "LIVE" using a liveness test is
 # cached, preventing further lookups to the address. Empty string disables
@@ -50,6 +43,7 @@ cache_expiration_nonlive = "5m"
 # cache will have finite capacity and implement LRU eviction.
 cache_capacity_nonlive = 0
 
+## ------ Registration / Connection Filters ------
 
 # Allow the station to opt out of either version of internet protocol to limit a
 # statio to handling one or the other. For example, v6 on small station deployment
@@ -98,14 +92,35 @@ detector_filter_list = [
     "::1",
 ]
 
-# Log level, one of the following: info, error, warn, debug, trace
-log_level = "error"
+## ------ GeoIP Info ------
 
 # MaxMind Database files - if empty then the Empty Geoip lookup will be used (effictvely disaling
 # lookup). The default path used by the maxmind geoiupdate tool is `/usr/local/share/GeoIP`.
 # repo - https://github.com/maxmind/geoipupdate/blob/main/pkg/geoipupdate/defaults_notwin.go#L15
 geoip_cc_db_path = ""
 geoip_asn_db_path = ""
+
+
+## ------ ZMQ ------
+
+# Bool to enable or disable sharing of registrations over API when received over decoy registrar
+enable_share_over_api = false
+
+# REST endpoint to share decoy registrations.
+preshare_endpoint = ""
+
+# Name of abstract socket to bind proxy to
+socket_name = "zmq-proxy"
+
+# Time in milliseconds to wait between sending heartbeats.
+# Heartbeats are only sent when other traffic doesn't come through;
+# i.e. normal messages can "act" as a heartbeat by confirming
+# that the connection is alive.
+heartbeat_interval = 30000
+
+# Time in milliseconds after sending a heartbeat to wait for
+# a response before the connection is assumed to be dead.
+heartbeat_timeout = 1000
 
 ### ZMQ sockets to connect to and subscribe
 
