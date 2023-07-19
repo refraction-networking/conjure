@@ -73,11 +73,6 @@ impl Flow {
             },
         }
     }
-
-    // pub fn to_string(&self) -> String {
-    //     let re = String(self.src_ip) + ":" + self.src_port + " -> " +self.dst_ip + ":" + self.dst_port;
-    //     return re;
-    // }
 }
 
 impl fmt::Display for Flow {
@@ -86,9 +81,13 @@ impl fmt::Display for Flow {
     }
 }
 
+#[derive(Clone)]
 /// Statistics for a given Flow
-pub struct FlowStats {
+pub struct FlowStats{
     pub packet_count: u32,
+    pub init_seq_num: u32,
+    pub recent_comments: Vec<String>,
+
     // ipv4
     pub ipids: Option<IpidStats>,
     pub ttl_range: Option<TtlStats>,
@@ -96,24 +95,35 @@ pub struct FlowStats {
     // ipv6
     pub flow_label: Option<u32>,
     pub hop_limit_range: Option<HopLimitStats>,
+
+    pub cc: String,
+    pub asn: u32,
 }
 
 impl FlowStats {
-    pub fn new(ip_pkt: &IpPacket, _tcp_pkt: &TcpPacket) -> FlowStats {
+    pub fn new(ip_pkt: &IpPacket, _tcp_pkt: &TcpPacket, supplemental_fields: &SupplementalFields) -> FlowStats {
         match ip_pkt {
-            IpPacket::V4(pkt) => FlowStats {
+            IpPacket::V4(_pkt) => FlowStats {
                 packet_count: 1,
-                ipids: Some(IpidStats::new(pkt.get_identification())),
-                ttl_range: Some(TtlStats::new(pkt.get_ttl())),
+                init_seq_num: _tcp_pkt.get_sequence(),
+                recent_comments: vec![],
+                ipids: None,
+                ttl_range: None,
                 flow_label: None,
                 hop_limit_range: None,
+                asn: supplemental_fields.asn,
+                cc: supplemental_fields.cc.clone(),
             },
             IpPacket::V6(pkt) => FlowStats {
                 packet_count: 1,
+                init_seq_num: _tcp_pkt.get_sequence(),
+                recent_comments: vec![],
                 ipids: None,
                 ttl_range: None,
                 flow_label: Some(pkt.get_flow_label()),
                 hop_limit_range: Some(HopLimitStats::new(pkt.get_hop_limit())),
+                asn: supplemental_fields.asn,
+                cc: supplemental_fields.cc.clone(),
             },
         }
     }
@@ -124,54 +134,36 @@ impl FlowStats {
             IpPacket::V4(pkt) =>
             {
                 self.packet_count += 1;
-                self.ipids.as_mut().expect("identification of ipv4 packet not initialized").update(pkt.get_identification());
-                self.ttl_range.as_mut().expect("ttl of ipv4 packet not initialized").update(pkt.get_ttl());
+                if _tcp_pkt.get_sequence() >= self.init_seq_num +2 {
+                match self.ttl_range.as_mut() {
+                    Some(ttls) => {ttls.update(pkt.get_ttl(), &mut self.recent_comments); }
+                    None => {self.ttl_range = Some(TtlStats::new(pkt.get_ttl()));}
+                }
+                match self.ipids.as_mut() {
+                    Some(ipid) => {ipid.update(pkt.get_identification(), &mut self.recent_comments);}
+                    None => {self.ipids = Some(IpidStats::new(pkt.get_identification()))}
+                }
+            }
             }
             IpPacket::V6(pkt) => {
                 self.packet_count += 1;
-                self.hop_limit_range.as_mut().expect("hop limit of ipv6 packet not initialized").update(pkt.get_hop_limit());
+                self.hop_limit_range.as_mut().expect("hop limit of ipv6 packet not initialized").update(pkt.get_hop_limit(), &mut self.recent_comments);
             },
         }
     }
-
 }
 
-// impl fmt::Display for FlowStats {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "{} packets in flow\n", self.packet_count);
-//         match &self.ipids {
-//             Some(i) => { 
-//                 match i.min_offset{
-//                     Some(o) => {write!(f, "min IPID change : {} | ", o); }
-//                     None => {write!(f, "min IPID change : NONE | ");}
-//                 }
-//                 match i.max_offset{
-//                     Some(o) => {write!(f, "max IPID change : {}\n", o); }
-//                     None => {write!(f, "max IPID change : NONE\n");}
-//                 } 
-//             }
-//             None=>{}
-//         }
-//         match &self.ttl_range {
-//             Some(t) =>{ 
-//                 write!(f, "min TTL : {} | max TTL: {}", t.min_ttl, t.max_ttl);
-//             }
-//             None => {}
-//         }
-//         match self.flow_label {
-//             Some(fl) => {  write!(f, "flow label: {}\n", fl); }
-//             None => {}
-//         }
-//         match &self.hop_limit_range {
-//             Some(t) =>{ 
-//                 write!(f, "min Hop Limit : {} | max Hop Limit: {}", t.min_hop, t.max_hop);
-//             }
-//             None => {}
-//         }
-//         write!(f, " ")
-//     }
-// }
+impl From<FlowStats> for Vec<EnhancedPacketOption<'_>> {
+    fn from(value: FlowStats) -> Self {
+        let mut re: Vec<EnhancedPacketOption<'_>> = vec![];
+        for i in value.recent_comments {
+            re.push(EnhancedPacketOption::Comment(Cow::from(format!("{},", i))));
+        }
+        re
+    }
+}
 
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct IpidStats {
     pub curr_ipid: u16,
 
@@ -180,6 +172,13 @@ pub struct IpidStats {
 
     pub min_offset: Option<u16>,
     pub max_offset: Option<u16>,
+
+    /* ANOMALOUS PACKET TYPES 
+        0 - IPID = 0
+        1 - IPID delta is 0
+        2 - IPID delta changed
+    */
+    anomalous_pkts: Vec<u32>,
 }
 
 impl IpidStats{
@@ -189,14 +188,29 @@ impl IpidStats{
             recent_offsets: VecDeque::new(),
             min_offset : None,
             max_offset : None,
+            anomalous_pkts : vec![0,0,0],
         }
     }
 
-    pub fn update(&mut self, new_ipid: u16) {
+    pub fn update(&mut self, new_ipid: u16, comments: &mut Vec<String>) {
         let new_off = (self.curr_ipid as i32 - new_ipid as i32).abs() as u16;
+
+        // anomaly type 0
+        if new_ipid == 0 {
+            self.anomalous_pkts[0]+= 1;
+            comments.push(format!("ipid0: IPID = 0"));
+        }
+
+        // anomaly type 1
+        if new_off == 0 {
+            self.anomalous_pkts[1]+= 1;
+            comments.push(format!("ipid1: IPID delta = 0"));
+        }
+
         if self.recent_offsets.len() < 5 {
             self.recent_offsets.push_back(new_off);
             self.curr_ipid = new_ipid;
+
 
             match self.min_offset
             {
@@ -210,6 +224,21 @@ impl IpidStats{
             }
         }
         else {
+
+
+            // let avg = 0;
+            // for offs in self.recent_offsets {
+            //     avg += offs;
+            // }
+            // avg /= 5;
+
+            // anomaly type 2
+            if Some(&new_off) != self.recent_offsets.back()
+            {
+                self.anomalous_pkts[2] += 1;
+                comments.push(format!("IPID delta changed"));
+            }
+
             self.recent_offsets.pop_front();
             self.recent_offsets.push_back(new_off);
             self.curr_ipid = new_ipid;
@@ -228,9 +257,14 @@ impl IpidStats{
     }
 }
 
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct TtlStats {
     pub min_ttl: u8,
     pub max_ttl: u8,
+    /* ANOMALOUS PACKET TYPES 
+        0 - TTL falls outside min/max range
+    */
+    anomalous_pkts: Vec<u32>,
 }
 
 impl TtlStats{
@@ -238,18 +272,33 @@ impl TtlStats{
         TtlStats {
             min_ttl : ttl,
             max_ttl : ttl,
+            anomalous_pkts : vec![0],
         }
     }
 
-    pub fn update(&mut self, new_ttl: u8) {
-        self.min_ttl = min(self.min_ttl, new_ttl);
-        self.max_ttl = max(self.max_ttl, new_ttl);
+    pub fn update(&mut self, new_ttl: u8, comments: &mut Vec<String>) {
+        if new_ttl < self.min_ttl {
+            self.min_ttl = new_ttl;
+            self.anomalous_pkts[0]+=1;
+            comments.push(format!("ttl0: TTL falls out of min/max range"));
+        }
+
+        if new_ttl > self.max_ttl {
+            self.max_ttl = new_ttl;
+            self.anomalous_pkts[0]+=1;
+            comments.push(format!("ttl0: TTL falls out of min/max range"));
+        }
     }
 }
 
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct HopLimitStats {
     pub min_hop: u8,
     pub max_hop: u8,
+    /* ANOMALOUS PACKET TYPES 
+        0 - Hop Limit falls outside min/max range
+    */
+    anomalous_pkts: Vec<u32>,
 }
 
 impl HopLimitStats{
@@ -257,12 +306,24 @@ impl HopLimitStats{
         HopLimitStats {
             min_hop : hop,
             max_hop : hop,
+            anomalous_pkts : vec![0],
         }
     }
 
-    pub fn update(&mut self, new_hop: u8) {
-        self.min_hop = min(self.min_hop, new_hop);
-        self.max_hop = max(self.max_hop, new_hop);
+    pub fn update(&mut self, new_hop: u8, comments: &mut Vec<String>) {
+        if new_hop < self.min_hop {
+            self.min_hop = new_hop;
+            self.anomalous_pkts[0]+=1;
+            comments.push(format!("hop0: HopCount falls out of min/max range"));
+
+
+        }
+
+        if new_hop > self.max_hop {
+            self.max_hop = new_hop;
+            self.anomalous_pkts[0]+=1;
+            comments.push(format!("hop0: HopCount falls out of min/max range"));
+        }
     }
 }
 
@@ -376,21 +437,24 @@ impl PacketHandler {
         Ok(p)
     }
 
-    pub fn append_to_stats(&mut self, ip_pkt: &IpPacket, tcp_pkt: &TcpPacket) {
+    pub fn append_to_stats(&mut self, ip_pkt: &IpPacket, o_tcp_pkt: &Option<TcpPacket>, supplemental_fields: &SupplementalFields, comments: &mut Vec<EnhancedPacketOption<'_>> ) {
+        match o_tcp_pkt {
+            Some(tcp_pkt) => {
         let curr_flow = Flow::new(ip_pkt, tcp_pkt);
         if !self.stats.contains_key(&curr_flow) {
-            // 18 = SYNACK packet, IPID is 0 in this case so ignore it (?)
-            if tcp_pkt.get_flags() != 18
-            {
-                let curr_stats = FlowStats::new(ip_pkt, tcp_pkt);
-                self.stats.insert(curr_flow, curr_stats);
-            }
+            let curr_stats = FlowStats::new(ip_pkt, tcp_pkt, supplemental_fields);
+            self.stats.insert(curr_flow, curr_stats);
+            comments.append(&mut self.stats[&curr_flow].clone().into());
         }
         else {
             if let Some(x) = self.stats.get_mut(&curr_flow) {
                 x.append(ip_pkt, tcp_pkt); 
             }
+            comments.append(&mut self.stats[&curr_flow].clone().into());
         }
+    },
+    None => {},
+}
     }
 
     pub fn get_supplemental(
@@ -513,13 +577,17 @@ impl PacketHandler {
         let mut wtr = Writer::from_path(self.stats_output_path.clone())?;
 
         // write headers
-        wtr.write_record(&["flow_key", "packet_count", "min_ipid_delta", "max_ipid_delta", "min_ttl", "max_ttl", "flow_label", "min_hop_limit", "max_hop_limit"])?;
+        wtr.write_record(&["flow_key","packet_count", "asn", "cc",  "min_ipid_delta", "max_ipid_delta", "anom_ipid_t0", "anom_ipid_t1", "anom_ipid_t2", "min_ttl", "max_ttl", "anom_ttl_t0", "flow_label", "min_hop_limit", "max_hop_limit", "anom_hop_t0"])?;
 
         // write stats object
         for (fl, flst) in self.stats.iter(){
 
-            // v4
             let mut to_write = vec![format!("{}:{}->{}:{}", fl.src_ip,fl.src_port,fl.dst_ip, fl.dst_port), format!("{}",flst.packet_count)];
+
+            to_write.push(format!("{}",flst.asn));
+            to_write.push(format!("{}",flst.cc));
+
+            // v4
             match &flst.ipids {
                 Some(i) => { 
                     match i.min_offset {
@@ -530,12 +598,13 @@ impl PacketHandler {
                         Some(mo) => {to_write.push(format!("{}",mo));}
                         None => {to_write.push("NaN".to_string());}
                     }
+                    for n in 0..3 {to_write.push(format!("{}", i.anomalous_pkts[n]));}
                 }
-                None => { to_write.push("NaN".to_string()); to_write.push("NaN".to_string());}
+                None => { for _ in 0..5 {to_write.push("NaN".to_string());}}
             }
             match &flst.ttl_range {
-                Some(t) => { to_write.push(format!("{}",t.min_ttl)); to_write.push(format!("{}",t.max_ttl));}
-                None => { to_write.push("NaN".to_string()); to_write.push("NaN".to_string());}
+                Some(t) => { to_write.push(format!("{}",t.min_ttl)); to_write.push(format!("{}",t.max_ttl)); to_write.push(format!("{}",t.anomalous_pkts[0]));}
+                None => { for _ in 0..3 {to_write.push("NaN".to_string());}}
             }
 
             // v6
@@ -544,8 +613,8 @@ impl PacketHandler {
                 None => { to_write.push("NaN".to_string());}
             }
             match &flst.hop_limit_range {
-                Some(h) => { to_write.push(format!("{}",h.min_hop)); to_write.push(format!("{}",h.max_hop));}
-                None => { to_write.push("NaN".to_string()); to_write.push("NaN".to_string());}
+                Some(h) => { to_write.push(format!("{}",h.min_hop)); to_write.push(format!("{}",h.max_hop)); to_write.push(format!("{}",h.anomalous_pkts[0]));}
+                None => { for _ in 0..3 {to_write.push("NaN".to_string());}}
             }
         let _ = wtr.write_record(to_write);
         }

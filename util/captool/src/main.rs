@@ -20,7 +20,7 @@ use flate2::Compression;
 use humantime::parse_duration;
 use ipnet::IpNet;
 use pcap::{Activated, Capture, Device, Linktype};
-use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
+use pcap_file::pcapng::blocks::enhanced_packet::{EnhancedPacketBlock, EnhancedPacketOption};
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
 use pcap_file::pcapng::PcapNgWriter;
 use pcap_file::DataLink;
@@ -411,7 +411,7 @@ fn read_pcap_dir<W>(
             break;
         }
         // h_display.lock().unwrap().print_stats();
-        thread::sleep(Duration::from_secs(5));
+        // thread::sleep(Duration::from_secs(5));
     });
 
     // refresh the path list and launch jobs
@@ -528,7 +528,6 @@ fn read_packets<T, W>(
             Err(_) => continue,
         };
 
-        // TODO: add packet exclusion here
         if handler.lock().unwrap().should_exclude(ip_pkt.source()) {
             continue
         }
@@ -548,13 +547,8 @@ fn read_packets<T, W>(
             }
         };
 
-        match TcpPacket::new(ip_pkt.to_immutable().payload()) {
-            Some(x) => {
-                let y = ip_pkt.to_immutable();
-                handler.lock().unwrap().append_to_stats(&y, &x);
-            }
-            None => {}
-        }
+        let mut anom_comments: Vec<EnhancedPacketOption<'_>> = vec![];
+        handler.lock().unwrap().append_to_stats(&ip_pkt.to_immutable(), &TcpPacket::new(ip_pkt.to_immutable().payload()), &supplemental_fields, &mut anom_comments);
 
         let mut interface_id = 0;
         if matches!(ip_pkt, MutableIpPacket::V6(_)) {
@@ -572,12 +566,15 @@ fn read_packets<T, W>(
             }
         };
 
+        let mut tmp: Vec<EnhancedPacketOption<'_>> = supplemental_fields.into();
+        tmp.append(&mut anom_comments);
+
         let out = EnhancedPacketBlock {
             interface_id,
             timestamp: ts,
             original_len: d_out.len() as u32,
             data: Cow::Borrowed(d_out),
-            options: supplemental_fields.into(),
+            options: tmp,
         };
 
         match { writer.lock().unwrap().write_pcapng_block(out) } {
