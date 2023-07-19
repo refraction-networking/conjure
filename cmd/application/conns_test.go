@@ -40,6 +40,25 @@ func (m *MockGeoIP) ASN(ip net.IP) (uint, error) {
 	// return 0, nil
 }
 
+type testConn struct {
+	net.Conn
+	remoteAddr net.Addr
+}
+
+func (conn *testConn) RemoteAddr() net.Addr {
+	return conn.remoteAddr
+}
+
+func newTestConn(conn net.Conn, remoteIP net.IP) *testConn {
+	remoteAddr := &net.IPAddr{
+		IP: remoteIP,
+	}
+	return &testConn{
+		Conn:       conn,
+		remoteAddr: remoteAddr,
+	}
+}
+
 func TestConnHandleNewTCPConn(t *testing.T) {
 	testSubnetPath := conjurepath.Root + "/pkg/station/lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
@@ -54,6 +73,8 @@ func TestConnHandleNewTCPConn(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
 	defer clientConn.Close()
 	defer serverConn.Close()
+	clientTestConn := newTestConn(clientConn, ip)
+	serverTestConn := newTestConn(serverConn, net.ParseIP("127.0.0.1"))
 
 	// Create a WaitGroup to synchronize the test execution
 	var wg sync.WaitGroup
@@ -61,7 +82,7 @@ func TestConnHandleNewTCPConn(t *testing.T) {
 
 	// Call the handleNewTCPConn function in a separate goroutine
 	go func() {
-		connManager.handleNewTCPConn(rm, serverConn, ip)
+		connManager.handleNewTCPConn(rm, serverTestConn, ip)
 		wg.Done()
 	}()
 
@@ -70,7 +91,7 @@ func TestConnHandleNewTCPConn(t *testing.T) {
 	go func() {
 		// Add a small delay before writing data to allow handleNewTCPConn to start reading
 		time.Sleep(200 * time.Millisecond)
-		_, err := clientConn.Write([]byte("Hello, server!"))
+		_, err := clientTestConn.Write([]byte("Hello, server!"))
 		if err != nil {
 			t.Errorf("failed to write data to server: %v", err)
 		}
@@ -78,7 +99,7 @@ func TestConnHandleNewTCPConn(t *testing.T) {
 
 	// Simulate receiving data from the server
 	serverData := make([]byte, len(clientData))
-	_, err := io.ReadFull(serverConn, serverData)
+	_, err := io.ReadFull(serverTestConn, serverData)
 	if err != nil {
 		t.Fatalf("failed to read data from server: %v", err)
 	}
@@ -139,6 +160,28 @@ func TestConnPrintAndReset(t *testing.T) {
 	connManager.connStats.PrintAndReset(logger)
 }
 
+func TestConnHandleNewTCPConnNoData(t *testing.T) {
+	logger := log.New(os.Stdout, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
+	testSubnetPath := conjurepath.Root + "/pkg/station/lib/test/phantom_subnets.toml"
+	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
+
+	rm := cj.NewRegistrationManager(&cj.RegConfig{})
+
+	db := &MockGeoIP{}
+	rm.GeoIP = db
+
+	connManager := newConnManager(nil)
+	ip := net.ParseIP("8.8.8.8")
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+
+	clientTestConn := newTestConn(clientConn, ip)
+
+	connManager.handleNewTCPConn(rm, clientTestConn, ip)
+	connManager.connStats.PrintAndReset(logger)
+}
+
 func TestConnHandleConcurrent(t *testing.T) {
 	// We don't actually care about what gets written
 	logger := log.New(io.Discard, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
@@ -170,9 +213,12 @@ func TestConnHandleConcurrent(t *testing.T) {
 			defer clientConn.Close()
 			defer serverConn.Close()
 
+			clientTestConn := newTestConn(clientConn, ip)
+			serverTestConn := newTestConn(serverConn, ip)
+
 			// Call the handleNewTCPConn function in a separate goroutine
 			go func() {
-				connManager.handleNewTCPConn(rm, serverConn, ip)
+				connManager.handleNewTCPConn(rm, serverTestConn, ip)
 				wg.Done()
 			}()
 
@@ -181,7 +227,7 @@ func TestConnHandleConcurrent(t *testing.T) {
 			go func() {
 				// Add a small delay before writing data to allow handleNewTCPConn to start reading
 				time.Sleep(200 * time.Millisecond)
-				_, err := clientConn.Write([]byte("Hello, server!"))
+				_, err := clientTestConn.Write([]byte("Hello, server!"))
 				if err != nil {
 					t.Errorf("failed to write data to server: %v", err)
 				}
@@ -189,7 +235,7 @@ func TestConnHandleConcurrent(t *testing.T) {
 
 			// Simulate receiving data from the server
 			serverData := make([]byte, len(clientData))
-			_, err := io.ReadFull(serverConn, serverData)
+			_, err := io.ReadFull(serverTestConn, serverData)
 			if err != nil {
 				t.Logf("failed to read data from server: %v", err)
 				t.Fail()
