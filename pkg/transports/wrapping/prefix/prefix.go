@@ -84,9 +84,7 @@ const (
 	TLSAlertFatal
 	DNSOverTCP
 	OpenSSH2
-	TLSCompleteCHNoSNI
-	TLSCompleteCHSNI
-	HTTPGetComplete
+
 	// GetShortBase64
 )
 
@@ -132,12 +130,7 @@ func (id PrefixID) Name() string {
 		return "DNSOverTCP"
 	case OpenSSH2:
 		return "OpenSSH2"
-	case TLSCompleteCHNoSNI:
-		return "TLSFullCHNoSNI"
-	case TLSCompleteCHSNI:
-		return "TLSFullCH"
-	case HTTPGetComplete:
-		return "HTTPFull"
+
 	// case GetShort:
 	// 	return "GetShort"
 	default:
@@ -168,12 +161,6 @@ var defaultPrefixes = map[PrefixID]prefix{
 	DNSOverTCP: {[]byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 53, false},
 	// SSH-2.0-OpenSSH_8.9p1
 	OpenSSH2: {[]byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion, 22, false},
-	// TLS 1.3 ClientHello complete without an SNI. Flushes after Prefix
-	TLSCompleteCHNoSNI: {tlsCompleteCHNoSNI, len(tlsCompleteCHNoSNI), len(tlsCompleteCHNoSNI) + minTagLength, len(tlsCompleteCHNoSNI) + minTagLength, randomizeDstPortMinVersion, 443, true},
-	// TLS 1.3 ClientHello complete with an SNI. Flushes after Prefix
-	TLSCompleteCHSNI: {tlsCompleteCHSNI, len(tlsCompleteCHSNI), len(tlsCompleteCHSNI) + minTagLength, len(tlsCompleteCHSNI) + minTagLength, randomizeDstPortMinVersion, 443, true},
-	// HTTP Get complete packet. Flushes after the prefix before the tag.
-	HTTPGetComplete: {httpGetComplete, len(httpGetComplete), len(httpGetComplete) + minTagLength, len(httpGetComplete) + minTagLength, randomizeDstPortMinVersion, 80, true},
 
 	// // HTTP GET base64 in url min tag length 88 because 64 bytes base64 encoded should be length 88
 	// GetShort: {base64TagDecode, []byte("GET /"), 5, 5 + 88, 5 + 88, randomizeDstPortMinVersion},
