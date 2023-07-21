@@ -23,12 +23,12 @@ func (c *connStats) AddCreatedConnecting(asn uint, cc string, tp string) {
 	if isValidCC(cc) {
 		c.m.Lock()
 		defer c.m.Unlock()
-		if _, ok := c.geoIPMap[asn]; !ok {
+		if _, ok := c.v4geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
-			c.geoIPMap[asn] = &asnCounts{}
-			c.geoIPMap[asn].cc = cc
+			c.v4geoIPMap[asn] = &asnCounts{}
+			c.v4geoIPMap[asn].cc = cc
 		}
-		atomic.AddInt64(&c.geoIPMap[asn].numCreatedConnecting, 1)
+		atomic.AddInt64(&c.v4geoIPMap[asn].numCreatedConnecting, 1)
 	}
 }
 
@@ -39,13 +39,13 @@ func (c *connStats) AddCreatedToSuccessfulConnecting(asn uint, cc string, tp str
 	if isValidCC(cc) {
 		c.m.Lock()
 		defer c.m.Unlock()
-		if _, ok := c.geoIPMap[asn]; !ok {
+		if _, ok := c.v4geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
-			c.geoIPMap[asn] = &asnCounts{}
-			c.geoIPMap[asn].cc = cc
+			c.v4geoIPMap[asn] = &asnCounts{}
+			c.v4geoIPMap[asn].cc = cc
 		}
-		atomic.AddInt64(&c.geoIPMap[asn].numCreatedConnecting, -1)
-		atomic.AddInt64(&c.geoIPMap[asn].numSuccessfulConnecting, 1)
+		atomic.AddInt64(&c.v4geoIPMap[asn].numCreatedConnecting, -1)
+		atomic.AddInt64(&c.v4geoIPMap[asn].numSuccessfulConnecting, 1)
 	}
 }
 
@@ -56,13 +56,13 @@ func (c *connStats) AddCreatedToFailedConnecting(asn uint, cc string, tp string,
 	if isValidCC(cc) {
 		c.m.Lock()
 		defer c.m.Unlock()
-		if _, ok := c.geoIPMap[asn]; !ok {
+		if _, ok := c.v4geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
-			c.geoIPMap[asn] = &asnCounts{}
-			c.geoIPMap[asn].cc = cc
+			c.v4geoIPMap[asn] = &asnCounts{}
+			c.v4geoIPMap[asn].cc = cc
 		}
-		atomic.AddInt64(&c.geoIPMap[asn].numCreatedConnecting, -1)
-		atomic.AddInt64(&c.geoIPMap[asn].numFailedConnecting, 1)
+		atomic.AddInt64(&c.v4geoIPMap[asn].numCreatedConnecting, -1)
+		atomic.AddInt64(&c.v4geoIPMap[asn].numFailedConnecting, 1)
 	}
 }
 
@@ -73,13 +73,13 @@ func (c *connStats) AddSuccessfulToDiscardedConnecting(asn uint, cc string, tp s
 	if isValidCC(cc) {
 		c.m.Lock()
 		defer c.m.Unlock()
-		if _, ok := c.geoIPMap[asn]; !ok {
+		if _, ok := c.v4geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
-			c.geoIPMap[asn] = &asnCounts{}
-			c.geoIPMap[asn].cc = cc
+			c.v4geoIPMap[asn] = &asnCounts{}
+			c.v4geoIPMap[asn].cc = cc
 		}
-		atomic.AddInt64(&c.geoIPMap[asn].numSuccessfulConnecting, -1)
-		atomic.AddInt64(&c.geoIPMap[asn].numDiscardedConnecting, 1)
+		atomic.AddInt64(&c.v4geoIPMap[asn].numSuccessfulConnecting, -1)
+		atomic.AddInt64(&c.v4geoIPMap[asn].numDiscardedConnecting, 1)
 	}
 }
 
@@ -89,12 +89,12 @@ func (c *connStats) AddNoRegConnecting(asn uint, cc string, tp string) {
 	if isValidCC(cc) {
 		c.m.Lock()
 		defer c.m.Unlock()
-		if _, ok := c.geoIPMap[asn]; !ok {
+		if _, ok := c.v4geoIPMap[asn]; !ok {
 			// We haven't seen asn before, so add it to the map
-			c.geoIPMap[asn] = &asnCounts{}
-			c.geoIPMap[asn].cc = cc
+			c.v4geoIPMap[asn] = &asnCounts{}
+			c.v4geoIPMap[asn].cc = cc
 		}
-		atomic.AddInt64(&c.geoIPMap[asn].numNoReg, 1)
+		atomic.AddInt64(&c.v4geoIPMap[asn].numNoReg, 1)
 	}
 
 }
