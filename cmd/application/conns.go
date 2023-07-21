@@ -228,7 +228,7 @@ func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clie
 		} else {
 			cm.discardToClose(asn, cc, isIPv4)
 		}
-
+		logger.Infof("Didn't make it to readLoop --> count = %d", count) //TESTING
 		return
 	}
 
