@@ -9,13 +9,12 @@ import (
 
 	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
-	"github.com/refraction-networking/gotapdance/tapdance"
-
-	// td imports assets/
-	td "github.com/refraction-networking/gotapdance/tapdance"
 	tls "github.com/refraction-networking/utls"
+
+	// td imports assets/RegError/generateHTTPRequestBeginning
+	td "github.com/refraction-networking/gotapdance/tapdance"
+
 	"github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 /**
@@ -30,6 +29,21 @@ const deadlineConnectTDStationMax = 14231
 const deadlineTCPtoDecoyMin = deadlineConnectTDStationMin
 const deadlineTCPtoDecoyMax = deadlineConnectTDStationMax
 
+// Fixed-Size-Payload has a 1 byte flags field.
+// bit 0 (1 << 7) determines if flow is bidirectional(0) or upload-only(1)
+// bit 1 (1 << 6) enables dark-decoys
+// bits 2-5 are unassigned
+// bit 6 determines whether PROXY-protocol-formatted string will be sent
+// bit 7 (1 << 0) signals to use TypeLen outer proto
+var (
+	tdFlagUploadOnly = uint8(1 << 7)
+	// tdFlagDarkDecoy   = uint8(1 << 6)
+	tdFlagProxyHeader = uint8(1 << 1)
+	tdFlagUseTIL      = uint8(1 << 0)
+)
+
+var default_flags = tdFlagUseTIL
+
 type DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error)
 
 type DecoyRegistrar struct {
@@ -41,10 +55,8 @@ type DecoyRegistrar struct {
 	logger logrus.FieldLogger
 
 	// Fields taken from ConjureReg struct
-	m             sync.Mutex
-	stats         *pb.SessionStats
-	sessionIDStr  string
-	covertAddress string
+	m     sync.Mutex
+	stats *pb.SessionStats
 }
 
 // CurrentClientLibraryVersion returns the current client library version used
@@ -71,61 +83,6 @@ func currentClientLibraryVersion() uint32 {
 	// return 0
 }
 
-// RegError - Registration Error passed during registration to indicate failure mode
-type RegError struct {
-	code uint
-	msg  string
-}
-
-func NewRegError(code uint, msg string) RegError {
-	return RegError{code: code, msg: msg}
-}
-
-func (err RegError) Error() string {
-	return fmt.Sprintf("Registration Error [%v]: %v", err.CodeStr(), err.msg)
-}
-
-func (err RegError) Code() uint {
-	return err.code
-}
-
-// CodeStr - Get desctriptor associated with error code
-func (err RegError) CodeStr() string {
-	switch err.code {
-	case Unreachable:
-		return "UNREACHABLE"
-	case DialFailure:
-		return "DIAL_FAILURE"
-	case NotImplemented:
-		return "NOT_IMPLEMENTED"
-	case TLSError:
-		return "TLS_ERROR"
-	default:
-		return "UNKNOWN"
-	}
-}
-
-const (
-	// Unreachable -Dial Error Unreachable -- likely network unavailable (i.e. ipv6 error)
-	Unreachable = iota
-
-	// DialFailure - Dial Error Other than unreachable
-	DialFailure
-
-	// NotImplemented - Related Function Not Implemented
-	NotImplemented
-
-	// TLSError (Expired, Wrong-Host, Untrusted-Root, ...)
-	TLSError
-
-	// Unknown - Error occurred without obvious explanation
-	Unknown
-)
-
-func (r *DecoyRegistrar) getPbTransport() pb.TransportType {
-	return r.Transport.ID()
-}
-
 func (r *DecoyRegistrar) setTCPToDecoy(tcprtt *uint32) {
 	r.m.Lock()
 	defer r.m.Unlock()
@@ -136,76 +93,49 @@ func (r *DecoyRegistrar) setTCPToDecoy(tcprtt *uint32) {
 	r.stats.TcpToDecoy = tcprtt
 }
 
-func (reg *DecoyRegistrar) setTLSToDecoy(tlsrtt *uint32) {
-	reg.m.Lock()
-	defer reg.m.Unlock()
+func (r *DecoyRegistrar) setTLSToDecoy(tlsrtt *uint32) {
+	r.m.Lock()
+	defer r.m.Unlock()
 
-	if reg.stats == nil {
-		reg.stats = &pb.SessionStats{}
+	if r.stats == nil {
+		r.stats = &pb.SessionStats{}
 	}
-	reg.stats.TlsToDecoy = tlsrtt
+	r.stats.TlsToDecoy = tlsrtt
 }
 
-func (r *DecoyRegistrar) generateClientToStation() (*pb.ClientToStation, error) {
-	var covert *string
-	if len(r.covertAddress) > 0 {
-		//[TODO]{priority:medium} this isn't the correct place to deal with signaling to the station
-		//transition = pb.C2S_Transition_C2S_SESSION_COVERT_INIT
-		covert = &r.covertAddress
-	}
-
-	//[reference] Generate ClientToStation protobuf
-	// transition := pb.C2S_Transition_C2S_SESSION_INIT
-	currentGen := td.Assets().GetGeneration()
-	currentLibVer := currentClientLibraryVersion()
-	transport := reg.getPbTransport()
-	transportParams, err := reg.getPbTransportParams()
-	if err != nil {
-		// Logger().Debugf("%s failed to marshal transport parameters ", reg.sessionIDStr)
-	}
-
-	// remove type url to save space for DNS registration
-	// for server side changes see https://github.com/refraction-networking/conjure/pull/163
-	transportParams.TypeUrl = ""
-
-	initProto := &pb.ClientToStation{
-		ClientLibVersion:    &currentLibVer,
-		CovertAddress:       covert,
-		DecoyListGeneration: &currentGen,
-		V6Support:           reg.getV6Support(),
-		V4Support:           reg.getV4Support(),
-		Transport:           &transport,
-		Flags:               reg.generateFlags(),
-		TransportParams:     transportParams,
-
-		DisableRegistrarOverrides: &reg.ConjureSession.DisableRegistrarOverrides,
-
-		//[TODO]{priority:medium} specify width in C2S because different width might
-		// 		be useful in different regions (constant for now.)
-	}
-
-	if len(reg.phantomSNI) > 0 {
-		initProto.MaskedDecoyServerName = &reg.phantomSNI
-	}
-
-	for (proto.Size(initProto)+AES_GCM_TAG_SIZE)%3 != 0 {
-		initProto.Padding = append(initProto.Padding, byte(0))
-	}
-
-	return initProto, nil
+func (r *DecoyRegistrar) GetRandomDuration(base, min, max int) time.Duration {
+	addon := getRandInt(min, max) / 1000 // why this min and max???
+	rtt := rttInt(r.getTcpToDecoy())
+	return time.Millisecond * time.Duration(base+rtt*addon)
 }
 
-func NewDecoyRegistrar() *DecoyRegistrar {
-	return &DecoyRegistrar{
-		logger: tapdance.Logger(),
+func (r *DecoyRegistrar) getTcpToDecoy() uint32 {
+	r.m.Lock()
+	defer r.m.Unlock()
+	if r != nil {
+		if r.stats != nil {
+			return r.stats.GetTcpToDecoy()
+		}
 	}
+	return 0
 }
 
-func NewDecoyRegistrarWithDialer(dialer DialFunc) *DecoyRegistrar {
-	return &DecoyRegistrar{
-		dialContex: dialer,
-		logger:     tapdance.Logger(),
+func generateFlags(cjSession *td.ConjureSession) *pb.RegistrationFlags {
+	flags := &pb.RegistrationFlags{}
+	mask := default_flags
+	if cjSession.UseProxyHeader {
+		mask |= tdFlagProxyHeader
 	}
+
+	uploadOnly := mask&tdFlagUploadOnly == tdFlagUploadOnly
+	proxy := mask&tdFlagProxyHeader == tdFlagProxyHeader
+	til := mask&tdFlagUseTIL == tdFlagUseTIL
+
+	flags.UploadOnly = &uploadOnly
+	flags.ProxyHeader = &proxy
+	flags.Use_TIL = &til
+
+	return flags
 }
 
 func (r DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostname string, deadline time.Time) (*tls.UConn, error) {
@@ -241,39 +171,31 @@ func (r DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostnam
 	return tlsConn, nil
 }
 
-func generateVSP() ([]byte, error) {
-	c2s, err := reg.generateClientToStation()
-	if err != nil {
-		return nil, err
-	}
+// Register -> Send -> createRequest -> generateVSP -> generateClientToStation
 
-	//[reference] Marshal ClientToStation protobuf
-	return proto.Marshal(c2s)
-}
-
-func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpec) ([]byte, error) {
+func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpec, cjSession *td.ConjureSession) ([]byte, error) {
 	//[reference] generate and encrypt variable size payload
-	vsp, err := reg.generateVSP()
+	vsp, err := generateVSP(cjSession)
 	if err != nil {
 		return nil, err
 	}
 	if len(vsp) > int(^uint16(0)) {
 		return nil, fmt.Errorf("Variable-Size Payload exceeds %v", ^uint16(0))
 	}
-	encryptedVsp, err := aesGcmEncrypt(vsp, reg.keys.VspKey, reg.keys.VspIv)
+	encryptedVsp, err := aesGcmEncrypt(vsp, cjSession.Keys.VspKey, cjSession.Keys.VspIv)
 	if err != nil {
 		return nil, err
 	}
 
 	//[reference] generate and encrypt fixed size payload
-	fsp := reg.generateFSP(uint16(len(encryptedVsp)))
-	encryptedFsp, err := aesGcmEncrypt(fsp, reg.keys.FspKey, reg.keys.FspIv)
+	fsp := generateFSP(uint16(len(encryptedVsp)))
+	encryptedFsp, err := aesGcmEncrypt(fsp, cjSession.Keys.FspKey, cjSession.Keys.FspIv)
 	if err != nil {
 		return nil, err
 	}
 
 	var tag []byte // tag will be base-64 style encoded
-	tag = append(encryptedVsp, reg.keys.Representative...)
+	tag = append(encryptedVsp, cjSession.Keys.Representative...)
 	tag = append(tag, encryptedFsp...)
 
 	httpRequest := generateHTTPRequestBeginning(decoy.GetHostname())
@@ -289,7 +211,7 @@ func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpe
 	return httpRequest, nil
 }
 
-func (r DecoyRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
+func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Context) (*td.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
 
 	logger.Debugf("Registering V4 and V6 via DecoyRegistrar")
@@ -326,7 +248,7 @@ func (r DecoyRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context
 	for _, decoy := range decoys {
 		logger.Debugf("Sending Reg: %v, %v", decoy.GetHostname(), decoy.GetIpAddrStr())
 		//decoyAddr := decoy.GetIpAddrStr()
-		go r.Send(ctx, reg, decoy, dialErrors)
+		go r.Send(ctx, cjSession, decoy, dialErrors)
 	}
 
 	//[reference] Dial errors happen immediately so block until all N dials complete
@@ -334,7 +256,7 @@ func (r DecoyRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context
 	for err := range dialErrors {
 		if err != nil {
 			logger.Debugf("%v", err)
-			if dialErr, ok := err.(tapdance.RegError); ok && dialErr.Code() == tapdance.Unreachable {
+			if dialErr, ok := err.(td.RegError); ok && dialErr.Code() == td.Unreachable {
 				// If we failed because ipv6 network was unreachable try v4 only.
 				unreachableCount++
 				if unreachableCount < width {
@@ -351,18 +273,19 @@ func (r DecoyRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context
 	//[reference] if ALL fail to dial return error (retry in parent if ipv6 unreachable)
 	if unreachableCount == width {
 		logger.Debugf("NETWORK UNREACHABLE")
-		return nil, tapdance.NewRegError(tapdance.Unreachable, "All decoys failed to register -- Dial Unreachable")
+		return nil, td.NewRegError(td.Unreachable, "All decoys failed to register -- Dial Unreachable")
 	}
 
 	// randomized sleeping here to break the intraflow signal
-	toSleep := reg.GetRandomDuration(3000, 212, 3449)
+	// TODO: is this okay?
+	toSleep := r.GetRandomDuration(3000, 212, 3449)
 	logger.Debugf("Successfully sent registrations, sleeping for: %v", toSleep)
 	lib.SleepWithContext(ctx, toSleep)
 
 	return reg, nil
 }
 
-func (r *DecoyRegistrar) Send(ctx context.Context, reg *tapdance.ConjureReg, decoy *pb.TLSDecoySpec, dialError chan error) {
+func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession, decoy *pb.TLSDecoySpec, dialError chan error) {
 
 	deadline, deadlineAlreadySet := ctx.Deadline()
 	if !deadlineAlreadySet {
@@ -380,7 +303,7 @@ func (r *DecoyRegistrar) Send(ctx context.Context, reg *tapdance.ConjureReg, dec
 	r.setTCPToDecoy(durationToU32ptrMs(time.Since(tcpToDecoyStartTs)))
 	if err != nil {
 		if opErr, ok := err.(*net.OpError); ok && opErr.Err.Error() == "connect: network is unreachable" {
-			dialError <- RegError{msg: err.Error(), code: Unreachable}
+			dialError <- td.NewRegError(td.Unreachable, err.Error())
 			return
 		}
 		dialError <- err
@@ -397,16 +320,16 @@ func (r *DecoyRegistrar) Send(ctx context.Context, reg *tapdance.ConjureReg, dec
 	if err != nil {
 		dialConn.Close()
 		msg := fmt.Sprintf("%v - %v createConn: %v", decoy.GetHostname(), decoy.GetIpAddrStr(), err.Error())
-		dialError <- RegError{msg: msg, code: TLSError}
+		dialError <- td.NewRegError(td.TLSError, msg)
 		return
 	}
 	r.setTLSToDecoy(durationToU32ptrMs(time.Since(tlsToDecoyStartTs)))
 
 	//[reference] Create the HTTP request for the registration
-	httpRequest, err := reg.createRequest(tlsConn, decoy)
+	httpRequest, err := r.createRequest(tlsConn, decoy, cjSession)
 	if err != nil {
 		msg := fmt.Sprintf("%v - %v createReq: %v", decoy.GetHostname(), decoy.GetIpAddrStr(), err.Error())
-		dialError <- RegError{msg: msg, code: TLSError}
+		dialError <- td.NewRegError(td.TLSError, msg)
 		return
 	}
 
@@ -417,17 +340,10 @@ func (r *DecoyRegistrar) Send(ctx context.Context, reg *tapdance.ConjureReg, dec
 		// Logger().Errorf("%v - %v Could not send Conjure registration request, error: %v", decoy.GetHostname(), decoy.GetIpAddrStr(), err.Error())
 		tlsConn.Close()
 		msg := fmt.Sprintf("%v - %v Write: %v", decoy.GetHostname(), decoy.GetIpAddrStr(), err.Error())
-		dialError <- RegError{msg: msg, code: TLSError}
+		dialError <- td.NewRegError(td.TLSError, msg)
 		return
 	}
 
 	dialError <- nil
 	readAndClose(dialConn, time.Second*15)
-}
-
-// Move to other file eventually?
-func GetRandomDuration(base, min, max int) time.Duration {
-	addon := getRandInt(min, max) / 1000 // why this min and max???
-	rtt := rttInt(reg.getTcpToDecoy())
-	return time.Millisecond * time.Duration(base+rtt*addon)
 }
