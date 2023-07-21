@@ -165,6 +165,10 @@ func buildSymmetricVerifier(psk []byte) func(cs tls.ConnectionState) error {
 		expected, err := newCertificate(psk)
 		// expected.Leaf.KeyUsage |= x509.KeyUsageCertSign
 
+		if !cs.DidResume {
+			return fmt.Errorf("expected session resumption")
+		}
+
 		if len(cs.PeerCertificates) != 1 {
 			return fmt.Errorf("expected 1 peer certificate, got %v", len(cs.PeerCertificates))
 		}

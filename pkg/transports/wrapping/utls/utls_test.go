@@ -278,7 +278,7 @@ func TestTryParamsToDstPort(t *testing.T) {
 	}{{true, 58047}, {false, defaultPort}}
 
 	for _, testCase := range cases {
-		ct := ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &testCase.r}}
+		ct := ClientTransport{Parameters: &pb.UTLSTransportParams{RandomizeDstPort: &testCase.r}}
 		var transport Transport
 
 		rawParams, err := anypb.New(ct.GetParams())
