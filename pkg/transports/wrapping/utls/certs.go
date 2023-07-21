@@ -1,21 +1,22 @@
 package utls
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/pem"
+	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"math/big"
-	"net"
 	"time"
+
+	tls "github.com/refraction-networking/utls"
+	"golang.org/x/crypto/hkdf"
 )
 
 func publicKey(priv any) any {
@@ -31,12 +32,7 @@ func publicKey(priv any) any {
 	}
 }
 
-func generateKeyAndCert(r io.Reader, secret [32]byte, names []string, validFrom ...string) (cert []byte, key []byte, err error) {
-	var priv any
-	var ecdsaCurve string = "P384"
-	var ed25519Key bool = false
-	var rsaBits int = 4096
-	var validFor time.Duration = time.Duration(time.Hour * 6)
+func genKey(r io.Reader, ecdsaCurve string, ed25519Key bool, rsaBits int) (priv any, err error) {
 	switch ecdsaCurve {
 	case "":
 		if ed25519Key {
@@ -53,84 +49,127 @@ func generateKeyAndCert(r io.Reader, secret [32]byte, names []string, validFrom 
 	case "P521":
 		priv, err = ecdsa.GenerateKey(elliptic.P521(), r)
 	default:
-		log.Fatalf("Unrecognized elliptic curve: %q", ecdsaCurve)
+		err = fmt.Errorf("Unrecognized elliptic curve: %q", ecdsaCurve)
 	}
 	if err != nil {
-		log.Fatalf("Failed to generate private key: %v", err)
+		err = fmt.Errorf("Failed to generate private key: %v", err)
 	}
-
-	// ECDSA, ED25519 and RSA subject keys should have the DigitalSignature
-	// KeyUsage bits set in the x509.Certificate template
-	keyUsage := x509.KeyUsageDigitalSignature
-	// Only RSA subject keys should have the KeyEncipherment KeyUsage bits set. In
-	// the context of TLS this KeyUsage is particular to RSA key exchange and
-	// authentication.
-	if _, isRSA := priv.(*rsa.PrivateKey); isRSA {
-		keyUsage |= x509.KeyUsageKeyEncipherment
-	}
-
-	var notBefore time.Time
-	if len(validFrom) == 0 {
-		notBefore = time.Now()
-	} else {
-		notBefore, err = time.Parse("Jan 2 15:04:05 2006", validFrom[0])
-		if err != nil {
-			log.Fatalf("Failed to parse creation date: %v", err)
-		}
-	}
-
-	notAfter := notBefore.Add(validFor)
-
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(r, serialNumberLimit)
-	if err != nil {
-		log.Fatalf("Failed to generate serial number: %v", err)
-	}
-
-	template := x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject: pkix.Name{
-			Organization: []string{"refraction-networking"},
-		},
-		NotBefore: notBefore,
-		NotAfter:  notAfter,
-
-		KeyUsage:              keyUsage,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-	}
-
-	for _, h := range names {
-		if ip := net.ParseIP(h); ip != nil {
-			template.IPAddresses = append(template.IPAddresses, ip)
-		} else {
-			template.DNSNames = append(template.DNSNames, h)
-		}
-	}
-
-	derBytes, err := x509.CreateCertificate(r, &template, &template, publicKey(priv), priv)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create certificate: %w", err)
-	}
-
-	certOut := new(bytes.Buffer)
-
-	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
-		return nil, nil, fmt.Errorf("failed to encode cert to to buffer: %w", err)
-	}
-
-	keyOut := new(bytes.Buffer)
-
-	privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to marshal private key: %w", err)
-	}
-
-	if err := pem.Encode(keyOut, &pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}); err != nil {
-		return nil, nil, fmt.Errorf("failed to write data to key.pem: %w", err)
-	}
-
-	cert = certOut.Bytes()
-	key = keyOut.Bytes()
 	return
+}
+
+type Not1Reader struct {
+	r io.Reader
+}
+
+func (n1r *Not1Reader) Read(p []byte) (n int, err error) {
+
+	if len(p) == 1 {
+		// err = io.EOF
+		return 1, nil
+	}
+
+	return n1r.r.Read(p)
+}
+
+// func clientHelloRandomFromSeed(seed []byte) ([handshake.RandomBytesLength]byte, error) {
+// 	randSource := hkdf.New(sha256.New, seed, nil, nil)
+// 	randomBytes := [handshake.RandomBytesLength]byte{}
+
+// 	_, err := io.ReadFull(randSource, randomBytes[:])
+// 	if err != nil {
+// 		return [handshake.RandomBytesLength]byte{}, err
+// 	}
+
+// 	return randomBytes, nil
+// }
+
+// getPrivkey creates ECDSA private key used in DTLS Certificates
+func getPrivkey(seed []byte) (*ecdsa.PrivateKey, error) {
+	randSource := hkdf.New(sha256.New, seed, nil, nil)
+
+	privkey, err := ecdsa.GenerateKey(elliptic.P256(), &Not1Reader{r: randSource})
+	if err != nil {
+		return &ecdsa.PrivateKey{}, err
+	}
+	return privkey, nil
+}
+
+// getX509Tpl creates x509 template for x509 Certificates generation used in DTLS Certificates.
+func getX509Tpl(seed []byte) (*x509.Certificate, error) {
+	randSource := hkdf.New(sha256.New, seed, nil, nil)
+
+	maxBigInt := new(big.Int)
+	maxBigInt.Exp(big.NewInt(2), big.NewInt(130), nil).Sub(maxBigInt, big.NewInt(1))
+	serialNumber, err := rand.Int(randSource, maxBigInt)
+	if err != nil {
+		return &x509.Certificate{}, err
+	}
+
+	// Make the Certificate valid from UTC today till next month.
+	utcNow := time.Now().UTC()
+	validFrom := time.Date(utcNow.Year(), utcNow.Month(), utcNow.Day(), 0, 0, 0, 0, time.UTC)
+	validUntil := validFrom.AddDate(0, 1, 0)
+
+	// random CN
+	cnBytes := make([]byte, 8)
+	_, err = io.ReadFull(randSource, cnBytes)
+	if err != nil {
+		return &x509.Certificate{}, fmt.Errorf("failed to generate common name: %w", err)
+	}
+	cn := hex.EncodeToString(cnBytes)
+
+	return &x509.Certificate{
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageClientAuth,
+			x509.ExtKeyUsageServerAuth,
+		},
+		BasicConstraintsValid: true,
+		NotBefore:             validFrom,
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		NotAfter:              validUntil,
+		SerialNumber:          serialNumber,
+		SignatureAlgorithm:    x509.ECDSAWithSHA256,
+		Version:               2,
+		Subject:               pkix.Name{CommonName: cn},
+		DNSNames:              []string{cn},
+		IsCA:                  true,
+	}, nil
+}
+
+func newCertificate(seed []byte) (*tls.Certificate, error) {
+	privkey, err := getPrivkey(seed)
+	if err != nil {
+		return &tls.Certificate{}, err
+	}
+
+	tpl, err := getX509Tpl(seed)
+	if err != nil {
+		return &tls.Certificate{}, err
+	}
+
+	randSource := hkdf.New(sha256.New, seed, nil, nil)
+
+	certDER, err := x509.CreateCertificate(randSource, tpl, tpl, privkey.Public(), privkey)
+	if err != nil {
+		return &tls.Certificate{}, err
+	}
+
+	return &tls.Certificate{
+		Certificate: [][]byte{certDER},
+		PrivateKey:  privkey,
+	}, nil
+}
+
+func certsFromSeed(seed []byte) (*tls.Certificate, *tls.Certificate, error) {
+	clientCert, err := newCertificate(seed)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error generate cert: %v", err)
+	}
+
+	// serverCert, err := newCertificate(seed)
+	// if err != nil {
+	// 	return &tls.Certificate{}, &tls.Certificate{}, fmt.Errorf("error generate cert: %v", err)
+	// }
+
+	return clientCert, clientCert, nil
 }
