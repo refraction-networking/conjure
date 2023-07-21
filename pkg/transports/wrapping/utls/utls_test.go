@@ -3,7 +3,6 @@ package utls
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -309,7 +308,6 @@ func TestUtlsSessionResumption(t *testing.T) {
 	cert, err := newCertificate(randVal[:])
 	serverConfig := &tls.Config{
 		Certificates:           []tls.Certificate{*cert},
-		InsecureSkipVerify:     true,
 		MinVersion:             tls.VersionTLS10,
 		MaxVersion:             tls.VersionTLS12,
 		SessionTicketsDisabled: false,
@@ -376,68 +374,111 @@ func TestUtlsSessionResumption(t *testing.T) {
 	require.True(t, bytes.Equal(message, received))
 }
 
-func buildSymmetricVerifier(psk []byte) func(cs tls.ConnectionState) error {
-	return func(cs tls.ConnectionState) error {
-		expected, err := newCertificate(psk)
-		// expected.Leaf.KeyUsage |= x509.KeyUsageCertSign
-
-		if len(cs.PeerCertificates) != 1 {
-			return fmt.Errorf("expected 1 peer certificate, got %v", len(cs.PeerCertificates))
-		}
-
-		if len(expected.Certificate) != 1 {
-			return fmt.Errorf("expected 1 pre-established cert, got %v", len(expected.Certificate))
-		}
-
-		expectedCert, err := x509.ParseCertificate(expected.Certificate[0])
-		if err != nil {
-			return fmt.Errorf("error parsing peer certificate: %v", err)
-		}
-
-		err = verifyCert(cs.PeerCertificates[0], expectedCert)
-		if err != nil {
-			return fmt.Errorf("error verifying peer certificate: %v", err)
-		}
-
-		return nil
+func TestUtlsSessionResumptionTCP(t *testing.T) {
+	var err error
+	listenAddr := &net.TCPAddr{
+		IP:   net.IPv6loopback,
+		Port: 4443,
 	}
-}
+	message := []byte(`test message!`)
 
-func verifyCert(incoming, correct *x509.Certificate) error {
-	correct.KeyUsage |= x509.KeyUsageCertSign // CheckSignature have requirements for the KeyUsage field
-	err := incoming.CheckSignatureFrom(correct)
-	if err != nil {
-		return fmt.Errorf("error verifying certificate signature: %v", err)
+	randVal := [32]byte{}
+	n, err := rand.Read(randVal[:])
+	require.Nil(t, err)
+	require.Equal(t, 32, n)
+	domainName := "abc.def.com"
+	ordering := make(chan struct{})
+	cert, err := newCertificate(randVal[:])
+	serverConfig := &tls.Config{
+		Certificates:           []tls.Certificate{*cert},
+		MinVersion:             tls.VersionTLS10,
+		MaxVersion:             tls.VersionTLS12,
+		SessionTicketsDisabled: false,
+		ClientAuth:             tls.RequireAnyClientCert,
+		VerifyConnection:       buildSymmetricVerifier(randVal[:]),
+		CipherSuites:           []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
 	}
 
-	return nil
+	go func() {
+		config := *serverConfig
+
+		config.BuildNameToCertificate()
+		config.SetSessionTicketKeys([][32]byte{randVal})
+
+		l, err := net.ListenTCP("tcp", listenAddr)
+		if err != nil {
+			t.Fail()
+			ordering <- struct{}{}
+			return
+		}
+		defer l.Close()
+
+		ordering <- struct{}{}
+
+		sfc, err := l.Accept()
+		if err != nil {
+			t.Fail()
+			return
+		}
+
+		wrapped := tls.Server(sfc, &config)
+
+		stationReceived := make([]byte, len(message))
+		_, err = io.ReadFull(wrapped, stationReceived)
+		if err != nil {
+			t.Logf("failed ReadFull: %s %s", stationReceived, err)
+			t.Logf("%v", config.CipherSuites)
+			t.Fail()
+			return
+		}
+		_, err = wrapped.Write(stationReceived)
+		if err != nil {
+			t.Logf("failed Write")
+			t.Fail()
+			return
+		}
+	}()
+
+	serverSession, err := tls.ForgeServerSessionState(randVal[:], serverConfig, tls.HelloChrome_Auto)
+	require.Nil(t, err)
+
+	sessionTicket, err := serverSession.MakeEncryptedTicket(randVal, &tls.Config{})
+	require.Nil(t, err)
+
+	// Create a session ticket that wasn't actually issued by the server.
+	sessionState := tls.MakeClientSessionState(sessionTicket, uint16(tls.VersionTLS12),
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		randVal[:],
+		nil, nil)
+
+	config := &tls.Config{
+		ServerName:   domainName,
+		Certificates: []tls.Certificate{*cert},
+		// VerifyConnection: buildSymmetricVerifier(randVal[:]),
+	}
+
+	<-ordering
+	c2p, err := net.Dial("tcp", listenAddr.String())
+	require.Nil(t, err)
+
+	clientTLSConn := tls.UClient(c2p, config, tls.HelloGolang)
+	require.NotNil(t, clientTLSConn)
+
+	err = clientTLSConn.BuildHandshakeState()
+	require.Nil(t, err)
+
+	// SetSessionState sets the session ticket, which may be preshared or fake.
+	err = clientTLSConn.SetSessionState(sessionState)
+	require.Nil(t, err)
+
+	_, err = clientTLSConn.Write(message)
+	require.Nil(t, err)
+
+	received := make([]byte, len(message))
+	_, err = io.ReadFull(clientTLSConn, received)
+	require.Nil(t, err, "failed reading from connection")
+	require.True(t, bytes.Equal(message, received))
 }
-
-// func serverVerifyClientConnection(cs tls.ConnectionState) error {
-
-// 	if len(cs.PeerCertificates) != 1 {
-// 		return fmt.Errorf("expected 1 peer certificate, got %v", len(cs.PeerCertificates))
-// 	}
-
-// 	err := verifyCert(cs.PeerCertificates[0])
-// 	if err != nil {
-// 		return fmt.Errorf("error verifying peer certificate: %v", err)
-// 	}
-
-// 	return nil
-// }
-
-// func clientVerifyServerConnection(cs tls.ConnectionState) error {
-// 	opts := x509.VerifyOptions{
-// 		DNSName:       cs.ServerName,
-// 		Intermediates: x509.NewCertPool(),
-// 	}
-// 	for _, cert := range cs.PeerCertificates[1:] {
-// 		opts.Intermediates.AddCert(cert)
-// 	}
-// 	_, err := cs.PeerCertificates[0].Verify(opts)
-// 	return err
-// }
 
 const (
 	// ticketKeyNameLen is the number of bytes of identifier that is prepended to

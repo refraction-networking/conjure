@@ -57,11 +57,11 @@ func genKey(r io.Reader, ecdsaCurve string, ed25519Key bool, rsaBits int) (priv 
 	return
 }
 
-type Not1Reader struct {
+type not1Reader struct {
 	r io.Reader
 }
 
-func (n1r *Not1Reader) Read(p []byte) (n int, err error) {
+func (n1r *not1Reader) Read(p []byte) (n int, err error) {
 
 	if len(p) == 1 {
 		// err = io.EOF
@@ -87,7 +87,7 @@ func (n1r *Not1Reader) Read(p []byte) (n int, err error) {
 func getPrivkey(seed []byte) (*ecdsa.PrivateKey, error) {
 	randSource := hkdf.New(sha256.New, seed, nil, nil)
 
-	privkey, err := ecdsa.GenerateKey(elliptic.P256(), &Not1Reader{r: randSource})
+	privkey, err := ecdsa.GenerateKey(elliptic.P256(), &not1Reader{r: randSource})
 	if err != nil {
 		return &ecdsa.PrivateKey{}, err
 	}
@@ -160,16 +160,39 @@ func newCertificate(seed []byte) (*tls.Certificate, error) {
 	}, nil
 }
 
-func certsFromSeed(seed []byte) (*tls.Certificate, *tls.Certificate, error) {
-	clientCert, err := newCertificate(seed)
+func buildSymmetricVerifier(psk []byte) func(cs tls.ConnectionState) error {
+	return func(cs tls.ConnectionState) error {
+		expected, err := newCertificate(psk)
+		// expected.Leaf.KeyUsage |= x509.KeyUsageCertSign
+
+		if len(cs.PeerCertificates) != 1 {
+			return fmt.Errorf("expected 1 peer certificate, got %v", len(cs.PeerCertificates))
+		}
+
+		if len(expected.Certificate) != 1 {
+			return fmt.Errorf("expected 1 pre-established cert, got %v", len(expected.Certificate))
+		}
+
+		expectedCert, err := x509.ParseCertificate(expected.Certificate[0])
+		if err != nil {
+			return fmt.Errorf("error parsing peer certificate: %v", err)
+		}
+
+		err = verifyCert(cs.PeerCertificates[0], expectedCert)
+		if err != nil {
+			return fmt.Errorf("error verifying peer certificate: %v", err)
+		}
+
+		return nil
+	}
+}
+
+func verifyCert(incoming, correct *x509.Certificate) error {
+	correct.KeyUsage |= x509.KeyUsageCertSign // CheckSignature have requirements for the KeyUsage field
+	err := incoming.CheckSignatureFrom(correct)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error generate cert: %v", err)
+		return fmt.Errorf("error verifying certificate signature: %v", err)
 	}
 
-	// serverCert, err := newCertificate(seed)
-	// if err != nil {
-	// 	return &tls.Certificate{}, &tls.Certificate{}, fmt.Errorf("error generate cert: %v", err)
-	// }
-
-	return clientCert, clientCert, nil
+	return nil
 }
