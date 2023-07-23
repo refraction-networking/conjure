@@ -13,7 +13,6 @@ type connectingCounts struct {
 	numCreatedConnecting    int64
 	numSuccessfulConnecting int64
 	numFailedConnecting     int64
-	numDiscardedConnecting  int64
 	numAuthFail             int64
 	numOtherFail            int64
 }
@@ -68,20 +67,6 @@ func (c *connStats) AddCreatedToFailedConnecting(asn uint, cc string, tp string,
 }
 
 func (c *connStats) AddSuccessfulToDiscardedConnecting(asn uint, cc string, tp string) {
-	atomic.AddInt64(&c.numSuccessfulConnecting, -1)
-	atomic.AddInt64(&c.numDiscardedConnecting, 1)
-
-	if isValidCC(cc) {
-		c.m.Lock()
-		defer c.m.Unlock()
-		if _, ok := c.v4geoIPMap[asn]; !ok {
-			// We haven't seen asn before, so add it to the map
-			c.v4geoIPMap[asn] = &asnCounts{}
-			c.v4geoIPMap[asn].cc = cc
-		}
-		atomic.AddInt64(&c.v4geoIPMap[asn].numSuccessfulConnecting, -1)
-		atomic.AddInt64(&c.v4geoIPMap[asn].numDiscardedConnecting, 1)
-	}
 }
 
 func (c *connStats) AddAuthFailConnecting(asn uint, cc string, tp string) {
@@ -121,5 +106,19 @@ func (c *connStats) resetConnecting() {
 }
 
 func (c *connectingCounts) string() string {
-	return fmt.Sprintf("%d %d %d %d %d", atomic.LoadInt64(&c.numCreatedConnecting), atomic.LoadInt64(&c.numSuccessfulConnecting), atomic.LoadInt64(&c.numFailedConnecting), atomic.LoadInt64(&c.numAuthFail), atomic.LoadInt64(&c.numOtherFail))
+	totalEndStates := atomic.LoadInt64(&c.numSuccessfulConnecting) + atomic.LoadInt64(&c.numFailedConnecting) + atomic.LoadInt64(&c.numAuthFail) + atomic.LoadInt64(&c.numOtherFail)
+	if totalEndStates < 1 {
+		totalEndStates = 0
+	}
+	return fmt.Sprintf("%d %d %d %d %d %.3f %.3f %.3f %.3f",
+		atomic.LoadInt64(&c.numCreatedConnecting),
+		atomic.LoadInt64(&c.numSuccessfulConnecting),
+		atomic.LoadInt64(&c.numFailedConnecting),
+		atomic.LoadInt64(&c.numAuthFail),
+		atomic.LoadInt64(&c.numOtherFail),
+		float64(atomic.LoadInt64(&c.numSuccessfulConnecting))/float64(totalEndStates),
+		float64(atomic.LoadInt64(&c.numFailedConnecting))/float64(totalEndStates),
+		float64(atomic.LoadInt64(&c.numAuthFail))/float64(totalEndStates),
+		float64(atomic.LoadInt64(&c.numOtherFail))/float64(totalEndStates),
+	)
 }
