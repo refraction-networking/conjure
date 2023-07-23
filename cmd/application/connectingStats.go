@@ -121,5 +121,5 @@ func (c *connStats) resetConnecting() {
 }
 
 func (c *connectingCounts) string() string {
-	return fmt.Sprintf("%d %d %d %d %d %d", atomic.LoadInt64(&c.numCreatedConnecting), atomic.LoadInt64(&c.numSuccessfulConnecting), atomic.LoadInt64(&c.numFailedConnecting), atomic.LoadInt64(&c.numDiscardedConnecting), atomic.LoadInt64(&c.numAuthFail), atomic.LoadInt64(&c.numOtherFail))
+	return fmt.Sprintf("%d %d %d %d %d", atomic.LoadInt64(&c.numCreatedConnecting), atomic.LoadInt64(&c.numSuccessfulConnecting), atomic.LoadInt64(&c.numFailedConnecting), atomic.LoadInt64(&c.numAuthFail), atomic.LoadInt64(&c.numOtherFail))
 }
