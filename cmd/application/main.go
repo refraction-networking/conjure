@@ -61,22 +61,26 @@ func main() {
 
 	regManager := cj.NewRegistrationManager(conf.RegConfig)
 
-	dtlsTransport, err := dtls.NewTransport(func(ip *net.IP) {
-		cc, err := regManager.GeoIP.CC(*ip)
-		if err != nil {
-			return
-		}
-
-		var asn uint = 0
-		if cc != "unk" {
-			asn, err = regManager.GeoIP.ASN(*ip)
+	logIPDTLS := func(logger func(asn uint, cc, tp string)) func(*net.IP) {
+		return func(ip *net.IP) {
+			cc, err := regManager.GeoIP.CC(*ip)
 			if err != nil {
 				return
 			}
-		}
 
-		connManager.AddNoRegConnecting(asn, cc, "dtls")
-	})
+			var asn uint = 0
+			if cc != "unk" {
+				asn, err = regManager.GeoIP.ASN(*ip)
+				if err != nil {
+					return
+				}
+			}
+
+			logger(asn, cc, "dtls")
+		}
+	}
+
+	dtlsTransport, err := dtls.NewTransport(logIPDTLS(connManager.AddAuthFailConnecting), logIPDTLS(connManager.AddOtherFailConnecting))
 
 	if err != nil {
 		log.Fatalf("failed to setup dtls: %v", err)

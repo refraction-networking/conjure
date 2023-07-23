@@ -7,32 +7,19 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
 
 	"github.com/mingyech/dtls"
-	"github.com/mingyech/dtls/pkg/protocol"
 	"github.com/mingyech/dtls/pkg/protocol/handshake"
-	"github.com/mingyech/dtls/pkg/protocol/recordlayer"
 	"github.com/mingyech/transport/udp"
 )
 
 // Listen creates a listener and starts listening
 func Listen(network string, laddr *net.UDPAddr, config *Config) (*Listener, error) {
-	lc := udp.ListenConfig{
-		AcceptFilter: func(packet []byte) bool {
-			pkts, err := recordlayer.UnpackDatagram(packet)
-			if err != nil || len(pkts) < 1 {
-				return false
-			}
-			h := &recordlayer.Header{}
-			if err := h.Unmarshal(pkts[0]); err != nil {
-				return false
-			}
-			return h.ContentType == protocol.ContentTypeHandshake
-		},
-	}
+	lc := udp.ListenConfig{}
 	parent, err := lc.Listen(network, laddr)
 	if err != nil {
 		return nil, err
@@ -62,11 +49,11 @@ func (l *Listener) acceptLoop() {
 			if err != nil {
 				switch addr := c.RemoteAddr().(type) {
 				case *net.UDPAddr:
-					l.logUnregistered(&addr.IP)
+					l.logIP(err, &addr.IP)
 				case *net.TCPAddr:
-					l.logUnregistered(&addr.IP)
+					l.logIP(err, &addr.IP)
 				case *net.IPAddr:
-					l.logUnregistered(&addr.IP)
+					l.logIP(err, &addr.IP)
 				}
 
 				return
@@ -91,6 +78,14 @@ func (l *Listener) acceptLoop() {
 	}
 }
 
+func (l *Listener) logIP(err error, ip *net.IP) {
+	var terr *dtls.TemporaryError
+	if errors.As(err, &terr) {
+		l.logOther(ip)
+	}
+	l.logAuthFail(ip)
+}
+
 // NewListener creates a DTLS listener which accepts connections from an inner Listener.
 func NewListener(inner net.Listener, config *Config) (*Listener, error) {
 	// the default cert is only used for checking avaliable cipher suites
@@ -100,11 +95,12 @@ func NewListener(inner net.Listener, config *Config) (*Listener, error) {
 	}
 
 	newDTLSListner := Listener{
-		parent:          inner,
-		connMap:         map[[handshake.RandomBytesLength]byte](chan net.Conn){},
-		connToCert:      map[[handshake.RandomBytesLength]byte]*certPair{},
-		defaultCert:     defaultCert,
-		logUnregistered: config.LogUnregistered,
+		parent:      inner,
+		connMap:     map[[handshake.RandomBytesLength]byte](chan net.Conn){},
+		connToCert:  map[[handshake.RandomBytesLength]byte]*certPair{},
+		defaultCert: defaultCert,
+		logAuthFail: config.LogAuthFail,
+		logOther:    config.LogOther,
 	}
 
 	go newDTLSListner.acceptLoop()
@@ -120,7 +116,8 @@ type Listener struct {
 	connToCert      map[[handshake.RandomBytesLength]byte]*certPair
 	connToCertMutex sync.RWMutex
 	defaultCert     *tls.Certificate
-	logUnregistered func(*net.IP)
+	logAuthFail     func(*net.IP)
+	logOther        func(*net.IP)
 }
 
 // Close closes the listener.

@@ -39,10 +39,10 @@ func (Transport) GetIdentifier(reg *dd.DecoyRegistration) string {
 }
 
 // NewTransport creates a new dtls transport
-func NewTransport(logUnreg func(*net.IP)) (*Transport, error) {
+func NewTransport(logAuthFail func(*net.IP), logOtherFail func(*net.IP)) (*Transport, error) {
 	addr := &net.UDPAddr{Port: listenPort}
 
-	listener, err := dtls.Listen("udp", addr, &dtls.Config{LogUnregistered: logUnreg})
+	listener, err := dtls.Listen("udp", addr, &dtls.Config{LogAuthFail: logAuthFail, LogOther: logAuthFail})
 	if err != nil {
 		return nil, fmt.Errorf("error creating dtls listner: %v", err)
 	}
@@ -56,7 +56,7 @@ func NewTransport(logUnreg func(*net.IP)) (*Transport, error) {
 	return &Transport{
 		dnat:         dnat,
 		dtlsListener: listener,
-		unregLogger:  logUnreg,
+		unregLogger:  logAuthFail,
 	}, nil
 }
 

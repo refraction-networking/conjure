@@ -18,7 +18,7 @@ func main() {
 	laddr, err := net.ResolveUDPAddr("udp", *localAddr)
 	util.Check(err)
 
-	listener, err := dtls.Listen("udp", laddr, &dtls.Config{LogUnregistered: func(*net.IP) {}})
+	listener, err := dtls.Listen("udp", laddr, &dtls.Config{LogAuthFail: func(*net.IP) { fmt.Println("err ip") }, LogOther: func(*net.IP) { fmt.Println("err other") }})
 	if err != nil {
 		fmt.Printf("error creating dtls listner: %v\n", err)
 	}

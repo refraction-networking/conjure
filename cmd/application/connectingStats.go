@@ -14,7 +14,8 @@ type connectingCounts struct {
 	numSuccessfulConnecting int64
 	numFailedConnecting     int64
 	numDiscardedConnecting  int64
-	numNoReg                int64
+	numAuthFail             int64
+	numOtherFail            int64
 }
 
 func (c *connStats) AddCreatedConnecting(asn uint, cc string, tp string) {
@@ -83,8 +84,8 @@ func (c *connStats) AddSuccessfulToDiscardedConnecting(asn uint, cc string, tp s
 	}
 }
 
-func (c *connStats) AddNoRegConnecting(asn uint, cc string, tp string) {
-	atomic.AddInt64(&c.numNoReg, 1)
+func (c *connStats) AddAuthFailConnecting(asn uint, cc string, tp string) {
+	atomic.AddInt64(&c.numAuthFail, 1)
 
 	if isValidCC(cc) {
 		c.m.Lock()
@@ -94,7 +95,23 @@ func (c *connStats) AddNoRegConnecting(asn uint, cc string, tp string) {
 			c.v4geoIPMap[asn] = &asnCounts{}
 			c.v4geoIPMap[asn].cc = cc
 		}
-		atomic.AddInt64(&c.v4geoIPMap[asn].numNoReg, 1)
+		atomic.AddInt64(&c.v4geoIPMap[asn].numAuthFail, 1)
+	}
+
+}
+
+func (c *connStats) AddOtherFailConnecting(asn uint, cc string, tp string) {
+	atomic.AddInt64(&c.numOtherFail, 1)
+
+	if isValidCC(cc) {
+		c.m.Lock()
+		defer c.m.Unlock()
+		if _, ok := c.v4geoIPMap[asn]; !ok {
+			// We haven't seen asn before, so add it to the map
+			c.v4geoIPMap[asn] = &asnCounts{}
+			c.v4geoIPMap[asn].cc = cc
+		}
+		atomic.AddInt64(&c.v4geoIPMap[asn].numOtherFail, 1)
 	}
 
 }
@@ -104,6 +121,5 @@ func (c *connStats) resetConnecting() {
 }
 
 func (c *connectingCounts) string() string {
-	return fmt.Sprintf("%d %d %d %d %d", atomic.LoadInt64(&c.numCreatedConnecting), atomic.LoadInt64(&c.numSuccessfulConnecting), atomic.LoadInt64(&c.numFailedConnecting), atomic.LoadInt64(&c.numDiscardedConnecting), atomic.LoadInt64(&c.numNoReg))
-
+	return fmt.Sprintf("%d %d %d %d %d %d", atomic.LoadInt64(&c.numCreatedConnecting), atomic.LoadInt64(&c.numSuccessfulConnecting), atomic.LoadInt64(&c.numFailedConnecting), atomic.LoadInt64(&c.numDiscardedConnecting), atomic.LoadInt64(&c.numAuthFail), atomic.LoadInt64(&c.numOtherFail))
 }
