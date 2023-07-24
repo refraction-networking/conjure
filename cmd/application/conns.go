@@ -221,6 +221,9 @@ func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clie
 		} else if errors.Is(err, errConnTimeout) {
 			logger.Errorln("error occurred discarding data (read 0 B): timeout")
 			cm.discardToTimeout(asn, cc, isIPv4)
+		} else if errors.Is(err, errConnClosed) {
+			logger.Errorln("error occurred discarding data (read 0 B): closed")
+			cm.discardToClose(asn, cc, isIPv4)
 		} else if err != nil {
 			//Log any other error
 			logger.Errorln("error occurred discarding data (read 0 B):", err)
@@ -254,6 +257,9 @@ readLoop:
 			} else if errors.Is(err, errConnTimeout) {
 				logger.Errorf("error occurred discarding data (read %d B): timeout\n", received.Len())
 				cm.discardToTimeout(asn, cc, isIPv4)
+			} else if errors.Is(err, errConnClosed) {
+				logger.Errorf("error occurred discarding data (read %d B): closed\n", received.Len())
+				cm.discardToClose(asn, cc, isIPv4)
 			} else if err != nil {
 				//Log any other error
 				logger.Errorf("error occurred discarding data (read %d B): %v\n", received.Len(), err)
@@ -281,6 +287,13 @@ readLoop:
 					cm.createdToTimeout(asn, cc, isIPv4)
 				} else {
 					cm.readToTimeout(asn, cc, isIPv4)
+				}
+			} else if errors.Is(err, errConnClosed) {
+				logger.Errorf("got error while reading from connection, giving up after %d bytes: closed\n", received.Len()+n)
+				if received.Len() == 0 {
+					cm.createdToClose(asn, cc, isIPv4)
+				} else {
+					cm.readToError(asn, cc, isIPv4)
 				}
 			} else {
 				logger.Errorf("got error while reading from connection, giving up after %d bytes: %v\n", received.Len()+n, err)
@@ -373,6 +386,7 @@ type statCounts struct {
 	numCreatedToReset   int64 // Number of times connections have moved from Created to Reset
 	numCreatedToTimeout int64 // Number of times connections have moved from Created to Timeout
 	numCreatedToError   int64 // Number of times connections have moved from Created to Error
+	numCreatedToClose   int64 // Number of times connections have moved from Created to Closed
 
 	numReadToCheck   int64 // Number of times connections have moved from Read to Check
 	numReadToTimeout int64 // Number of times connections have moved from Read to Timeout
@@ -473,7 +487,7 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 		}
 		for asn, counts := range val {
 			var tt = math.Max(1, float64(atomic.LoadInt64(&counts.totalTransitions)))
-			logger.Infof("conn-stats-verbose (IPv%d): %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d %d %d %d",
+			logger.Infof("conn-stats-verbose (IPv%d): %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d %d %d %d",
 				ip_ver,
 				asn,
 				counts.cc,
@@ -482,6 +496,7 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 				atomic.LoadInt64(&counts.numCreatedToReset),
 				atomic.LoadInt64(&counts.numCreatedToTimeout),
 				atomic.LoadInt64(&counts.numCreatedToError),
+				atomic.LoadInt64(&counts.numCreatedToClose),
 				atomic.LoadInt64(&counts.numReadToCheck),
 				atomic.LoadInt64(&counts.numReadToTimeout),
 				atomic.LoadInt64(&counts.numReadToReset),
@@ -866,6 +881,56 @@ func (c *connStats) createdToError(asn uint, cc string, isIPv4 bool) {
 			atomic.AddInt64(&c.v6geoIPMap[asn].numCreated, -1)
 			atomic.AddInt64(&c.v6geoIPMap[asn].numErr, 1)
 			atomic.AddInt64(&c.v6geoIPMap[asn].numCreatedToError, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
+		}
+	}
+}
+
+func (c *connStats) createdToClose(asn uint, cc string, isIPv4 bool) {
+	if isIPv4 {
+		// Overall tracking
+		atomic.AddInt64(&c.ipv4.numCreated, -1)
+		atomic.AddInt64(&c.ipv4.numClosed, 1)
+		atomic.AddInt64(&c.ipv4.numCreatedToClose, 1)
+		atomic.AddInt64(&c.ipv4.totalTransitions, 1)
+		atomic.AddInt64(&c.ipv4.numResolved, 1)
+
+		// GeoIP tracking
+		if isValidCC(cc) {
+			c.m.Lock()
+			defer c.m.Unlock()
+			if _, ok := c.v4geoIPMap[asn]; !ok {
+				// We haven't seen asn before, so add it to the map
+				c.v4geoIPMap[asn] = &asnCounts{}
+				c.v4geoIPMap[asn].cc = cc
+			}
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreated, -1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numClosed, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numCreatedToClose, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].totalTransitions, 1)
+			atomic.AddInt64(&c.v4geoIPMap[asn].numResolved, 1)
+		}
+	} else {
+		// Overall tracking
+		atomic.AddInt64(&c.ipv6.numCreated, -1)
+		atomic.AddInt64(&c.ipv6.numClosed, 1)
+		atomic.AddInt64(&c.ipv6.numCreatedToClose, 1)
+		atomic.AddInt64(&c.ipv6.totalTransitions, 1)
+		atomic.AddInt64(&c.ipv6.numResolved, 1)
+
+		// GeoIP tracking
+		if isValidCC(cc) {
+			c.m.Lock()
+			defer c.m.Unlock()
+			if _, ok := c.v6geoIPMap[asn]; !ok {
+				// We haven't seen asn before, so add it to the map
+				c.v6geoIPMap[asn] = &asnCounts{}
+				c.v6geoIPMap[asn].cc = cc
+			}
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreated, -1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numClosed, 1)
+			atomic.AddInt64(&c.v6geoIPMap[asn].numCreatedToClose, 1)
 			atomic.AddInt64(&c.v6geoIPMap[asn].totalTransitions, 1)
 			atomic.AddInt64(&c.v6geoIPMap[asn].numResolved, 1)
 		}
@@ -1525,6 +1590,9 @@ var (
 
 	// errConnAborted replaces aborted error to prevent client IP logging
 	errConnAborted = errors.New("aborted")
+
+	// errConnClosed replaces closed errors to prevent client IP logging
+	errConnClosed = errors.New("closed")
 )
 
 func generalizeErr(err error) error {
@@ -1536,7 +1604,7 @@ func generalizeErr(err error) error {
 		errors.Is(err, io.EOF),
 		errors.Is(err, syscall.EPIPE),
 		errors.Is(err, os.ErrClosed):
-		return nil
+		return errConnClosed
 	case errors.Is(err, syscall.ECONNRESET):
 		return errConnReset
 	case errors.Is(err, syscall.ECONNREFUSED):
