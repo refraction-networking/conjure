@@ -11,15 +11,11 @@ import (
 	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
 
-	// td imports assets/RegError/generateHTTPRequestBeginning
+	// td imports assets, RegError, generateHTTPRequestBeginning
 	td "github.com/refraction-networking/gotapdance/tapdance"
 
 	"github.com/sirupsen/logrus"
 )
-
-/**
- * TODO: enable logging
- */
 
 // timeout for sending TD request and getting a response
 const deadlineConnectTDStationMin = 11175
@@ -57,30 +53,9 @@ type DecoyRegistrar struct {
 	// Fields taken from ConjureReg struct
 	m     sync.Mutex
 	stats *pb.SessionStats
-}
-
-// CurrentClientLibraryVersion returns the current client library version used
-// for feature compatibility support between client and server. Currently I
-// don't intend to connect this to the library tag version in any way.
-//
-// When adding new client versions comment out older versions and add new
-// version below with a description of the reason for the new version.
-func currentClientLibraryVersion() uint32 {
-	// Support for randomizing destination port for phantom connection
-	// https://github.com/refraction-networking/gotapdance/pull/108
-	return 3
-
-	// // Selection algorithm update - Oct 27, 2022 -- Phantom selection version rework again to use
-	// // hkdf for actual uniform distribution across phantom subnets.
-	// // https://github.com/refraction-networking/conjure/pull/145
-	// return 2
-
-	// // Initial inclusion of client version - added due to update in phantom
-	// // selection algorithm that is not backwards compatible to older clients.
-	// return 1
-
-	// // No client version indicates any client before this change.
-	// return 0
+	// add Width, sharedKeys necessary stuff (2nd line in struct except ConjureSeed)
+	// Keys
+	FspKey, FspIv, VspKey, VspIv, NewMasterSecret []byte
 }
 
 func (r *DecoyRegistrar) setTCPToDecoy(tcprtt *uint32) {
@@ -120,24 +95,6 @@ func (r *DecoyRegistrar) getTcpToDecoy() uint32 {
 	return 0
 }
 
-func generateFlags(cjSession *td.ConjureSession) *pb.RegistrationFlags {
-	flags := &pb.RegistrationFlags{}
-	mask := default_flags
-	if cjSession.UseProxyHeader {
-		mask |= tdFlagProxyHeader
-	}
-
-	uploadOnly := mask&tdFlagUploadOnly == tdFlagUploadOnly
-	proxy := mask&tdFlagProxyHeader == tdFlagProxyHeader
-	til := mask&tdFlagUseTIL == tdFlagUseTIL
-
-	flags.UploadOnly = &uploadOnly
-	flags.ProxyHeader = &proxy
-	flags.Use_TIL = &til
-
-	return flags
-}
-
 func (r DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostname string, deadline time.Time) (*tls.UConn, error) {
 	var err error
 	//[reference] TLS to Decoy
@@ -171,8 +128,6 @@ func (r DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostnam
 	return tlsConn, nil
 }
 
-// Register -> Send -> createRequest -> generateVSP -> generateClientToStation
-
 func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpec, cjSession *td.ConjureSession) ([]byte, error) {
 	//[reference] generate and encrypt variable size payload
 	vsp, err := generateVSP(cjSession)
@@ -182,14 +137,14 @@ func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpe
 	if len(vsp) > int(^uint16(0)) {
 		return nil, fmt.Errorf("Variable-Size Payload exceeds %v", ^uint16(0))
 	}
-	encryptedVsp, err := aesGcmEncrypt(vsp, cjSession.Keys.VspKey, cjSession.Keys.VspIv)
+	encryptedVsp, err := aesGcmEncrypt(vsp, r.VspKey, r.VspIv)
 	if err != nil {
 		return nil, err
 	}
 
 	//[reference] generate and encrypt fixed size payload
 	fsp := generateFSP(uint16(len(encryptedVsp)))
-	encryptedFsp, err := aesGcmEncrypt(fsp, cjSession.Keys.FspKey, cjSession.Keys.FspIv)
+	encryptedFsp, err := aesGcmEncrypt(fsp, r.FspKey, r.FspIv)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +232,6 @@ func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Conte
 	}
 
 	// randomized sleeping here to break the intraflow signal
-	// TODO: is this okay?
 	toSleep := r.GetRandomDuration(3000, 212, 3449)
 	logger.Debugf("Successfully sent registrations, sleeping for: %v", toSleep)
 	lib.SleepWithContext(ctx, toSleep)
@@ -336,7 +290,7 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 	//[reference] Write reg into conn
 	_, err = tlsConn.Write(httpRequest)
 	if err != nil {
-		// // This will not get printed because it is executed in a goroutine.
+		// This will not get printed because it is executed in a goroutine.
 		// Logger().Errorf("%v - %v Could not send Conjure registration request, error: %v", decoy.GetHostname(), decoy.GetIpAddrStr(), err.Error())
 		tlsConn.Close()
 		msg := fmt.Sprintf("%v - %v Write: %v", decoy.GetHostname(), decoy.GetIpAddrStr(), err.Error())
