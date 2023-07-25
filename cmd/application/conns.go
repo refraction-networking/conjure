@@ -286,6 +286,7 @@ readLoop:
 					cm.readToTimeout(asn, cc, isIPv4)
 				}
 			} else if errors.Is(err, errConnClosed) {
+				logger.Errorf("got error while reading from connection, giving up after %d bytes: closed\n", received.Len()+n)
 				if received.Len() == 0 {
 					cm.createdToClose(asn, cc, isIPv4)
 				} else {
