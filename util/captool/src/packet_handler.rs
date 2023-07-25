@@ -2,7 +2,7 @@ use crate::flows::LimiterState;
 use crate::limit::LimitError;
 
 use std::borrow::Cow;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap};
 use std::error::Error;
 use std::fmt;
 use std::net::IpAddr;
@@ -168,7 +168,7 @@ pub struct IpidStats {
     pub curr_ipid: u16,
 
     // currently tracks 5 most recent offsets
-    pub recent_offsets: VecDeque<u16>,
+    pub recent_offset: Option<u16>,
 
     pub min_offset: Option<u16>,
     pub max_offset: Option<u16>,
@@ -185,7 +185,7 @@ impl IpidStats{
     pub fn new(ipid: u16) -> IpidStats {
         IpidStats {
             curr_ipid: ipid,
-            recent_offsets: VecDeque::new(),
+            recent_offset: None,
             min_offset : None,
             max_offset : None,
             anomalous_pkts : vec![0,0,0],
@@ -207,58 +207,36 @@ impl IpidStats{
             comments.push(format!("ipid1: IPID delta = 0"));
         }
 
-        if self.recent_offsets.len() < 5 {
-            self.recent_offsets.push_back(new_off);
-            self.curr_ipid = new_ipid;
-
-
-            match self.min_offset
-            {
-                Some(mo) => { self.min_offset = Some(min(mo, new_off)); }
-                None => { self.min_offset = Some(new_off);}
+        match self.recent_offset {
+            Some(ro) => {
+                // anomaly type 2
+                if new_off != ro
+                {
+                    self.anomalous_pkts[2] += 1;
+                    comments.push(format!("IPID delta changed"));
+                }
             }
-            match self.max_offset
-            {
-                Some(mo) => { self.max_offset = Some(max(mo, new_off)); }
-                None => { self.max_offset = Some(new_off);}
-            }
+            None => {}
         }
-        else {
+        self.recent_offset = Some(new_off);
+        self.curr_ipid = new_ipid;
 
-
-            // let avg = 0;
-            // for offs in self.recent_offsets {
-            //     avg += offs;
-            // }
-            // avg /= 5;
-
-            // anomaly type 2
-            if Some(&new_off) != self.recent_offsets.back()
-            {
-                self.anomalous_pkts[2] += 1;
-                comments.push(format!("IPID delta changed"));
-            }
-
-            self.recent_offsets.pop_front();
-            self.recent_offsets.push_back(new_off);
-            self.curr_ipid = new_ipid;
-
-            match self.min_offset
-            {
-                Some(mo) => { self.min_offset = Some(min(mo, new_off)); }
-                None => { self.min_offset = Some(new_off);}
-            }
-            match self.max_offset
-            {
-                Some(mo) => { self.max_offset = Some(max(mo, new_off)); }
-                None => { self.max_offset = Some(new_off);}
-            }
+        match self.min_offset
+        {
+            Some(mo) => { self.min_offset = Some(min(mo, new_off)); }
+            None => { self.min_offset = Some(new_off);}
+        }
+        match self.max_offset
+        {
+            Some(mo) => { self.max_offset = Some(max(mo, new_off)); }
+            None => { self.max_offset = Some(new_off);}
         }
     }
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct TtlStats {
+    pub exp_ttl: u8,
     pub min_ttl: u8,
     pub max_ttl: u8,
     /* ANOMALOUS PACKET TYPES 
@@ -270,6 +248,7 @@ pub struct TtlStats {
 impl TtlStats{
     pub fn new(ttl: u8) -> TtlStats {
         TtlStats {
+            exp_ttl: ttl,
             min_ttl : ttl,
             max_ttl : ttl,
             anomalous_pkts : vec![0],
@@ -277,22 +256,20 @@ impl TtlStats{
     }
 
     pub fn update(&mut self, new_ttl: u8, comments: &mut Vec<String>) {
-        if new_ttl < self.min_ttl {
-            self.min_ttl = new_ttl;
+        if new_ttl < self.exp_ttl - 1 || new_ttl > self.exp_ttl + 1 {
             self.anomalous_pkts[0]+=1;
-            comments.push(format!("ttl0: TTL falls out of min/max range"));
+            comments.push(format!("ttl0: TTL diverges from expected value"));
         }
 
-        if new_ttl > self.max_ttl {
-            self.max_ttl = new_ttl;
-            self.anomalous_pkts[0]+=1;
-            comments.push(format!("ttl0: TTL falls out of min/max range"));
-        }
+        if new_ttl < self.min_ttl { self.min_ttl = new_ttl; }
+
+        if new_ttl > self.max_ttl { self.max_ttl = new_ttl; }
     }
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct HopLimitStats {
+    pub exp_hop: u8,
     pub min_hop: u8,
     pub max_hop: u8,
     /* ANOMALOUS PACKET TYPES 
@@ -304,6 +281,7 @@ pub struct HopLimitStats {
 impl HopLimitStats{
     pub fn new(hop: u8) -> HopLimitStats {
         HopLimitStats {
+            exp_hop: hop,
             min_hop : hop,
             max_hop : hop,
             anomalous_pkts : vec![0],
@@ -311,19 +289,13 @@ impl HopLimitStats{
     }
 
     pub fn update(&mut self, new_hop: u8, comments: &mut Vec<String>) {
-        if new_hop < self.min_hop {
-            self.min_hop = new_hop;
+        if new_hop < self.exp_hop - 1 || new_hop > self.exp_hop + 1 {
             self.anomalous_pkts[0]+=1;
-            comments.push(format!("hop0: HopCount falls out of min/max range"));
-
-
+            comments.push(format!("hop0: HopLimit diverges from expected value"));
         }
 
-        if new_hop > self.max_hop {
-            self.max_hop = new_hop;
-            self.anomalous_pkts[0]+=1;
-            comments.push(format!("hop0: HopCount falls out of min/max range"));
-        }
+        if new_hop < self.min_hop { self.min_hop = new_hop; }
+        if new_hop > self.max_hop { self.max_hop = new_hop; }
     }
 }
 
