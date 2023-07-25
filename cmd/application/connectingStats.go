@@ -110,12 +110,13 @@ func (c *connectingCounts) string() string {
 	if totalEndStates < 1 {
 		totalEndStates = 0
 	}
-	return fmt.Sprintf("%d %d %d %d %d %.3f %.3f %.3f %.3f",
+	return fmt.Sprintf("%d %d %d %d %d %d %.3f %.3f %.3f %.3f",
 		atomic.LoadInt64(&c.numCreatedConnecting),
 		atomic.LoadInt64(&c.numSuccessfulConnecting),
 		atomic.LoadInt64(&c.numTimeoutConnecting),
 		atomic.LoadInt64(&c.numAuthFailConnecting),
 		atomic.LoadInt64(&c.numOtherFailConnecting),
+		totalEndStates,
 		float64(atomic.LoadInt64(&c.numSuccessfulConnecting))/float64(totalEndStates),
 		float64(atomic.LoadInt64(&c.numTimeoutConnecting))/float64(totalEndStates),
 		float64(atomic.LoadInt64(&c.numAuthFailConnecting))/float64(totalEndStates),
