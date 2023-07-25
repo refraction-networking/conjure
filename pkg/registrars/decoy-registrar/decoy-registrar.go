@@ -58,6 +58,19 @@ type DecoyRegistrar struct {
 	FspKey, FspIv, VspKey, VspIv, NewMasterSecret []byte
 }
 
+func NewDecoyRegistrar() *DecoyRegistrar {
+	return &DecoyRegistrar{
+		logger: td.Logger(),
+	}
+}
+
+func NewDecoyRegistrarWithDialer(dialer DialFunc) *DecoyRegistrar {
+	return &DecoyRegistrar{
+		dialContex: dialer,
+		logger:     td.Logger(),
+	}
+}
+
 func (r *DecoyRegistrar) setTCPToDecoy(tcprtt *uint32) {
 	r.m.Lock()
 	defer r.m.Unlock()
