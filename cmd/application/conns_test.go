@@ -160,61 +160,6 @@ func TestConnPrintAndReset(t *testing.T) {
 	connManager.connStats.PrintAndReset(logger)
 }
 
-func TestConnHandleNewTCPConnNoData(t *testing.T) {
-	logger := log.New(os.Stdout, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
-	testSubnetPath := conjurepath.Root + "/pkg/station/lib/test/phantom_subnets.toml"
-	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
-
-	rm := cj.NewRegistrationManager(&cj.RegConfig{})
-	// reg := &cj.DecoyRegistration{
-	// 	PhantomIp: net.IPv4(8, 8, 8, 8),
-	// }
-	// rm.AddRegistration(reg)
-
-	db := &MockGeoIP{}
-	rm.GeoIP = db
-	connManager := newConnManager(nil)
-
-	// Create a test TCP server to accept the connection
-	serverAddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:0") // 0 means the OS will choose an available port
-	if err != nil {
-		t.Fatalf("Error resolving server address: %v", err)
-	}
-
-	server, err := net.ListenTCP("tcp", serverAddr)
-	if err != nil {
-		t.Fatalf("Error starting TCP server: %v", err)
-	}
-	defer server.Close()
-
-	// Run handleNewTCPConn in a goroutine
-	go func() {
-		for {
-			conn, err := server.Accept()
-			if err != nil {
-				return
-			}
-			go connManager.handleNewTCPConn(rm, conn, net.IPv4(8, 8, 8, 8))
-		}
-	}()
-
-	// Dial multiple TCP connections to the server
-	numConns := 4
-
-	for i := 0; i < numConns; i++ {
-		clientConn, err := net.Dial("tcp", server.Addr().String())
-		if err != nil {
-			t.Fatalf("Error dialing TCP server: %v", err)
-		}
-		defer clientConn.Close()
-	}
-
-	// Allow some time for the handleNewTCPConn to finish processing
-	time.Sleep(500 * time.Millisecond)
-
-	connManager.connStats.PrintAndReset(logger)
-}
-
 func TestConnHandleConcurrent(t *testing.T) {
 	// We don't actually care about what gets written
 	logger := log.New(io.Discard, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)

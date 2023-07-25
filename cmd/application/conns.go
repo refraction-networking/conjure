@@ -222,7 +222,6 @@ func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clie
 			logger.Errorln("error occurred discarding data (read 0 B): timeout")
 			cm.discardToTimeout(asn, cc, isIPv4)
 		} else if errors.Is(err, errConnClosed) {
-			logger.Errorln("error occurred discarding data (read 0 B): closed")
 			cm.discardToClose(asn, cc, isIPv4)
 		} else if err != nil {
 			//Log any other error
@@ -231,7 +230,6 @@ func (cm *connManager) handleNewTCPConn(regManager *cj.RegistrationManager, clie
 		} else {
 			cm.discardToClose(asn, cc, isIPv4)
 		}
-		logger.Infof("Didn't make it to readLoop --> count = %d", count) //TESTING
 		return
 	}
 
@@ -258,7 +256,6 @@ readLoop:
 				logger.Errorf("error occurred discarding data (read %d B): timeout\n", received.Len())
 				cm.discardToTimeout(asn, cc, isIPv4)
 			} else if errors.Is(err, errConnClosed) {
-				logger.Errorf("error occurred discarding data (read %d B): closed\n", received.Len())
 				cm.discardToClose(asn, cc, isIPv4)
 			} else if err != nil {
 				//Log any other error
@@ -289,7 +286,6 @@ readLoop:
 					cm.readToTimeout(asn, cc, isIPv4)
 				}
 			} else if errors.Is(err, errConnClosed) {
-				logger.Errorf("got error while reading from connection, giving up after %d bytes: closed\n", received.Len()+n)
 				if received.Len() == 0 {
 					cm.createdToClose(asn, cc, isIPv4)
 				} else {
