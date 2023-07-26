@@ -8,7 +8,7 @@ import (
 
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/registrars/dns-registrar/responder"
-	"github.com/refraction-networking/conjure/pkg/regprocessor"
+	"github.com/refraction-networking/conjure/pkg/regserver/regprocessor"
 	pb "github.com/refraction-networking/conjure/proto"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
