@@ -20,7 +20,6 @@ const listenPort = 41245
 type Transport struct {
 	dnat             *dnat
 	dtlsListener     *dtls.Listener
-	unregLogger      func(*net.IP)
 	logDialSuccess   func(*net.IP)
 	logListenSuccess func(*net.IP)
 }
@@ -56,9 +55,10 @@ func NewTransport(logAuthFail func(*net.IP), logOtherFail func(*net.IP), logDial
 	}
 
 	return &Transport{
-		dnat:         dnat,
-		dtlsListener: listener,
-		unregLogger:  logAuthFail,
+		dnat:             dnat,
+		dtlsListener:     listener,
+		logDialSuccess:   logDialSuccess,
+		logListenSuccess: logListenSuccess,
 	}, nil
 }
 
