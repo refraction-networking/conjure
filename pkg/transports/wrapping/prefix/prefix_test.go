@@ -14,11 +14,11 @@ import (
 
 	"github.com/refraction-networking/conjure/internal/conjurepath"
 	"github.com/refraction-networking/conjure/pkg/core"
-	"github.com/refraction-networking/conjure/pkg/ed25519"
-	"github.com/refraction-networking/conjure/pkg/ed25519/extra25519"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/internal/tests"
 	pb "github.com/refraction-networking/conjure/proto"
+	"github.com/refraction-networking/ed25519"
+	"github.com/refraction-networking/ed25519/extra25519"
 )
 
 func TestSuccessfulWrap(t *testing.T) {
