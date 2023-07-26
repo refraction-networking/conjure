@@ -566,6 +566,16 @@ fn read_packets<T, W>(
             }
         };
 
+        // let d_out_mut: &mut [u8] = ?? // clone this somehow?
+
+        let anom_data: (&mut [u8], Linktype) = (d_out.as_mut(), link_type);
+        let _anon_ip_pkt: MutableIpPacket = match MutableIpPacket::try_from(anom_data) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        // TODO: move append_to_stats here
+
         let mut tmp: Vec<EnhancedPacketOption<'_>> = supplemental_fields.into();
         tmp.append(&mut anom_comments);
 
