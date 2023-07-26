@@ -18,9 +18,11 @@ import (
 const listenPort = 41245
 
 type Transport struct {
-	dnat         *dnat
-	dtlsListener *dtls.Listener
-	unregLogger  func(*net.IP)
+	dnat             *dnat
+	dtlsListener     *dtls.Listener
+	unregLogger      func(*net.IP)
+	logDialSuccess   func(*net.IP)
+	logListenSuccess func(*net.IP)
 }
 
 // Name returns name of the transport
@@ -39,7 +41,7 @@ func (Transport) GetIdentifier(reg *dd.DecoyRegistration) string {
 }
 
 // NewTransport creates a new dtls transport
-func NewTransport(logAuthFail func(*net.IP), logOtherFail func(*net.IP)) (*Transport, error) {
+func NewTransport(logAuthFail func(*net.IP), logOtherFail func(*net.IP), logDialSuccess func(*net.IP), logListenSuccess func(*net.IP)) (*Transport, error) {
 	addr := &net.UDPAddr{Port: listenPort}
 
 	listener, err := dtls.Listen("udp", addr, &dtls.Config{LogAuthFail: logAuthFail, LogOther: logAuthFail})
@@ -90,6 +92,7 @@ func (t *Transport) Connect(ctx context.Context, reg *dd.DecoyRegistration) (net
 			errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
 			return
 		}
+		t.logDialSuccess(&clientAddr.IP)
 
 		connCh <- dtlsConn
 	}()
@@ -100,6 +103,7 @@ func (t *Transport) Connect(ctx context.Context, reg *dd.DecoyRegistration) (net
 			errCh <- fmt.Errorf("error accepting dtls connection from secret: %v", err)
 			return
 		}
+		t.logListenSuccess(&clientAddr.IP)
 
 		connCh <- conn
 	}()

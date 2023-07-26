@@ -553,7 +553,7 @@ func handleConnectingTpReg(regManager *RegistrationManager, reg *DecoyRegistrati
 					return
 				}
 
-				regManager.connectingStats.AddCreatedToSuccessfulConnecting(asn, cc, transport.Name())
+				// regManager.connectingStats.AddCreatedToSuccessfulConnecting(asn, cc, transport.Name())
 
 				Stat().AddConn()
 				Proxy(reg, conn, logger)

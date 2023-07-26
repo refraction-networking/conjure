@@ -80,7 +80,7 @@ func main() {
 		}
 	}
 
-	dtlsTransport, err := dtls.NewTransport(logIPDTLS(connManager.AddAuthFailConnecting), logIPDTLS(connManager.AddOtherFailConnecting))
+	dtlsTransport, err := dtls.NewTransport(logIPDTLS(connManager.AddAuthFailConnecting), logIPDTLS(connManager.AddOtherFailConnecting), logIPDTLS(connManager.AddCreatedToDialSuccessfulConnecting), logIPDTLS(connManager.AddCreatedToListenSuccessfulConnecting))
 
 	if err != nil {
 		log.Fatalf("failed to setup dtls: %v", err)
