@@ -39,8 +39,6 @@ github.com/libp2p/go-reuseport v0.3.0 h1:iiZslO5byUYZEg9iCwJGf5h+sf1Agmqx2V2FDjP
 github.com/libp2p/go-reuseport v0.3.0/go.mod h1:laea40AimhtfEqysZ71UpYj4S+R9VpH8PgqLo7L+SwI=
 github.com/mingyech/dtls v0.1.0 h1:AdYeTIbgBK+gPquewN1HdZ6EM7GkuHoa5UNU77Ob1Ns=
 github.com/mingyech/dtls v0.1.0/go.mod h1:YStHDz+DrppG95Sruyv/ohTLpFupgFZW9xqYlzJ7vSs=
-github.com/mingyech/gotapdance v1.2.1-0.20230726184621-97a3561b798c h1:+NUaR/081C6NaBMW1DibhRX7En124zrZMRXUtD0esSI=
-github.com/mingyech/gotapdance v1.2.1-0.20230726184621-97a3561b798c/go.mod h1:XN3lLXSVFBhlvDfj0ESWRw0I6z2Re88h0+gJ6XtmuYg=
 github.com/mingyech/transport v0.1.1 h1:nvIMoQIe48xM/K30G6WIhsCEti7B+FodMhKiLgk3YXk=
 github.com/mingyech/transport v0.1.1/go.mod h1:PPGxXJJy8BpXZWuBWM6Nf1Xze6vWOMSuoKrZFVAEX7c=
 github.com/mroth/weightedrand v1.0.0 h1:V8JeHChvl2MP1sAoXq4brElOcza+jxLkRuwvtQu8L3E=
@@ -71,6 +69,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/refraction-networking/ed25519 v0.1.2 h1:08kJZUkAlY7a7cZGosl1teGytV+QEoNxPO7NnRvAB+g=
 github.com/refraction-networking/ed25519 v0.1.2/go.mod h1:nxYLUAYt/hmNpAh64PNSQ/tQ9gTIB89wCaGKJlRtZ9I=
+github.com/refraction-networking/gotapdance v1.6.0-dtlsbeta h1:fKbDVKcgTfLReUZXt2E6LzNgVSDksdDWWggxBChJ6JQ=
+github.com/refraction-networking/gotapdance v1.6.0-dtlsbeta/go.mod h1:ZPCynd9re3CbvXTXqNHu4EU01Ve5Z2wexy76XC0b1No=
 github.com/refraction-networking/obfs4 v0.1.1 h1:9AmxHFbafOZzXTGidKI2EeL0FGkIramIlB4dPLg3d+4=
 github.com/refraction-networking/obfs4 v0.1.1/go.mod h1:wAl/+gWiLsrcykJA3nKJHx89f5/gXGM8UKvty7+mvbM=
 github.com/refraction-networking/utls v1.2.0 h1:U5f8wkij2NVinfLuJdFP3gCMwIHs+EzvhxmYdXgiapo=

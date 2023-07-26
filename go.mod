@@ -18,7 +18,7 @@ require (
 	github.com/pion/sctp v1.8.7
 	github.com/pion/stun v0.3.5
 	github.com/refraction-networking/ed25519 v0.1.2
-	github.com/refraction-networking/gotapdance v1.5.6
+	github.com/refraction-networking/gotapdance v1.6.0-dtlsbeta
 	github.com/refraction-networking/obfs4 v0.1.1
 	github.com/refraction-networking/utls v1.2.0
 	github.com/sirupsen/logrus v1.9.0
@@ -49,5 +49,3 @@ require (
 	golang.org/x/text v0.11.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/refraction-networking/gotapdance => github.com/mingyech/gotapdance v1.2.1-0.20230726184621-97a3561b798c
