@@ -9,13 +9,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
+type dialFunc = func(ctx context.Context, network, addr string) (net.Conn, error)
 
 type DecoyRegistrar struct {
 
 	// dialContex is a custom dailer to use when establishing TCP connections
 	// to decoys. When nil, Dialer.dialContex will be used.
-	dialContex DialFunc
+	dialContex dialFunc
 
 	logger logrus.FieldLogger
 }
@@ -26,7 +26,10 @@ func NewDecoyRegistrar() *DecoyRegistrar {
 	}
 }
 
-func NewDecoyRegistrarWithDialer(dialer DialFunc) *DecoyRegistrar {
+// NewDecoyRegistrarWithDialer returns a decoy registrar with custom dialer.
+//
+// Deprecated: Set dialer in tapdace.Dialer.DialerWithLaddr instead.
+func NewDecoyRegistrarWithDialer(dialer dialFunc) *DecoyRegistrar {
 	return &DecoyRegistrar{
 		dialContex: dialer,
 		logger:     tapdance.Logger(),
@@ -97,11 +100,6 @@ func (r DecoyRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context
 		logger.Debugf("NETWORK UNREACHABLE")
 		return nil, tapdance.NewRegError(tapdance.Unreachable, "All decoys failed to register -- Dial Unreachable")
 	}
-
-	// randomized sleeping here to break the intraflow signal
-	toSleep := reg.GetRandomDuration(3000, 212, 3449)
-	logger.Debugf("Successfully sent registrations, sleeping for: %v", toSleep)
-	sleepWithContext(ctx, toSleep)
 
 	return reg, nil
 }

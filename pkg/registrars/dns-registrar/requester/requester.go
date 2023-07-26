@@ -15,7 +15,7 @@ import (
 	utls "github.com/refraction-networking/utls"
 )
 
-type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
+type dialFunc = func(ctx context.Context, network, addr string) (net.Conn, error)
 
 type Requester struct {
 	// transport is the underlying transport used for the dns request
@@ -23,10 +23,10 @@ type Requester struct {
 	// dialTransport is used for constructing the transport on the first request
 	// this allows us to not dial anything until the first request, while avoid storing
 	// a lot of internal state in Requester
-	dialTransport func(dialer DialFunc) (net.PacketConn, error)
+	dialTransport func(dialer dialFunc) (net.PacketConn, error)
 
 	// dialer is the dialer to be used for the underlying TCP/UDP transport
-	dialer DialFunc
+	dialer dialFunc
 
 	// remote address
 	remoteAddr net.Addr
@@ -36,7 +36,7 @@ type Requester struct {
 }
 
 // New Requester using DoT as transport
-func dialDoT(dotaddr string, utlsDistribution string, dialTransport DialFunc) (net.Conn, error) {
+func dialDoT(dotaddr string, utlsDistribution string, dialTransport dialFunc) (net.Conn, error) {
 	utlsClientHelloID, err := sampleUTLSDistribution(utlsDistribution)
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func dialDoT(dotaddr string, utlsDistribution string, dialTransport DialFunc) (n
 }
 
 // New Requester using DoH as transport
-func dialDoH(dohurl string, utlsDistribution string, dialTransport DialFunc) (net.Conn, error) {
+func dialDoH(dohurl string, utlsDistribution string, dialTransport dialFunc) (net.Conn, error) {
 	utlsClientHelloID, err := sampleUTLSDistribution(utlsDistribution)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func dialDoH(dohurl string, utlsDistribution string, dialTransport DialFunc) (ne
 }
 
 // New Requester using UDP as transport
-func dialUDP(remoteAddr string, dialContext DialFunc) (net.Conn, error) {
+func dialUDP(remoteAddr string, dialContext dialFunc) (net.Conn, error) {
 	udpConn, err := dialContext(context.Background(), "udp", remoteAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing udp connection: %v", err)
@@ -135,7 +135,7 @@ func NewRequester(config *Config) (*Requester, error) {
 		return nil, fmt.Errorf("error resolving addr from config: %v", err)
 	}
 
-	dialTransport := func(dialer DialFunc) (net.PacketConn, error) {
+	dialTransport := func(dialer dialFunc) (net.PacketConn, error) {
 		switch config.TransportMethod {
 		case DoT:
 			conn, err := dialDoT(config.Target, config.UtlsDistribution, dialer)
@@ -196,7 +196,7 @@ func (r *Requester) sendHandshake(payload []byte) (*noise.CipherState, *noise.Ci
 }
 
 // SetDialer sets a custom dialer for the underlying TCP/UDP transport
-func (r *Requester) SetDialer(dialer DialFunc) error {
+func (r *Requester) SetDialer(dialer dialFunc) error {
 	if dialer == nil {
 		return fmt.Errorf("no dialer provided")
 	}

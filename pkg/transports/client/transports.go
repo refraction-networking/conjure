@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	cj "github.com/refraction-networking/conjure/pkg/core/interfaces"
+	"github.com/refraction-networking/conjure/pkg/transports/connecting/dtls"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
@@ -60,6 +61,7 @@ var defaultTransports = []cj.Transport{
 	&min.ClientTransport{},
 	&obfs4.ClientTransport{},
 	&prefix.ClientTransport{},
+	&dtls.ClientTransport{},
 }
 
 // AddTransport adds new transport

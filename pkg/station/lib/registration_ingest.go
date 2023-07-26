@@ -231,6 +231,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 	logger.Debugf("Adding registration %v\n", reg.IDString())
 	Stat().AddReg(reg.DecoyListVersion, reg.RegistrationSource)
 	rm.AddRegStats(reg)
+	handleConnectingTpReg(rm, reg, logger)
 }
 
 func tryShareRegistrationOverAPI(reg *DecoyRegistration, apiEndpoint string, logger *log.Logger) {
@@ -368,6 +369,11 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		return nil, fmt.Errorf("error determining phantom connection proto: %s", err)
 	}
 
+	srcPort, err := rm.getClientSrcPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer)
+	if err != nil {
+		return nil, fmt.Errorf("error determining client source port: %s", err)
+	}
+
 	reg := DecoyRegistration{
 		DecoyListVersion: c2s.GetDecoyListGeneration(),
 		Keys:             conjureKeys,
@@ -376,6 +382,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		TransportPtr:     &transport,
 		TransportParams:  transportParams,
 		Flags:            c2s.Flags,
+		clientPort:       srcPort,
 
 		PhantomIp:    phantomAddr,
 		PhantomPort:  phantomPort,
@@ -491,4 +498,78 @@ func (rm *RegistrationManager) getPhantomDstPort(t pb.TransportType, params any,
 	// will attempt to reach. The libVersion is provided incase of version dependent changes in the
 	// transport selection algorithms themselves.
 	return transport.GetDstPort(libVer, seed, params)
+}
+
+// getPhantomDstPort returns the proper phantom port based on registration type, transport
+// parameters provided by the client and session details (also provided by the client).
+func (rm *RegistrationManager) getClientSrcPort(t pb.TransportType, params any, seed []byte, libVer uint) (uint16, error) {
+	var transport, ok = rm.registeredDecoys.transports[t].(ConnectingTransport)
+	if !ok {
+		// non-connecting transports do not have a set source port
+		return 0, nil
+	}
+
+	// GetDstPort Given the library version, a seed, and a generic object containing parameters the
+	// transport should be able to return the destination port that a clients phantom connection
+	// will attempt to reach. The libVersion is provided incase of version dependent changes in the
+	// transport selection algorithms themselves.
+	return transport.GetSrcPort(libVer, seed, params)
+}
+
+// Handle new registration from client for UDP Transports
+// NOTE: this is called within a goroutine in get_zmq_updates
+func handleConnectingTpReg(regManager *RegistrationManager, reg *DecoyRegistration, logger *log.Logger) {
+	// using a Connecting Transport
+	for tptype, tp := range regManager.GetConnectingTransports() {
+		if tptype == reg.Transport { // correct transport name
+			ctx, cancelFunc := context.WithTimeout(context.Background(), 15*time.Second)
+			go func(transport ConnectingTransport) {
+				defer cancelFunc()
+
+				cc, err := regManager.GeoIP.CC(reg.registrationAddr)
+				if err != nil {
+					logger.Errorln("Failed to get CC:", err)
+					return
+				}
+
+				var asn uint = 0
+				if cc != "unk" {
+					asn, err = regManager.GeoIP.ASN(reg.registrationAddr)
+					if err != nil {
+						logger.Errorln("Failed to get ASN:", err)
+						return
+					}
+				}
+
+				regManager.connectingStats.AddCreatedConnecting(asn, cc, transport.Name())
+
+				conn, err := transport.Connect(ctx, reg)
+				if err != nil {
+					if errors.Is(err, context.DeadlineExceeded) {
+						regManager.connectingStats.AddCreatedToTimeoutConnecting(asn, cc, transport.Name())
+					} else {
+						regManager.connectingStats.AddOtherFailConnecting(asn, cc, transport.Name())
+					}
+					return
+				}
+
+				// regManager.connectingStats.AddCreatedToSuccessfulConnecting(asn, cc, transport.Name())
+
+				Stat().AddConn()
+				Proxy(reg, conn, logger)
+				Stat().CloseConn()
+
+				regManager.connectingStats.AddSuccessfulToDiscardedConnecting(asn, cc, transport.Name())
+
+			}(tp)
+		}
+	}
+}
+
+type ConnectingTpStats interface {
+	AddCreatedConnecting(asn uint, cc string, tp string)
+	AddCreatedToSuccessfulConnecting(asn uint, cc string, tp string)
+	AddCreatedToTimeoutConnecting(asn uint, cc string, tp string)
+	AddSuccessfulToDiscardedConnecting(asn uint, cc string, tp string)
+	AddOtherFailConnecting(asn uint, cc string, tp string)
 }

@@ -28,6 +28,8 @@ type Config struct {
 	MaxRetries int
 
 	// Delay is the delay duration between retries
+	//
+	// Deprecated: Use tapdance.Dialer.RegDelay instead.
 	Delay time.Duration
 
 	// STUNAddr is the address of STUN server used to determine the client's IPv4 address for the DNS registrar
