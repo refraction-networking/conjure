@@ -47,18 +47,14 @@ func newDNAT() (*dnat, error) {
 	flags := IFF_TUN | IFF_NO_PI
 	binary.LittleEndian.PutUint16(ifreq[0x10:], uint16(flags))
 
-	fmt.Printf("fd: %v\n", tun.Fd())
 	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, tun.Fd(), uintptr(TUNSETIFF), uintptr(unsafe.Pointer(&ifreq[0])))
 	if errno != 0 {
 		tun.Close()
 		return nil, errno
 	}
-	fmt.Printf("fd after tun: %v\n", tun.Fd())
 
 	// Get the interface name
 	name := string(ifreq[:bytes.IndexByte(ifreq[:], 0)])
-
-	fmt.Println("Interface Name:", name)
 
 	// Bring the interface up
 	err = setUp(tun, name)
