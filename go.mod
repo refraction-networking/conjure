@@ -7,7 +7,6 @@ go 1.18
 replace gitlab.com/yawning/obfs4.git => github.com/jmwample/obfs4 v0.0.0-20230725223418-2d2e5b4a16ba
 
 require (
-	git.torproject.org/pluggable-transports/goptlib.git v1.3.0
 	github.com/BurntSushi/toml v1.2.1
 	github.com/Psiphon-Labs/psiphon-tunnel-core v0.0.14-beta-ios.0.20230714185657-14bf1ee6651a
 	github.com/flynn/noise v1.0.0
@@ -38,6 +37,7 @@ require (
 	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/jmwample/obfs4 v0.1.0 // indirect
 	github.com/klauspost/compress v1.15.12 // indirect
 	github.com/oschwald/maxminddb-golang v1.10.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
