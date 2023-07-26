@@ -20,11 +20,11 @@ import (
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	pt "git.torproject.org/pluggable-transports/goptlib.git"
+	"github.com/refraction-networking/obfs4/common/drbg"
+	"github.com/refraction-networking/obfs4/common/ntor"
+	"github.com/refraction-networking/obfs4/transports/obfs4"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/yawning/obfs4.git/common/drbg"
-	"gitlab.com/yawning/obfs4.git/common/ntor"
-	"gitlab.com/yawning/obfs4.git/transports/obfs4"
+	pt "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
 )
 
 func wrapConnection(conn net.Conn, nodeID, publicKey string, wrapped chan (net.Conn), stateDir string) {
