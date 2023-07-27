@@ -7,7 +7,7 @@ ARG GID=1000
 RUN groupadd -g $GID -o $UNAME
 RUN useradd -m -u $UID -g $GID -o -s /bin/bash $UNAME
 
-RUN apt-get update && apt-get install -yq sudo apt-utils software-properties-common
+RUN apt-get update && apt-get install -yq sudo apt-utils software-properties-common iproute2 ethtool
 
 # install pf_ring deps
 
@@ -91,7 +91,7 @@ FROM base_pfring as conjure_det
 COPY sysconfig/conjure.conf /opt/conjure/sysconfig
 COPY scripts/ /opt/conjure/scripts
 
-RUN apt update && apt install -yq libzmq3-dev iproute2
+RUN apt update && apt install -yq libzmq3-dev iproute2 ethtool
 COPY --from=dev_img /opt/conjure/bin/conjure /opt/conjure/bin/
 
 # ------------------------------------------------------------------------------
@@ -102,7 +102,7 @@ FROM ubuntu:20.04 as conjure_app
 COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
 COPY scripts/ /opt/conjure/scripts
 
-RUN apt update && apt install -yq libzmq3-dev iproute2
+RUN apt update && apt install -yq libzmq3-dev iproute2 ethtool
 COPY --from=dev_img /opt/conjure/bin/application /opt/conjure/bin/
 
 # ------------------------------------------------------------------------------
@@ -113,7 +113,7 @@ FROM ubuntu:20.04 as conjure_reg
 COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
 COPY scripts/ /opt/conjure/scripts/
 
-RUN apt update && apt install -yq libzmq3-dev iproute2
+RUN apt update && apt install -yq libzmq3-dev iproute2 ethtool
 COPY --from=dev_img /opt/conjure/bin/registration-server /opt/conjure/bin/
 
 # ------------------------------------------------------------------------------
@@ -124,7 +124,7 @@ FROM ubuntu:20.04 as conjure_sim
 COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
 COPY scripts/ /opt/conjure/scripts/
 
-RUN apt update && apt install -yq libzmq3-dev iproute2
+RUN apt update && apt install -yq libzmq3-dev iproute2 ethtool
 COPY --from=dev_img /opt/conjure/bin/conjure-sim /opt/conjure/bin/conjure
 COPY --from=dev_img /opt/conjure/bin/registration-server /opt/conjure/bin/
 
