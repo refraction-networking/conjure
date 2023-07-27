@@ -2,4 +2,6 @@ use (
 	.
 	./pkg/regserver
 	./proto
+    ./cmd/application
+    ./cmd/registration-server
 )

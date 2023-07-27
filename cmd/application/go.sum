@@ -1,2 +1,4 @@
 github.com/refraction-networking/conjure v0.6.0-dtlsbeta h1:4k0Y93MR6sgLQUs2nFyUZO0pdSx5JWDPjFq/EpuVsnQ=
 github.com/refraction-networking/conjure v0.6.0-dtlsbeta/go.mod h1:/Ah4d0Pa8tIjKHaZhA/50l0E+IehYmzewSg46SfG7hw=
+github.com/refraction-networking/conjure v0.6.0 h1:kDOWPE9WY+zquJsXDifxjUh98LlqJB+fhlEyoqQdlug=
+github.com/refraction-networking/conjure v0.6.0/go.mod h1:iRRZEI3nZsBLn1Er6xPwGwi68XNCKlno4kkWlMvMSk8=

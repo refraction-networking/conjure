@@ -1,9 +1,10 @@
 
 backup/
 conjure
-application/application
+cmd/application/application
 libtapdance/genkey
 cmd/registration-server/registration-server
+cmd/registration-server/regserver
 target
 bin/
 Cargo.lock
