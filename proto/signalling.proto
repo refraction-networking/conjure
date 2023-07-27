@@ -4,7 +4,7 @@ syntax = "proto2";
 // At some point we will want to migrate to proto3, but we are not
 // using any proto3 features yet.
 
-package tapdance;
+package proto;
 
 import "google/protobuf/any.proto";
 

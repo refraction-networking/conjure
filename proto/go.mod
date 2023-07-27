@@ -3,6 +3,7 @@ module github.com/refraction-networking/conjure/proto
 go 1.18
 
 require (
+	github.com/golang/protobuf v1.5.0
 	github.com/stretchr/testify v1.8.4
 	google.golang.org/protobuf v1.31.0
 )
