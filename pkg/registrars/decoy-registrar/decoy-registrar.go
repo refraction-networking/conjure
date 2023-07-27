@@ -2,6 +2,7 @@ package decoy
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
+	"golang.org/x/crypto/hkdf"
 
 	// td imports assets, RegError, generateHTTPRequestBeginning
 	td "github.com/refraction-networking/gotapdance/tapdance"
@@ -53,7 +55,7 @@ type DecoyRegistrar struct {
 	// Fields taken from ConjureReg struct
 	m     sync.Mutex
 	stats *pb.SessionStats
-	// add Width, sharedKeys necessary stuff (2nd line in struct except ConjureSeed)
+	Width uint
 	// Keys
 	FspKey, FspIv, VspKey, VspIv, NewMasterSecret []byte
 }
@@ -179,6 +181,38 @@ func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpe
 	return httpRequest, nil
 }
 
+func (r *DecoyRegistrar) PrepareKeys(pubkey [32]byte) error {
+	sharedSecret, _, err := generateEligatorTransformedKey(pubkey[:])
+	if err != nil {
+		return err
+	}
+
+	tdHkdf := hkdf.New(sha256.New, sharedSecret, []byte("conjureconjureconjureconjure"), nil)
+
+	r.FspKey = make([]byte, 16)
+	r.FspIv = make([]byte, 12)
+	r.VspKey = make([]byte, 16)
+	r.VspIv = make([]byte, 12)
+	r.NewMasterSecret = make([]byte, 48)
+
+	if _, err := tdHkdf.Read(r.FspKey); err != nil {
+		return err
+	}
+	if _, err := tdHkdf.Read(r.FspIv); err != nil {
+		return err
+	}
+	if _, err := tdHkdf.Read(r.VspKey); err != nil {
+		return err
+	}
+	if _, err := tdHkdf.Read(r.VspIv); err != nil {
+		return err
+	}
+	if _, err := tdHkdf.Read(r.NewMasterSecret); err != nil {
+		return err
+	}
+	return err
+}
+
 func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Context) (*td.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
 
@@ -191,7 +225,7 @@ func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Conte
 	}
 
 	// Choose N (width) decoys from decoylist
-	decoys, err := cjSession.Decoys()
+	decoys, err := SelectDecoys(cjSession.Keys.SharedSecret, cjSession.GetV6Include(), uint(r.Width))
 	if err != nil {
 		logger.Warnf("failed to select decoys: %v", err)
 		return nil, err
@@ -207,8 +241,8 @@ func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Conte
 	}
 
 	width := uint(len(decoys))
-	if width < cjSession.Width {
-		logger.Warnf("Using width %v (default %v)", width, cjSession.Width)
+	if width < r.Width {
+		logger.Warnf("Using width %v (default %v)", width, r.Width)
 	}
 
 	//[reference] Send registrations to each decoy

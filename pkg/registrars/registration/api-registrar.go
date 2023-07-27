@@ -164,6 +164,10 @@ func (r *APIRegistrar) setHTTPClient(reg *tapdance.ConjureReg) {
 	}
 }
 
+func (r *APIRegistrar) PrepareKeys(pubkey [32]byte) error {
+	return nil
+}
+
 func (r APIRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
 	defer lib.SleepWithContext(ctx, r.connectionDelay)
 

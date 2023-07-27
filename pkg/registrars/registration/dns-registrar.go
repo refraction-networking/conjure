@@ -187,6 +187,10 @@ func (r *DNSRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession)
 	return nil, lib.ErrRegFailed
 }
 
+func (r *DNSRegistrar) PrepareKeys(pubkey [32]byte) error {
+	return nil
+}
+
 // Register prepares and sends the registration request.
 func (r *DNSRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
 

@@ -5,16 +5,28 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"math/big"
 	mrand "math/rand"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/core"
+	"github.com/refraction-networking/conjure/pkg/ed25519/extra25519"
 	pb "github.com/refraction-networking/conjure/proto"
 	td "github.com/refraction-networking/gotapdance/tapdance"
+	"golang.org/x/crypto/curve25519"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+)
+
+const (
+	v4 uint = iota
+	v6
+	both
 )
 
 // utils.go contains functions needed for the decoy-registrar specifically
@@ -289,4 +301,77 @@ func generateFlags(cjSession *td.ConjureSession) *pb.RegistrationFlags {
 	flags.Use_TIL = &til
 
 	return flags
+}
+
+// Taken from gotapdance/tapdance/common.go
+// takes Station's Public Key
+// returns Shared Secret, and Eligator Representative
+func generateEligatorTransformedKey(stationPubkey []byte) ([]byte, []byte, error) {
+	if len(stationPubkey) != 32 {
+		return nil, nil, errors.New("Unexpected station pubkey length. Expected: 32." +
+			" Received: " + strconv.Itoa(len(stationPubkey)) + ".")
+	}
+	var sharedSecret, clientPrivate, clientPublic, representative [32]byte
+	for ok := false; ok != true; {
+		var sliceKeyPrivate []byte = clientPrivate[:]
+		_, err := rand.Read(sliceKeyPrivate)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		ok = extra25519.ScalarBaseMult(&clientPublic, &representative, &clientPrivate)
+	}
+	var stationPubkeyByte32 [32]byte
+	copy(stationPubkeyByte32[:], stationPubkey)
+	curve25519.ScalarMult(&sharedSecret, &clientPrivate, &stationPubkeyByte32)
+
+	// extra25519.ScalarBaseMult does not randomize most significant bit(sign of y_coord?)
+	// Other implementations of elligator may have up to 2 non-random bits.
+	// Here we randomize the bit, expecting it to be flipped back to 0 on station
+	randByte := make([]byte, 1)
+	_, err := rand.Read(randByte)
+	if err != nil {
+		return nil, nil, err
+	}
+	representative[31] |= (0xC0 & randByte[0])
+	return sharedSecret[:], representative[:], nil
+}
+
+// SelectDecoys - Get an array of `width` decoys to be used for registration
+func SelectDecoys(sharedSecret []byte, version uint, width uint) ([]*pb.TLSDecoySpec, error) {
+
+	//[reference] prune to v6 only decoys if useV6 is true
+
+	var allDecoys []*pb.TLSDecoySpec
+	switch version {
+	case v6:
+		allDecoys = td.Assets().GetV6Decoys()
+	case v4:
+		allDecoys = td.Assets().GetV4Decoys()
+	case both:
+		allDecoys = td.Assets().GetAllDecoys()
+	default:
+		allDecoys = td.Assets().GetAllDecoys()
+	}
+
+	if len(allDecoys) == 0 {
+		return nil, fmt.Errorf("no decoys")
+	}
+
+	decoys := make([]*pb.TLSDecoySpec, width)
+	numDecoys := big.NewInt(int64(len(allDecoys)))
+	hmacInt := new(big.Int)
+	idx := new(big.Int)
+
+	//[reference] select decoys
+	for i := uint(0); i < width; i++ {
+		macString := fmt.Sprintf("registrationdecoy%d", i)
+		hmac := core.ConjureHMAC(sharedSecret, macString)
+		hmacInt = hmacInt.SetBytes(hmac[:8])
+		hmacInt.SetBytes(hmac)
+		hmacInt.Abs(hmacInt)
+		idx.Mod(hmacInt, numDecoys)
+		decoys[i] = allDecoys[int(idx.Int64())]
+	}
+	return decoys, nil
 }
