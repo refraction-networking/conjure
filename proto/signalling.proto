@@ -117,7 +117,7 @@ message PhantomSubnetsList{
 message PhantomSubnets{
     optional uint32 weight = 1;
     repeated string subnets = 2;
-    repeated bool randomize_dst_port = 3;
+    optional bool randomize_dst_port = 3;
 }
 
 // State transitions of the client
