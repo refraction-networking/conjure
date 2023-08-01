@@ -126,12 +126,9 @@ func parseSubnets(phantomSubnets []string) ([]*net.IPNet, error) {
 	}
 
 	for _, strNet := range phantomSubnets {
-		_, parsedNet, err := net.ParseCIDR(strNet)
+		parsedNet, err := parseSubnet(strNet)
 		if err != nil {
 			return nil, err
-		}
-		if parsedNet == nil {
-			return nil, fmt.Errorf("failed to parse %v as subnet", parsedNet)
 		}
 
 		subnets = append(subnets, parsedNet)
@@ -139,6 +136,18 @@ func parseSubnets(phantomSubnets []string) ([]*net.IPNet, error) {
 
 	return subnets, nil
 	// return nil, fmt.Errorf("parseSubnets not implemented yet")
+}
+
+func parseSubnet(phantomSubnet string) (*net.IPNet, error) {
+	_, parsedNet, err := net.ParseCIDR(phantomSubnet)
+	if err != nil {
+		return nil, err
+	}
+	if parsedNet == nil {
+		return nil, fmt.Errorf("failed to parse %v as subnet", parsedNet)
+	}
+
+	return parsedNet, nil
 }
 
 // SelectAddrFromSubnetOffset given a CIDR block and offset, return the net.IP
