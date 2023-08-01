@@ -14,23 +14,22 @@ import (
 )
 
 type Choice struct {
-	Subnets []string
-	Weight  int64
+	Subnets           []string
+	Weight            int64
+	SupportRandomPort bool
 }
 
 // getSubnets - return EITHER all subnet strings as one composite array if we are
 //
 //	selecting unweighted, or return the array associated with the (seed) selected
 //	array of subnet strings based on the associated weights
-func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) []string {
-
-	var out []string = []string{}
+func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) ([]*net.IPNet, error) {
 
 	if weighted {
 
 		weightedSubnets := sc.GetWeightedSubnets()
 		if weightedSubnets == nil {
-			return []string{}
+			return []*net.IPNet{}, nil
 		}
 
 		choices := make([]Choice, 0, len(weightedSubnets))
@@ -44,7 +43,7 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) []string 
 			}
 
 			totWeight += int64(weight)
-			choices = append(choices, Choice{Subnets: subnets, Weight: int64(weight)})
+			choices = append(choices, Choice{Subnets: subnets, Weight: int64(weight), SupportRandomPort: *cjSubnet.RandomizeDstPort})
 		}
 
 		// Sort choices assending
@@ -57,7 +56,7 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) []string 
 		totWeightBig := big.NewInt(totWeight)
 		rndBig, err := rand.Int(hkdfReader, totWeightBig)
 		if err != nil {
-			return nil
+			return nil, err
 		}
 
 		// Decrement rnd by each weight until it's < 0
@@ -65,7 +64,7 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) []string 
 		for _, choice := range choices {
 			rnd -= choice.Weight
 			if rnd < 0 {
-				return choice.Subnets
+				return parseSubnets(choice.Subnets)
 			}
 		}
 
@@ -73,16 +72,17 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) []string 
 
 		weightedSubnets := sc.GetWeightedSubnets()
 		if weightedSubnets == nil {
-			return []string{}
+			return []*net.IPNet{}, nil
 		}
 
 		// Use unweighted config for subnets, concat all into one array and return.
+		out := []string{}
 		for _, cjSubnet := range weightedSubnets {
 			out = append(out, cjSubnet.Subnets...)
 		}
-	}
 
-	return out
+		return parseSubnets(out)
+	}
 }
 
 // SubnetFilter - Filter IP subnets based on whatever to prevent specific subnets from
