@@ -13,25 +13,27 @@ import (
 	"golang.org/x/crypto/hkdf"
 )
 
-type choice struct {
-	Subnets           []string
-	Weight            int64
-	SupportRandomPort bool
+type phantomNet struct {
+	*net.IPNet
+	supportRandomPort bool
+}
+
+func (p *phantomNet) SupportRandomPort() bool {
+	return p.supportRandomPort
 }
 
 // getSubnets - return EITHER all subnet strings as one composite array if we are
 //
 //	selecting unweighted, or return the array associated with the (seed) selected
 //	array of subnet strings based on the associated weights
-func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) ([]*net.IPNet, error) {
-
+func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) ([]*phantomNet, error) {
 	weightedSubnets := sc.GetWeightedSubnets()
 	if weightedSubnets == nil {
-		return []*net.IPNet{}, nil
+		return []*phantomNet{}, nil
 	}
 
 	if weighted {
-		choices := make([]choice, 0, len(weightedSubnets))
+		choices := make([]*pb.PhantomSubnets, 0, len(weightedSubnets))
 
 		totWeight := int64(0)
 		for _, cjSubnet := range weightedSubnets {
@@ -42,12 +44,12 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) ([]*net.I
 			}
 
 			totWeight += int64(weight)
-			choices = append(choices, choice{Subnets: subnets, Weight: int64(weight), SupportRandomPort: *cjSubnet.RandomizeDstPort})
+			choices = append(choices, cjSubnet)
 		}
 
 		// Sort choices assending
 		sort.Slice(choices, func(i, j int) bool {
-			return choices[i].Weight < choices[j].Weight
+			return choices[i].GetWeight() < choices[j].GetWeight()
 		})
 
 		// Naive method: get random int, subtract from weights until you are < 0
@@ -61,22 +63,26 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) ([]*net.I
 		// Decrement rnd by each weight until it's < 0
 		rnd := rndBig.Int64()
 		for _, choice := range choices {
-			rnd -= choice.Weight
+			rnd -= int64(choice.GetWeight())
 			if rnd < 0 {
-				return parseSubnets(choice.Subnets)
+				return parseSubnets(choice)
 			}
 		}
 
-		return []*net.IPNet{}, nil
+		return []*phantomNet{}, nil
 	}
 
 	// Use unweighted config for subnets, concat all into one array and return.
-	out := []string{}
+	out := []*phantomNet{}
 	for _, cjSubnet := range weightedSubnets {
-		out = append(out, cjSubnet.Subnets...)
+		nets, err := parseSubnets(cjSubnet)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing subnet: %v", err)
+		}
+		out = append(out, nets...)
 	}
 
-	return parseSubnets(out)
+	return out, nil
 }
 
 // SubnetFilter - Filter IP subnets based on whatever to prevent specific subnets from
@@ -112,24 +118,23 @@ func V6Only(obj []*net.IPNet) ([]*net.IPNet, error) {
 	return out, nil
 }
 
-func parseSubnets(phantomSubnets []string) ([]*net.IPNet, error) {
-	var subnets []*net.IPNet = []*net.IPNet{}
+func parseSubnets(phantomSubnet *pb.PhantomSubnets) ([]*phantomNet, error) {
+	subnets := []*phantomNet{}
 
-	if len(phantomSubnets) == 0 {
+	if len(phantomSubnet.GetSubnets()) == 0 {
 		return nil, fmt.Errorf("parseSubnets - no subnets provided")
 	}
 
-	for _, strNet := range phantomSubnets {
+	for _, strNet := range phantomSubnet.GetSubnets() {
 		parsedNet, err := parseSubnet(strNet)
 		if err != nil {
 			return nil, err
 		}
 
-		subnets = append(subnets, parsedNet)
+		subnets = append(subnets, &phantomNet{IPNet: parsedNet, supportRandomPort: phantomSubnet.GetRandomizeDstPort()})
 	}
 
 	return subnets, nil
-	// return nil, fmt.Errorf("parseSubnets not implemented yet")
 }
 
 func parseSubnet(phantomSubnet string) (*net.IPNet, error) {
