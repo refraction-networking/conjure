@@ -154,7 +154,7 @@ func SelectAddrFromSubnetOffset(net1 *net.IPNet, offset *big.Int) (net.IP, error
 
 	// Check that offset is within this subnet
 	if netSize.Cmp(offset) <= 0 {
-		return nil, errors.New("Offset too big for subnet")
+		return nil, errors.New("offset too big for subnet")
 	}
 
 	ipBigInt := &big.Int{}
