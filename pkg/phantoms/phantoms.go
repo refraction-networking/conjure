@@ -13,7 +13,7 @@ import (
 	"golang.org/x/crypto/hkdf"
 )
 
-type Choice struct {
+type choice struct {
 	Subnets           []string
 	Weight            int64
 	SupportRandomPort bool
@@ -31,7 +31,7 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) ([]*net.I
 	}
 
 	if weighted {
-		choices := make([]Choice, 0, len(weightedSubnets))
+		choices := make([]choice, 0, len(weightedSubnets))
 
 		totWeight := int64(0)
 		for _, cjSubnet := range weightedSubnets {
@@ -42,7 +42,7 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) ([]*net.I
 			}
 
 			totWeight += int64(weight)
-			choices = append(choices, Choice{Subnets: subnets, Weight: int64(weight), SupportRandomPort: *cjSubnet.RandomizeDstPort})
+			choices = append(choices, choice{Subnets: subnets, Weight: int64(weight), SupportRandomPort: *cjSubnet.RandomizeDstPort})
 		}
 
 		// Sort choices assending
