@@ -25,13 +25,12 @@ type Choice struct {
 //	array of subnet strings based on the associated weights
 func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) ([]*net.IPNet, error) {
 
+	weightedSubnets := sc.GetWeightedSubnets()
+	if weightedSubnets == nil {
+		return []*net.IPNet{}, nil
+	}
+
 	if weighted {
-
-		weightedSubnets := sc.GetWeightedSubnets()
-		if weightedSubnets == nil {
-			return []*net.IPNet{}, nil
-		}
-
 		choices := make([]Choice, 0, len(weightedSubnets))
 
 		totWeight := int64(0)
@@ -68,21 +67,16 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) ([]*net.I
 			}
 		}
 
-	} else {
-
-		weightedSubnets := sc.GetWeightedSubnets()
-		if weightedSubnets == nil {
-			return []*net.IPNet{}, nil
-		}
-
-		// Use unweighted config for subnets, concat all into one array and return.
-		out := []string{}
-		for _, cjSubnet := range weightedSubnets {
-			out = append(out, cjSubnet.Subnets...)
-		}
-
-		return parseSubnets(out)
+		return []*net.IPNet{}, nil
 	}
+
+	// Use unweighted config for subnets, concat all into one array and return.
+	out := []string{}
+	for _, cjSubnet := range weightedSubnets {
+		out = append(out, cjSubnet.Subnets...)
+	}
+
+	return parseSubnets(out)
 }
 
 // SubnetFilter - Filter IP subnets based on whatever to prevent specific subnets from
@@ -251,7 +245,7 @@ func selectIPAddr(seed []byte, subnets []*net.IPNet) (*net.IP, error) {
 // SelectPhantom - select one phantom IP address based on shared secret
 func SelectPhantom(seed []byte, subnetsList *pb.PhantomSubnetsList, transform SubnetFilter, weighted bool) (*net.IP, error) {
 
-	s, err := parseSubnets(getSubnets(subnetsList, seed, weighted))
+	s, err := getSubnets(subnetsList, seed, weighted)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse subnets: %v", err)
 	}
@@ -297,5 +291,5 @@ func GetDefaultPhantomSubnets() *pb.PhantomSubnetsList {
 // Just returns the list of subnets provided by the protobuf.
 // Convenience function to not have to export getSubnets() or parseSubnets()
 func GetUnweightedSubnetList(subnetsList *pb.PhantomSubnetsList) ([]*net.IPNet, error) {
-	return parseSubnets(getSubnets(subnetsList, nil, false))
+	return getSubnets(subnetsList, nil, false)
 }
