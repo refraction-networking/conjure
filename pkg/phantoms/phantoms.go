@@ -88,7 +88,7 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) ([]*phant
 // SubnetFilter - Filter IP subnets based on whatever to prevent specific subnets from
 //
 //	inclusion in choice. See v4Only and v6Only for reference.
-type SubnetFilter func([]*net.IPNet) ([]*net.IPNet, error)
+type SubnetFilter func([]*phantomNet) ([]*phantomNet, error)
 
 // V4Only - a functor for transforming the subnet list to only include IPv4 subnets
 func V4Only(obj []*net.IPNet) ([]*net.IPNet, error) {
@@ -150,7 +150,7 @@ func parseSubnet(phantomSubnet string) (*net.IPNet, error) {
 }
 
 // SelectAddrFromSubnetOffset given a CIDR block and offset, return the net.IP
-func SelectAddrFromSubnetOffset(net1 *net.IPNet, offset *big.Int) (net.IP, error) {
+func SelectAddrFromSubnetOffset(net1 *phantomNet, offset *big.Int) (net.IP, error) {
 	bits, addrLen := net1.Mask.Size()
 
 	// Compute network size (e.g. an ipv4 /24 is 2^(32-24)
@@ -179,10 +179,10 @@ func SelectAddrFromSubnetOffset(net1 *net.IPNet, offset *big.Int) (net.IP, error
 // for the high and low values in each allocation. The random number is then
 // bound between the global min and max of that set. This ensures that
 // addresses are chosen based on the number of addresses in the subnet.
-func selectIPAddr(seed []byte, subnets []*net.IPNet) (*net.IP, error) {
+func selectIPAddr(seed []byte, subnets []*phantomNet) (*net.IP, error) {
 	type idNet struct {
 		min, max big.Int
-		net      net.IPNet
+		net      *phantomNet
 	}
 	var idNets []idNet
 
@@ -196,14 +196,14 @@ func selectIPAddr(seed []byte, subnets []*net.IPNet) (*net.IP, error) {
 			_idNet.min.Set(addressTotal)
 			addressTotal.Add(addressTotal, big.NewInt(2).Exp(big.NewInt(2), big.NewInt(int64(32-netMaskOnes)), nil))
 			_idNet.max.Sub(addressTotal, big.NewInt(1))
-			_idNet.net = *_net
+			_idNet.net = _net
 			idNets = append(idNets, _idNet)
 		} else if ipv6net := _net.IP.To16(); ipv6net != nil {
 			_idNet := idNet{}
 			_idNet.min.Set(addressTotal)
 			addressTotal.Add(addressTotal, big.NewInt(2).Exp(big.NewInt(2), big.NewInt(int64(128-netMaskOnes)), nil))
 			_idNet.max.Sub(addressTotal, big.NewInt(1))
-			_idNet.net = *_net
+			_idNet.net = _net
 			idNets = append(idNets, _idNet)
 		} else {
 			return nil, fmt.Errorf("failed to parse %v", _net)
@@ -233,7 +233,7 @@ func selectIPAddr(seed []byte, subnets []*net.IPNet) (*net.IP, error) {
 
 			var offset big.Int
 			offset.Sub(id, &_idNet.min)
-			result, err = SelectAddrFromSubnetOffset(&_idNet.net, &offset)
+			result, err = SelectAddrFromSubnetOffset(_idNet.net, &offset)
 			if err != nil {
 				return nil, fmt.Errorf("failed to chose IP address: %v", err)
 			}
@@ -295,6 +295,6 @@ func GetDefaultPhantomSubnets() *pb.PhantomSubnetsList {
 
 // Just returns the list of subnets provided by the protobuf.
 // Convenience function to not have to export getSubnets() or parseSubnets()
-func GetUnweightedSubnetList(subnetsList *pb.PhantomSubnetsList) ([]*net.IPNet, error) {
+func GetUnweightedSubnetList(subnetsList *pb.PhantomSubnetsList) ([]*phantomNet, error) {
 	return getSubnets(subnetsList, nil, false)
 }
