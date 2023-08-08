@@ -100,10 +100,12 @@ func TestWeightedSelection(t *testing.T) {
 	loops := 1000
 	r := rand.New(rand.NewSource(5421212341231))
 	w := uint32(1)
+	subnet1 := "1.1.1.1/32"
+	subnet2 := "2.2.2.2/32"
 	var ps = &pb.PhantomSubnetsList{
 		WeightedSubnets: []*pb.PhantomSubnets{
-			{Weight: &w, Subnets: []string{"1"}},
-			{Weight: &w, Subnets: []string{"2"}},
+			{Weight: &w, Subnets: []string{subnet1}},
+			{Weight: &w, Subnets: []string{subnet2}},
 		},
 	}
 
@@ -120,9 +122,9 @@ func TestWeightedSelection(t *testing.T) {
 		if sa == nil {
 			t.Fatalf("failed to parse pb.PhantomSubnetsList: %v, %v, %v", seed, true, ps)
 
-		} else if sa[0].String() == "1" {
+		} else if sa[0].String() == subnet1 {
 			count[0]++
-		} else if sa[0].String() == "2" {
+		} else if sa[0].String() == subnet2 {
 			count[1]++
 		}
 
