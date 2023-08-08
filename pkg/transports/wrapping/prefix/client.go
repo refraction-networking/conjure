@@ -114,6 +114,10 @@ func (t ClientTransport) ParseParams(data *anypb.Any) (any, error) {
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible or the parameters are otherwise invalid
 func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
+	if genericParams, ok := p.(*pb.GenericTransportParams); ok {
+		t.parameters.RandomizeDstPort = proto.Bool(genericParams.GetRandomizeDstPort())
+	}
+
 	prefixParams, ok := p.(*pb.PrefixTransportParams)
 	if !ok {
 		return fmt.Errorf("%w, incorrect param type", ErrBadParams)
