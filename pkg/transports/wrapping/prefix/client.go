@@ -116,6 +116,7 @@ func (t ClientTransport) ParseParams(data *anypb.Any) (any, error) {
 func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 	if genericParams, ok := p.(*pb.GenericTransportParams); ok {
 		t.parameters.RandomizeDstPort = proto.Bool(genericParams.GetRandomizeDstPort())
+		return nil
 	}
 
 	prefixParams, ok := p.(*pb.PrefixTransportParams)
