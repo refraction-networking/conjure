@@ -69,8 +69,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/refraction-networking/ed25519 v0.1.2 h1:08kJZUkAlY7a7cZGosl1teGytV+QEoNxPO7NnRvAB+g=
 github.com/refraction-networking/ed25519 v0.1.2/go.mod h1:nxYLUAYt/hmNpAh64PNSQ/tQ9gTIB89wCaGKJlRtZ9I=
-github.com/refraction-networking/gotapdance v1.6.0-dtlsbeta h1:fKbDVKcgTfLReUZXt2E6LzNgVSDksdDWWggxBChJ6JQ=
-github.com/refraction-networking/gotapdance v1.6.0-dtlsbeta/go.mod h1:ZPCynd9re3CbvXTXqNHu4EU01Ve5Z2wexy76XC0b1No=
+github.com/refraction-networking/gotapdance v1.6.3-0.20230808211749-c27ccf15c6b3 h1:m/QlwkrU9z+oGxOaEWNj500cueYhX09Fn+9iMApzG3k=
+github.com/refraction-networking/gotapdance v1.6.3-0.20230808211749-c27ccf15c6b3/go.mod h1:JwmYjjHo+m5EHc3700+kaYomLRf69RhiWrmprw6kQ3I=
 github.com/refraction-networking/obfs4 v0.1.1 h1:9AmxHFbafOZzXTGidKI2EeL0FGkIramIlB4dPLg3d+4=
 github.com/refraction-networking/obfs4 v0.1.1/go.mod h1:wAl/+gWiLsrcykJA3nKJHx89f5/gXGM8UKvty7+mvbM=
 github.com/refraction-networking/utls v1.2.0 h1:U5f8wkij2NVinfLuJdFP3gCMwIHs+EzvhxmYdXgiapo=
