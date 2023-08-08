@@ -172,7 +172,7 @@ func SelectAddrFromSubnetOffset(net1 *phantomNet, offset *big.Int) (*PhantomIP, 
 	ipBigInt.Add(ipBigInt, offset)
 	ip := net.IP(ipBigInt.Bytes())
 
-	return &PhantomIP{IP: &ip, supportRandomPort: net1.supportRandomPort}, nil
+	return &PhantomIP{ip: &ip, supportRandomPort: net1.supportRandomPort}, nil
 }
 
 // selectIPAddr selects an ip address from the list of subnets associated
@@ -300,11 +300,17 @@ func GetUnweightedSubnetList(subnetsList *pb.PhantomSubnetsList) ([]*phantomNet,
 	return getSubnets(subnetsList, nil, false)
 }
 
+// type aliase to make embedding unexported
+type ip = net.IP
 type PhantomIP struct {
-	*net.IP
+	*ip
 	supportRandomPort bool
 }
 
 func (p *PhantomIP) SupportRandomPort() bool {
 	return p.supportRandomPort
+}
+
+func (p *PhantomIP) IP() *net.IP {
+	return p.ip
 }
