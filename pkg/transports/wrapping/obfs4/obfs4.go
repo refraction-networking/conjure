@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 
-	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/refraction-networking/obfs4/common/drbg"
@@ -34,8 +33,8 @@ func (Transport) Name() string { return "obfs4" }
 func (Transport) LogPrefix() string { return "OBFS4" }
 
 // GetIdentifier implements the station Transport interface
-func (Transport) GetIdentifier(r *cj.DecoyRegistration) string {
-	return string(r.Keys.Obfs4Keys.PublicKey.Bytes()[:]) + string(r.Keys.Obfs4Keys.NodeID.Bytes()[:])
+func (Transport) GetIdentifier(r transports.Registration) string {
+	return string(r.Obfs4PublicKey().Bytes()[:]) + string(r.Obfs4NodeID().Bytes()[:])
 }
 
 // GetProto returns the next layer protocol that the transport uses. Implements
@@ -72,7 +71,7 @@ func (t Transport) ParamStrings(p any) []string {
 }
 
 // WrapConnection implements the station Transport interface
-func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, regManager *cj.RegistrationManager) (*cj.DecoyRegistration, net.Conn, error) {
+func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, regManager transports.RegManager) (transports.Registration, net.Conn, error) {
 	if data.Len() < ClientMinHandshakeLength {
 		return nil, nil, transports.ErrTryAgain
 	}
@@ -81,7 +80,7 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 	copy(representative[:ntor.RepresentativeLength], data.Bytes()[:ntor.RepresentativeLength])
 
 	for _, r := range getObfs4Registrations(regManager, phantom) {
-		mark := generateMark(r.Keys.Obfs4Keys.NodeID, r.Keys.Obfs4Keys.PublicKey, &representative)
+		mark := generateMark(r.Obfs4NodeID(), r.Obfs4PublicKey(), &representative)
 		pos := findMarkMac(mark, data.Bytes(), ntor.RepresentativeLength+ClientMinPadLength, MaxHandshakeLength, true)
 		if pos == -1 {
 			continue
@@ -89,8 +88,8 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 
 		// We found the mark in the client handshake! We found our registration!
 		args := pt.Args{}
-		args.Add("node-id", r.Keys.Obfs4Keys.NodeID.Hex())
-		args.Add("private-key", r.Keys.Obfs4Keys.PrivateKey.Hex())
+		args.Add("node-id", r.Obfs4NodeID().Hex())
+		args.Add("private-key", r.Obfs4PrivateKey().Hex())
 		seed, err := drbg.NewSeed()
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create DRBG seed: %w", err)
@@ -125,8 +124,8 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 // This function makes the assumption that any identifier with length 52 is an obfs4 registration.
 // This may not be strictly true, but any other identifier will simply fail to form a connection and
 // should be harmless.
-func getObfs4Registrations(regManager *cj.RegistrationManager, darkDecoyAddr net.IP) []*cj.DecoyRegistration {
-	var regs []*cj.DecoyRegistration
+func getObfs4Registrations(regManager transports.RegManager, darkDecoyAddr net.IP) []transports.Registration {
+	var regs []transports.Registration
 
 	for identifier, r := range regManager.GetRegistrations(darkDecoyAddr) {
 		if len(identifier) == ntor.PublicKeyLength+ntor.NodeIDLength {

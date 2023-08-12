@@ -100,13 +100,13 @@ type dnat struct {
 	tun *os.File
 }
 
-func (d *dnat) addEntry(src net.IP, sport uint16, dst net.IP, dport uint16) error {
+func (d *dnat) addEntry(src net.IP, sport uint16, dst *net.IP, dport uint16) error {
 	ipLayer := &layers.IPv4{
 		Version:  4,
 		IHL:      5,
 		TTL:      64,
 		SrcIP:    src,
-		DstIP:    dst,
+		DstIP:    *dst,
 		Protocol: layers.IPProtocolUDP,
 	}
 

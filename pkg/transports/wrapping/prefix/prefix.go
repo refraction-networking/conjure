@@ -7,7 +7,6 @@ import (
 	"net"
 
 	"github.com/refraction-networking/conjure/pkg/core"
-	dd "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -185,8 +184,8 @@ func (Transport) LogPrefix() string { return "PREF" }
 // GetIdentifier takes in a registration and returns an identifier for it. This
 // identifier should be unique for each registration on a given phantom;
 // registrations on different phantoms can have the same identifier.
-func (Transport) GetIdentifier(d *dd.DecoyRegistration) string {
-	return string(core.ConjureHMAC(d.Keys.SharedSecret, "PrefixTransportHMACString"))
+func (Transport) GetIdentifier(d transports.Registration) string {
+	return string(core.ConjureHMAC(d.SharedSecret(), "PrefixTransportHMACString"))
 }
 
 // GetProto returns the next layer protocol that the transport uses. Implements
@@ -269,7 +268,7 @@ func (t Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16,
 //
 // If the returned error is nil or non-nil and non-{ transports.ErrTryAgain,
 // transports.ErrNotTransport }, the caller may no longer use data or conn.
-func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, net.Conn, error) {
+func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager transports.RegManager) (transports.Registration, net.Conn, error) {
 	if data.Len() < minTagLength {
 		return nil, nil, transports.ErrTryAgain
 	}
@@ -282,7 +281,7 @@ func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst ne
 	return reg, transports.PrependToConn(c, data), nil
 }
 
-func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, error) {
+func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager transports.RegManager) (transports.Registration, error) {
 	if data.Len() == 0 {
 		return nil, transports.ErrTryAgain
 	}
@@ -335,9 +334,9 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 			continue
 		}
 
-		if reg.Transport != pb.TransportType_Prefix {
+		if reg.Transport() != pb.TransportType_Prefix {
 			return nil, ErrIncorrectTransport
-		} else if params, ok := reg.TransportParams.(*pb.PrefixTransportParams); ok {
+		} else if params, ok := reg.TransportParams().(*pb.PrefixTransportParams); ok {
 			if params == nil || params.GetPrefixId() != int32(id) {
 				// If the registration we found has no params specified (invalid and shouldn't have
 				// been ingested) or if the prefix ID does not match the expected prefix, set the
