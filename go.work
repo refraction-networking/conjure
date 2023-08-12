@@ -1,7 +1,9 @@
+go 1.20.0
+
 use (
 	.
+	./cmd/application
+	./cmd/registration-server
 	./pkg/regserver
 	./proto
-    ./cmd/application
-    ./cmd/registration-server
 )
