@@ -11,12 +11,12 @@ type Registration interface {
 	SharedSecret() []byte
 	GetRegistrationAddress() string
 	GetSrcPort() uint16
+	GetDstPort() uint16
 	PhantomIP() *net.IP
-	PhantomPort() uint16
 	Obfs4PublicKey() *ntor.PublicKey
 	Obfs4PrivateKey() *ntor.PrivateKey
 	Obfs4NodeID() *ntor.NodeID
-	Transport() pb.TransportType
+	TransportType() pb.TransportType
 	TransportParams() any
 }
 

@@ -334,7 +334,7 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 			continue
 		}
 
-		if reg.Transport() != pb.TransportType_Prefix {
+		if reg.TransportType() != pb.TransportType_Prefix {
 			return nil, ErrIncorrectTransport
 		} else if params, ok := reg.TransportParams().(*pb.PrefixTransportParams); ok {
 			if params == nil || params.GetPrefixId() != int32(id) {

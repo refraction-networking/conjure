@@ -63,13 +63,13 @@ func NewTransport(logAuthFail func(*net.IP), logOtherFail func(*net.IP), logDial
 
 // Connect takes a registraion and returns a dtls Conn connected to the client
 func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (net.Conn, error) {
-	if reg.Transport() != pb.TransportType_DTLS {
+	if reg.TransportType() != pb.TransportType_DTLS {
 		return nil, transports.ErrNotTransport
 	}
 
 	clientAddr := net.UDPAddr{IP: net.ParseIP(reg.GetRegistrationAddress()), Port: int(reg.GetSrcPort())}
 
-	err := t.dnat.addEntry(clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.PhantomPort())
+	err := t.dnat.addEntry(clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
 	if err != nil {
 		return nil, fmt.Errorf("error adding DNAT entry: %v", err)
 	}
