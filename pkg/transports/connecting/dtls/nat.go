@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"syscall"
 
 	"github.com/pion/stun"
 )
@@ -25,32 +24,8 @@ func openUDP(ctx context.Context, laddr, addr string, dialer dialFunc) error {
 	}
 	defer conn.Close()
 
-	fileConn, ok := conn.(fileConn)
-	if !ok {
-		return fmt.Errorf("dialed conn does not implement File()")
-	}
-
-	// Get the file descriptor
-	fd, err := fileConn.File()
-	if err != nil {
-		return err
-	}
-	defer fd.Close()
-
-	// Set the TTL
-	err = syscall.SetsockoptInt(int(fd.Fd()), syscall.IPPROTO_IP, syscall.IP_TTL, ttl)
-	if err != nil {
-		return err
-	}
-
 	// Write data to the connection
 	_, err = conn.Write([]byte(""))
-	if err != nil {
-		return err
-	}
-
-	// reset TTL
-	err = syscall.SetsockoptInt(int(fd.Fd()), syscall.IPPROTO_IP, syscall.IP_TTL, defaultTTL)
 	if err != nil {
 		return err
 	}
