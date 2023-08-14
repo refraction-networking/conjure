@@ -87,6 +87,12 @@ func (t *Transport) Connect(ctx context.Context, reg *dd.DecoyRegistration) (net
 			return
 		}
 
+		// Write data to the connection
+		_, err = udpConn.Write([]byte(""))
+		if err != nil {
+			return
+		}
+
 		dtlsConn, err := dtls.ClientWithContext(ctx, udpConn, &dtls.Config{PSK: reg.Keys.SharedSecret, SCTP: dtls.ServerAccept})
 		if err != nil {
 			errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
