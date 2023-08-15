@@ -17,6 +17,8 @@ import (
 	"github.com/refraction-networking/conjure/pkg/station/geoip"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/transports"
+	"github.com/refraction-networking/obfs4/common/ntor"
 
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
@@ -220,8 +222,15 @@ func (regManager *RegistrationManager) RegistrationExists(reg *DecoyRegistration
 }
 
 // GetRegistrations returns registrations associated with a specific phantom address.
-func (regManager *RegistrationManager) GetRegistrations(phantomAddr net.IP) map[string]*DecoyRegistration {
-	return regManager.registeredDecoys.getRegistrations(phantomAddr)
+func (regManager *RegistrationManager) GetRegistrations(phantomAddr net.IP) map[string]transports.Registration {
+	regs := regManager.registeredDecoys.getRegistrations(phantomAddr)
+
+	convertedRegs := make(map[string]transports.Registration)
+	for id, reg := range regs {
+		convertedRegs[id] = reg
+	}
+
+	return convertedRegs
 }
 
 // CountRegistrations counts the number of registrations tracked that are using a
@@ -277,7 +286,7 @@ type DecoyRegistration struct {
 	Flags              *pb.RegistrationFlags
 	Transport          pb.TransportType
 	TransportPtr       *Transport
-	TransportParams    any
+	transportParams    any
 	RegistrationTime   time.Time
 	RegistrationSource *pb.RegistrationSource
 	DecoyListVersion   uint32
@@ -290,6 +299,40 @@ type DecoyRegistration struct {
 	// validity marks whether the registration has been validated through liveness and other checks.
 	// This also denotes whether the registration has been shared with the detector.
 	Valid bool
+}
+
+// SharedSecret returns the shared secret of the registration
+func (reg *DecoyRegistration) SharedSecret() []byte {
+	return reg.Keys.SharedSecret
+}
+
+// PhantomIP returns the phantom IP
+func (reg *DecoyRegistration) PhantomIP() *net.IP {
+	return &reg.PhantomIp
+}
+
+// Obfs4PublicKey returns the obfs4 public key
+func (reg *DecoyRegistration) Obfs4PublicKey() *ntor.PublicKey {
+	return reg.Keys.Obfs4Keys.PublicKey
+}
+
+// Obfs4PublicKey returns the obfs4 private key
+func (reg *DecoyRegistration) Obfs4PrivateKey() *ntor.PrivateKey {
+	return reg.Keys.Obfs4Keys.PrivateKey
+}
+
+// Obfs4PublicKey returns the obfs4 node ID
+func (reg *DecoyRegistration) Obfs4NodeID() *ntor.NodeID {
+	return reg.Keys.Obfs4Keys.NodeID
+}
+
+// TransportType returns the protobuf transport type
+func (reg *DecoyRegistration) TransportType() pb.TransportType {
+	return reg.Transport
+}
+
+func (reg *DecoyRegistration) TransportParams() any {
+	return reg.transportParams
 }
 
 // String -- Print a digest of the important identifying information for this registration.

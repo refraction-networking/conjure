@@ -1,4 +1,4 @@
-package cjproto
+package proto
 
 import (
 	"testing"

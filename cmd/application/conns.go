@@ -315,7 +315,14 @@ readLoop:
 
 	transports:
 		for i, t := range possibleTransports {
-			reg, wrapped, err = t.WrapConnection(&received, clientConn, originalDstIP, regManager)
+			wrappedReg, wrapped, err := t.WrapConnection(&received, clientConn, originalDstIP, regManager)
+			reg, ok := wrappedReg.(*cj.DecoyRegistration)
+			if !ok {
+				logger.Errorf("unexpected returned reg type from transport: %T, expected: %T", wrapped, reg)
+				delete(possibleTransports, i)
+				continue transports
+			}
+
 			err = generalizeErr(err)
 			if errors.Is(err, transports.ErrTryAgain) {
 				continue transports
