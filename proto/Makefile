@@ -11,7 +11,7 @@ RUST_OUT_PATH	= ../src/$(RUST_OUT)
 default: $(RUST_OUT_PATH) $(GO_OUT)
 
 $(GO_OUT):	$(SRC)
-	$(PROTOC) $(SRC) --go_out . --go_opt=M"signalling.proto=./;cjproto" signalling.proto
+	$(PROTOC) $(SRC) --go_out . --go_opt=M"signalling.proto=./;proto" signalling.proto
 
 $(RUST_OUT_PATH): $(SRC)
 	$(PROTOC) $(SRC) --rust_out . && cp $(RUST_OUT) $(RUST_OUT_PATH)

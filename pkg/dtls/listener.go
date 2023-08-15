@@ -12,9 +12,9 @@ import (
 	"net"
 	"sync"
 
-	"github.com/mingyech/dtls"
-	"github.com/mingyech/dtls/pkg/protocol/handshake"
-	"github.com/mingyech/transport/udp"
+	"github.com/pion/dtls/v2"
+	"github.com/pion/dtls/v2/pkg/protocol/handshake"
+	"github.com/pion/transport/v2/udp"
 )
 
 // Listen creates a listener and starts listening

@@ -380,7 +380,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		Covert:           c2s.GetCovertAddress(),
 		Transport:        c2s.GetTransport(),
 		TransportPtr:     &transport,
-		TransportParams:  transportParams,
+		transportParams:  transportParams,
 		Flags:            c2s.Flags,
 		clientPort:       srcPort,
 

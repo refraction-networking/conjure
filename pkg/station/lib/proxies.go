@@ -230,7 +230,7 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 		Gen:         uint(reg.DecoyListVersion),
 	}
 
-	paramStrs := (*reg.TransportPtr).ParamStrings(reg.TransportParams)
+	paramStrs := (*reg.TransportPtr).ParamStrings(reg.transportParams)
 	if paramStrs != nil {
 		tunStats.TransportOpts = paramStrs
 	}

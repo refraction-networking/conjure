@@ -1,4 +1,4 @@
-package cjproto
+package proto
 
 // Package tdproto, in addition to generated functions, has some manual extensions.
 

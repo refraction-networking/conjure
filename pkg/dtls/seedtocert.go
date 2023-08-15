@@ -16,7 +16,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/mingyech/dtls/pkg/protocol/handshake"
+	"github.com/pion/dtls/v2/pkg/protocol/handshake"
 	"golang.org/x/crypto/hkdf"
 )
 

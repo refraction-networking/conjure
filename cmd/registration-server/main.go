@@ -14,9 +14,9 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/refraction-networking/conjure/pkg/metrics"
-	"github.com/refraction-networking/conjure/pkg/regprocessor"
 	"github.com/refraction-networking/conjure/pkg/regserver/apiregserver"
 	"github.com/refraction-networking/conjure/pkg/regserver/dnsregserver"
+	"github.com/refraction-networking/conjure/pkg/regserver/regprocessor"
 	"github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports/connecting/dtls"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"

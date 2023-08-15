@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/mingyech/dtls"
+	"github.com/pion/dtls/v2"
 )
 
 type certPair struct {
