@@ -10,24 +10,24 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/hashicorp/golang-lru v0.6.0
 	github.com/libp2p/go-reuseport v0.3.0
-	github.com/mingyech/dtls v0.1.0
-	github.com/mingyech/transport v0.1.1
 	github.com/mroth/weightedrand v1.0.0
 	github.com/oschwald/geoip2-golang v1.9.0
 	github.com/pebbe/zmq4 v1.2.10
 	github.com/pelletier/go-toml v1.9.5
+	github.com/pion/dtls/v2 v2.2.7
 	github.com/pion/logging v0.2.2
 	github.com/pion/sctp v1.8.7
 	github.com/pion/stun v0.6.1
+	github.com/pion/transport/v2 v2.2.2-0.20230802201558-f2dffd80896b
 	github.com/refraction-networking/ed25519 v0.1.2
-	github.com/refraction-networking/gotapdance v1.5.6
+	github.com/refraction-networking/gotapdance v0.0.0-00010101000000-000000000000
 	github.com/refraction-networking/obfs4 v0.1.2
 	github.com/refraction-networking/utls v1.3.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib v1.4.0
 	golang.org/x/crypto v0.11.0
-	golang.org/x/net v0.12.0
+	golang.org/x/net v0.13.0
 	golang.org/x/sys v0.10.0
 	google.golang.org/grpc v1.57.0
 	google.golang.org/protobuf v1.31.0
@@ -42,9 +42,7 @@ require (
 	github.com/gaukas/godicttls v0.0.3 // indirect
 	github.com/klauspost/compress v1.16.6 // indirect
 	github.com/oschwald/maxminddb-golang v1.11.0 // indirect
-	github.com/pion/dtls/v2 v2.2.7 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
-	github.com/pion/transport/v2 v2.2.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sergeyfrolov/bsbuffer v0.0.0-20180903213811-94e85abb8507 // indirect
 	golang.org/x/text v0.11.0 // indirect
@@ -52,3 +50,7 @@ require (
 )
 
 replace github.com/refraction-networking/gotapdance => github.com/refraction-networking/gotapdance v1.6.3-0.20230813005345-574dafa9cbf6
+
+replace github.com/pion/dtls/v2 => github.com/mingyech/dtls/v2 v2.0.0
+
+replace github.com/pion/transport/v2 => github.com/mingyech/transport/v2 v2.0.0
