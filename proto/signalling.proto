@@ -117,6 +117,7 @@ message PhantomSubnetsList{
 message PhantomSubnets{
     optional uint32 weight = 1;
     repeated string subnets = 2;
+    optional bool randomize_dst_port = 3;
 }
 
 // State transitions of the client
@@ -193,6 +194,7 @@ message WebRTCSignal {
 
 message DTLSTransportParams {
     optional uint32 src_port = 1;
+    optional bool randomize_dst_port = 2;
 }
 
 message StationToClient {

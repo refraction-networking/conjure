@@ -6,7 +6,6 @@ require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/flynn/noise v1.0.0
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/golang/protobuf v1.5.3
 	github.com/google/gopacket v1.1.19
 	github.com/hashicorp/golang-lru v0.6.0
 	github.com/libp2p/go-reuseport v0.3.0
@@ -40,6 +39,7 @@ require (
 	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/gaukas/godicttls v0.0.3 // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/klauspost/compress v1.16.6 // indirect
 	github.com/oschwald/maxminddb-golang v1.11.0 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
@@ -49,7 +49,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/refraction-networking/gotapdance => github.com/refraction-networking/gotapdance v1.6.3-0.20230813005345-574dafa9cbf6
+replace github.com/refraction-networking/gotapdance => github.com/refraction-networking/gotapdance v1.6.3-0.20230808211749-c27ccf15c6b3
 
 replace github.com/pion/dtls/v2 => github.com/mingyech/dtls/v2 v2.0.0
 

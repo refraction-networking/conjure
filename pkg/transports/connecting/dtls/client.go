@@ -65,7 +65,18 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 // error if the provided generic message is not compatible.
 //
 // DTLS transport currently has no caller controlled params
-func (*ClientTransport) SetParams(any, ...bool) error {
+func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
+	params, ok := p.(*pb.GenericTransportParams)
+	if !ok {
+		return nil
+	}
+
+	if t.Parameters == nil {
+		t.Parameters = &pb.DTLSTransportParams{}
+	}
+
+	t.Parameters.RandomizeDstPort = proto.Bool(params.GetRandomizeDstPort())
+
 	return nil
 }
 

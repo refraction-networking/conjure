@@ -13,27 +13,27 @@ import (
 	"golang.org/x/crypto/hkdf"
 )
 
-type Choice struct {
-	Subnets []string
-	Weight  int64
+type phantomNet struct {
+	*net.IPNet
+	supportRandomPort bool
+}
+
+func (p *phantomNet) SupportRandomPort() bool {
+	return p.supportRandomPort
 }
 
 // getSubnets - return EITHER all subnet strings as one composite array if we are
 //
 //	selecting unweighted, or return the array associated with the (seed) selected
 //	array of subnet strings based on the associated weights
-func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) []string {
-
-	var out []string = []string{}
+func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) ([]*phantomNet, error) {
+	weightedSubnets := sc.GetWeightedSubnets()
+	if weightedSubnets == nil {
+		return []*phantomNet{}, nil
+	}
 
 	if weighted {
-
-		weightedSubnets := sc.GetWeightedSubnets()
-		if weightedSubnets == nil {
-			return []string{}
-		}
-
-		choices := make([]Choice, 0, len(weightedSubnets))
+		choices := make([]*pb.PhantomSubnets, 0, len(weightedSubnets))
 
 		totWeight := int64(0)
 		for _, cjSubnet := range weightedSubnets {
@@ -44,12 +44,12 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) []string 
 			}
 
 			totWeight += int64(weight)
-			choices = append(choices, Choice{Subnets: subnets, Weight: int64(weight)})
+			choices = append(choices, cjSubnet)
 		}
 
 		// Sort choices assending
 		sort.Slice(choices, func(i, j int) bool {
-			return choices[i].Weight < choices[j].Weight
+			return choices[i].GetWeight() < choices[j].GetWeight()
 		})
 
 		// Naive method: get random int, subtract from weights until you are < 0
@@ -57,42 +57,42 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) []string 
 		totWeightBig := big.NewInt(totWeight)
 		rndBig, err := rand.Int(hkdfReader, totWeightBig)
 		if err != nil {
-			return nil
+			return nil, err
 		}
 
 		// Decrement rnd by each weight until it's < 0
 		rnd := rndBig.Int64()
 		for _, choice := range choices {
-			rnd -= choice.Weight
+			rnd -= int64(choice.GetWeight())
 			if rnd < 0 {
-				return choice.Subnets
+				return parseSubnets(choice)
 			}
 		}
 
-	} else {
-
-		weightedSubnets := sc.GetWeightedSubnets()
-		if weightedSubnets == nil {
-			return []string{}
-		}
-
-		// Use unweighted config for subnets, concat all into one array and return.
-		for _, cjSubnet := range weightedSubnets {
-			out = append(out, cjSubnet.Subnets...)
-		}
+		return []*phantomNet{}, nil
 	}
 
-	return out
+	// Use unweighted config for subnets, concat all into one array and return.
+	out := []*phantomNet{}
+	for _, cjSubnet := range weightedSubnets {
+		nets, err := parseSubnets(cjSubnet)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing subnet: %v", err)
+		}
+		out = append(out, nets...)
+	}
+
+	return out, nil
 }
 
 // SubnetFilter - Filter IP subnets based on whatever to prevent specific subnets from
 //
 //	inclusion in choice. See v4Only and v6Only for reference.
-type SubnetFilter func([]*net.IPNet) ([]*net.IPNet, error)
+type SubnetFilter func([]*phantomNet) ([]*phantomNet, error)
 
 // V4Only - a functor for transforming the subnet list to only include IPv4 subnets
-func V4Only(obj []*net.IPNet) ([]*net.IPNet, error) {
-	var out []*net.IPNet = []*net.IPNet{}
+func V4Only(obj []*phantomNet) ([]*phantomNet, error) {
+	out := []*phantomNet{}
 
 	for _, _net := range obj {
 		if ipv4net := _net.IP.To4(); ipv4net != nil {
@@ -103,8 +103,8 @@ func V4Only(obj []*net.IPNet) ([]*net.IPNet, error) {
 }
 
 // V6Only - a functor for transforming the subnet list to only include IPv6 subnets
-func V6Only(obj []*net.IPNet) ([]*net.IPNet, error) {
-	var out []*net.IPNet = []*net.IPNet{}
+func V6Only(obj []*phantomNet) ([]*phantomNet, error) {
+	out := []*phantomNet{}
 
 	for _, _net := range obj {
 		if _net.IP == nil {
@@ -118,31 +118,39 @@ func V6Only(obj []*net.IPNet) ([]*net.IPNet, error) {
 	return out, nil
 }
 
-func parseSubnets(phantomSubnets []string) ([]*net.IPNet, error) {
-	var subnets []*net.IPNet = []*net.IPNet{}
+func parseSubnets(phantomSubnet *pb.PhantomSubnets) ([]*phantomNet, error) {
+	subnets := []*phantomNet{}
 
-	if len(phantomSubnets) == 0 {
+	if len(phantomSubnet.GetSubnets()) == 0 {
 		return nil, fmt.Errorf("parseSubnets - no subnets provided")
 	}
 
-	for _, strNet := range phantomSubnets {
-		_, parsedNet, err := net.ParseCIDR(strNet)
+	for _, strNet := range phantomSubnet.GetSubnets() {
+		parsedNet, err := parseSubnet(strNet)
 		if err != nil {
 			return nil, err
 		}
-		if parsedNet == nil {
-			return nil, fmt.Errorf("failed to parse %v as subnet", parsedNet)
-		}
 
-		subnets = append(subnets, parsedNet)
+		subnets = append(subnets, &phantomNet{IPNet: parsedNet, supportRandomPort: phantomSubnet.GetRandomizeDstPort()})
 	}
 
 	return subnets, nil
-	// return nil, fmt.Errorf("parseSubnets not implemented yet")
+}
+
+func parseSubnet(phantomSubnet string) (*net.IPNet, error) {
+	_, parsedNet, err := net.ParseCIDR(phantomSubnet)
+	if err != nil {
+		return nil, err
+	}
+	if parsedNet == nil {
+		return nil, fmt.Errorf("failed to parse %v as subnet", parsedNet)
+	}
+
+	return parsedNet, nil
 }
 
 // SelectAddrFromSubnetOffset given a CIDR block and offset, return the net.IP
-func SelectAddrFromSubnetOffset(net1 *net.IPNet, offset *big.Int) (net.IP, error) {
+func SelectAddrFromSubnetOffset(net1 *phantomNet, offset *big.Int) (*PhantomIP, error) {
 	bits, addrLen := net1.Mask.Size()
 
 	// Compute network size (e.g. an ipv4 /24 is 2^(32-24)
@@ -151,7 +159,7 @@ func SelectAddrFromSubnetOffset(net1 *net.IPNet, offset *big.Int) (net.IP, error
 
 	// Check that offset is within this subnet
 	if netSize.Cmp(offset) <= 0 {
-		return nil, errors.New("Offset too big for subnet")
+		return nil, errors.New("offset too big for subnet")
 	}
 
 	ipBigInt := &big.Int{}
@@ -162,8 +170,9 @@ func SelectAddrFromSubnetOffset(net1 *net.IPNet, offset *big.Int) (net.IP, error
 	}
 
 	ipBigInt.Add(ipBigInt, offset)
+	ip := net.IP(ipBigInt.Bytes())
 
-	return net.IP(ipBigInt.Bytes()), nil
+	return &PhantomIP{ip: &ip, supportRandomPort: net1.supportRandomPort}, nil
 }
 
 // selectIPAddr selects an ip address from the list of subnets associated
@@ -171,10 +180,10 @@ func SelectAddrFromSubnetOffset(net1 *net.IPNet, offset *big.Int) (net.IP, error
 // for the high and low values in each allocation. The random number is then
 // bound between the global min and max of that set. This ensures that
 // addresses are chosen based on the number of addresses in the subnet.
-func selectIPAddr(seed []byte, subnets []*net.IPNet) (*net.IP, error) {
+func selectIPAddr(seed []byte, subnets []*phantomNet) (*PhantomIP, error) {
 	type idNet struct {
 		min, max big.Int
-		net      net.IPNet
+		net      *phantomNet
 	}
 	var idNets []idNet
 
@@ -188,14 +197,14 @@ func selectIPAddr(seed []byte, subnets []*net.IPNet) (*net.IP, error) {
 			_idNet.min.Set(addressTotal)
 			addressTotal.Add(addressTotal, big.NewInt(2).Exp(big.NewInt(2), big.NewInt(int64(32-netMaskOnes)), nil))
 			_idNet.max.Sub(addressTotal, big.NewInt(1))
-			_idNet.net = *_net
+			_idNet.net = _net
 			idNets = append(idNets, _idNet)
 		} else if ipv6net := _net.IP.To16(); ipv6net != nil {
 			_idNet := idNet{}
 			_idNet.min.Set(addressTotal)
 			addressTotal.Add(addressTotal, big.NewInt(2).Exp(big.NewInt(2), big.NewInt(int64(128-netMaskOnes)), nil))
 			_idNet.max.Sub(addressTotal, big.NewInt(1))
-			_idNet.net = *_net
+			_idNet.net = _net
 			idNets = append(idNets, _idNet)
 		} else {
 			return nil, fmt.Errorf("failed to parse %v", _net)
@@ -218,14 +227,14 @@ func selectIPAddr(seed []byte, subnets []*net.IPNet) (*net.IP, error) {
 	// Find the network (ID net) that contains our random value and select a
 	// random address from that subnet.
 	// min >= id%total >= max
-	var result net.IP
+	var result *PhantomIP
 	for _, _idNet := range idNets {
 		// fmt.Printf("tot:%s, seed%%tot:%s     id cmp max: %d,  id cmp min: %d %s\n", addressTotal.String(), id, _idNet.max.Cmp(id), _idNet.min.Cmp(id), _idNet.net.String())
 		if _idNet.max.Cmp(id) >= 0 && _idNet.min.Cmp(id) <= 0 {
 
 			var offset big.Int
 			offset.Sub(id, &_idNet.min)
-			result, err = SelectAddrFromSubnetOffset(&_idNet.net, &offset)
+			result, err = SelectAddrFromSubnetOffset(_idNet.net, &offset)
 			if err != nil {
 				return nil, fmt.Errorf("failed to chose IP address: %v", err)
 			}
@@ -236,13 +245,13 @@ func selectIPAddr(seed []byte, subnets []*net.IPNet) (*net.IP, error) {
 	if result == nil {
 		return nil, errors.New("nil result should not be possible")
 	}
-	return &result, nil
+	return result, nil
 }
 
 // SelectPhantom - select one phantom IP address based on shared secret
-func SelectPhantom(seed []byte, subnetsList *pb.PhantomSubnetsList, transform SubnetFilter, weighted bool) (*net.IP, error) {
+func SelectPhantom(seed []byte, subnetsList *pb.PhantomSubnetsList, transform SubnetFilter, weighted bool) (*PhantomIP, error) {
 
-	s, err := parseSubnets(getSubnets(subnetsList, seed, weighted))
+	s, err := getSubnets(subnetsList, seed, weighted)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse subnets: %v", err)
 	}
@@ -258,12 +267,12 @@ func SelectPhantom(seed []byte, subnetsList *pb.PhantomSubnetsList, transform Su
 }
 
 // SelectPhantomUnweighted - select one phantom IP address based on shared secret
-func SelectPhantomUnweighted(seed []byte, subnets *pb.PhantomSubnetsList, transform SubnetFilter) (*net.IP, error) {
+func SelectPhantomUnweighted(seed []byte, subnets *pb.PhantomSubnetsList, transform SubnetFilter) (*PhantomIP, error) {
 	return SelectPhantom(seed, subnets, transform, false)
 }
 
 // SelectPhantomWeighted - select one phantom IP address based on shared secret
-func SelectPhantomWeighted(seed []byte, subnets *pb.PhantomSubnetsList, transform SubnetFilter) (*net.IP, error) {
+func SelectPhantomWeighted(seed []byte, subnets *pb.PhantomSubnetsList, transform SubnetFilter) (*PhantomIP, error) {
 	return SelectPhantom(seed, subnets, transform, true)
 }
 
@@ -287,6 +296,21 @@ func GetDefaultPhantomSubnets() *pb.PhantomSubnetsList {
 
 // Just returns the list of subnets provided by the protobuf.
 // Convenience function to not have to export getSubnets() or parseSubnets()
-func GetUnweightedSubnetList(subnetsList *pb.PhantomSubnetsList) ([]*net.IPNet, error) {
-	return parseSubnets(getSubnets(subnetsList, nil, false))
+func GetUnweightedSubnetList(subnetsList *pb.PhantomSubnetsList) ([]*phantomNet, error) {
+	return getSubnets(subnetsList, nil, false)
+}
+
+// type aliase to make embedding unexported
+type ip = net.IP
+type PhantomIP struct {
+	*ip
+	supportRandomPort bool
+}
+
+func (p *PhantomIP) SupportRandomPort() bool {
+	return p.supportRandomPort
+}
+
+func (p *PhantomIP) IP() *net.IP {
+	return p.ip
 }
