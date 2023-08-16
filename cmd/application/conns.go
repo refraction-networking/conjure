@@ -316,12 +316,6 @@ readLoop:
 	transports:
 		for i, t := range possibleTransports {
 			wrappedReg, wrapped, err := t.WrapConnection(&received, clientConn, originalDstIP, regManager)
-			reg, ok := wrappedReg.(*cj.DecoyRegistration)
-			if !ok {
-				logger.Errorf("unexpected returned reg type from transport: %T, expected: %T", wrapped, reg)
-				delete(possibleTransports, i)
-				continue transports
-			}
 
 			err = generalizeErr(err)
 			if errors.Is(err, transports.ErrTryAgain) {
@@ -340,6 +334,14 @@ readLoop:
 				cm.checkToError(asn, cc, isIPv4)
 				time.Sleep(d)
 				return
+			}
+
+			ok := false
+			reg, ok = wrappedReg.(*cj.DecoyRegistration)
+			if !ok {
+				logger.Errorf("unexpected returned reg type from transport: %T, expected: %T", wrapped, reg)
+				delete(possibleTransports, i)
+				continue transports
 			}
 
 			// We found our transport! First order of business: disable deadline
