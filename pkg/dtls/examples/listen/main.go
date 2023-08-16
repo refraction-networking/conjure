@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/mingyech/dtls/examples/util"
+	"github.com/pion/dtls/v2/examples/util"
 	"github.com/refraction-networking/conjure/pkg/dtls"
 )
 

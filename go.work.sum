@@ -1,1 +1,10 @@
-github.com/refraction-networking/gotapdance v1.6.3-0.20230813005345-574dafa9cbf6/go.mod h1:/MV2KoHp0P3Pw9c6XtQswR7IPvNJluBbRcmHab9pBwI=
+github.com/mingyech/dtls v0.1.0 h1:AdYeTIbgBK+gPquewN1HdZ6EM7GkuHoa5UNU77Ob1Ns=
+github.com/mingyech/dtls/v2 v2.0.0 h1:RKN1CjBs8wct3JnrcRmqnfH3BO0ocYLEhmg62uaHq+A=
+github.com/mingyech/dtls/v2 v2.0.0/go.mod h1:Jvjs/Mzb6dWhNbhnobeR2HC8nmjF5AaLezvpVo+PQ1U=
+github.com/mingyech/transport v0.1.1 h1:nvIMoQIe48xM/K30G6WIhsCEti7B+FodMhKiLgk3YXk=
+github.com/mingyech/transport/v2 v2.0.0 h1:fCiVNeEmIk14fZ3B7Xb/Q8GVPqa/4Sr4IPddtrnZqCs=
+github.com/mingyech/transport/v2 v2.0.0/go.mod h1:HxvcVVQjlzjznqrWIlxx424GAEPyasX8gQw1VxjHP/Y=
+github.com/pion/stun v0.3.5/go.mod h1:gDMim+47EeEtfWogA37n6qXZS88L5V6LqFcf+DZA2UA=
+golang.org/x/net v0.13.0 h1:Nvo8UFsZ8X3BhAC9699Z1j7XQ3rsZnUUm7jfBEk1ueY=
+golang.org/x/net v0.13.0/go.mod h1:zEVYFnQC7m/vmpQFELhcD1EWkZlX69l4oqgmer6hfKA=
+golang.org/x/term v0.10.0/go.mod h1:lpqdcUyK/oCiQxvxVrppt5ggO2KCZ5QblwqPnfZ6d5o=

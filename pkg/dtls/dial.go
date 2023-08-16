@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/mingyech/dtls"
-	"github.com/mingyech/dtls/pkg/protocol/handshake"
+	"github.com/pion/dtls/v2"
+	"github.com/pion/dtls/v2/pkg/protocol/handshake"
 )
 
 // Dial creates a DTLS connection to the given network address using the given shared secret
