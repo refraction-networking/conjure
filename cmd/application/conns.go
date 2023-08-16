@@ -315,7 +315,7 @@ readLoop:
 
 	transports:
 		for i, t := range possibleTransports {
-			wrappedReg, wrapped, err := t.WrapConnection(&received, clientConn, originalDstIP, regManager)
+			wrappedReg, wrappedConn, err := t.WrapConnection(&received, clientConn, originalDstIP, regManager)
 
 			err = generalizeErr(err)
 			if errors.Is(err, transports.ErrTryAgain) {
@@ -343,6 +343,7 @@ readLoop:
 				delete(possibleTransports, i)
 				continue transports
 			}
+			wrapped = wrappedConn
 
 			// We found our transport! First order of business: disable deadline
 			err = wrapped.SetDeadline(time.Time{})
