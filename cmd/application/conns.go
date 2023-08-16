@@ -343,6 +343,7 @@ readLoop:
 				delete(possibleTransports, i)
 				continue transports
 			}
+			// set outer wrapped var
 			wrapped = wrappedConn
 
 			// We found our transport! First order of business: disable deadline
