@@ -197,6 +197,10 @@ message DTLSTransportParams {
     optional bool randomize_dst_port = 2;
 }
 
+message DTLSTransportConf {
+    optional string stun_server = 1;
+}
+
 message StationToClient {
     // Should accompany (at least) SESSION_INIT and CONFIRM_RECONNECT.
     optional uint32 protocol_version = 1;
