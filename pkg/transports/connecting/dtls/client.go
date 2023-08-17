@@ -45,7 +45,7 @@ type ClientConfig struct {
 	// STUNServer is the address of the stun server to use
 	STUNServer string
 
-	// DisableIRWorkaround disables sending an empty packet
+	// DisableIRWorkaround disables sending an empty packet to workaround DTLS blocking in IR
 	DisableIRWorkaround bool
 }
 
