@@ -34,14 +34,19 @@ type ClientTransport struct {
 	// // state tracks fields internal to the registrar that survive for the lifetime
 	// // of the transport session without being shared - i.e. local derived keys.
 	// state any
-	privPort   int
-	pubPort    int
-	psk        []byte
-	stunServer string
+	privPort            int
+	pubPort             int
+	psk                 []byte
+	stunServer          string
+	disableIRWorkaround bool
 }
 
-type Config struct {
+type ClientConfig struct {
+	// STUNServer is the address of the stun server to use
 	STUNServer string
+
+	// DisableIRWorkaround disables sending an empty packet
+	DisableIRWorkaround bool
 }
 
 // Name returns a string identifier for the Transport for logging
@@ -76,8 +81,9 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 		}
 
 		t.Parameters.RandomizeDstPort = proto.Bool(params.GetRandomizeDstPort())
-	case *Config:
+	case *ClientConfig:
 		t.stunServer = params.STUNServer
+		t.disableIRWorkaround = params.DisableIRWorkaround
 	}
 
 	return nil
@@ -138,9 +144,17 @@ func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 
 func (t *ClientTransport) listen(ctx context.Context, dialer dialFunc, address string) (net.Conn, error) {
 	laddr := &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: t.privPort}
-	err := openUDP(ctx, laddr.String(), address, dialer)
-	if err != nil {
-		return nil, fmt.Errorf("error opening UDP port from gateway: %v", err)
+
+	if t.disableIRWorkaround {
+		err := openUDPLimitTTL(ctx, laddr.String(), address, dialer)
+		if err != nil {
+			return nil, fmt.Errorf("error opening UDP port from gateway: %v", err)
+		}
+	} else {
+		err := openUDP(ctx, laddr.String(), address, dialer)
+		if err != nil {
+			return nil, fmt.Errorf("error opening UDP port from gateway: %v", err)
+		}
 	}
 
 	udpConn, err := dialer(ctx, "udp", laddr.String(), address)
