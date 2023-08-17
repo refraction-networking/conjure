@@ -68,8 +68,6 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible.
-//
-// DTLS transport currently has no caller controlled params
 func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 	switch params := p.(type) {
 	case *pb.GenericTransportParams:
