@@ -45,9 +45,9 @@ func generateObfs4Keys(rand io.Reader) (Obfs4Keys, error) {
 
 // ConjureSharedKeys contains keys that the station is required to keep.
 type ConjureSharedKeys struct {
-	SharedSecret                                            []byte
-	FspKey, FspIv, VspKey, VspIv, MasterSecret, ConjureSeed []byte
-	Obfs4Keys                                               Obfs4Keys
+	SharedSecret []byte
+	ConjureSeed  []byte
+	Obfs4Keys    Obfs4Keys
 }
 
 // GenSharedKeys generates the keys requires to form a Conjure connection based on the SharedSecret
@@ -55,28 +55,13 @@ func GenSharedKeys(clientLibVer uint, sharedSecret []byte, tt pb.TransportType) 
 	tdHkdf := hkdf.New(sha256.New, sharedSecret, []byte("conjureconjureconjureconjure"), nil)
 	keys := ConjureSharedKeys{
 		SharedSecret: sharedSecret,
-		FspKey:       make([]byte, 16),
-		FspIv:        make([]byte, 12),
-		VspKey:       make([]byte, 16),
-		VspIv:        make([]byte, 12),
-		MasterSecret: make([]byte, 48),
 		ConjureSeed:  make([]byte, 16),
 	}
 
-	if _, err := tdHkdf.Read(keys.FspKey); err != nil {
-		return keys, err
-	}
-	if _, err := tdHkdf.Read(keys.FspIv); err != nil {
-		return keys, err
-	}
-	if _, err := tdHkdf.Read(keys.VspKey); err != nil {
-		return keys, err
-	}
-	if _, err := tdHkdf.Read(keys.VspIv); err != nil {
-		return keys, err
-	}
-	if _, err := tdHkdf.Read(keys.MasterSecret); err != nil {
-		return keys, err
+	// To maintain compatability with old client version, ensure the same number of random bytes are read before reading ConjureSeed
+	if clientLibVer < 4 {
+		emptyBuf := make([]byte, 16+12+16+12+48)
+		tdHkdf.Read(emptyBuf)
 	}
 	if _, err := tdHkdf.Read(keys.ConjureSeed); err != nil {
 		return keys, err
