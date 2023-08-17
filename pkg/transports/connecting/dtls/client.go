@@ -34,9 +34,14 @@ type ClientTransport struct {
 	// // state tracks fields internal to the registrar that survive for the lifetime
 	// // of the transport session without being shared - i.e. local derived keys.
 	// state any
-	privPort int
-	pubPort  int
-	psk      []byte
+	privPort   int
+	pubPort    int
+	psk        []byte
+	stunServer string
+}
+
+type Config struct {
+	STUNServer string
 }
 
 // Name returns a string identifier for the Transport for logging
@@ -66,16 +71,16 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 //
 // DTLS transport currently has no caller controlled params
 func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
-	params, ok := p.(*pb.GenericTransportParams)
-	if !ok {
-		return nil
-	}
+	switch params := p.(type) {
+	case *pb.GenericTransportParams:
+		if t.Parameters == nil {
+			t.Parameters = &pb.DTLSTransportParams{}
+		}
 
-	if t.Parameters == nil {
-		t.Parameters = &pb.DTLSTransportParams{}
+		t.Parameters.RandomizeDstPort = proto.Bool(params.GetRandomizeDstPort())
+	case *Config:
+		t.stunServer = params.STUNServer
 	}
-
-	t.Parameters.RandomizeDstPort = proto.Bool(params.GetRandomizeDstPort())
 
 	return nil
 }
@@ -83,6 +88,10 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 // Prepare lets the transport use the dialer to prepare. This is called before GetParams to let the
 // transport prepare stuff such as nat traversal.
 func (t *ClientTransport) Prepare(dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
+	if t.stunServer == "" {
+		t.stunServer = defaultSTUNServer
+	}
+
 	privePort, pubPort, err := publicAddr(defaultSTUNServer, dialer)
 	if err != nil {
 		return fmt.Errorf("error finding public port: %v", err)
