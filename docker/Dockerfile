@@ -62,8 +62,8 @@ COPY cmd/ /opt/conjure/cmd
 COPY pkg/ /opt/conjure/pkg
 COPY proto/ /opt/conjure/proto
 
-RUN PATH="$HOME/.go/bin/:$PATH" make app
-RUN PATH="$HOME/.go/bin/:$PATH" make registration-server
+RUN PATH="$HOME/.go/bin/:/usr/local/go/bin:$PATH" make app
+RUN PATH="$HOME/.go/bin/:/usr/local/go/bin:$PATH" make registration-server
 
 # Add default configs and launch scripts
 COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
