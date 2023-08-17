@@ -102,8 +102,20 @@ install_go() {
     # INSTALL GOLANG
 
     if ! command -v go &> /dev/null; then
-	echo "unable to find golang, installing latest." 
-	curl -LO https://get.golang.org/$(uname)/go_installer && chmod +x go_installer && ./go_installer && rm go_installer
+	GOLANG_LATEST_STABLE_VERSION=$(curl "https://go.dev/dl/?mode=json" | jq -r '.[0].files[].filename | select(test("go.*.linux-amd64.tar.gz"))')
+	echo "unable to find golang, installing latest. ${GOLANG_LATEST_STABLE_VERSION}" 
+	curl -OL https://go.dev/dl/${GOLANG_LATEST_STABLE_VERSION}
+	if [ $? -ne 0 ]; then
+	    echo "$0: pulling golang latest stable failed"
+	    exit 1
+	fi
+	tar -C /usr/local -xzf ${GOLANG_LATEST_STABLE_VERSION}
+	export PATH=$PATH:/usr/local/go/bin
+	if ! command -v go &> /dev/null; then
+  	    echo "$0: failed to install golang"
+	    exit 1
+	fi
+	go version
     fi
 }
 
@@ -157,7 +169,7 @@ install_routes() {
 echo "Installing install, libssl, git, cargo..."
 sudo apt-get update -y
 # FIXME: Hold back kernel and kernel headers?
-sudo apt-get install -y libssl-dev git libgmp3-dev wget lsb-release build-essential
+sudo apt-get install -y libssl-dev git libgmp3-dev wget lsb-release build-essential jq
 
 install_deps
 
