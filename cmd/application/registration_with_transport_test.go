@@ -17,7 +17,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func mockReceiveFromDetector() (*pb.ClientToStation, cj.ConjureSharedKeys) {
+func mockReceiveFromDetector() (*pb.ClientToStation, core.ConjureSharedKeys) {
 	clientToStationBytes, _ := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
 	sharedSecret, _ := hex.DecodeString("5414c734ad5dc53e6b56a7bb47ce695a14a3ef076a3d5ace9cbf3b4d12706b73")
 
@@ -32,7 +32,7 @@ func mockReceiveFromDetector() (*pb.ClientToStation, cj.ConjureSharedKeys) {
 	clientToStation.Flags = &pb.RegistrationFlags{Use_TIL: &t}
 	clientToStation.ClientLibVersion = &v
 
-	conjureKeys, _ := cj.GenSharedKeys(uint(v), sharedSecret, 0)
+	conjureKeys, _ := core.GenSharedKeys(uint(v), sharedSecret, 0)
 
 	return clientToStation, conjureKeys
 }

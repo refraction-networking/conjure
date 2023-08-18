@@ -10,12 +10,13 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 	"github.com/refraction-networking/conjure/pkg/station/log"
+	pb "github.com/refraction-networking/conjure/proto"
 )
 
 const (
@@ -334,7 +335,7 @@ func (rm *RegistrationManager) parseRegMessage(msg []byte) ([]*DecoyRegistration
 // NewRegistration creates a new registration from details provided. Adds the registration
 // to tracking map, But marks it as not valid. This is a utility function, it its not
 // used in the ingest pipeline
-func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
+func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *core.ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
 	gen := uint(c2s.GetDecoyListGeneration())
 	clientLibVer := uint(c2s.GetClientLibVersion())
 	phantomAddr, err := rm.PhantomSelector.Select(
@@ -398,7 +399,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	c2s := c2sw.GetRegistrationPayload()
 
 	// Generate keys from shared secret using HKDF
-	conjureKeys, err := GenSharedKeys(uint(c2s.GetClientLibVersion()), c2sw.GetSharedSecret(), c2s.GetTransport())
+	conjureKeys, err := core.GenSharedKeys(uint(c2s.GetClientLibVersion()), c2sw.GetSharedSecret(), c2s.GetTransport())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate keys: %v", err)
 	}

@@ -35,9 +35,9 @@ import (
 	"crypto/sha256"
 	"fmt"
 
-	"gitlab.com/yawning/obfs4.git/common/drbg"
-	"gitlab.com/yawning/obfs4.git/common/ntor"
-	"gitlab.com/yawning/obfs4.git/transports/obfs4/framing"
+	"github.com/refraction-networking/obfs4/common/drbg"
+	"github.com/refraction-networking/obfs4/common/ntor"
+	"github.com/refraction-networking/obfs4/transports/obfs4/framing"
 )
 
 const (

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/station/geoip"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 	"github.com/refraction-networking/conjure/pkg/station/log"
@@ -268,7 +269,7 @@ type DecoyRegistration struct {
 	regCC            string
 	regASN           uint
 
-	Keys               *ConjureSharedKeys
+	Keys               *core.ConjureSharedKeys
 	Covert, Mask       string
 	Flags              *pb.RegistrationFlags
 	Transport          pb.TransportType

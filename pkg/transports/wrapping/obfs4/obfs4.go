@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"net"
 
-	pt "git.torproject.org/pluggable-transports/goptlib.git"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
-	"gitlab.com/yawning/obfs4.git/common/drbg"
-	"gitlab.com/yawning/obfs4.git/common/ntor"
-	"gitlab.com/yawning/obfs4.git/transports/obfs4"
+	"github.com/refraction-networking/obfs4/common/drbg"
+	"github.com/refraction-networking/obfs4/common/ntor"
+	"github.com/refraction-networking/obfs4/transports/obfs4"
+
+	pt "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -35,7 +36,20 @@ func (Transport) LogPrefix() string { return "OBFS4" }
 
 // GetIdentifier implements the station Transport interface
 func (Transport) GetIdentifier(r *cj.DecoyRegistration) string {
-	return string(r.Keys.Obfs4Keys.PublicKey.Bytes()[:]) + string(r.Keys.Obfs4Keys.NodeID.Bytes()[:])
+	var err error
+	if r == nil || r.Keys == nil {
+		return ""
+	} else if r.Keys.TransportKeys == nil {
+		r.Keys.TransportKeys, err = generateObfs4Keys(r.Keys.TransportReader)
+		if err != nil {
+			return ""
+		}
+	}
+	obfs4Keys, ok := r.Keys.TransportKeys.(Obfs4Keys)
+	if !ok {
+		return ""
+	}
+	return string(obfs4Keys.PublicKey.Bytes()[:]) + string(obfs4Keys.NodeID.Bytes()[:])
 }
 
 // GetProto returns the next layer protocol that the transport uses. Implements
@@ -73,6 +87,7 @@ func (t Transport) ParamStrings(p any) []string {
 
 // WrapConnection implements the station Transport interface
 func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, regManager *cj.RegistrationManager) (*cj.DecoyRegistration, net.Conn, error) {
+	var err error
 	if data.Len() < ClientMinHandshakeLength {
 		return nil, nil, transports.ErrTryAgain
 	}
@@ -81,7 +96,20 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 	copy(representative[:ntor.RepresentativeLength], data.Bytes()[:ntor.RepresentativeLength])
 
 	for _, r := range getObfs4Registrations(regManager, phantom) {
-		mark := generateMark(r.Keys.Obfs4Keys.NodeID, r.Keys.Obfs4Keys.PublicKey, &representative)
+		if r == nil || r.Keys == nil {
+			return nil, nil, fmt.Errorf("broken registration")
+		} else if r.Keys.TransportKeys == nil {
+			r.Keys.TransportKeys, err = generateObfs4Keys(r.Keys.TransportReader)
+			if err != nil {
+				return nil, nil, fmt.Errorf("Failed to generate obfs4 keys: %w", err)
+			}
+		}
+		obfs4Keys, ok := r.Keys.TransportKeys.(Obfs4Keys)
+		if !ok {
+			return nil, nil, fmt.Errorf("Incorrect Key Type")
+		}
+
+		mark := generateMark(obfs4Keys.NodeID, obfs4Keys.PublicKey, &representative)
 		pos := findMarkMac(mark, data.Bytes(), ntor.RepresentativeLength+ClientMinPadLength, MaxHandshakeLength, true)
 		if pos == -1 {
 			continue
@@ -89,8 +117,8 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 
 		// We found the mark in the client handshake! We found our registration!
 		args := pt.Args{}
-		args.Add("node-id", r.Keys.Obfs4Keys.NodeID.Hex())
-		args.Add("private-key", r.Keys.Obfs4Keys.PrivateKey.Hex())
+		args.Add("node-id", obfs4Keys.NodeID.Hex())
+		args.Add("private-key", obfs4Keys.PrivateKey.Hex())
 		seed, err := drbg.NewSeed()
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create DRBG seed: %w", err)
@@ -161,3 +189,29 @@ func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, e
 
 	return 443, nil
 }
+
+// func generateObfs4Keys(rand io.Reader) (core.Obfs4Keys, error) {
+// 	keys := Obfs4Keys{
+// 		PrivateKey: new(ntor.PrivateKey),
+// 		PublicKey:  new(ntor.PublicKey),
+// 		NodeID:     new(ntor.NodeID),
+// 	}
+
+// 	_, err := rand.Read(keys.PrivateKey[:])
+// 	if err != nil {
+// 		return keys, err
+// 	}
+
+// 	keys.PrivateKey[0] &= 248
+// 	keys.PrivateKey[31] &= 127
+// 	keys.PrivateKey[31] |= 64
+
+// 	pub, err := curve25519.X25519(keys.PrivateKey[:], curve25519.Basepoint)
+// 	if err != nil {
+// 		return keys, err
+// 	}
+// 	copy(keys.PublicKey[:], pub)
+
+// 	_, err = rand.Read(keys.NodeID[:])
+// 	return keys, err
+// }

@@ -3,10 +3,12 @@ package decoy
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
@@ -56,6 +58,8 @@ type DecoyRegistrar struct {
 	// add Width, sharedKeys necessary stuff (2nd line in struct except ConjureSeed)
 	// Keys
 	FspKey, FspIv, VspKey, VspIv, NewMasterSecret []byte
+
+	Width uint
 }
 
 func NewDecoyRegistrar() *DecoyRegistrar {
@@ -191,7 +195,7 @@ func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Conte
 	}
 
 	// Choose N (width) decoys from decoylist
-	decoys, err := cjSession.Decoys()
+	decoys, err := selectDecoys(cjSession.Keys.SharedSecret, cjSession.V6Support.Include(), r.Width)
 	if err != nil {
 		logger.Warnf("failed to select decoys: %v", err)
 		return nil, err
@@ -207,8 +211,8 @@ func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Conte
 	}
 
 	width := uint(len(decoys))
-	if width < cjSession.Width {
-		logger.Warnf("Using width %v (default %v)", width, cjSession.Width)
+	if width < r.Width {
+		logger.Warnf("Using width %v (default %v)", width, r.Width)
 	}
 
 	//[reference] Send registrations to each decoy
@@ -313,4 +317,48 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 
 	dialError <- nil
 	readAndClose(dialConn, time.Second*15)
+}
+
+const (
+	v4 uint = iota
+	v6
+	both
+)
+
+// SelectDecoys - Get an array of `width` decoys to be used for registration
+func selectDecoys(sharedSecret []byte, version uint, width uint) ([]*pb.TLSDecoySpec, error) {
+
+	//[reference] prune to v6 only decoys if useV6 is true
+	var allDecoys []*pb.TLSDecoySpec
+	switch version {
+	case v6:
+		allDecoys = td.Assets().GetV6Decoys()
+	case v4:
+		allDecoys = td.Assets().GetV4Decoys()
+	case both:
+		allDecoys = td.Assets().GetAllDecoys()
+	default:
+		allDecoys = td.Assets().GetAllDecoys()
+	}
+
+	if len(allDecoys) == 0 {
+		return nil, fmt.Errorf("no decoys")
+	}
+
+	decoys := make([]*pb.TLSDecoySpec, width)
+	numDecoys := big.NewInt(int64(len(allDecoys)))
+	hmacInt := new(big.Int)
+	idx := new(big.Int)
+
+	//[reference] select decoys
+	for i := uint(0); i < width; i++ {
+		macString := fmt.Sprintf("registrationdecoy%d", i)
+		hmac := core.ConjureHMAC(sharedSecret, macString)
+		hmacInt = hmacInt.SetBytes(hmac[:8])
+		hmacInt.SetBytes(hmac)
+		hmacInt.Abs(hmacInt)
+		idx.Mod(hmacInt, numDecoys)
+		decoys[i] = allDecoys[int(idx.Int64())]
+	}
+	return decoys, nil
 }

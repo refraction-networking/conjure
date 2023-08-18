@@ -3,7 +3,7 @@ package obfs4
 import (
 	"io"
 
-	"gitlab.com/yawning/obfs4.git/common/ntor"
+	"github.com/refraction-networking/obfs4/common/ntor"
 	"golang.org/x/crypto/curve25519"
 )
 
