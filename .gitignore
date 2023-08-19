@@ -1,8 +1,9 @@
 
 backup/
-conjure
 cmd/application/application
 libtapdance/genkey
+libtapdance/*.o
+libtapdance/*.a
 cmd/registration-server/registration-server
 cmd/registration-server/regserver
 target
