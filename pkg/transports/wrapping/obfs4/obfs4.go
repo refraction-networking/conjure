@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 
-	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/refraction-networking/obfs4/common/drbg"
@@ -35,17 +34,17 @@ func (Transport) Name() string { return "obfs4" }
 func (Transport) LogPrefix() string { return "OBFS4" }
 
 // GetIdentifier implements the station Transport interface
-func (Transport) GetIdentifier(r *cj.DecoyRegistration) string {
-	var err error
-	if r == nil || r.Keys == nil {
+func (Transport) GetIdentifier(r transports.Registration) string {
+	if r == nil {
 		return ""
-	} else if r.Keys.TransportKeys == nil {
-		r.Keys.TransportKeys, err = generateObfs4Keys(r.Keys.TransportReader)
+	} else if r.TransportKeys() == nil {
+		keys, err := generateObfs4Keys(r.TransportReader())
 		if err != nil {
 			return ""
 		}
+		r.SetTransportKeys(keys)
 	}
-	obfs4Keys, ok := r.Keys.TransportKeys.(Obfs4Keys)
+	obfs4Keys, ok := r.TransportKeys().(Obfs4Keys)
 	if !ok {
 		return ""
 	}
@@ -86,8 +85,7 @@ func (t Transport) ParamStrings(p any) []string {
 }
 
 // WrapConnection implements the station Transport interface
-func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, regManager *cj.RegistrationManager) (*cj.DecoyRegistration, net.Conn, error) {
-	var err error
+func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, regManager transports.RegManager) (transports.Registration, net.Conn, error) {
 	if data.Len() < ClientMinHandshakeLength {
 		return nil, nil, transports.ErrTryAgain
 	}
@@ -96,15 +94,16 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 	copy(representative[:ntor.RepresentativeLength], data.Bytes()[:ntor.RepresentativeLength])
 
 	for _, r := range getObfs4Registrations(regManager, phantom) {
-		if r == nil || r.Keys == nil {
+		if r == nil {
 			return nil, nil, fmt.Errorf("broken registration")
-		} else if r.Keys.TransportKeys == nil {
-			r.Keys.TransportKeys, err = generateObfs4Keys(r.Keys.TransportReader)
+		} else if r.TransportKeys() == nil {
+			keys, err := generateObfs4Keys(r.TransportReader())
 			if err != nil {
 				return nil, nil, fmt.Errorf("Failed to generate obfs4 keys: %w", err)
 			}
+			r.SetTransportKeys(keys)
 		}
-		obfs4Keys, ok := r.Keys.TransportKeys.(Obfs4Keys)
+		obfs4Keys, ok := r.TransportKeys().(Obfs4Keys)
 		if !ok {
 			return nil, nil, fmt.Errorf("Incorrect Key Type")
 		}
@@ -153,8 +152,8 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 // This function makes the assumption that any identifier with length 52 is an obfs4 registration.
 // This may not be strictly true, but any other identifier will simply fail to form a connection and
 // should be harmless.
-func getObfs4Registrations(regManager *cj.RegistrationManager, darkDecoyAddr net.IP) []*cj.DecoyRegistration {
-	var regs []*cj.DecoyRegistration
+func getObfs4Registrations(regManager transports.RegManager, darkDecoyAddr net.IP) []transports.Registration {
+	var regs []transports.Registration
 
 	for identifier, r := range regManager.GetRegistrations(darkDecoyAddr) {
 		if len(identifier) == ntor.PublicKeyLength+ntor.NodeIDLength {

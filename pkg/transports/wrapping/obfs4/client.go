@@ -1,6 +1,7 @@
 package obfs4
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -8,8 +9,8 @@ import (
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/refraction-networking/obfs4/transports/obfs4"
-	pt "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
 
+	pt "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -36,6 +37,10 @@ func (*ClientTransport) String() string {
 // that the station knows what transport to expect connecting to the chosen phantom.
 func (*ClientTransport) ID() pb.TransportType {
 	return pb.TransportType_Obfs4
+}
+
+func (*ClientTransport) Prepare(dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
+	return nil
 }
 
 // GetParams returns a generic protobuf with any parameters from both the registration and the

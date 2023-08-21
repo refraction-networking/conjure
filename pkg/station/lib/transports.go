@@ -5,6 +5,7 @@ import (
 	"context"
 	"net"
 
+	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -21,7 +22,7 @@ type Transport interface {
 	// GetIdentifier takes in a registration and returns an identifier for it. This identifier
 	// should be unique for each registration on a given phantom; registrations on different
 	// phantoms can have the same identifier.
-	GetIdentifier(*DecoyRegistration) string
+	GetIdentifier(transports.Registration) string
 
 	// GetProto returns the IP protocol used by the transport. Typical transports will use TCP or
 	// UDP, if something beyond these is required you will need to update the enum in the protobuf
@@ -68,7 +69,7 @@ type WrappingTransport interface {
 	// yet been enough data sent to be conclusive), they should return transports.ErrTryAgain. If
 	// the transport can be conclusively determined to not exist on the connection, implementations
 	// should return transports.ErrNotTransport.
-	WrapConnection(data *bytes.Buffer, conn net.Conn, phantom net.IP, rm *RegistrationManager) (reg *DecoyRegistration, wrapped net.Conn, err error)
+	WrapConnection(data *bytes.Buffer, conn net.Conn, phantom net.IP, rm transports.RegManager) (reg transports.Registration, wrapped net.Conn, err error)
 }
 
 // ConnectingTransport describes transports that actively form an outgoing connection to clients to
@@ -78,5 +79,8 @@ type ConnectingTransport interface {
 
 	// Connect attempts to connect to the client from the phantom address derived in the
 	// registration.
-	Connect(context.Context, *DecoyRegistration) (net.Conn, error)
+	Connect(context.Context, transports.Registration) (net.Conn, error)
+
+	// GetSrcPort reads client source port from transport parameters
+	GetSrcPort(libVersion uint, seed []byte, parameters any) (uint16, error)
 }

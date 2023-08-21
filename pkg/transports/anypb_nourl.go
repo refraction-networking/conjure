@@ -2,6 +2,7 @@ package transports
 
 import (
 	"fmt"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -16,6 +17,8 @@ func UnmarshalAnypbTo(src *anypb.Any, dst protoreflect.ProtoMessage) error {
 	if err != nil {
 		return fmt.Errorf("error reading src type: %v", err)
 	}
+
+	src.TypeUrl = strings.ReplaceAll(src.TypeUrl, "tapdance.", "proto.")
 
 	if src.TypeUrl != "" && src.TypeUrl != expected.TypeUrl {
 		return fmt.Errorf("incorrect non-empty TypeUrl: %v != %v", src.TypeUrl, expected.TypeUrl)

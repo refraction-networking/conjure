@@ -315,7 +315,8 @@ readLoop:
 
 	transports:
 		for i, t := range possibleTransports {
-			reg, wrapped, err = t.WrapConnection(&received, clientConn, originalDstIP, regManager)
+			wrappedReg, wrappedConn, err := t.WrapConnection(&received, clientConn, originalDstIP, regManager)
+
 			err = generalizeErr(err)
 			if errors.Is(err, transports.ErrTryAgain) {
 				continue transports
@@ -334,6 +335,16 @@ readLoop:
 				time.Sleep(d)
 				return
 			}
+
+			ok := false
+			reg, ok = wrappedReg.(*cj.DecoyRegistration)
+			if !ok {
+				logger.Errorf("unexpected returned reg type from transport: %T, expected: %T", wrapped, reg)
+				delete(possibleTransports, i)
+				continue transports
+			}
+			// set outer wrapped var
+			wrapped = wrappedConn
 
 			// We found our transport! First order of business: disable deadline
 			err = wrapped.SetDeadline(time.Time{})
@@ -404,6 +415,8 @@ type statCounts struct {
 	totalTransitions int64 // Number of all transitions tracked
 	numNewConns      int64 // Number new connections potentially handshaking
 	numResolved      int64 // Number connections that have reached a terminal state.
+
+	connectingCounts
 }
 
 type asnCounts struct {
@@ -418,6 +431,8 @@ type connStats struct {
 	ipv6       statCounts
 	v4geoIPMap map[uint]*asnCounts
 	v6geoIPMap map[uint]*asnCounts
+
+	connectingCounts
 }
 
 func (c *connStats) PrintAndReset(logger *log.Logger) {
@@ -433,7 +448,7 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 	}
 
 	if numASNs > 0 {
-		logger.Infof("conn-stats (IPv4): %d %d %d %d %d %.3f %d %.3f %d %.3f %d %.3f %d %.3f %d",
+		logger.Infof("conn-stats (IPv4): %d %d %d %d %d %.3f %d %.3f %d %.3f %d %.3f %d %.3f %d %s",
 			atomic.LoadInt64(&c.ipv4.numCreated),
 			atomic.LoadInt64(&c.ipv4.numReading),
 			atomic.LoadInt64(&c.ipv4.numChecking),
@@ -449,6 +464,7 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 			atomic.LoadInt64(&c.ipv4.numClosed),
 			1000*float64(atomic.LoadInt64(&c.ipv4.numClosed))/epochDur,
 			numASNs,
+			c.connectingCounts.string(),
 		)
 	}
 
@@ -484,7 +500,7 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 		}
 		for asn, counts := range val {
 			var tt = math.Max(1, float64(atomic.LoadInt64(&counts.totalTransitions)))
-			logger.Infof("conn-stats-verbose (IPv%d): %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d %d %d %d",
+			logger.Infof("conn-stats-verbose (IPv%d): %d %s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d %d %d %d %s",
 				ip_ver,
 				asn,
 				counts.cc,
@@ -530,6 +546,7 @@ func (c *connStats) PrintAndReset(logger *log.Logger) {
 				atomic.LoadInt64(&counts.numNewConns),
 				atomic.LoadInt64(&c.ipv6.numResolved),
 				atomic.LoadInt64(&counts.numResolved),
+				counts.connectingCounts.string(),
 			)
 		}
 	}
@@ -602,6 +619,8 @@ func (c *connStats) reset() {
 	c.v6geoIPMap = make(map[uint]*asnCounts)
 
 	c.epochStart = time.Now()
+
+	c.resetConnecting()
 }
 
 func (c *connStats) addCreated(asn uint, cc string, isIPv4 bool) {

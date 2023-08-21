@@ -16,10 +16,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Registration strategy using a centralized REST API to
-// create registrations. Only the Endpoint need be specified;
-// the remaining fields are valid with their zero values and
-// provide the opportunity for additional control over the process.
+// APIRegistrar implements a registration strategy using a centralized REST API to create
+// registrations. Only the Endpoint need be specified; the remaining fields are valid with their
+// zero values and provide the opportunity for additional control over the process.
 type APIRegistrar struct {
 	// endpoint to use in registration request
 	endpoint string
@@ -64,6 +63,11 @@ func NewAPIRegistrar(config *Config) (*APIRegistrar, error) {
 		client:             config.HTTPClient,
 		logger:             tapdance.Logger().WithField("registrar", "API"),
 	}, nil
+}
+
+// PrepareRegKeys prepares key materials specific to the registrar
+func (r *APIRegistrar) PrepareRegKeys(pubkey [32]byte) error {
+	return nil
 }
 
 // registerUnidirectional sends unidirectional registration data to the registration server
@@ -166,7 +170,6 @@ func (r *APIRegistrar) setHTTPClient(reg *tapdance.ConjureReg) {
 
 func (r APIRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
 	defer lib.SleepWithContext(ctx, r.connectionDelay)
-
 	if r.bidirectional {
 		return r.registerBidirectional(cjSession, ctx)
 	}

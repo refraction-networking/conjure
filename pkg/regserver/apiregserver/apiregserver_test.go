@@ -16,7 +16,7 @@ import (
 
 	zmq "github.com/pebbe/zmq4"
 	"github.com/refraction-networking/conjure/pkg/metrics"
-	"github.com/refraction-networking/conjure/pkg/regprocessor"
+	"github.com/refraction-networking/conjure/pkg/regserver/regprocessor"
 	pb "github.com/refraction-networking/conjure/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"

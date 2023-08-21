@@ -2,6 +2,7 @@ package prefix
 
 import (
 	"bufio"
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -71,6 +72,10 @@ func (*ClientTransport) ID() pb.TransportType {
 	return pb.TransportType_Prefix
 }
 
+func (*ClientTransport) Prepare(dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
+	return nil
+}
+
 // GetParams returns a generic protobuf with any parameters from both the registration and the
 // transport.
 func (t *ClientTransport) GetParams() (proto.Message, error) {
@@ -109,6 +114,11 @@ func (t ClientTransport) ParseParams(data *anypb.Any) (any, error) {
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible or the parameters are otherwise invalid
 func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
+	if genericParams, ok := p.(*pb.GenericTransportParams); ok {
+		t.parameters.RandomizeDstPort = proto.Bool(genericParams.GetRandomizeDstPort())
+		return nil
+	}
+
 	prefixParams, ok := p.(*pb.PrefixTransportParams)
 	if !ok {
 		return fmt.Errorf("%w, incorrect param type", ErrBadParams)

@@ -64,8 +64,10 @@ func TestManagerFunctionality(t *testing.T) {
 	storedReg := potentialRegistrations[string(core.ConjureHMAC(newReg.Keys.SharedSecret, "MinTrasportHMACString"))]
 	require.NotNil(t, storedReg)
 
-	if storedReg.PhantomIp.String() != "192.122.190.148" || storedReg.Covert != "52.44.73.6:443" {
-		t.Fatalf("Improper registration returned: %v\n", storedReg.String())
+	reg := storedReg.(*cj.DecoyRegistration)
+
+	if reg.PhantomIp.String() != "192.122.190.148" || reg.Covert != "52.44.73.6:443" {
+		t.Fatalf("Improper registration returned: %v\n", reg.String())
 	}
 }
 

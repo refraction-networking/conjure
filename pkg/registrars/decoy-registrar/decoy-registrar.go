@@ -68,6 +68,9 @@ func NewDecoyRegistrar() *DecoyRegistrar {
 	}
 }
 
+// NewDecoyRegistrarWithDialer returns a decoy registrar with custom dialer.
+//
+// Deprecated: Set dialer in tapdace.Dialer.DialerWithLaddr instead.
 func NewDecoyRegistrarWithDialer(dialer DialFunc) *DecoyRegistrar {
 	return &DecoyRegistrar{
 		dialContex: dialer,
@@ -95,7 +98,12 @@ func (r *DecoyRegistrar) setTLSToDecoy(tlsrtt *uint32) {
 	r.stats.TlsToDecoy = tlsrtt
 }
 
-func (r *DecoyRegistrar) GetRandomDuration(base, min, max int) time.Duration {
+// PrepareRegKeys prepares key materials specific to the registrar
+func (r *DecoyRegistrar) PrepareRegKeys(pubkey [32]byte) error {
+	return nil
+}
+
+func (r *DecoyRegistrar) GetRandomDurationByRTT(base, min, max int) time.Duration {
 	addon := getRandInt(min, max) / 1000 // why this min and max???
 	rtt := rttInt(r.getTcpToDecoy())
 	return time.Millisecond * time.Duration(base+rtt*addon)
@@ -249,7 +257,7 @@ func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Conte
 	}
 
 	// randomized sleeping here to break the intraflow signal
-	toSleep := r.GetRandomDuration(3000, 212, 3449)
+	toSleep := r.GetRandomDurationByRTT(3000, 212, 3449)
 	logger.Debugf("Successfully sent registrations, sleeping for: %v", toSleep)
 	lib.SleepWithContext(ctx, toSleep)
 

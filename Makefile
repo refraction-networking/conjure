@@ -85,7 +85,8 @@ endif
 
 clean:
 	cargo clean
-	rm -f ${TARGETS} *.o *~ ${EXE_DIR}
+	$(RM) -rf *.o *~ ${EXE_DIR}
+	cd ./libtapdance/ && make clean
 
 ${PROTO_RS_PATH}:
 	cd ./proto/ && make

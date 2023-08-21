@@ -4,14 +4,17 @@ import (
 	"errors"
 
 	cj "github.com/refraction-networking/conjure/pkg/core/interfaces"
+	"github.com/refraction-networking/conjure/pkg/transports/connecting/dtls"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
 	pb "github.com/refraction-networking/conjure/proto"
 )
 
-var transportsByName map[string]cj.Transport = make(map[string]cj.Transport)
-var transportsByID map[pb.TransportType]cj.Transport = make(map[pb.TransportType]cj.Transport)
+// These track a builder function instead of an instance because ClientTransports with a pointer
+// receiver will return a pointer over and over.
+var transportsByName map[string]func() cj.Transport = make(map[string]func() cj.Transport)
+var transportsByID map[pb.TransportType]func() cj.Transport = make(map[pb.TransportType]func() cj.Transport)
 
 var (
 	// ErrAlreadyRegistered error when registering a transport that matches
@@ -25,45 +28,72 @@ var (
 
 // New returns a new Transport
 func New(name string) (cj.Transport, error) {
-	transport, ok := transportsByName[name]
+	builder, ok := transportsByName[name]
 	if !ok {
 		return nil, ErrUnknownTransport
 	}
 
-	return transport, nil
+	return builder(), nil
+}
+
+// NewWithParamsByID returns a new Transport by Type ID, if one exists, and attempts to set the
+// parameters provided.
+func NewWithParamsByID(id pb.TransportType, params any) (cj.Transport, error) {
+	builder, ok := transportsByID[id]
+	if !ok {
+		return nil, ErrUnknownTransport
+	}
+
+	transport := builder()
+	err := transport.SetParams(params)
+	return transport, err
 }
 
 // NewWithParams returns a new Transport and attempts to set the parameters provided
 func NewWithParams(name string, params any) (cj.Transport, error) {
-	transport, ok := transportsByName[name]
+	builder, ok := transportsByName[name]
 	if !ok {
 		return nil, ErrUnknownTransport
 	}
 
+	transport := builder()
 	err := transport.SetParams(params)
 	return transport, err
 }
 
 // GetTransportByName returns transport by name
 func GetTransportByName(name string) (cj.Transport, bool) {
-	t, ok := transportsByName[name]
-	return t, ok
+	builder, ok := transportsByName[name]
+	if !ok {
+		return nil, ok
+	}
+
+	return builder(), true
 }
 
 // GetTransportByID returns transport by name
 func GetTransportByID(id pb.TransportType) (cj.Transport, bool) {
-	t, ok := transportsByID[id]
-	return t, ok
+	builder, ok := transportsByID[id]
+	if !ok {
+		return nil, ok
+	}
+
+	return builder(), true
 }
 
-var defaultTransports = []cj.Transport{
-	&min.ClientTransport{},
-	&obfs4.ClientTransport{},
-	&prefix.ClientTransport{},
+var defaultTransportBuilders = []func() cj.Transport{
+	func() cj.Transport { return &min.ClientTransport{} },
+	func() cj.Transport { return &obfs4.ClientTransport{} },
+	func() cj.Transport { return &prefix.ClientTransport{} },
+	func() cj.Transport { return &dtls.ClientTransport{} },
 }
 
 // AddTransport adds new transport
-func AddTransport(t cj.Transport) error {
+func AddTransport(build func() cj.Transport) error {
+	t := build()
+	if t == nil {
+		return ErrUnknownTransport
+	}
 	name := t.Name()
 	id := t.ID()
 
@@ -73,16 +103,17 @@ func AddTransport(t cj.Transport) error {
 		return ErrAlreadyRegistered
 	}
 
-	transportsByName[name] = t
-	transportsByID[id] = t
+	transportsByName[name] = build
+	transportsByID[id] = build
 	return nil
 }
 
 // EnableDefaultTransports initializes the library with default transports
 func EnableDefaultTransports() error {
 	var err error
-	for _, t := range defaultTransports {
-		err = AddTransport(t)
+	for _, builder := range defaultTransportBuilders {
+
+		err = AddTransport(builder)
 		if err != nil {
 			return err
 		}

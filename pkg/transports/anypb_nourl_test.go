@@ -2,6 +2,7 @@ package transports_test
 
 import (
 	"crypto/rand"
+	"strings"
 	"testing"
 
 	"github.com/refraction-networking/conjure/pkg/transports"
@@ -54,4 +55,17 @@ func TestGarbage(t *testing.T) {
 
 	err = proto.Unmarshal(garbagebytes, dstAnypb)
 	require.NotNil(t, err)
+}
+
+func TestOldProto(t *testing.T) {
+	src, err := anypb.New(&pb.GenericTransportParams{RandomizeDstPort: proto.Bool(true)})
+	require.Nil(t, err)
+
+	src.TypeUrl = strings.ReplaceAll(src.TypeUrl, "proto.", "tapdance.")
+
+	dst := &pb.GenericTransportParams{}
+	err = transports.UnmarshalAnypbTo(src, dst)
+	require.Nil(t, err)
+
+	require.True(t, dst.GetRandomizeDstPort())
 }
