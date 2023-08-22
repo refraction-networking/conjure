@@ -18,6 +18,22 @@ type fileConn interface {
 }
 
 func openUDP(ctx context.Context, laddr, addr string, dialer dialFunc) error {
+	conn, err := dialer(ctx, "udp", laddr, addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Write data to the connection
+	_, err = conn.Write([]byte(""))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func openUDPLimitTTL(ctx context.Context, laddr, addr string, dialer dialFunc) error {
 	// Create a UDP connection
 	conn, err := dialer(ctx, "udp", laddr, addr)
 	if err != nil {
