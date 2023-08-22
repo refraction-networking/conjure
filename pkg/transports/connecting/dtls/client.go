@@ -46,6 +46,9 @@ type ClientConfig struct {
 	STUNServer string
 
 	// DisableIRWorkaround disables sending an empty packet to workaround DTLS blocking in IR
+	//
+	// In Iran, blocking seems to happen by matching the first packet in a "flow" against DTLS packet format and blocking if it matches. 
+	// If the first packet is anything else packets are permitted. UDP dst port does not seem to change this.
 	DisableIRWorkaround bool
 }
 
