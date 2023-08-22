@@ -131,7 +131,7 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 		return nil, err
 	}
 
-	//[ ] TODO: set the random as sessionID and CH readnom
+	//[ ] TODO: set the random as sessionID and CH random
 
 	err = clientTLSConn.BuildHandshakeState()
 	if err != nil {
