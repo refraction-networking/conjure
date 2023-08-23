@@ -83,9 +83,9 @@ func TestSelectWeightedMany(t *testing.T) {
 			t.Fatalf("Failed to select adddress: %v -- %s, %v, %v, %v -- %v", err, hex.EncodeToString(seed), ps, "None", true, count)
 		}
 
-		if net1.Contains(*addr.IP) {
+		if net1.Contains(*addr.IP()) {
 			count[0]++
-		} else if net2.Contains(*addr.IP) {
+		} else if net2.Contains(*addr.IP()) {
 			count[1]++
 		} else {
 			t.Fatalf("failed to parse pb.PhantomSubnetsList: %v, %v, %v", seed, true, ps)
@@ -288,7 +288,7 @@ func TestForDuplicates(t *testing.T) {
 		ipSet[addr.String()] = i
 
 		for _, snet := range snets {
-			if snet.Contains(*addr.IP) {
+			if snet.Contains(*addr.IP()) {
 				netMap[snet.String()] += 1
 			}
 		}
