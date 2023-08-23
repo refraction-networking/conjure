@@ -69,6 +69,8 @@ github.com/refraction-networking/ed25519 v0.1.2 h1:08kJZUkAlY7a7cZGosl1teGytV+QE
 github.com/refraction-networking/ed25519 v0.1.2/go.mod h1:nxYLUAYt/hmNpAh64PNSQ/tQ9gTIB89wCaGKJlRtZ9I=
 github.com/refraction-networking/gotapdance v1.6.3-0.20230808211749-c27ccf15c6b3 h1:m/QlwkrU9z+oGxOaEWNj500cueYhX09Fn+9iMApzG3k=
 github.com/refraction-networking/gotapdance v1.6.3-0.20230808211749-c27ccf15c6b3/go.mod h1:JwmYjjHo+m5EHc3700+kaYomLRf69RhiWrmprw6kQ3I=
+github.com/refraction-networking/gotapdance v1.6.5 h1:rIya4eAMWjtX99i10QH341x2KSI6LCy2NKqAoo2YLNU=
+github.com/refraction-networking/gotapdance v1.6.5/go.mod h1:TOYEVj8Y6WJ7z0Z2eXoEQkM63OHqa4xwmGrsz7zHzGU=
 github.com/refraction-networking/obfs4 v0.1.2 h1:J842O4fGSkd2W8ogYj0KN6gqVVY+Cpqodw9qFGL7wVU=
 github.com/refraction-networking/obfs4 v0.1.2/go.mod h1:wAl/+gWiLsrcykJA3nKJHx89f5/gXGM8UKvty7+mvbM=
 github.com/refraction-networking/utls v1.3.3 h1:f/TBLX7KBciRyFH3bwupp+CE4fzoYKCirhdRcC490sw=
