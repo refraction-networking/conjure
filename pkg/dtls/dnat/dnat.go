@@ -1,4 +1,4 @@
-package dtls
+package dnat
 
 import (
 	"bytes"
@@ -12,10 +12,12 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"golang.org/x/sys/unix"
 )
 
-func newDNAT() (*dnat, error) {
+// NewDNAT returns an object that implements the DNAT interface
+func NewDNAT() (interfaces.DNAT, error) {
 	const (
 		IFF_TUN   = 0x0001
 		IFF_NO_PI = 0x1000
@@ -100,12 +102,12 @@ type dnat struct {
 	tun *os.File
 }
 
-func (d *dnat) addEntry(src net.IP, sport uint16, dst *net.IP, dport uint16) error {
+func (d *dnat) AddEntry(src *net.IP, sport uint16, dst *net.IP, dport uint16) error {
 	ipLayer := &layers.IPv4{
 		Version:  4,
 		IHL:      5,
 		TTL:      64,
-		SrcIP:    src,
+		SrcIP:    *src,
 		DstIP:    *dst,
 		Protocol: layers.IPProtocolUDP,
 	}
