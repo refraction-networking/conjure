@@ -35,17 +35,35 @@ type ClientTransport struct {
 	stationPublicKey [32]byte
 }
 
-// ClientParams are parameters avaialble to configure the Prefix transport
+const (
+	// DefaultFlush uses the flush pattern defined by the chosen prefix
+	DefaultFlush int32 = iota
+	// NoAddedFlush no flushes when writing prefix and tag
+	NoAddedFlush
+	// FlushAfterPrefix flush after the prefix before the tag (if possible), but not after tag
+	// before client data is sent over the connection
+	FlushAfterPrefix
+	// FlushAfterTag do not flush after the prefix before the tag, but do flush after tag before
+	// client data is sent over the connection
+	FlushAfterTag
+	// FlushAfterPrefixAndTag flush after both the prefix before the tag (if possible), as well as
+	// after the tag before client data is sent over the connection
+	FlushAfterPrefixAndTag
+)
+
+// ClientParams are parameters available to a calling library to configure the Prefix transport
 // outside of the specific Prefix
 type ClientParams struct {
 	RandomizeDstPort bool
+	FlushAfterPrefix int32
+	PrefixID         int32
 }
 
 // Prefix struct used by, selected by, or given to the client. This interface allows for non-uniform
 // behavior like a rand prefix for example.
 type Prefix interface {
 	Bytes() []byte
-	FlushAfterPrefix() bool
+	FlushPolicy() int32
 	ID() PrefixID
 	DstPort([]byte) uint16
 }
@@ -72,6 +90,8 @@ func (*ClientTransport) ID() pb.TransportType {
 	return pb.TransportType_Prefix
 }
 
+// Prepare lets the transport use the dialer to prepare. This is called before GetParams to let the
+// transport prepare stuff such as nat traversal.
 func (*ClientTransport) Prepare(dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
 	return nil
 }
@@ -119,8 +139,22 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 		return nil
 	}
 
-	prefixParams, ok := p.(*pb.PrefixTransportParams)
-	if !ok {
+	var prefixParams *pb.PrefixTransportParams
+	if clientParams, ok := p.(*pb.PrefixTransportParams); ok {
+		prefixParams = clientParams
+	} else if clientParams, ok := p.(*ClientParams); ok {
+		prefixParams = &pb.PrefixTransportParams{
+			PrefixId:          &clientParams.PrefixID,
+			CustomFlushPolicy: &clientParams.FlushAfterPrefix,
+			RandomizeDstPort:  &clientParams.RandomizeDstPort,
+		}
+	} else if clientParams, ok := p.(ClientParams); ok {
+		prefixParams = &pb.PrefixTransportParams{
+			PrefixId:          &clientParams.PrefixID,
+			CustomFlushPolicy: &clientParams.FlushAfterPrefix,
+			RandomizeDstPort:  &clientParams.RandomizeDstPort,
+		}
+	} else {
 		return fmt.Errorf("%w, incorrect param type", ErrBadParams)
 	}
 
@@ -134,9 +168,9 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 		// the prefixes that the client known about.
 		t.parameters = prefixParams
 		t.Prefix = &clientPrefix{
-			bytes:            prefixParams.GetPrefix(),
-			id:               PrefixID(prefixParams.GetPrefixId()),
-			flushAfterPrefix: prefixParams.GetFlushAfterPrefix(),
+			bytes:       prefixParams.GetPrefix(),
+			id:          PrefixID(prefixParams.GetPrefixId()),
+			flushPolicy: prefixParams.GetCustomFlushPolicy(),
 		}
 
 		return nil
@@ -230,36 +264,72 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 	w := bufio.NewWriter(conn)
 
 	var msg []byte = t.Prefix.Bytes()
-	if t.Prefix.FlushAfterPrefix() {
-		if _, err := w.Write(msg); err != nil {
-			return nil, err
-		}
 
-		w.Flush()
-		if _, err := w.Write(obfuscatedID); err != nil {
-			return nil, err
-		}
-
-		w.Flush()
-	} else {
-		msg = append(msg, obfuscatedID...)
-		if _, err := w.Write(msg); err != nil {
-			return nil, err
-		}
-
-		w.Flush()
+	if _, err := w.Write(msg); err != nil {
+		return nil, err
 	}
 
+	// Maybe flush based on prefix spec and client param override
+	switch *t.parameters.CustomFlushPolicy {
+	case NoAddedFlush:
+		break
+	case FlushAfterPrefix:
+		w.Flush()
+	case FlushAfterPrefixAndTag:
+		w.Flush()
+	case DefaultFlush:
+		fallthrough
+	default:
+		switch t.Prefix.FlushPolicy() {
+		case NoAddedFlush:
+			break
+		case FlushAfterPrefix:
+			w.Flush()
+		case FlushAfterPrefixAndTag:
+			w.Flush()
+		case DefaultFlush:
+			fallthrough
+		default:
+			break
+		}
+	}
+
+	if _, err := w.Write(obfuscatedID); err != nil {
+		return nil, err
+	}
+
+	// Maybe flush based on prefix spec and client param override
+	switch *t.parameters.CustomFlushPolicy {
+	case NoAddedFlush:
+		break
+	case FlushAfterTag:
+		w.Flush()
+	case FlushAfterPrefixAndTag:
+		w.Flush()
+	case DefaultFlush:
+		fallthrough
+	default:
+		switch t.Prefix.FlushPolicy() {
+		case NoAddedFlush:
+			break
+		default:
+			w.Flush()
+		}
+	}
 	return conn, nil
+}
+
+func maybeFlush(w *bufio.Writer, customPolicy, prefixPolicy int32) {
+
 }
 
 // ---
 
 type clientPrefix struct {
-	bytes            []byte
-	id               PrefixID
-	port             uint16
-	flushAfterPrefix bool
+	bytes       []byte
+	id          PrefixID
+	port        uint16
+	flushPolicy int32
 
 	// // Function allowing encoding / transformation of obfuscated ID bytes after they have been
 	// // obfuscated. Examples - base64 encode, padding
@@ -284,8 +354,8 @@ func (c *clientPrefix) DstPort([]byte) uint16 {
 	return c.port
 }
 
-func (c *clientPrefix) FlushAfterPrefix() bool {
-	return c.flushAfterPrefix
+func (c *clientPrefix) FlushPolicy() int32 {
+	return c.flushPolicy
 }
 
 // ---

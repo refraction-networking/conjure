@@ -17,13 +17,22 @@ a previous registration.
 
 TODO: Comparison to min transport
 
+
+Usage Example:
+
+```go
+transports.NewWithParams()
+
+
+```
+
 ### Prefixes Supported by Default
 
 TODO: The prefixes supported by default are as follows.
 
 ### Ports
 
-TODO: Prefixes have default ports associated with them, but also allow port randomization.
+Prefixes have default ports associated with them, but also allow port randomization.
 
 ### :warning: Sharp Edges :warning:
 
@@ -47,6 +56,8 @@ In order to add a prefix ...
 These features are not necessarily planned or landing imminently, they are simply things that would
 be nice to have.
 
+- [X] **Randomization** - indicate segments of the prefix to be filled from a random source.
+
 - [ ] **Server Side Prefix Override From File** - file format shared between station and Reg server
   describing available prefixes outside of defaults.
 
@@ -55,8 +66,6 @@ be nice to have.
 
 - [ ] **StreamEncodings** - Allow the Stream of client bytes to (by configuration) encoded /
   encrypted using a scheme expected by the station, AES or Base64 for example.
-
-- [ ] **Randomization** - indicate segments of the prefix to be filled from a random source.
 
 - [ ] **Prefix Revocation** - If there is a prefix that is known to be blocked and we don't want
   clients to use it, but we still want them to roll a random prefix, how do we do this?
