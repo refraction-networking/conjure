@@ -89,3 +89,12 @@ func (o Overrides) Override(reg *pb.C2SWrapper, randReader io.Reader) error {
 type RegOverride interface {
 	Override(*pb.C2SWrapper, io.Reader) error
 }
+
+// DNAT used by the station side DTLS transport implementation to warm up the DNAT table such that
+// we are able to handle incoming client connections.
+type DNAT interface {
+	AddEntry(clientAddr *net.IP, clientPort uint16, phantomIP *net.IP, phantomPort uint16) error
+}
+
+// DnatBuilder function type alias for building a DNAT object
+type DnatBuilder func() (DNAT, error)

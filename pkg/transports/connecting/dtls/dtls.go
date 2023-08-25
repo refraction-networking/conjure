@@ -8,6 +8,7 @@ import (
 
 	"github.com/libp2p/go-reuseport"
 	"github.com/refraction-networking/conjure/pkg/core"
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/dtls"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
@@ -17,7 +18,7 @@ import (
 const listenPort = 41245
 
 type Transport struct {
-	dnat             *dnat
+	DNAT             interfaces.DNAT
 	dtlsListener     *dtls.Listener
 	logDialSuccess   func(*net.IP)
 	logListenSuccess func(*net.IP)
@@ -39,7 +40,7 @@ func (Transport) GetIdentifier(reg transports.Registration) string {
 }
 
 // NewTransport creates a new dtls transport
-func NewTransport(logAuthFail func(*net.IP), logOtherFail func(*net.IP), logDialSuccess func(*net.IP), logListenSuccess func(*net.IP)) (*Transport, error) {
+func NewTransport(logAuthFail func(*net.IP), logOtherFail func(*net.IP), logDialSuccess func(*net.IP), logListenSuccess func(*net.IP), buildDnat interfaces.DnatBuilder) (*Transport, error) {
 	addr := &net.UDPAddr{Port: listenPort}
 
 	listener, err := dtls.Listen("udp", addr, &dtls.Config{LogAuthFail: logAuthFail, LogOther: logAuthFail})
@@ -47,14 +48,14 @@ func NewTransport(logAuthFail func(*net.IP), logOtherFail func(*net.IP), logDial
 		return nil, fmt.Errorf("error creating dtls listner: %v", err)
 	}
 
-	dnat, err := newDNAT()
+	dnat, err := buildDnat()
 
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to tun device for DNAT: %v", err)
 	}
 
 	return &Transport{
-		dnat:             dnat,
+		DNAT:             dnat,
 		dtlsListener:     listener,
 		logDialSuccess:   logDialSuccess,
 		logListenSuccess: logListenSuccess,
@@ -69,7 +70,7 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 
 	clientAddr := net.UDPAddr{IP: net.ParseIP(reg.GetRegistrationAddress()), Port: int(reg.GetSrcPort())}
 
-	err := t.dnat.addEntry(clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
+	err := t.DNAT.AddEntry(&clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
 	if err != nil {
 		return nil, fmt.Errorf("error adding DNAT entry: %v", err)
 	}
