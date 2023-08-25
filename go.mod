@@ -6,7 +6,9 @@ require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/flynn/noise v1.0.0
 	github.com/go-redis/redis/v8 v8.11.5
+	github.com/golang/protobuf v1.5.3
 	github.com/google/gopacket v1.1.19
+	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/golang-lru v0.6.0
 	github.com/libp2p/go-reuseport v0.3.0
 	github.com/mroth/weightedrand v1.0.0
@@ -39,7 +41,6 @@ require (
 	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/gaukas/godicttls v0.0.3 // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/klauspost/compress v1.16.6 // indirect
 	github.com/oschwald/maxminddb-golang v1.11.0 // indirect
 	github.com/pion/randutil v0.1.0 // indirect

@@ -294,13 +294,14 @@ func GetDefaultPhantomSubnets() *pb.PhantomSubnetsList {
 	}
 }
 
-// Just returns the list of subnets provided by the protobuf.
-// Convenience function to not have to export getSubnets() or parseSubnets()
+// GetUnweightedSubnetList returns the list of subnets provided by the protobuf. Convenience
+// function to not have to export getSubnets() or parseSubnets()
 func GetUnweightedSubnetList(subnetsList *pb.PhantomSubnetsList) ([]*phantomNet, error) {
 	return getSubnets(subnetsList, nil, false)
 }
 
 // type aliase to make embedding unexported
+// nolint:unused
 type ip = net.IP
 type PhantomIP struct {
 	*ip

@@ -319,10 +319,6 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 	return conn, nil
 }
 
-func maybeFlush(w *bufio.Writer, customPolicy, prefixPolicy int32) {
-
-}
-
 // ---
 
 type clientPrefix struct {

@@ -545,6 +545,6 @@ func (mp *mockPrefix) DstPort([]byte) uint16 {
 	return 1024
 }
 
-func (mp *mockPrefix) FlushAfterPrefix() bool {
-	return true
+func (mp *mockPrefix) FlushPolicy() int32 {
+	return 1
 }
