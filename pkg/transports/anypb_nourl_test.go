@@ -57,6 +57,13 @@ func TestGarbage(t *testing.T) {
 	require.NotNil(t, err)
 }
 
+func TestEmpty(t *testing.T) {
+	dstAnypb := &anypb.Any{}
+
+	err := transports.UnmarshalAnypbTo(nil, dstAnypb)
+	require.Nil(t, err)
+}
+
 func TestOldProto(t *testing.T) {
 	src, err := anypb.New(&pb.GenericTransportParams{RandomizeDstPort: proto.Bool(true)})
 	require.Nil(t, err)
