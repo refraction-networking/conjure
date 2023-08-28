@@ -298,7 +298,7 @@ message PrefixTransportParams {
     // Prefix bytes (optional - usually sent from station to client as override if allowed by C2S)
     // as the station cannot take this into account when attempting to identify a connection.
     optional bytes prefix = 2;
-    optional bool flush_after_prefix = 3;
+    optional int32 custom_flush_policy = 3;
 
     // // potential future fields
     // obfuscator ID

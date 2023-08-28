@@ -4,5 +4,4 @@ use (
 	.
 	./cmd/application
 	./cmd/registration-server
-	./pkg/regserver
 )
