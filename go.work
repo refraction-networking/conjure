@@ -1,7 +1,8 @@
-go 1.20
+go 1.21.0
 
 use (
 	.
 	./cmd/application
 	./cmd/registration-server
+	./util/test_client
 )
