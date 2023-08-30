@@ -4,12 +4,11 @@ extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate aes_gcm;
-extern crate chrono;
 extern crate errno;
 extern crate hex;
 extern crate pnet;
 extern crate rand;
-
+extern crate time;
 extern crate protobuf;
 extern crate redis;
 extern crate serde;
