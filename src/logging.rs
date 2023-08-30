@@ -1,13 +1,14 @@
-extern crate chrono;
-extern crate log;
-
-use chrono::Local;
 use log::{Level, Metadata, Record};
+use time::format_description::FormatItem;
+use time::macros::format_description;
+use time::OffsetDateTime;
 
 pub struct SimpleLogger {
     log_level: Level,
     lcore_id: i32,
 }
+
+const FORMATTER: &[FormatItem<'_>]  = format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:9] [offset_hour][offset_minute]");
 
 impl log::Log for SimpleLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
@@ -23,10 +24,10 @@ impl log::Log for SimpleLogger {
                     && !s.starts_with("tick_to")
                     && !s.starts_with("ticking"))
             {
-                let t = Local::now();
-                // let t = time::OffsetDateTime::now_local().unwrap();
-                // unwrap relies on "%b %d, %Y %T" being a valid format string.
-                let t_s = t.format("%Y-%m-%d %H:%M:%S.%f %z").to_string();
+                // let t = Local::now();
+                // let t_s = t.format("%Y-%m-%d %H:%M:%S.%f %z").to_string();
+                let t = OffsetDateTime::now_local().unwrap();
+                let t_s = t.format(&FORMATTER).unwrap();
                 println!("{} (Core {}) {}: {}", t_s, self.lcore_id, record.level(), s);
             }
         }
