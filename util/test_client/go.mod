@@ -12,8 +12,8 @@ replace github.com/refraction-networking/gotapdance/v1-6-2 => github.com/refract
 
 require (
 	github.com/refraction-networking/conjure v0.6.7
-	github.com/refraction-networking/gotapdance v1.6.8
-	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
+	github.com/refraction-networking/gotapdance v1.6.9-dev
+	google.golang.org/protobuf v1.31.0
 )
 
 require (
@@ -22,6 +22,7 @@ require (
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/gaukas/godicttls v0.0.3 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/klauspost/compress v1.16.6 // indirect
 	github.com/libp2p/go-reuseport v0.3.0 // indirect
 	github.com/pion/dtls/v2 v2.2.7 // indirect
@@ -40,5 +41,4 @@ require (
 	golang.org/x/net v0.13.0 // indirect
 	golang.org/x/sys v0.11.0 // indirect
 	golang.org/x/text v0.11.0 // indirect
-	google.golang.org/protobuf v1.31.0 // indirect
 )
