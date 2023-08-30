@@ -1,8 +1,7 @@
-
-use time::macros::format_description;
-use time::format_description::FormatItem;
-use time::OffsetDateTime;
 use log::{Level, Metadata, Record};
+use time::format_description::FormatItem;
+use time::macros::format_description;
+use time::OffsetDateTime;
 
 pub struct SimpleLogger {
     log_level: Level,
