@@ -19,5 +19,7 @@ func TestPhantomsParse(t *testing.T) {
 	require.Equal(t, ok, true)
 	require.Equal(t, len(sc.WeightedSubnets), 2)
 	require.Equal(t, len(sc.WeightedSubnets[0].Subnets), 2)
+	require.True(t, sc.WeightedSubnets[0].RandomizeDstPort)
+	require.False(t, sc.WeightedSubnets[1].RandomizeDstPort)
 	require.Contains(t, sc.WeightedSubnets[0].Subnets, "192.122.190.0/24")
 }

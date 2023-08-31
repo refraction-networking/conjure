@@ -10,8 +10,9 @@ import (
 
 // ConjurePhantomSubnet - Weighted option to choose phantom address from.
 type ConjurePhantomSubnet struct {
-	Weight  uint32
-	Subnets []string
+	Weight           uint32
+	Subnets          []string
+	RandomizeDstPort bool
 }
 
 // SubnetConfig - Configuration of subnets for Conjure to choose a Phantom out of.
