@@ -26,7 +26,7 @@ impl log::Log for SimpleLogger {
             {
                 // let t = Local::now();
                 // let t_s = t.format("%Y-%m-%d %H:%M:%S.%f %z").to_string();
-                let t = OffsetDateTime::now_local().unwrap();
+                let t = OffsetDateTime::now_local().unwrap_or(OffsetDateTime::now_utc());
                 let t_s = t.format(&FORMATTER).unwrap();
                 println!("{} (Core {}) {}: {}", t_s, self.lcore_id, record.level(), s);
             }
