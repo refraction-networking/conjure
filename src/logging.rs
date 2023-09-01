@@ -8,7 +8,7 @@ pub struct SimpleLogger {
     lcore_id: i32,
 }
 
-const FORMATTER: &[FormatItem<'_>]  = format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:9] [offset_hour][offset_minute]");
+const FORMATTER: &[FormatItem<'_>]  = format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:9] [offset_hour sign:mandatory][offset_minute]");
 
 impl log::Log for SimpleLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
