@@ -93,6 +93,7 @@ func (sc *SubnetConfig) getSubnetsHkdf(seed []byte, weighted bool) ([]*phantomNe
 
 		totWeight := int64(0)
 		for _, cjSubnet := range weightedSubnets {
+			cjSubnet := cjSubnet // copy loop ptr
 			weight := cjSubnet.Weight
 			subnets := cjSubnet.Subnets
 			if subnets == nil {
