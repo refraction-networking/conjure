@@ -103,8 +103,8 @@ func TestPhantomsSeededSelectionV4(t *testing.T) {
 
 	var newConf = &SubnetConfig{
 		WeightedSubnets: []ConjurePhantomSubnet{
-			{Weight: 9, Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
-			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
+			{Weight: 9, Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}, RandomizeDstPort: true},
+			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: true},
 		},
 	}
 
@@ -127,8 +127,8 @@ func TestPhantomsSeededSelectionV6Varint(t *testing.T) {
 
 	var newConf = &SubnetConfig{
 		WeightedSubnets: []ConjurePhantomSubnet{
-			{Weight: 9, Subnets: []string{"192.122.190.0/24", "2001:48a8:687f:1::/64"}},
-			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
+			{Weight: 9, Subnets: []string{"192.122.190.0/24", "2001:48a8:687f:1::/64"}, RandomizeDstPort: true},
+			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: true},
 		},
 	}
 
@@ -143,7 +143,7 @@ func TestPhantomsSeededSelectionV6Varint(t *testing.T) {
 }
 
 func TestPhantomsV6OnlyFilter(t *testing.T) {
-	testNets := []string{"192.122.190.0/24", "2001:48a8:687f:1::/64", "2001:48a8:687f:1::/64"}
+	testNets := &ConjurePhantomSubnet{1, []string{"192.122.190.0/24", "2001:48a8:687f:1::/64", "2001:48a8:687f:1::/64"}, true}
 	testNetsParsed, err := parseSubnets(testNets)
 	require.Nil(t, err)
 	require.Equal(t, 3, len(testNetsParsed))
@@ -158,7 +158,7 @@ func TestPhantomsV6OnlyFilter(t *testing.T) {
 // they re useful to test limitations (i.e. multiple clients sharing a phantom
 // address)
 func TestPhantomsSeededSelectionV4Min(t *testing.T) {
-	subnets, err := parseSubnets([]string{"192.122.190.0/32", "2001:48a8:687f:1::/128"})
+	subnets, err := parseSubnets(&ConjurePhantomSubnet{1, []string{"192.122.190.0/32", "2001:48a8:687f:1::/128"}, true})
 	require.Nil(t, err)
 
 	seed, err := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
@@ -187,7 +187,7 @@ func TestPhantomSeededSelectionFuzz(t *testing.T) {
 		_, variableSubnet, err := net.ParseCIDR(s)
 		require.Nil(t, err)
 
-		subnets := []*net.IPNet{defaultV6, variableSubnet}
+		subnets := []*phantomNet{{defaultV6, true}, {variableSubnet, false}}
 
 		var seed = make([]byte, 32)
 		for j := 0; j < 10000; j++ {
@@ -310,9 +310,11 @@ func ExpandSeed(seed, salt []byte, i int) []byte {
 // IPv6 address.
 //
 // --- FAIL: TestDuplicates (0.00s)
-//     phantom_selector_test.go:341: Generated duplicate IP; biased random. Both seeds 25 and 12 generated 2002::ee94:8e44:13ce:4e81
-//         25: 30af851e2b8e4dd57db8830d5fc6f759bdc2c7a5a396f6641cc23604fa61c851
-//         12: 301f4d8eba57f250e9fc3fa8205b3703fb4a6edbe4941f2a8ff2bc01e05051a9
+//
+//	phantom_selector_test.go:341: Generated duplicate IP; biased random. Both seeds 25 and 12 generated 2002::ee94:8e44:13ce:4e81
+//	    25: 30af851e2b8e4dd57db8830d5fc6f759bdc2c7a5a396f6641cc23604fa61c851
+//	    12: 301f4d8eba57f250e9fc3fa8205b3703fb4a6edbe4941f2a8ff2bc01e05051a9
+//
 // FAIL
 func TestDuplicates(t *testing.T) {
 	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
