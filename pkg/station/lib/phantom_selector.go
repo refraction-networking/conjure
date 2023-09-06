@@ -49,6 +49,7 @@ func (sc *SubnetConfig) getSubnetsVarint(seed []byte, weighted bool) ([]*phantom
 
 		choices := make([]wr.Choice, 0, len(sc.WeightedSubnets))
 		for _, cjSubnet := range sc.WeightedSubnets {
+			cjSubnet := cjSubnet // copy loop ptr
 			choices = append(choices, wr.Choice{Item: &cjSubnet, Weight: uint(cjSubnet.Weight)})
 		}
 		c, err := wr.NewChooser(choices...)
