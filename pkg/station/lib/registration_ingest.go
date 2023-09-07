@@ -359,7 +359,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		return nil, fmt.Errorf("error handling transport params: %s", err)
 	}
 
-	phantomPort, err := rm.getPhantomDstPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer)
+	phantomPort, err := rm.getPhantomDstPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer, phantomAddr.SupportsPortRand)
 	if err != nil {
 		return nil, fmt.Errorf("error selecting phantom dst port: %s", err)
 	}
@@ -384,7 +384,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		Flags:            c2s.Flags,
 		clientPort:       srcPort,
 
-		PhantomIp:    phantomAddr,
+		PhantomIp:    *phantomAddr.IP,
 		PhantomPort:  phantomPort,
 		PhantomProto: phantomProto,
 
@@ -481,13 +481,13 @@ func (rm *RegistrationManager) getTransportProto(t pb.TransportType, params any,
 
 // getPhantomDstPort returns the proper phantom port based on registration type, transport
 // parameters provided by the client and session details (also provided by the client).
-func (rm *RegistrationManager) getPhantomDstPort(t pb.TransportType, params any, seed []byte, libVer uint) (uint16, error) {
+func (rm *RegistrationManager) getPhantomDstPort(t pb.TransportType, params any, seed []byte, libVer uint, supportsRandom bool) (uint16, error) {
 	var transport, ok = rm.registeredDecoys.transports[t]
 	if !ok {
 		return 0, fmt.Errorf("unknown transport")
 	}
 
-	if libVer < randomizeDstPortMinVersion {
+	if libVer < randomizeDstPortMinVersion || !supportsRandom {
 		// Before randomizeDstPortMinVersion all transport (min and obfs4) exclusively used 443 as
 		// their destination port.
 		return 443, nil
