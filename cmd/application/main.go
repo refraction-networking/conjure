@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/dtls/dnat"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/station/log"
 	"github.com/refraction-networking/conjure/pkg/transports/connecting/dtls"
@@ -80,7 +81,8 @@ func main() {
 		}
 	}
 
-	dtlsTransport, err := dtls.NewTransport(logIPDTLS(connManager.AddAuthFailConnecting), logIPDTLS(connManager.AddOtherFailConnecting), logIPDTLS(connManager.AddCreatedToDialSuccessfulConnecting), logIPDTLS(connManager.AddCreatedToListenSuccessfulConnecting))
+	dtlsbuilder := dnat.NewDNAT
+	dtlsTransport, err := dtls.NewTransport(logIPDTLS(connManager.AddAuthFailConnecting), logIPDTLS(connManager.AddOtherFailConnecting), logIPDTLS(connManager.AddCreatedToDialSuccessfulConnecting), logIPDTLS(connManager.AddCreatedToListenSuccessfulConnecting), dtlsbuilder)
 
 	if err != nil {
 		log.Fatalf("failed to setup dtls: %v", err)

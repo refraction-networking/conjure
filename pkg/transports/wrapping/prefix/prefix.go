@@ -64,7 +64,7 @@ type prefix struct {
 
 	// Flush Indicates whether the client is expected to flush the write buffer after the prefix
 	// before writing the tag. This would allow the whole first packet to be a prefix (with no tag).
-	Flush bool
+	Flush int32
 }
 
 // PrefixID provide an integer Identifier for each individual prefixes allowing clients to indicate
@@ -141,25 +141,25 @@ func (id PrefixID) Name() string {
 // initializing the prefix transport.
 var defaultPrefixes = map[PrefixID]prefix{
 	//Min - Empty prefix
-	Min: {[]byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion, 443, false},
+	Min: {[]byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion, 443, NoAddedFlush},
 	// HTTP GET
-	GetLong: {[]byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion, 80, false},
+	GetLong: {[]byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion, 80, NoAddedFlush},
 	// HTTP POST
-	PostLong: {[]byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion, 80, false},
+	PostLong: {[]byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion, 80, NoAddedFlush},
 	// HTTP Response
-	HTTPResp: {[]byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion, 80, false},
+	HTTPResp: {[]byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion, 80, NoAddedFlush},
 	// TLS Client Hello
-	TLSClientHello: {[]byte("\x16\x03\x03\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 443, false},
+	TLSClientHello: {[]byte("\x16\x03\x03\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 443, NoAddedFlush},
 	// TLS Server Hello
-	TLSServerHello: {[]byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion, 443, false},
+	TLSServerHello: {[]byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion, 443, NoAddedFlush},
 	// TLS Alert Warning
-	TLSAlertWarning: {[]byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443, false},
+	TLSAlertWarning: {[]byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443, NoAddedFlush},
 	// TLS Alert Fatal
-	TLSAlertFatal: {[]byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443, false},
+	TLSAlertFatal: {[]byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443, NoAddedFlush},
 	// DNS over TCP
-	DNSOverTCP: {[]byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 53, false},
+	DNSOverTCP: {[]byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 53, NoAddedFlush},
 	// SSH-2.0-OpenSSH_8.9p1
-	OpenSSH2: {[]byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion, 22, false},
+	OpenSSH2: {[]byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion, 22, NoAddedFlush},
 
 	// // HTTP GET base64 in url min tag length 88 because 64 bytes base64 encoded should be length 88
 	// GetShort: {base64TagDecode, []byte("GET /"), 5, 5 + 88, 5 + 88, randomizeDstPortMinVersion},

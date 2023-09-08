@@ -190,28 +190,28 @@ var _cases = []struct {
 
 	// because the Prefix object is defined the client doesn't care that the id isn't in the
 	// set of defaults, because the Prefix can give the dst port.
-	{"3", &clientPrefix{[]byte{}, 22, 1025, false}, &ptp{RandomizeDstPort: &f, PrefixId: &i22}, 1025, 0, nil, ErrUnknownPrefix, ErrUnknownPrefix},
-	{"4", &clientPrefix{[]byte{}, 22, 1025, false}, &ptp{RandomizeDstPort: &t, PrefixId: &i22}, 58047, 0, nil, ErrUnknownPrefix, ErrBadParams},
+	{"3", &clientPrefix{[]byte{}, 22, 1025, NoAddedFlush}, &ptp{RandomizeDstPort: &f, PrefixId: &i22}, 1025, 0, nil, ErrUnknownPrefix, ErrUnknownPrefix},
+	{"4", &clientPrefix{[]byte{}, 22, 1025, NoAddedFlush}, &ptp{RandomizeDstPort: &t, PrefixId: &i22}, 58047, 0, nil, ErrUnknownPrefix, ErrBadParams},
 
 	// Properly working examples
-	{"5", &clientPrefix{[]byte{}, 0, 443, false}, &ptp{RandomizeDstPort: &t}, 58047, 58047, nil, nil, nil},
-	{"6", &clientPrefix{[]byte{}, 0, 443, false}, &ptp{RandomizeDstPort: &f}, 443, 443, nil, nil, nil},
+	{"5", &clientPrefix{[]byte{}, 0, 443, NoAddedFlush}, &ptp{RandomizeDstPort: &t}, 58047, 58047, nil, nil, nil},
+	{"6", &clientPrefix{[]byte{}, 0, 443, NoAddedFlush}, &ptp{RandomizeDstPort: &f}, 443, 443, nil, nil, nil},
 
 	// // This will result in a broken connection, valid for both client and server. but unable to
 	// // connect since they will disagree about the expected port. This is not taking into account
 	// // the overrides system which could also cause this, but will be valid and applied properly
 	// // so as not to cause something like this from happening.
-	{"7", &clientPrefix{[]byte{}, 0, 1025, false}, &ptp{RandomizeDstPort: &f}, 1025, 443, nil, nil, nil},
-	{"8", &clientPrefix{[]byte{}, 1, 1025, false}, &ptp{RandomizeDstPort: &f, PrefixId: &i1}, 1025, 80, nil, nil, ErrBadParams},
+	{"7", &clientPrefix{[]byte{}, 0, 1025, NoAddedFlush}, &ptp{RandomizeDstPort: &f}, 1025, 443, nil, nil, nil},
+	{"8", &clientPrefix{[]byte{}, 1, 1025, NoAddedFlush}, &ptp{RandomizeDstPort: &f, PrefixId: &i1}, 1025, 80, nil, nil, ErrBadParams},
 
 	// Params nil. Prefix not nil
-	{"9", &clientPrefix{[]byte{}, -2, 1025, false}, nil, 1025, 0, nil, ErrBadParams, ErrUnknownPrefix},
-	{"10", &clientPrefix{[]byte{}, -2, 443, false}, nil, 443, 0, nil, ErrBadParams, nil},
+	{"9", &clientPrefix{[]byte{}, -2, 1025, NoAddedFlush}, nil, 1025, 0, nil, ErrBadParams, ErrUnknownPrefix},
+	{"10", &clientPrefix{[]byte{}, -2, 443, NoAddedFlush}, nil, 443, 0, nil, ErrBadParams, nil},
 
 	// Random prefix, resolved by client into another prefix BEFORE calling GetParams. This means
 	// that none of ClientTransport.GetParams, ClientTransport.DstPort, or Transport.GetDstPort are
 	// aware of a PrefixID of -1 (Rand)
-	{"11", &clientPrefix{[]byte{}, -1, 1025, false}, &ptp{RandomizeDstPort: &t, PrefixId: &in1}, 0, 0, ErrUnknownPrefix, ErrUnknownPrefix, ErrUnknownPrefix},
+	{"11", &clientPrefix{[]byte{}, -1, 1025, NoAddedFlush}, &ptp{RandomizeDstPort: &t, PrefixId: &in1}, 0, 0, ErrUnknownPrefix, ErrUnknownPrefix, ErrUnknownPrefix},
 }
 
 func TestPrefixGetDstPortServer(t *testing.T) {
@@ -332,17 +332,17 @@ func TestClientTransportFromID(t *testing.T) {
 
 	p, err := TryFromID(Min)
 	require.Nil(t, err)
-	require.Equal(t, &clientPrefix{defaultPrefixes[0].StaticMatch, 0, 443, false}, p)
+	require.Equal(t, &clientPrefix{defaultPrefixes[0].StaticMatch, 0, 443, NoAddedFlush}, p)
 
 	p, err = TryFromID(OpenSSH2)
 	require.Nil(t, err)
-	require.Equal(t, &clientPrefix{defaultPrefixes[OpenSSH2].StaticMatch, OpenSSH2, 22, false}, p)
+	require.Equal(t, &clientPrefix{defaultPrefixes[OpenSSH2].StaticMatch, OpenSSH2, 22, NoAddedFlush}, p)
 
 	b, _ := hex.DecodeString("010000")
 	r := bytes.NewReader(b)
 	p, err = pickRandomPrefix(r)
 	require.Nil(t, err)
-	require.Equal(t, &clientPrefix{defaultPrefixes[1].StaticMatch, 1, 80, false}, p)
+	require.Equal(t, &clientPrefix{defaultPrefixes[1].StaticMatch, 1, 80, NoAddedFlush}, p)
 }
 
 /*

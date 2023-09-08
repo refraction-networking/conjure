@@ -34,9 +34,22 @@ type ClientTransport struct {
 	// // state tracks fields internal to the registrar that survive for the lifetime
 	// // of the transport session without being shared - i.e. local derived keys.
 	// state any
-	privPort int
-	pubPort  int
-	psk      []byte
+	privPort            int
+	pubPort             int
+	psk                 []byte
+	stunServer          string
+	disableIRWorkaround bool
+}
+
+type ClientConfig struct {
+	// STUNServer is the address of the stun server to use
+	STUNServer string
+
+	// DisableIRWorkaround disables sending an empty packet to workaround DTLS blocking in IR
+	//
+	// In Iran, blocking seems to happen by matching the first packet in a "flow" against DTLS packet format and blocking if it matches. 
+	// If the first packet is anything else packets are permitted. UDP dst port does not seem to change this.
+	DisableIRWorkaround bool
 }
 
 // Name returns a string identifier for the Transport for logging
@@ -63,19 +76,18 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible.
-//
-// DTLS transport currently has no caller controlled params
 func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
-	params, ok := p.(*pb.GenericTransportParams)
-	if !ok {
-		return nil
-	}
+	switch params := p.(type) {
+	case *pb.GenericTransportParams:
+		if t.Parameters == nil {
+			t.Parameters = &pb.DTLSTransportParams{}
+		}
 
-	if t.Parameters == nil {
-		t.Parameters = &pb.DTLSTransportParams{}
+		t.Parameters.RandomizeDstPort = proto.Bool(params.GetRandomizeDstPort())
+	case *ClientConfig:
+		t.stunServer = params.STUNServer
+		t.disableIRWorkaround = params.DisableIRWorkaround
 	}
-
-	t.Parameters.RandomizeDstPort = proto.Bool(params.GetRandomizeDstPort())
 
 	return nil
 }
@@ -83,6 +95,10 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 // Prepare lets the transport use the dialer to prepare. This is called before GetParams to let the
 // transport prepare stuff such as nat traversal.
 func (t *ClientTransport) Prepare(dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
+	if t.stunServer == "" {
+		t.stunServer = defaultSTUNServer
+	}
+
 	privePort, pubPort, err := publicAddr(defaultSTUNServer, dialer)
 	if err != nil {
 		return fmt.Errorf("error finding public port: %v", err)
@@ -131,9 +147,17 @@ func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 
 func (t *ClientTransport) listen(ctx context.Context, dialer dialFunc, address string) (net.Conn, error) {
 	laddr := &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: t.privPort}
-	err := openUDP(ctx, laddr.String(), address, dialer)
-	if err != nil {
-		return nil, fmt.Errorf("error opening UDP port from gateway: %v", err)
+
+	if t.disableIRWorkaround {
+		err := openUDPLimitTTL(ctx, laddr.String(), address, dialer)
+		if err != nil {
+			return nil, fmt.Errorf("error opening UDP port from gateway: %v", err)
+		}
+	} else {
+		err := openUDP(ctx, laddr.String(), address, dialer)
+		if err != nil {
+			return nil, fmt.Errorf("error opening UDP port from gateway: %v", err)
+		}
 	}
 
 	udpConn, err := dialer(ctx, "udp", laddr.String(), address)

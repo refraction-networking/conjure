@@ -11,7 +11,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"net"
 	"sync"
 
 	zmq "github.com/pebbe/zmq4"
@@ -58,7 +57,7 @@ type zmqSender interface {
 }
 
 type ipSelector interface {
-	Select([]byte, uint, uint, bool) (net.IP, error)
+	Select([]byte, uint, uint, bool) (*lib.PhantomIP, error)
 }
 
 // RegProcessor provides an interface to publish registrations and helper functions to process registration requests
@@ -277,6 +276,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		return nil, ErrRegProcessFailed
 	}
 
+	phantomSubnetSupportsRandPort := false
 	if c2s.GetV4Support() {
 		p.selectorMutex.RLock()
 		defer p.selectorMutex.RUnlock()
@@ -293,6 +293,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 
 		addr4 := binary.BigEndian.Uint32(phantom4.To4())
 		regResp.Ipv4Addr = &addr4
+		phantomSubnetSupportsRandPort = phantom4.SupportsPortRand
 	}
 
 	if c2s.GetV6Support() {
@@ -308,7 +309,8 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 			return nil, err
 		}
 
-		regResp.Ipv6Addr = phantom6
+		regResp.Ipv6Addr = *phantom6.IP
+		phantomSubnetSupportsRandPort = phantom6.SupportsPortRand
 	}
 
 	transportType := c2s.GetTransport()
@@ -323,15 +325,22 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		return nil, fmt.Errorf("failed to parse transport parameters: %w", err)
 	}
 
-	dstPort, err := t.GetDstPort(uint(c2s.GetClientLibVersion()), cjkeys.ConjureSeed, params)
-	if err != nil {
-		return nil, fmt.Errorf("error determining destination port: %w", err)
-	}
+	if phantomSubnetSupportsRandPort {
+		dstPort, err := t.GetDstPort(uint(c2s.GetClientLibVersion()), cjkeys.ConjureSeed, params)
+		if err != nil {
+			return nil, fmt.Errorf("error determining destination port: %w", err)
+		}
 
-	// we have to cast to uint32 because protobuf using varint for all int / uint types and doesn't
-	// have an outward facing uint16 type.
-	port := uint32(dstPort)
-	regResp.DstPort = &port
+		// we have to cast to uint32 because protobuf using varint for all int / uint types and doesn't
+		// have an outward facing uint16 type.
+
+		port := uint32(dstPort)
+		regResp.DstPort = &port
+	} else {
+		port := uint32(443)
+		regResp.DstPort = &port
+
+	}
 
 	// Overrides will modify the C2SWrapper and put the updated registrationResponse inside to be
 	// forwarded to the station.
