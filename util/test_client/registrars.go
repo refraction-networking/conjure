@@ -20,8 +20,13 @@ func decoyRegistrarPermutations() []registrar {
 func apiRegistrarPermutations() []registrar {
 	ts := []registrar{}
 	for _, r := range []bool{true, false} {
+		var apiEndpoint string = defaultAPIEndpoint
+		if r {
+			apiEndpoint = defaultBDAPIEndpoint
+		}
+
 		m1, err := registration.NewAPIRegistrar(&registration.Config{
-			Target:             defaultBDAPIEndpoint,
+			Target:             apiEndpoint,
 			Bidirectional:      r,
 			MaxRetries:         3,
 			SecondaryRegistrar: nil,

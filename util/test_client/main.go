@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -20,16 +21,20 @@ const (
 	defaultBDAPIEndpoint   = "https://registration.refraction.network/api/register-bidirectional"
 	defaultConnectionDelay = 750 * time.Millisecond
 
-	testCovertAddr = "http://1.1.1.1:80/"
+	testCovertAddr = "http://example.com/"
+	testCovertName = "example.com"
 )
 
 var defaultGenFilter = func(uint32) bool { return true }
 
 var availableGens = map[uint32]string{
-	// 957:  "assets/ClientConf.957",
-	1159: "assets/ClientConf.1159",
-	1163: "assets/ClientConf.1163",
+	// 1159: "assets/ClientConf.1159",
+	// 1163: "assets/ClientConf.1163",
 	1164: "assets/ClientConf.1164",
+}
+
+type dialer interface {
+	DialContext(context.Context, string, string) (net.Conn, error)
 }
 
 type connCfg struct {
@@ -72,7 +77,7 @@ func collectConnectionConfigs() (<-chan *connCfg, error) {
 	return configs, nil
 }
 
-func (c *connCfg) ToRunners(availableGens map[uint32]string, availableVersions []string) ([]*connCfgRunner, error) {
+func (c *connCfg) ToRunners(availableGens map[uint32]string) ([]*connCfgRunner, error) {
 	runners := []*connCfgRunner{}
 	for gen := range availableGens {
 		if !c.transport.generationFilter(gen) || !c.registrar.generationFilter(gen) {
@@ -208,10 +213,15 @@ func testRunnerEcho(c *connCfgRunner) error {
 	return nil
 }
 
+func DryRun(c *Config) error {
+	return nil
+}
+
 func main() {
 	logger().Info("Testing Conjure Client Variants")
 	// setLogLevel(slog.LevelDebug)
 	setLogLevel(levelTrace)
+	tapdance.SetLoggerOutput(io.Discard)
 
 	connectionConfigs, err := collectConnectionConfigs()
 	if err != nil {
@@ -223,7 +233,7 @@ func main() {
 		errors := map[string]error{}
 		runs := 0
 		for i := 0; i < nTrials; i++ {
-			runners, err := config.ToRunners(availableGens, availableVersions)
+			runners, err := config.ToRunners(availableGens)
 			if err != nil {
 				logger().Error("failed to create runners from %s: %w", config, err)
 			}
@@ -235,7 +245,7 @@ func main() {
 			}
 		}
 
-		logger().Info("Result", "config", config, fmt.Sprintf("%d/%d", runs-len(errors), runs))
+		logger().Info("Result", "config", config, "r", fmt.Sprintf("%d/%d", runs-len(errors), runs))
 		for cfg, e := range errors {
 			logger().Debug("connection failed", "config", cfg, "error", e)
 		}
