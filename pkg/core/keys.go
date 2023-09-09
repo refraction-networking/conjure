@@ -39,7 +39,7 @@ func generateEligatorTransformedKey(stationPubkey []byte) ([]byte, []byte, error
 			" Received: " + strconv.Itoa(len(stationPubkey)) + ".")
 	}
 	var sharedSecret, clientPrivate, clientPublic, representative [32]byte
-	for ok := false; ok != true; {
+	for ok := false; !ok; {
 		var sliceKeyPrivate []byte = clientPrivate[:]
 		_, err := rand.Read(sliceKeyPrivate)
 		if err != nil {
@@ -50,13 +50,17 @@ func generateEligatorTransformedKey(stationPubkey []byte) ([]byte, []byte, error
 	}
 	var stationPubkeyByte32 [32]byte
 	copy(stationPubkeyByte32[:], stationPubkey)
-	curve25519.ScalarMult(&sharedSecret, &clientPrivate, &stationPubkeyByte32)
+	s, err := curve25519.X25519(clientPrivate[:], stationPubkeyByte32[:])
+	if err != nil {
+		return nil, nil, err
+	}
+	copy(sharedSecret[:], s[:])
 
 	// extra25519.ScalarBaseMult does not randomize most significant bit(sign of y_coord?)
 	// Other implementations of elligator may have up to 2 non-random bits.
 	// Here we randomize the bit, expecting it to be flipped back to 0 on station
 	randByte := make([]byte, 1)
-	_, err := rand.Read(randByte)
+	_, err = rand.Read(randByte)
 	if err != nil {
 		return nil, nil, err
 	}

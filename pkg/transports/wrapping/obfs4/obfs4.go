@@ -42,7 +42,10 @@ func (Transport) GetIdentifier(r transports.Registration) string {
 		if err != nil {
 			return ""
 		}
-		r.SetTransportKeys(keys)
+		err = r.SetTransportKeys(keys)
+		if err != nil {
+			return ""
+		}
 	}
 	obfs4Keys, ok := r.TransportKeys().(Obfs4Keys)
 	if !ok {
@@ -101,7 +104,10 @@ func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, phantom net.IP, 
 			if err != nil {
 				return nil, nil, fmt.Errorf("Failed to generate obfs4 keys: %w", err)
 			}
-			r.SetTransportKeys(keys)
+			err = r.SetTransportKeys(keys)
+			if err != nil {
+				return nil, nil, fmt.Errorf("Failed to set obfs4 keys: %w", err)
+			}
 		}
 		obfs4Keys, ok := r.TransportKeys().(Obfs4Keys)
 		if !ok {

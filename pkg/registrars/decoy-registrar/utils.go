@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/refraction-networking/conjure/pkg/core"
+	"github.com/refraction-networking/conjure/pkg/station/log"
 	pb "github.com/refraction-networking/conjure/proto"
 	td "github.com/refraction-networking/gotapdance/tapdance"
 	"google.golang.org/protobuf/proto"
@@ -170,8 +171,14 @@ func reverseEncrypt(ciphertext []byte, keyStream []byte) []byte {
 
 func readAndClose(c net.Conn, readDeadline time.Duration) {
 	tinyBuf := []byte{0}
-	c.SetReadDeadline(time.Now().Add(readDeadline))
-	c.Read(tinyBuf)
+	err := c.SetReadDeadline(time.Now().Add(readDeadline))
+	if err != nil {
+		return
+	}
+	_, err = c.Read(tinyBuf)
+	if err != nil {
+		return
+	}
 	c.Close()
 }
 
@@ -216,7 +223,7 @@ func generateClientToStation(cjSession *td.ConjureSession) (*pb.ClientToStation,
 
 	transportParams, err := getPbTransportParams(cjSession)
 	if err != nil {
-		// Logger().Debugf("%s failed to marshal transport parameters ", reg.sessionIDStr)
+		log.Debugf("%s failed to marshal transport parameters ", cjSession.IDString())
 	}
 	// remove type url to save space for DNS registration
 	// for server side changes see https://github.com/refraction-networking/conjure/pull/163

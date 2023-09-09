@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/client/assets"
 	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
@@ -57,14 +58,18 @@ type DecoyRegistrar struct {
 	stats *pb.SessionStats
 	// add Width, sharedKeys necessary stuff (2nd line in struct except ConjureSeed)
 	// Keys
-	FspKey, FspIv, VspKey, VspIv, NewMasterSecret []byte
+	fspKey, fspIv, vspKey, vspIv, newMasterSecret []byte
 
 	Width uint
+
+	ClientHelloID tls.ClientHelloID
 }
 
 func NewDecoyRegistrar() *DecoyRegistrar {
 	return &DecoyRegistrar{
-		logger: td.Logger(),
+		logger:        td.Logger(),
+		ClientHelloID: tls.HelloChrome_62,
+		Width:         5,
 	}
 }
 
@@ -73,8 +78,10 @@ func NewDecoyRegistrar() *DecoyRegistrar {
 // Deprecated: Set dialer in tapdace.Dialer.DialerWithLaddr instead.
 func NewDecoyRegistrarWithDialer(dialer DialFunc) *DecoyRegistrar {
 	return &DecoyRegistrar{
-		dialContex: dialer,
-		logger:     td.Logger(),
+		dialContex:    dialer,
+		logger:        td.Logger(),
+		ClientHelloID: tls.HelloChrome_62,
+		Width:         5,
 	}
 }
 
@@ -103,19 +110,21 @@ func (r *DecoyRegistrar) PrepareRegKeys(pubkey [32]byte) error {
 	return nil
 }
 
-func (r *DecoyRegistrar) GetRandomDurationByRTT(base, min, max int) time.Duration {
+// getRandomDurationByRTT returns a random duration between min and max in milliseconds adding base.
+func (r *DecoyRegistrar) getRandomDurationByRTT(base, min, max int) time.Duration {
 	addon := getRandInt(min, max) / 1000 // why this min and max???
 	rtt := rttInt(r.getTcpToDecoy())
 	return time.Millisecond * time.Duration(base+rtt*addon)
 }
 
 func (r *DecoyRegistrar) getTcpToDecoy() uint32 {
+	if r == nil {
+		return 0
+	}
 	r.m.Lock()
 	defer r.m.Unlock()
-	if r != nil {
-		if r.stats != nil {
-			return r.stats.GetTcpToDecoy()
-		}
+	if r.stats != nil {
+		return r.stats.GetTcpToDecoy()
 	}
 	return 0
 }
@@ -133,7 +142,7 @@ func (r DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostnam
 		// Logger().Debugf("%v SNI was nil. Setting it to %v ", r.sessionIDStr, config.ServerName)
 	}
 	//[TODO]{priority:medium} parroting Chrome 62 ClientHello -- parrot newer.
-	tlsConn := tls.UClient(dialConn, &config, tls.HelloChrome_62)
+	tlsConn := tls.UClient(dialConn, &config, r.ClientHelloID)
 
 	err = tlsConn.BuildHandshakeState()
 	if err != nil {
@@ -144,7 +153,11 @@ func (r DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostnam
 		return nil, err
 	}
 
-	tlsConn.SetDeadline(deadline)
+	err = tlsConn.SetDeadline(deadline)
+	if err != nil {
+		return nil, err
+	}
+
 	err = tlsConn.Handshake()
 	if err != nil {
 		return nil, err
@@ -162,14 +175,14 @@ func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpe
 	if len(vsp) > int(^uint16(0)) {
 		return nil, fmt.Errorf("Variable-Size Payload exceeds %v", ^uint16(0))
 	}
-	encryptedVsp, err := aesGcmEncrypt(vsp, r.VspKey, r.VspIv)
+	encryptedVsp, err := aesGcmEncrypt(vsp, r.vspKey, r.vspIv)
 	if err != nil {
 		return nil, err
 	}
 
 	//[reference] generate and encrypt fixed size payload
 	fsp := generateFSP(uint16(len(encryptedVsp)))
-	encryptedFsp, err := aesGcmEncrypt(fsp, r.FspKey, r.FspIv)
+	encryptedFsp, err := aesGcmEncrypt(fsp, r.fspKey, r.fspIv)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +270,7 @@ func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Conte
 	}
 
 	// randomized sleeping here to break the intraflow signal
-	toSleep := r.GetRandomDurationByRTT(3000, 212, 3449)
+	toSleep := r.getRandomDurationByRTT(3000, 212, 3449)
 	logger.Debugf("Successfully sent registrations, sleeping for: %v", toSleep)
 	lib.SleepWithContext(ctx, toSleep)
 
@@ -340,13 +353,13 @@ func selectDecoys(sharedSecret []byte, version uint, width uint) ([]*pb.TLSDecoy
 	var allDecoys []*pb.TLSDecoySpec
 	switch version {
 	case v6:
-		allDecoys = td.Assets().GetV6Decoys()
+		allDecoys = assets.Assets().GetV6Decoys()
 	case v4:
-		allDecoys = td.Assets().GetV4Decoys()
+		allDecoys = assets.Assets().GetV4Decoys()
 	case both:
-		allDecoys = td.Assets().GetAllDecoys()
+		allDecoys = assets.Assets().GetAllDecoys()
 	default:
-		allDecoys = td.Assets().GetAllDecoys()
+		allDecoys = assets.Assets().GetAllDecoys()
 	}
 
 	if len(allDecoys) == 0 {

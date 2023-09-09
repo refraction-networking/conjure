@@ -3,22 +3,30 @@ package core
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"testing"
 
-	pb "github.com/refraction-networking/conjure/proto"
-
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/hkdf"
+
+	pb "github.com/refraction-networking/conjure/proto"
 )
 
 func TestNewGenKeys(t *testing.T) {
-	fakePubkey := [32]byte{0}
+	var fakePubkey [32]byte
+	k, _ := hex.DecodeString("00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF")
+	copy(fakePubkey[:], k)
 
-	keys, _ := GenerateClientSharedKeys(fakePubkey)
-	oldKeys, _ := generateClientSharedKeysOld(fakePubkey)
+	keys, err := GenerateClientSharedKeys(fakePubkey)
+	require.Nil(t, err)
+	oldKeys, err := generateClientSharedKeysOld(fakePubkey)
+	require.Nil(t, err)
 
-	stationKeys, _ := GenSharedKeys(4, keys.SharedSecret, pb.TransportType_Null)
-	stationKeysOld, _ := GenSharedKeys(3, oldKeys.SharedSecret, pb.TransportType_Null)
+	stationKeys, err := GenSharedKeys(4, keys.SharedSecret, pb.TransportType_Null)
+	require.Nil(t, err)
+	stationKeysOld, err := GenSharedKeys(3, oldKeys.SharedSecret, pb.TransportType_Null)
+	require.Nil(t, err)
 
 	if !bytes.Equal(keys.ConjureSeed, stationKeys.ConjureSeed) {
 		t.Fatalf("Version 4 station ConjureSeed does not match client: \nStation: %v\nClient: %v", stationKeys.ConjureSeed, keys.ConjureSeed)
@@ -30,26 +38,20 @@ func TestNewGenKeys(t *testing.T) {
 }
 
 // Below is for testing that SharedSecret and ConjureSeed match with old client version.
-type OldSharedKeys struct {
+type oldSharedKeys struct {
 	SharedSecret, Representative                               []byte
 	FspKey, FspIv, VspKey, VspIv, NewMasterSecret, ConjureSeed []byte
 	reader                                                     io.Reader
 }
 
-// oldConjureSharedKeys contains keys that the station is required to keep.
-type oldConjureSharedKeys struct {
-	SharedSecret                                            []byte
-	FspKey, FspIv, VspKey, VspIv, MasterSecret, ConjureSeed []byte
-}
-
-func generateClientSharedKeysOld(pubkey [32]byte) (*OldSharedKeys, error) {
+func generateClientSharedKeysOld(pubkey [32]byte) (*oldSharedKeys, error) {
 	sharedSecret, representative, err := generateEligatorTransformedKey(pubkey[:])
 	if err != nil {
 		return nil, err
 	}
 
 	tdHkdf := hkdf.New(sha256.New, sharedSecret, []byte("conjureconjureconjureconjure"), nil)
-	keys := &OldSharedKeys{
+	keys := &oldSharedKeys{
 		SharedSecret:    sharedSecret,
 		Representative:  representative,
 		FspKey:          make([]byte, 16),
