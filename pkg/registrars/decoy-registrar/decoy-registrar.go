@@ -58,7 +58,7 @@ type DecoyRegistrar struct {
 	stats *pb.SessionStats
 	// add Width, sharedKeys necessary stuff (2nd line in struct except ConjureSeed)
 	// Keys
-	fspKey, fspIv, vspKey, vspIv, newMasterSecret []byte
+	fspKey, fspIv, vspKey, vspIv []byte
 
 	Width uint
 
