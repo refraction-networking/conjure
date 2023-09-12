@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/refraction-networking/gotapdance/tapdance"
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 )
 
 type Config struct {
@@ -39,7 +39,7 @@ type Config struct {
 	Bidirectional bool
 
 	// SecondaryRegistrar is the secondary registrar to use when the main one fails
-	SecondaryRegistrar tapdance.Registrar
+	SecondaryRegistrar interfaces.Registrar
 
 	// HTTPClient is the HTTP client to use for the API registrar
 	HTTPClient *http.Client

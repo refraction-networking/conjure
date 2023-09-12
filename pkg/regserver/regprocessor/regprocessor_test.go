@@ -4,16 +4,17 @@ import (
 	"crypto/ed25519"
 	"encoding/binary"
 	"encoding/hex"
+	"io"
 	"net"
 	"sync"
 	"testing"
-	"time"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	zmq "github.com/pebbe/zmq4"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
+	"github.com/refraction-networking/conjure/pkg/log"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regserver/overrides"
 	"github.com/refraction-networking/conjure/pkg/station/lib"
@@ -21,7 +22,6 @@ import (
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
 	pb "github.com/refraction-networking/conjure/proto"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,7 +32,7 @@ var (
 
 func mockRegProcessor() RegProcessor {
 	return RegProcessor{
-		metrics: metrics.NewMetrics(log.NewEntry(log.StandardLogger()), 5*time.Second),
+		metrics: metrics.NewMetrics(log.New(io.Discard, "", 0), 5),
 	}
 }
 

@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/refraction-networking/conjure/pkg/log"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/registrars/dns-registrar/responder"
 	"github.com/refraction-networking/conjure/pkg/regserver/regprocessor"
 	pb "github.com/refraction-networking/conjure/proto"
-	log "github.com/sirupsen/logrus"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -25,12 +26,12 @@ type DNSRegServer struct {
 	dnsResponder *responder.Responder
 	processor    registrar
 	latestCCGen  uint32
-	logger       log.FieldLogger
+	logger       *log.Logger
 	metrics      *metrics.Metrics
 }
 
 // NewDNSRegServer creates a new DNSRegServer object.
-func NewDNSRegServer(domain string, udpAddr string, privkey []byte, regprocessor *regprocessor.RegProcessor, latestClientConfGeneration uint32, logger log.FieldLogger, metrics *metrics.Metrics) (*DNSRegServer, error) {
+func NewDNSRegServer(domain string, udpAddr string, privkey []byte, regprocessor *regprocessor.RegProcessor, latestClientConfGeneration uint32, logger *log.Logger, metrics *metrics.Metrics) (*DNSRegServer, error) {
 
 	if domain == "" || udpAddr == "" || privkey == nil || regprocessor == nil || logger == nil {
 		return nil, errors.New("all arguments must not be nil")
@@ -54,6 +55,7 @@ func NewDNSRegServer(domain string, udpAddr string, privkey []byte, regprocessor
 	}, nil
 }
 
+// ListenAndServe starts the DNS registration server.
 func (s *DNSRegServer) ListenAndServe() error {
 	err := s.dnsResponder.RecvAndRespond(s.processRequest)
 	if err != nil {
@@ -68,12 +70,12 @@ func (s *DNSRegServer) processRequest(reqIn []byte) ([]byte, error) {
 	c2sPayload := &pb.C2SWrapper{}
 	err := proto.Unmarshal(reqIn, c2sPayload)
 	if err != nil {
-		s.logger.Errorf("Error in recieved request unmarshal: [%v]", err)
+		s.logger.Errorf("Error in received request unmarshal: [%v]", err)
 		return nil, err
 	}
 
-	reqLogger := s.logger.WithField("regid", hex.EncodeToString(c2sPayload.GetSharedSecret()))
-	reqLogger.Tracef("Request received: [%+v]", c2sPayload)
+	fields := fmt.Sprintf("reg_id: %s", hex.EncodeToString(c2sPayload.GetSharedSecret()))
+	s.logger.Tracef("Request received: [%s] [%+v]", fields, c2sPayload)
 
 	clientconfOutdated := false
 	if c2sPayload.RegistrationPayload.GetDecoyListGeneration() < atomic.LoadUint32(&s.latestCCGen) {
@@ -86,18 +88,18 @@ func (s *DNSRegServer) processRequest(reqIn []byte) ([]byte, error) {
 
 	reqIsBd := c2sPayload.GetRegistrationSource() == pb.RegistrationSource_BidirectionalDNS
 	if reqIsBd {
-		reqLogger = s.logger.WithField("registration-type", "bidirectional")
+		fields += fmt.Sprintf(", registration-type: bidirectional")
 		var regResponse *pb.RegistrationResponse
 		regResponse, err = s.processor.RegisterBidirectional(c2sPayload, pb.RegistrationSource_BidirectionalDNS, nil)
 		dnsResp.BidirectionalResponse = regResponse
 	} else {
-		reqLogger = s.logger.WithField("registration-type", "unidirectional")
+		fields += fmt.Sprintf(", registration-type: unidirectional")
 		err = s.processor.RegisterUnidirectional(c2sPayload, pb.RegistrationSource_DNS, nil)
 	}
 
 	// if registration publish failed, immediately return
 	if err != nil {
-		reqLogger.Errorf("registration publish failed: %v", err)
+		s.logger.Errorf("registration publish failed [%s]: %v", fields, err)
 		regSuccess := false
 		dnsResp.Success = &regSuccess
 
@@ -110,21 +112,22 @@ func (s *DNSRegServer) processRequest(reqIn []byte) ([]byte, error) {
 
 	regSuccess := true
 	dnsResp.Success = &regSuccess
-	reqLogger.Debugf("registration request successful")
+	s.logger.Debugf("registration request successful [%s]", fields)
 	responsePayload, err := proto.Marshal(dnsResp)
 	if err != nil {
-		reqLogger.Errorf("response marshal failed")
+		s.logger.Errorf("response marshal failed, [%s]: %v", fields, err)
 		return nil, errors.New("response marshal failed")
 	}
 	return responsePayload, nil
 }
 
 // Close closes the underlying dns responder.
-func (f *DNSRegServer) Close() error {
-	return f.dnsResponder.Close()
+func (s *DNSRegServer) Close() error {
+	return s.dnsResponder.Close()
 }
 
-// Close closes the underlying dns responder.
-func (f *DNSRegServer) UpdateLatestCCGen(gen uint32) {
-	atomic.StoreUint32(&f.latestCCGen, gen)
+// UpdateLatestCCGen helps the DNS registration server to dynamically reload configuration, updating
+// the latest client configuration generation number.
+func (s *DNSRegServer) UpdateLatestCCGen(gen uint32) {
+	atomic.StoreUint32(&s.latestCCGen, gen)
 }

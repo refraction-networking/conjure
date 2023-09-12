@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/log"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
-	"github.com/refraction-networking/conjure/pkg/station/log"
 	"github.com/refraction-networking/conjure/pkg/transports"
 )
 

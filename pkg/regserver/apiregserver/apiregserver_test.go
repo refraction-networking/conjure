@@ -6,19 +6,20 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	golog "log"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"sync"
 	"testing"
-	"time"
 
 	zmq "github.com/pebbe/zmq4"
+	"github.com/refraction-networking/conjure/pkg/log"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regserver/regprocessor"
 	pb "github.com/refraction-networking/conjure/proto"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
@@ -38,9 +39,9 @@ func init() {
 
 func newAPIREgServer() APIRegServer {
 	return APIRegServer{
-		logger:      log.New(),
+		logger:      log.New(os.Stdout, "reg: API, ", golog.Ldate|golog.Lmicroseconds),
 		logClientIP: true,
-		metrics:     metrics.NewMetrics(log.NewEntry(log.StandardLogger()), 5*time.Second),
+		metrics:     metrics.NewMetrics(log.New(io.Discard, "", 0), 5),
 	}
 
 }

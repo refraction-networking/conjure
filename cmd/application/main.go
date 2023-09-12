@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/refraction-networking/conjure/pkg/dtls/dnat"
+	"github.com/refraction-networking/conjure/pkg/log"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
-	"github.com/refraction-networking/conjure/pkg/station/log"
 	"github.com/refraction-networking/conjure/pkg/transports/connecting/dtls"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"

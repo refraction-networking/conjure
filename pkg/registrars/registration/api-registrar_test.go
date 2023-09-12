@@ -5,15 +5,18 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
+	golog "log"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
+	"github.com/refraction-networking/conjure/pkg/client"
+	"github.com/refraction-networking/conjure/pkg/client/assets"
+	"github.com/refraction-networking/conjure/pkg/log"
 	transports "github.com/refraction-networking/conjure/pkg/transports/client"
 	pb "github.com/refraction-networking/conjure/proto"
-	"github.com/refraction-networking/gotapdance/tapdance"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
@@ -24,9 +27,9 @@ func TestAPIRegistrar(t *testing.T) {
 	transport, err := transports.New("min")
 	require.Nil(t, err)
 
-	_, err = tapdance.AssetsSetDir("./tests/assets")
+	_, err = assets.AssetsSetDir("./tests/assets")
 	require.Nil(t, err)
-	session := tapdance.MakeConjureSession("1.2.3.4:1234", transport)
+	session := client.MakeConjureSession("1.2.3.4:1234", transport)
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
@@ -57,10 +60,10 @@ func TestAPIRegistrar(t *testing.T) {
 		endpoint:      server.URL,
 		client:        server.Client(),
 		bidirectional: false,
-		logger:        logrus.New(),
+		logger:        log.New(os.Stdout, "", golog.Ldate|golog.Lmicroseconds),
 	}
 
-	_, err = registrar.Register(session, context.TODO())
+	_, err = registrar.Register(context.TODO(), session)
 	require.Nil(t, err)
 
 	server.Close()
@@ -72,7 +75,7 @@ func TestAPIRegistrarBidirectional(t *testing.T) {
 	transport, err := transports.New("min")
 	require.Nil(t, err)
 	// Make Conjure session with covert address
-	session := tapdance.MakeConjureSession("1.2.3.4:1234", transport)
+	session := client.MakeConjureSession("1.2.3.4:1234", transport)
 	addr4 := binary.BigEndian.Uint32(net.ParseIP("127.0.0.1").To4())
 	addr6 := net.ParseIP("2001:48a8:687f:1:41d3:ff12:45b:73c8")
 	var port uint32 = 80
@@ -122,12 +125,12 @@ func TestAPIRegistrarBidirectional(t *testing.T) {
 		endpoint:      server.URL,
 		client:        server.Client(),
 		bidirectional: true,
-		logger:        logrus.New(),
+		logger:        log.New(os.Stdout, "", golog.Ldate|golog.Lmicroseconds),
 	}
 
 	// register.Register() connects to server set up above and sends registration info
 	// "response" will store the RegistrationResponse protobuf that the server replies with
-	response, err := registrar.Register(session, context.TODO())
+	response, err := registrar.Register(context.TODO(), session)
 	if err != nil {
 		t.Fatalf("bidirectional registrar failed with error: %v", err)
 	}

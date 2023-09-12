@@ -10,7 +10,18 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-type dialFunc = func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)
+// Registrar defines the interface for a module completing the initial portion of the conjure
+// protocol which registers the clients intent to connect, along with the specifics of the session
+// they wish to establish.
+type Registrar interface {
+	Register(context.Context, any) (any, error)
+
+	// PrepareRegKeys prepares key materials specific to the registrar
+	PrepareRegKeys(pubkey [32]byte) error
+}
+
+// DialFunc is a function type alias for dialing a connection.
+type DialFunc = func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)
 
 // Transport provides a generic interface for utilities that allow the client to dial and connect to
 // a phantom address when creating a Conjure connection.
@@ -52,6 +63,8 @@ type Transport interface {
 	PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error
 }
 
+// WrappingTransport defines the interface for reactive transports that receive and then wrap
+// client connections from the station perspective.
 type WrappingTransport interface {
 	Transport
 
@@ -59,42 +72,17 @@ type WrappingTransport interface {
 	WrapConn(conn net.Conn) (net.Conn, error)
 }
 
+// ConnectingTransport defines the interface for proactive transports that dial out from the station
+// as a means of creating the proxy connection with the client.
 type ConnectingTransport interface {
 	Transport
 
-	WrapDial(dialer dialFunc) (dialFunc, error)
+	WrapDial(dialer DialFunc) (DialFunc, error)
 
 	DisableRegDelay() bool
 }
 
-// Overrides makes it possible to treat an array of overrides as a single override note that the
-// subsequent overrides are not aware of those that come before so they may end up undoing their
-// changes.
-type Overrides []RegOverride
-
-// Override implements the RegOverride interface.
-func (o Overrides) Override(reg *pb.C2SWrapper, randReader io.Reader) error {
-	var err error
-	for _, override := range o {
-		err = override.Override(reg, randReader)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// RegOverride provides a generic way for the station to mutate an incoming registration before
-// handing it off to the stations or returning it to the client as part of the RegResponse protobuf.
-type RegOverride interface {
-	Override(*pb.C2SWrapper, io.Reader) error
-}
-
-// DNAT used by the station side DTLS transport implementation to warm up the DNAT table such that
-// we are able to handle incoming client connections.
-type DNAT interface {
-	AddEntry(clientAddr *net.IP, clientPort uint16, phantomIP *net.IP, phantomPort uint16) error
-}
-
-// DnatBuilder function type alias for building a DNAT object
-type DnatBuilder func() (DNAT, error)
+// Registration is a generic interface for the registration structure used by clients to establish
+// a connection after registering their session with the station. This acts as a kind of ticket,
+// holding the information necessary to (re-)establish the connection to the phantom.
+type Registration interface{}

@@ -14,8 +14,9 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/refraction-networking/conjure/pkg/core"
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
+	"github.com/refraction-networking/conjure/pkg/log"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
-	"github.com/refraction-networking/conjure/pkg/station/log"
 	pb "github.com/refraction-networking/conjure/proto"
 )
 
@@ -502,7 +503,7 @@ func handleConnectingTpReg(regManager *RegistrationManager, reg *DecoyRegistrati
 	for tptype, tp := range regManager.GetConnectingTransports() {
 		if tptype == reg.Transport { // correct transport name
 			ctx, cancelFunc := context.WithTimeout(context.Background(), 15*time.Second)
-			go func(transport ConnectingTransport) {
+			go func(transport interfaces.ConnectingTransportSS) {
 				defer cancelFunc()
 
 				cc, err := regManager.GeoIP.CC(reg.registrationAddr)

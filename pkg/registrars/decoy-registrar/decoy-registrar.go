@@ -3,21 +3,20 @@ package decoy
 import (
 	"context"
 	"fmt"
+	golog "log"
 	"math/big"
 	"net"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/client"
 	"github.com/refraction-networking/conjure/pkg/client/assets"
 	"github.com/refraction-networking/conjure/pkg/core"
+	"github.com/refraction-networking/conjure/pkg/log"
 	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
-
-	// td imports assets, RegError, generateHTTPRequestBeginning
-	td "github.com/refraction-networking/gotapdance/tapdance"
-
-	"github.com/sirupsen/logrus"
 )
 
 // timeout for sending TD request and getting a response
@@ -41,17 +40,20 @@ var (
 	tdFlagUseTIL      = uint8(1 << 0)
 )
 
-var default_flags = tdFlagUseTIL
+var defaultFlags = tdFlagUseTIL
 
+// DialFunc is a function that establishes network connections to decoys. This Dial does not require
+// a local address.
 type DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error)
 
+// DecoyRegistrar implements the Registrar interface for the Decoy Registration method.
 type DecoyRegistrar struct {
 
 	// dialContex is a custom dialer to use when establishing TCP connections
 	// to decoys. When nil, Dialer.dialContex will be used.
 	dialContex DialFunc
 
-	logger logrus.FieldLogger
+	logger *log.Logger
 
 	// Fields taken from ConjureReg struct
 	m     sync.Mutex
@@ -65,21 +67,19 @@ type DecoyRegistrar struct {
 	ClientHelloID tls.ClientHelloID
 }
 
+// NewDecoyRegistrar returns a decoy registrar with the default `net` dialer.
 func NewDecoyRegistrar() *DecoyRegistrar {
-	return &DecoyRegistrar{
-		logger:        td.Logger(),
-		ClientHelloID: tls.HelloChrome_62,
-		Width:         5,
-	}
+	d := &net.Dialer{}
+	return NewDecoyRegistrarWithDialFn(d.DialContext)
 }
 
-// NewDecoyRegistrarWithDialer returns a decoy registrar with custom dialer.
+// NewDecoyRegistrarWithDialFn returns a decoy registrar with custom dialer.
 //
-// Deprecated: Set dialer in tapdace.Dialer.DialerWithLaddr instead.
-func NewDecoyRegistrarWithDialer(dialer DialFunc) *DecoyRegistrar {
+// Deprecated: Set dialer in Dialer.DialWithLaddr instead.
+func NewDecoyRegistrarWithDialFn(dialer DialFunc) *DecoyRegistrar {
 	return &DecoyRegistrar{
 		dialContex:    dialer,
-		logger:        td.Logger(),
+		logger:        log.New(os.Stdout, "reg: Decoy, ", golog.Ldate|golog.Lmicroseconds),
 		ClientHelloID: tls.HelloChrome_62,
 		Width:         5,
 	}
@@ -113,11 +113,11 @@ func (r *DecoyRegistrar) PrepareRegKeys(pubkey [32]byte) error {
 // getRandomDurationByRTT returns a random duration between min and max in milliseconds adding base.
 func (r *DecoyRegistrar) getRandomDurationByRTT(base, min, max int) time.Duration {
 	addon := getRandInt(min, max) / 1000 // why this min and max???
-	rtt := rttInt(r.getTcpToDecoy())
+	rtt := rttInt(r.getTCPToDecoy())
 	return time.Millisecond * time.Duration(base+rtt*addon)
 }
 
-func (r *DecoyRegistrar) getTcpToDecoy() uint32 {
+func (r *DecoyRegistrar) getTCPToDecoy() uint32 {
 	if r == nil {
 		return 0
 	}
@@ -166,7 +166,7 @@ func (r *DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostna
 	return tlsConn, nil
 }
 
-func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpec, cjSession *td.ConjureSession) ([]byte, error) {
+func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpec, cjSession *client.ConjureSession) ([]byte, error) {
 	//[reference] generate and encrypt variable size payload
 	vsp, err := generateVSP(cjSession)
 	if err != nil {
@@ -204,21 +204,21 @@ func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpe
 	return httpRequest, nil
 }
 
-func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Context) (*td.ConjureReg, error) {
-	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
-
-	logger.Debugf("Registering V4 and V6 via DecoyRegistrar")
+// Register implements the conjure Registrar interface.
+func (r *DecoyRegistrar) Register(ctx context.Context, cjSession *client.ConjureSession) (*client.ConjureReg, error) {
+	fields := fmt.Sprintf("type:unidirectional, sessionID:%v", cjSession.IDString())
+	r.logger.Debugf("Registering V4 and V6 via DecoyRegistrar [%s]", fields)
 
 	reg, _, err := cjSession.UnidirectionalRegData(ctx, pb.RegistrationSource_API.Enum())
 	if err != nil {
-		logger.Errorf("Failed to prepare registration data: %v", err)
+		r.logger.Errorf("Failed to prepare registration data [%s]: %v", fields, err)
 		return nil, lib.ErrRegFailed
 	}
 
 	// Choose N (width) decoys from decoylist
-	decoys, err := selectDecoys(cjSession.Keys.SharedSecret, cjSession.V6Support.Include(), r.Width)
+	decoys, err := selectDecoys(cjSession.Keys.SharedSecret, uint(cjSession.V6Support), r.Width)
 	if err != nil {
-		logger.Warnf("failed to select decoys: %v", err)
+		r.logger.Warnf("failed to select decoys [%s]: %v", fields, err)
 		return nil, err
 	}
 
@@ -233,13 +233,13 @@ func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Cont
 
 	width := uint(len(decoys))
 	if width < r.Width {
-		logger.Warnf("Using width %v (default %v)", width, r.Width)
+		r.logger.Warnf("Using width %v (default %v)", width, r.Width)
 	}
 
 	//[reference] Send registrations to each decoy
 	dialErrors := make(chan error, width)
 	for _, decoy := range decoys {
-		logger.Debugf("Sending Reg: %v, %v", decoy.GetHostname(), decoy.GetIpAddrStr())
+		r.logger.Debugf("[%s] Sending Reg: %v, %v", fields, decoy.GetHostname(), decoy.GetIpAddrStr())
 		//decoyAddr := decoy.GetIpAddrStr()
 		go r.Send(ctx, cjSession, decoy, dialErrors)
 	}
@@ -248,8 +248,8 @@ func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Cont
 	var unreachableCount uint = 0
 	for err := range dialErrors {
 		if err != nil {
-			logger.Debugf("%v", err)
-			if dialErr, ok := err.(td.RegError); ok && dialErr.Code() == td.Unreachable {
+			r.logger.Debugf("[%s] %v", fields, err)
+			if dialErr, ok := err.(client.RegError); ok && dialErr.Code() == client.Unreachable {
 				// If we failed because ipv6 network was unreachable try v4 only.
 				unreachableCount++
 				if unreachableCount < width {
@@ -259,25 +259,28 @@ func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Cont
 				}
 			}
 		}
-		//[reference] if we succeed or fail for any other reason then the network is reachable and we can continue
+		//[reference] if we succeed or fail for any other reason then the network is reachable and
+		//we can continue
 		break
 	}
 
 	//[reference] if ALL fail to dial return error (retry in parent if ipv6 unreachable)
 	if unreachableCount == width {
-		logger.Debugf("NETWORK UNREACHABLE")
-		return nil, td.NewRegError(td.Unreachable, "All decoys failed to register -- Dial Unreachable")
+		r.logger.Debugf("NETWORK UNREACHABLE [%s]", fields)
+		return nil, client.NewRegError(client.Unreachable, "All decoys failed to register -- Dial Unreachable")
 	}
 
 	// randomized sleeping here to break the intraflow signal
 	toSleep := r.getRandomDurationByRTT(3000, 212, 3449)
-	logger.Debugf("Successfully sent registrations, sleeping for: %v", toSleep)
+	r.logger.Debugf("[%s] Successfully sent registrations, sleeping for: %v", fields, toSleep)
 	lib.SleepWithContext(ctx, toSleep)
 
 	return reg, nil
 }
 
-func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession, decoy *pb.TLSDecoySpec, dialError chan error) {
+// Send constructs a decoy registration and sends the encoded request to the decoy completing the
+// registration.
+func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *client.ConjureSession, decoy *pb.TLSDecoySpec, dialError chan error) {
 
 	deadline, deadlineAlreadySet := ctx.Deadline()
 	if !deadlineAlreadySet {
@@ -295,7 +298,7 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 	r.setTCPToDecoy(durationToU32ptrMs(time.Since(tcpToDecoyStartTs)))
 	if err != nil {
 		if opErr, ok := err.(*net.OpError); ok && opErr.Err.Error() == "connect: network is unreachable" {
-			dialError <- td.NewRegError(td.Unreachable, err.Error())
+			dialError <- client.NewRegError(client.Unreachable, err.Error())
 			return
 		}
 		dialError <- err
@@ -312,7 +315,7 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 	if err != nil {
 		dialConn.Close()
 		msg := fmt.Sprintf("%v - %v createConn: %v", decoy.GetHostname(), decoy.GetIpAddrStr(), err.Error())
-		dialError <- td.NewRegError(td.TLSError, msg)
+		dialError <- client.NewRegError(client.TLSError, msg)
 		return
 	}
 	r.setTLSToDecoy(durationToU32ptrMs(time.Since(tlsToDecoyStartTs)))
@@ -321,7 +324,7 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 	httpRequest, err := r.createRequest(tlsConn, decoy, cjSession)
 	if err != nil {
 		msg := fmt.Sprintf("%v - %v createReq: %v", decoy.GetHostname(), decoy.GetIpAddrStr(), err.Error())
-		dialError <- td.NewRegError(td.TLSError, msg)
+		dialError <- client.NewRegError(client.TLSError, msg)
 		return
 	}
 
@@ -332,7 +335,7 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 		// Logger().Errorf("%v - %v Could not send Conjure registration request, error: %v", decoy.GetHostname(), decoy.GetIpAddrStr(), err.Error())
 		tlsConn.Close()
 		msg := fmt.Sprintf("%v - %v Write: %v", decoy.GetHostname(), decoy.GetIpAddrStr(), err.Error())
-		dialError <- td.NewRegError(td.TLSError, msg)
+		dialError <- client.NewRegError(client.TLSError, msg)
 		return
 	}
 
@@ -340,25 +343,21 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 	readAndClose(dialConn, time.Second*15)
 }
 
-const (
-	v4 uint = iota
-	v6
-	both
-)
-
 // SelectDecoys - Get an array of `width` decoys to be used for registration
 func selectDecoys(sharedSecret []byte, version uint, width uint) ([]*pb.TLSDecoySpec, error) {
 
+	vX := client.IPSupport(version)
+
 	//[reference] prune to v6 only decoys if useV6 is true
 	var allDecoys []*pb.TLSDecoySpec
-	switch version {
-	case v6:
-		allDecoys = assets.Assets().GetV6Decoys()
-	case v4:
-		allDecoys = assets.Assets().GetV4Decoys()
-	case both:
+	if vX&client.V6 == client.V6 && vX&client.V4 == client.V4 {
 		allDecoys = assets.Assets().GetAllDecoys()
-	default:
+	} else if vX&client.V6 == client.V6 {
+		allDecoys = assets.Assets().GetV6Decoys()
+
+	} else if vX&client.V4 == client.V4 {
+		allDecoys = assets.Assets().GetV4Decoys()
+	} else {
 		allDecoys = assets.Assets().GetAllDecoys()
 	}
 

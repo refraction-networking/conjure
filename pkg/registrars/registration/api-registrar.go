@@ -5,14 +5,16 @@ import (
 	"context"
 	"fmt"
 	"io"
+	golog "log"
 	"net/http"
-	"strconv"
+	"os"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/client"
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
+	"github.com/refraction-networking/conjure/pkg/log"
 	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
-	"github.com/refraction-networking/gotapdance/tapdance"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -47,10 +49,10 @@ type APIRegistrar struct {
 	// be attempted. If it is non-nil, after failing to register
 	// (retrying MaxRetries times) we will fall back to
 	// the Register method on this field.
-	secondaryRegistrar tapdance.Registrar
+	secondaryRegistrar interfaces.Registrar
 
 	// Logger to use.
-	logger logrus.FieldLogger
+	logger *log.Logger
 }
 
 func NewAPIRegistrar(config *Config) (*APIRegistrar, error) {
@@ -61,7 +63,7 @@ func NewAPIRegistrar(config *Config) (*APIRegistrar, error) {
 		maxRetries:         config.MaxRetries,
 		secondaryRegistrar: config.SecondaryRegistrar,
 		client:             config.HTTPClient,
-		logger:             tapdance.Logger().WithField("registrar", "API"),
+		logger:             log.New(os.Stdout, "reg: API, ", golog.Ldate|golog.Lmicroseconds),
 	}, nil
 }
 
@@ -71,8 +73,8 @@ func (r *APIRegistrar) PrepareRegKeys(pubkey [32]byte) error {
 }
 
 // registerUnidirectional sends unidirectional registration data to the registration server
-func (r *APIRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
-	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
+func (r *APIRegistrar) registerUnidirectional(ctx context.Context, cjSession *client.ConjureSession) (*client.ConjureReg, error) {
+	logger := log.New(os.Stdout, fmt.Sprintf("type: unidirectional, sessionID: %s", cjSession.IDString()), golog.Ldate|golog.Lmicroseconds)
 
 	reg, protoPayload, err := cjSession.UnidirectionalRegData(ctx, pb.RegistrationSource_API.Enum())
 	if err != nil {
@@ -89,10 +91,9 @@ func (r *APIRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession
 	r.setHTTPClient(reg)
 
 	for tries := 0; tries < r.maxRetries+1; tries++ {
-		logger := logger.WithField("attempt", strconv.Itoa(tries+1)+"/"+strconv.Itoa(r.maxRetries+1))
 		err = r.executeHTTPRequest(ctx, payload, logger)
 		if err != nil {
-			logger.Warnf("error in registration attempt: %v", err)
+			logger.Warnf("error in registration attempt %d/%d: %v", tries+1, r.maxRetries+1, err)
 			continue
 		}
 		logger.Debugf("registration succeeded")
@@ -100,19 +101,20 @@ func (r *APIRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession
 	}
 
 	// If we make it here, we failed API registration
-	logger.WithField("attempts", r.maxRetries+1).Warnf("all registration attempt(s) failed")
+	logger.Warnf("attempts: %d, all registration attempt(s) failed", r.maxRetries+1)
 
 	if r.secondaryRegistrar != nil {
 		logger.Debugf("trying secondary registration method")
-		return r.secondaryRegistrar.Register(cjSession, ctx)
+		r, err := r.secondaryRegistrar.Register(ctx, cjSession)
+		return r.(*client.ConjureReg), err
 	}
 
 	return nil, lib.ErrRegFailed
 }
 
 // registerBidirectional sends bidirectional registration data to the registration server and reads the response
-func (r *APIRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
-	logger := r.logger.WithFields(logrus.Fields{"type": "bidirectional", "sessionID": cjSession.IDString()})
+func (r *APIRegistrar) registerBidirectional(ctx context.Context, cjSession *client.ConjureSession) (*client.ConjureReg, error) {
+	logger := log.New(os.Stdout, fmt.Sprintf("type: bidirectional, sessionID: %s", cjSession.IDString()), golog.Ldate|golog.Lmicroseconds)
 
 	reg, protoPayload, err := cjSession.BidirectionalRegData(ctx, pb.RegistrationSource_BidirectionalAPI.Enum())
 	if err != nil {
@@ -129,11 +131,9 @@ func (r *APIRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession,
 	r.setHTTPClient(reg)
 
 	for tries := 0; tries < r.maxRetries+1; tries++ {
-		logger := logger.WithField("attempt", strconv.Itoa(tries+1)+"/"+strconv.Itoa(r.maxRetries+1))
-
 		regResp, err := r.executeHTTPRequestBidirectional(ctx, payload, logger)
 		if err != nil {
-			logger.Warnf("error in registration attempt: %v", err)
+			logger.Warnf("error in registration attempt %d/%d: %v", tries+1, r.maxRetries+1, err)
 			continue
 		}
 
@@ -146,17 +146,16 @@ func (r *APIRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession,
 	}
 
 	// If we make it here, we failed API registration
-	logger.WithField("attempts", r.maxRetries+1).Warnf("all registration attempt(s) failed")
-
 	if r.secondaryRegistrar != nil {
-		logger.Debugf("trying secondary registration method")
-		return r.secondaryRegistrar.Register(cjSession, ctx)
+		logger.Debugf("attempts: %d, trying secondary registration method", r.maxRetries+1)
+		r, err := r.secondaryRegistrar.Register(ctx, cjSession)
+		return r.(*client.ConjureReg), err
 	}
 
 	return nil, lib.ErrRegFailed
 }
 
-func (r *APIRegistrar) setHTTPClient(reg *tapdance.ConjureReg) {
+func (r *APIRegistrar) setHTTPClient(reg *client.ConjureReg) {
 	if r.client == nil {
 		// Transports should ideally be re-used for TCP connection pooling,
 		// but each registration is most likely making precisely one request,
@@ -168,17 +167,17 @@ func (r *APIRegistrar) setHTTPClient(reg *tapdance.ConjureReg) {
 	}
 }
 
-func (r APIRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
+func (r APIRegistrar) Register(ctx context.Context, cjSession *client.ConjureSession) (*client.ConjureReg, error) {
 	defer lib.SleepWithContext(ctx, r.connectionDelay)
 	if r.bidirectional {
-		return r.registerBidirectional(cjSession, ctx)
+		return r.registerBidirectional(ctx, cjSession)
 	}
 
-	return r.registerUnidirectional(cjSession, ctx)
+	return r.registerUnidirectional(ctx, cjSession)
 
 }
 
-func (r APIRegistrar) executeHTTPRequest(ctx context.Context, payload []byte, logger logrus.FieldLogger) error {
+func (r APIRegistrar) executeHTTPRequest(ctx context.Context, payload []byte, logger *log.Logger) error {
 	req, err := http.NewRequestWithContext(ctx, "POST", r.endpoint, bytes.NewReader(payload))
 	if err != nil {
 		logger.Warnf("failed to create HTTP request to registration endpoint %s: %v", r.endpoint, err)
@@ -200,19 +199,19 @@ func (r APIRegistrar) executeHTTPRequest(ctx context.Context, payload []byte, lo
 	return nil
 }
 
-func (r APIRegistrar) executeHTTPRequestBidirectional(ctx context.Context, payload []byte, logger logrus.FieldLogger) (*pb.RegistrationResponse, error) {
+func (r APIRegistrar) executeHTTPRequestBidirectional(ctx context.Context, payload []byte, logger *log.Logger) (*pb.RegistrationResponse, error) {
 	// Create an instance of the ConjureReg struct to return; this will hold the updated phantom4 and phantom6 addresses received from registrar response
 	regResp := &pb.RegistrationResponse{}
 	// Make new HTTP request with given context, registrar, and paylaod
 	req, err := http.NewRequestWithContext(ctx, "POST", r.endpoint, bytes.NewReader(payload))
 	if err != nil {
-		logger.Warnf("%v failed to create HTTP request to registration endpoint %s: %v", r.endpoint, err)
+		logger.Warnf("failed to create HTTP request to registration endpoint %s: %v", r.endpoint, err)
 		return regResp, err
 	}
 
 	resp, err := r.client.Do(req)
 	if err != nil {
-		logger.Warnf("%v failed to do HTTP request to registration endpoint %s: %v", r.endpoint, err)
+		logger.Warnf("failed to do HTTP request to registration endpoint %s: %v", r.endpoint, err)
 		return regResp, err
 	}
 	defer resp.Body.Close()

@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/log"
 	pb "github.com/refraction-networking/conjure/proto"
 )
 
