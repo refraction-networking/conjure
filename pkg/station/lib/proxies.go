@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/log"
 )
 
 const proxyStallTimeout = 30 * time.Second

@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/refraction-networking/conjure/internal/conjurepath"
+	"github.com/refraction-networking/conjure/pkg/client"
 	"github.com/refraction-networking/conjure/pkg/client/assets"
 )
 
@@ -24,11 +25,11 @@ func TestSelectDecoys(t *testing.T) {
 	seed, err := hex.DecodeString("5a87133b68da3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
 	require.Nil(t, err)
 
-	decoys, err := selectDecoys(seed, v6, 5)
+	decoys, err := selectDecoys(seed, uint(client.V6), 5)
 	require.Nil(t, err)
 	require.True(t, len(decoys) >= 5, "Not enough decoys returned from selection.")
 
-	decoys, err = selectDecoys(seed, v4, 5)
+	decoys, err = selectDecoys(seed, uint(client.V4), 5)
 	require.Nil(t, err)
 	require.True(t, len(decoys) >= 5, "Not enough decoys returned from selection.")
 }
@@ -76,7 +77,7 @@ func TestSelectDecoysErrorHandling(t *testing.T) {
 	// ====[ ClientConf file doesn't exist ]=====
 
 	// => still using default configuration path since there was not file to update
-	decoy, err := selectDecoys(seed, both, 1)
+	decoy, err := selectDecoys(seed, uint(client.V4|client.V6), 1)
 	require.Nil(t, err)
 	require.NotNil(t, decoy)
 	assert.Equal(t, "tapdance1.freeaeskey.xyz", decoy[0].GetHostname())
@@ -90,7 +91,7 @@ func TestSelectDecoysErrorHandling(t *testing.T) {
 	}
 
 	// => still using default configuration path since there was not file to update
-	decoy, err = selectDecoys(seed, both, 1)
+	decoy, err = selectDecoys(seed, uint(client.V4|client.V6), 1)
 	require.Nil(t, err)
 	require.NotNil(t, decoy)
 	assert.Equal(t, "tapdance1.freeaeskey.xyz", decoy[0].GetHostname())

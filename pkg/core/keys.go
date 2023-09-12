@@ -15,6 +15,12 @@ import (
 	"golang.org/x/crypto/hkdf"
 )
 
+// AES_GCM_TAG_SIZE the size of the aesgcm tag used when generating the client to
+// station message.
+//
+//lint:ignore ST1003 This is a preferred style in this case.
+const AES_GCM_TAG_SIZE = 16
+
 // ConjureSharedKeys contains keys that the station is required to keep.
 type ConjureSharedKeys struct {
 	SharedSecret []byte

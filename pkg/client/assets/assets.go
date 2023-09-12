@@ -11,8 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/refraction-networking/conjure/pkg/log"
 	ps "github.com/refraction-networking/conjure/pkg/phantoms"
-	"github.com/refraction-networking/conjure/pkg/station/log"
 	pb "github.com/refraction-networking/conjure/proto"
 
 	"google.golang.org/protobuf/proto"
@@ -33,8 +33,6 @@ type assets struct {
 	config *pb.ClientConf
 
 	filenameClientConf string
-
-	socksAddr string
 }
 
 // could reset this internally to refresh assets and avoid woes of singleton testing
@@ -136,7 +134,6 @@ func initAssets(path string) error {
 		path:               path,
 		config:             &defaultClientConf,
 		filenameClientConf: "ClientConf",
-		socksAddr:          "",
 	}
 	err := assetsInstance.readConfigs()
 	return err
@@ -386,11 +383,6 @@ func (a *assets) saveClientConf() error {
 	}
 
 	return os.Rename(tmpFilename, filename)
-}
-
-// SetStatsSocksAddr - Provide a socks address for reporting stats from the client in the form "addr:port"
-func (a *assets) SetStatsSocksAddr(addr string) {
-	a.socksAddr = addr
 }
 
 // GetPhantomSubnets -

@@ -1,21 +1,22 @@
 package metrics
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/refraction-networking/conjure/pkg/log"
 )
 
 // Metrics provides an interface to log operational counters
 type Metrics struct {
 	metricsMap map[string]int
 	rwMutex    sync.RWMutex
-	logger     log.FieldLogger
+	logger     *log.Logger
 }
 
 // NewMetrics creates a Metrics object using the provided logger and starts logging every provided logPeriod
-func NewMetrics(logger log.FieldLogger, logPeriod time.Duration) *Metrics {
+func NewMetrics(logger *log.Logger, logPeriod time.Duration) *Metrics {
 	m := &Metrics{
 		logger:     logger,
 		rwMutex:    sync.RWMutex{},
@@ -38,11 +39,14 @@ func (m *Metrics) Add(name string, val int) {
 func (m *Metrics) log() {
 	loggerWithFields := m.logger
 
-	m.rwMutex.RLock()
-	for key, val := range m.metricsMap {
-		loggerWithFields = loggerWithFields.WithField(key, val)
-	}
-	m.rwMutex.RUnlock()
+	// embedded function to allow for scoped defer of mutex unlock
+	func() {
+		m.rwMutex.RLock()
+		defer m.rwMutex.RUnlock()
+		for key, val := range m.metricsMap {
+			loggerWithFields.SetPrefix(fmt.Sprintf("%s: %d", key, val))
+		}
+	}()
 
 	loggerWithFields.Infof("current metrics")
 }

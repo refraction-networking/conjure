@@ -17,10 +17,10 @@ import (
 
 	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
+	"github.com/refraction-networking/conjure/pkg/log"
+
 	"github.com/refraction-networking/conjure/pkg/station/geoip"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
-	"github.com/refraction-networking/conjure/pkg/station/log"
-	"github.com/refraction-networking/conjure/pkg/transports"
 
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
@@ -29,10 +29,6 @@ import (
 // DETECTOR_REG_CHANNEL is a constant that defines the name of the redis map that we
 // send validated registrations over in order to notify all detector cores.
 const DETECTOR_REG_CHANNEL string = "dark_decoy_map"
-
-// AES_GCM_TAG_SIZE the size of the aesgcm tag used when generating the client to
-// station message.
-const AES_GCM_TAG_SIZE = 16
 
 // RegistrationManager manages registration tracking for the station.
 type RegistrationManager struct {
@@ -227,10 +223,10 @@ func (regManager *RegistrationManager) RegistrationExists(reg *DecoyRegistration
 }
 
 // GetRegistrations returns registrations associated with a specific phantom address.
-func (regManager *RegistrationManager) GetRegistrations(phantomAddr net.IP) map[string]transports.Registration {
+func (regManager *RegistrationManager) GetRegistrations(phantomAddr net.IP) map[string]interfaces.RegistrationSS {
 	regs := regManager.registeredDecoys.getRegistrations(phantomAddr)
 
-	convertedRegs := make(map[string]transports.Registration)
+	convertedRegs := make(map[string]interfaces.RegistrationSS)
 	for id, reg := range regs {
 		convertedRegs[id] = reg
 	}
@@ -428,7 +424,7 @@ func (reg *DecoyRegistration) GenerateClientToStation() *pb.ClientToStation {
 		Transport:           &reg.Transport,
 	}
 
-	for (proto.Size(initProto)+AES_GCM_TAG_SIZE)%3 != 0 {
+	for (proto.Size(initProto)+core.AES_GCM_TAG_SIZE)%3 != 0 {
 		initProto.Padding = append(initProto.Padding, byte(0))
 	}
 

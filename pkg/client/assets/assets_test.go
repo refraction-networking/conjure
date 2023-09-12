@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/refraction-networking/conjure/internal/conjurepath"
-	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/log"
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"

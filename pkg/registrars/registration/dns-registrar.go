@@ -4,16 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	golog "log"
 	"net"
-	"strconv"
+	"os"
 	"time"
 
 	"github.com/pion/stun"
+	"github.com/refraction-networking/conjure/pkg/client"
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
+	"github.com/refraction-networking/conjure/pkg/log"
 	"github.com/refraction-networking/conjure/pkg/registrars/dns-registrar/requester"
 	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
-	"github.com/refraction-networking/gotapdance/tapdance"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -23,7 +25,7 @@ type DNSRegistrar struct {
 	connectionDelay time.Duration
 	bidirectional   bool
 	ip              []byte
-	logger          logrus.FieldLogger
+	logger          *log.Logger
 }
 
 func createRequester(config *Config) (*requester.Requester, error) {
@@ -63,7 +65,7 @@ func NewDNSRegistrar(config *Config) (*DNSRegistrar, error) {
 		return nil, fmt.Errorf("error creating requester: %v", err)
 	}
 
-	ip, err := getPublicIp(config.STUNAddr)
+	ip, err := getPublicIP(config.STUNAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get public IP: %v", err)
 	}
@@ -74,17 +76,17 @@ func NewDNSRegistrar(config *Config) (*DNSRegistrar, error) {
 		maxRetries:      config.MaxRetries,
 		bidirectional:   config.Bidirectional,
 		connectionDelay: config.Delay,
-		logger:          tapdance.Logger().WithField("registrar", "DNS"),
+		logger:          log.New(os.Stdout, "", golog.Ldate|golog.Lmicroseconds),
 	}, nil
 }
 
 // registerUnidirectional sends unidirectional registration data to the registration server
-func (r *DNSRegistrar) registerUnidirectional(ctx context.Context, cjSession *tapdance.ConjureSession) (*tapdance.ConjureReg, error) {
-	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
+func (r *DNSRegistrar) registerUnidirectional(ctx context.Context, cjSession *client.ConjureSession) (interfaces.Registration, error) {
+	fields := fmt.Sprintf("type: unidirectional, sessionID: %s", cjSession.IDString())
 
 	reg, protoPayload, err := cjSession.UnidirectionalRegData(ctx, pb.RegistrationSource_DNS.Enum())
 	if err != nil {
-		logger.Errorf("Failed to prepare registration data: %v", err)
+		r.logger.Errorf("Failed to prepare registration data [%s]: %v", fields, err)
 		return nil, lib.ErrRegFailed
 	}
 
@@ -99,38 +101,37 @@ func (r *DNSRegistrar) registerUnidirectional(ctx context.Context, cjSession *ta
 
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
-		logger.Errorf("failed to marshal ClientToStation payload: %v", err)
+		r.logger.Errorf("failed to marshal ClientToStation payload [%s]: %v", fields, err)
 		return nil, lib.ErrRegFailed
 	}
 
-	logger.Debugf("DNS payload length: %d", len(payload))
+	r.logger.Debugf("DNS payload length [%s]: %d", fields, len(payload))
 
 	for i := 0; i < r.maxRetries+1; i++ {
-		logger := logger.WithField("attempt", strconv.Itoa(i+1)+"/"+strconv.Itoa(r.maxRetries))
 		_, err := r.req.RequestAndRecv(payload)
 		if err != nil {
-			logger.Warnf("error in registration attempt: %v", err)
+			r.logger.Warnf("error in registration attempt %d/%d: %v", i+1, r.maxRetries, err)
 			continue
 		}
 
 		// for unidirectional registration, do not check for response and immediatly return
-		logger.Debugf("registration succeeded")
+		r.logger.Debugf("registration succeeded [%s]", fields)
 		return reg, nil
 	}
 
-	logger.WithField("maxTries", r.maxRetries).Warnf("all registration attempt(s) failed")
+	r.logger.Warnf("registration attempt(s) failed")
 
 	return nil, lib.ErrRegFailed
 
 }
 
 // registerBidirectional sends bidirectional registration data to the registration server and reads the response
-func (r *DNSRegistrar) registerBidirectional(ctx context.Context, cjSession *tapdance.ConjureSession) (*tapdance.ConjureReg, error) {
-	logger := r.logger.WithFields(logrus.Fields{"type": "bidirectional", "sessionID": cjSession.IDString()})
+func (r *DNSRegistrar) registerBidirectional(ctx context.Context, cjSession *client.ConjureSession) (interfaces.Registration, error) {
+	fields := fmt.Sprintf("type: unidirectional, sessionID: %s", cjSession.IDString())
 
 	reg, protoPayload, err := cjSession.BidirectionalRegData(ctx, pb.RegistrationSource_BidirectionalDNS.Enum())
 	if err != nil {
-		logger.Errorf("Failed to prepare registration data: %v", err)
+		r.logger.Errorf("Failed to prepare registration data [%s]: %v", fields, err)
 		return nil, lib.ErrRegFailed
 	}
 
@@ -145,50 +146,48 @@ func (r *DNSRegistrar) registerBidirectional(ctx context.Context, cjSession *tap
 
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
-		logger.Errorf("failed to marshal ClientToStation payload: %v", err)
+		r.logger.Errorf("failed to marshal ClientToStation payload [%s]: %v", fields, err)
 		return nil, lib.ErrRegFailed
 	}
 
-	logger.Debugf("DNS payload length: %d", len(payload))
+	r.logger.Debugf("DNS payload length: %d", len(payload))
 
 	for i := 0; i < r.maxRetries+1; i++ {
-		logger := logger.WithField("attempt", strconv.Itoa(i+1)+"/"+strconv.Itoa(r.maxRetries))
-
 		bdResponse, err := r.req.RequestAndRecv(payload)
 		if err != nil {
-			logger.Warnf("error in sending request to DNS registrar: %v", err)
+			r.logger.Warnf("error in sending request to DNS registrar in attempt %d/%d: %v", i+1, r.maxRetries+1, err)
 			continue
 		}
 
 		dnsResp := &pb.DnsResponse{}
 		err = proto.Unmarshal(bdResponse, dnsResp)
 		if err != nil {
-			logger.Warnf("error in storing Registrtion Response protobuf: %v", err)
+			r.logger.Warnf("error in storing Registration Response protobuf: %v", err)
 			continue
 		}
 		if !dnsResp.GetSuccess() {
-			logger.Warnf("registrar indicates that registration failed")
+			r.logger.Warnf("registrar indicates that registration failed")
 			continue
 		}
 		if dnsResp.GetClientconfOutdated() {
-			logger.Warnf("registrar indicates that ClinetConf is outdated")
+			r.logger.Warnf("registrar indicates that ClientConf is outdated")
 		}
 
 		err = reg.UnpackRegResp(dnsResp.GetBidirectionalResponse())
 		if err != nil {
-			logger.Warnf("failed to unpack registration response: %v", err)
+			r.logger.Warnf("failed to unpack registration response: %v", err)
 			continue
 		}
 		return reg, nil
 	}
 
-	logger.WithField("maxTries", r.maxRetries).Warnf("all registration attemps failed")
+	r.logger.Warnf("registration attempt(s) failed")
 
 	return nil, lib.ErrRegFailed
 }
 
 // Register prepares and sends the registration request.
-func (r *DNSRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
+func (r *DNSRegistrar) Register(ctx context.Context, cjSession *client.ConjureSession) (interfaces.Registration, error) {
 	defer lib.SleepWithContext(ctx, r.connectionDelay)
 
 	if r.bidirectional {
@@ -197,7 +196,7 @@ func (r *DNSRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.
 	return r.registerUnidirectional(ctx, cjSession)
 }
 
-func getPublicIp(server string) ([]byte, error) {
+func getPublicIP(server string) ([]byte, error) {
 
 	c, err := stun.Dial("udp4", server)
 	if err != nil {

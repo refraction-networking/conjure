@@ -129,13 +129,18 @@ func init() {
 	}
 }
 
-func ConfigFromTransportType(transportType pb.TransportType, randomizePortDefault bool) (cj.Transport, error) {
-	switch transportType {
-	case pb.TransportType_Min:
-		return &min.ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &randomizePortDefault}}, nil
-	case pb.TransportType_Obfs4:
-		return &obfs4.ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &randomizePortDefault}}, nil
-	default:
-		return nil, errors.New("unknown transport by TransportType try using TransportConfig")
-	}
-}
+// func ConfigFromTransportType(transportType pb.TransportType, randomizePortDefault bool) (cj.Transport, error) {
+// 	switch transportType {
+// 	case pb.TransportType_Min:
+// 		return &min.ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &randomizePortDefault}}, nil
+// 	case pb.TransportType_Obfs4:
+// 		return &obfs4.ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &randomizePortDefault}}, nil
+// 	case pb.TransportType_Prefix:
+// 		p := &prefix.ClientTransport{}
+// 		var id int32 = -1
+// 		err := p.SetParams(&pb.PrefixTransportParams{RandomizeDstPort: &randomizePortDefault, PrefixId: &id})
+// 		return p, err
+// 	default:
+// 		return nil, errors.New("unknown transport by TransportType try using TransportConfig")
+// 	}
+// }

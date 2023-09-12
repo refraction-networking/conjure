@@ -11,17 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/client"
+	"github.com/refraction-networking/conjure/pkg/client/assets"
 	"github.com/refraction-networking/conjure/pkg/core"
-	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/log"
 	pb "github.com/refraction-networking/conjure/proto"
-	td "github.com/refraction-networking/gotapdance/tapdance"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
-
-// utils.go contains functions needed for the decoy-registrar specifically
-// that do not have a ConjureReg, ConjureSession, DecoyRegistrar, etc receiver.
-// Most functions are taken from gotapdance/tapdance/utils.go
 
 // The key argument should be the AES key, either 16 or 32 bytes
 // to select AES-128 or AES-256.
@@ -187,7 +184,7 @@ func readAndClose(c net.Conn, readDeadline time.Duration) {
 // receiver, but eventually we may want to change the receiver type to *ConjureSession,
 // or use type alias to another name so we can define functions with that receiver here.
 
-func getPbTransportParams(cjSession *td.ConjureSession) (*anypb.Any, error) {
+func getPbTransportParams(cjSession *client.ConjureSession) (*anypb.Any, error) {
 	var m proto.Message
 	m, err := cjSession.Transport.GetParams()
 	if err != nil {
@@ -198,7 +195,7 @@ func getPbTransportParams(cjSession *td.ConjureSession) (*anypb.Any, error) {
 	return anypb.New(m)
 }
 
-func generateVSP(cjSession *td.ConjureSession) ([]byte, error) {
+func generateVSP(cjSession *client.ConjureSession) ([]byte, error) {
 	c2s, err := generateClientToStation(cjSession)
 	if err != nil {
 		return nil, err
@@ -207,7 +204,7 @@ func generateVSP(cjSession *td.ConjureSession) ([]byte, error) {
 	return proto.Marshal(c2s)
 }
 
-func generateClientToStation(cjSession *td.ConjureSession) (*pb.ClientToStation, error) {
+func generateClientToStation(cjSession *client.ConjureSession) (*pb.ClientToStation, error) {
 	var covert *string
 	if len(cjSession.CovertAddress) > 0 {
 		//[TODO]{priority:medium} this isn't the correct place to deal with signaling to the station
@@ -217,7 +214,7 @@ func generateClientToStation(cjSession *td.ConjureSession) (*pb.ClientToStation,
 
 	//[reference] Generate ClientToStation protobuf
 	// transition := pb.C2S_Transition_C2S_SESSION_INIT
-	currentGen := td.Assets().GetGeneration()
+	currentGen := assets.Assets().GetGeneration()
 	currentLibVer := core.CurrentClientLibraryVersion()
 	transport := cjSession.Transport.ID()
 
@@ -250,14 +247,14 @@ func generateClientToStation(cjSession *td.ConjureSession) (*pb.ClientToStation,
 	// 	initProto.MaskedDecoyServerName = &reg.phantomSNI
 	// }
 
-	for (proto.Size(initProto)+td.AES_GCM_TAG_SIZE)%3 != 0 {
+	for (proto.Size(initProto)+core.AES_GCM_TAG_SIZE)%3 != 0 {
 		initProto.Padding = append(initProto.Padding, byte(0))
 	}
 
 	return initProto, nil
 }
 
-func generateFlags(cjSession *td.ConjureSession) *pb.RegistrationFlags {
+func generateFlags(cjSession *client.ConjureSession) *pb.RegistrationFlags {
 	flags := &pb.RegistrationFlags{}
 	mask := defaultFlags
 	if cjSession.UseProxyHeader {

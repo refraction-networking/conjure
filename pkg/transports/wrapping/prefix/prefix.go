@@ -7,6 +7,7 @@ import (
 	"net"
 
 	"github.com/refraction-networking/conjure/pkg/core"
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -184,7 +185,7 @@ func (Transport) LogPrefix() string { return "PREF" }
 // GetIdentifier takes in a registration and returns an identifier for it. This
 // identifier should be unique for each registration on a given phantom;
 // registrations on different phantoms can have the same identifier.
-func (Transport) GetIdentifier(d transports.Registration) string {
+func (Transport) GetIdentifier(d interfaces.RegistrationSS) string {
 	return string(core.ConjureHMAC(d.SharedSecret(), "PrefixTransportHMACString"))
 }
 
@@ -268,7 +269,7 @@ func (t Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16,
 //
 // If the returned error is nil or non-nil and non-{ transports.ErrTryAgain,
 // transports.ErrNotTransport }, the caller may no longer use data or conn.
-func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager transports.RegManager) (transports.Registration, net.Conn, error) {
+func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager interfaces.RegManager) (interfaces.Registration, net.Conn, error) {
 	if data.Len() < minTagLength {
 		return nil, nil, transports.ErrTryAgain
 	}
@@ -281,7 +282,7 @@ func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst ne
 	return reg, transports.PrependToConn(c, data), nil
 }
 
-func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager transports.RegManager) (transports.Registration, error) {
+func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager interfaces.RegManager) (interfaces.Registration, error) {
 	if data.Len() == 0 {
 		return nil, transports.ErrTryAgain
 	}
