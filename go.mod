@@ -21,7 +21,7 @@ require (
 	github.com/pion/stun v0.6.1
 	github.com/pion/transport/v2 v2.2.3
 	github.com/refraction-networking/ed25519 v0.1.2
-	github.com/refraction-networking/gotapdance v1.7.0-beta.6
+	github.com/refraction-networking/gotapdance v1.7.1
 	github.com/refraction-networking/obfs4 v0.1.2
 	github.com/refraction-networking/utls v1.3.3
 	github.com/sirupsen/logrus v1.9.3
