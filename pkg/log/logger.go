@@ -267,6 +267,11 @@ func New(out io.Writer, prefix string, flag int) *Logger {
 	return &Logger{Logger: log.New(out, prefix, flag), level: level}
 }
 
+// Default returns a new logger struct with default values.
+func Default() *Logger {
+	return &Logger{Logger: log.Default(), level: level}
+}
+
 // SetLevel Sets the log level for the log package function calls,
 func (l *Logger) SetLevel(ll Level) {
 	l.level = ll

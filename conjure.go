@@ -7,11 +7,13 @@ import (
 	pb "github.com/refraction-networking/conjure/proto"
 )
 
-func Assets() *assets.Assets {
+type Assets assets.ClientInterface
+
+func GetAssets() Assets {
 	return assets.Assets()
 }
 
-func AssetsSetDir(dir string) (assets.Assets, error) {
+func SetAssetsDir(dir string) (Assets, error) {
 	return assets.AssetsSetDir(dir)
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/refraction-networking/conjure/pkg/log"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regserver/apiregserver"
 	"github.com/refraction-networking/conjure/pkg/regserver/dnsregserver"
@@ -23,7 +24,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
 	pb "github.com/refraction-networking/conjure/proto"
-	log "github.com/sirupsen/logrus"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -158,12 +159,6 @@ func main() {
 		}
 	}
 
-	logFormatter := &log.TextFormatter{
-		FullTimestamp: true,
-	}
-
-	log.SetFormatter(logFormatter)
-
 	conf, err := loadConfig(configPath)
 	if err != nil {
 		log.Fatalf("error occurred while parsing config: %v", err)
@@ -186,7 +181,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	metrics := metrics.NewMetrics(log.NewEntry(log.StandardLogger()), time.Duration(conf.LogMetricsInterval)*time.Second)
+	metrics := metrics.NewMetrics(log.Default(), time.Duration(conf.LogMetricsInterval)*time.Second)
 
 	var processor *regprocessor.RegProcessor
 
@@ -220,7 +215,7 @@ func main() {
 			log.Fatal(err)
 		}
 
-		dnsRegServer, err = dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey[:32], processor, conf.latestClientConf.GetGeneration(), log.WithField("registrar", "DNS"), metrics)
+		dnsRegServer, err = dnsregserver.NewDNSRegServer(conf.Domain, conf.DNSListenAddr, dnsPrivKey[:32], processor, conf.latestClientConf.GetGeneration(), log.Default(), metrics)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -229,7 +224,7 @@ func main() {
 	}
 
 	if !dnsOnly {
-		apiRegServer, err = apiregserver.NewAPIRegServer(conf.APIPort, processor, conf.latestClientConf, log.WithField("registrar", "API"), logClientIP, metrics)
+		apiRegServer, err = apiregserver.NewAPIRegServer(conf.APIPort, processor, conf.latestClientConf, log.Default(), logClientIP, metrics)
 		if err != nil {
 			log.Fatal(err)
 		}
