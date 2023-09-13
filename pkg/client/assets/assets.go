@@ -26,6 +26,13 @@ const (
 	sendLimitMin = 14400
 )
 
+// ClientInterface is an interface for accessing assets
+type ClientInterface interface {
+	GetClientConfig() *pb.ClientConf
+	SetClientConfig(*pb.ClientConf) error
+	GetPublicKey() *[32]byte
+}
+
 type assets struct {
 	sync.RWMutex
 	path string
@@ -137,6 +144,22 @@ func initAssets(path string) error {
 	}
 	err := assetsInstance.readConfigs()
 	return err
+}
+func (a *assets) GetClientConfig() *pb.ClientConf {
+	return a.config
+}
+func (a *assets) SetClientConfig(clientConf *pb.ClientConf) error {
+	a.Lock()
+	defer a.Unlock()
+	a.config = clientConf
+	return a.saveClientConf()
+}
+
+func (a *assets) GetPublicKey() *[32]byte {
+	if a.config == nil {
+		return nil
+	}
+	return a.GetConjurePubkey()
 }
 
 func (a *assets) GetAssetsDir() string {
@@ -276,14 +299,15 @@ func (a *assets) GetV6Decoy() *pb.TLSDecoySpec {
 	return chosenDecoy
 }
 
-func (a *assets) GetPubkey() *[32]byte {
-	a.RLock()
-	defer a.RUnlock()
+// // Deprecated - Tapdance Public Key
+// func (a *assets) GetPubkey() *[32]byte {
+// 	a.RLock()
+// 	defer a.RUnlock()
 
-	var pKey [32]byte
-	copy(pKey[:], a.config.GetDefaultPubkey().GetKey()[:])
-	return &pKey
-}
+// 	var pKey [32]byte
+// 	copy(pKey[:], a.config.GetDefaultPubkey().GetKey()[:])
+// 	return &pKey
+// }
 
 func (a *assets) GetConjurePubkey() *[32]byte {
 	a.RLock()
