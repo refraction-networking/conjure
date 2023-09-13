@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	golog "log"
 	"net"
 	"os"
@@ -14,11 +15,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/station/geoip"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 	"github.com/refraction-networking/conjure/pkg/station/log"
 	"github.com/refraction-networking/conjure/pkg/transports"
-	"github.com/refraction-networking/obfs4/common/ntor"
 
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
@@ -281,7 +282,7 @@ type DecoyRegistration struct {
 	regCC            string
 	regASN           uint
 
-	Keys               *ConjureSharedKeys
+	Keys               *core.ConjureSharedKeys
 	Covert, Mask       string
 	Flags              *pb.RegistrationFlags
 	Transport          pb.TransportType
@@ -311,19 +312,29 @@ func (reg *DecoyRegistration) PhantomIP() *net.IP {
 	return &reg.PhantomIp
 }
 
-// Obfs4PublicKey returns the obfs4 public key
-func (reg *DecoyRegistration) Obfs4PublicKey() *ntor.PublicKey {
-	return reg.Keys.Obfs4Keys.PublicKey
+// TransportKeys returns the obfs4 public key
+func (reg *DecoyRegistration) TransportKeys() interface{} {
+	if reg.Keys == nil {
+		return nil
+	}
+	return reg.Keys.TransportKeys
 }
 
-// Obfs4PublicKey returns the obfs4 private key
-func (reg *DecoyRegistration) Obfs4PrivateKey() *ntor.PrivateKey {
-	return reg.Keys.Obfs4Keys.PrivateKey
+// SetTransportKeys returns the obfs4 public key
+func (reg *DecoyRegistration) SetTransportKeys(k interface{}) error {
+	if reg.Keys == nil {
+		return fmt.Errorf("broken registration")
+	}
+	reg.Keys.TransportKeys = k
+	return nil
 }
 
-// Obfs4PublicKey returns the obfs4 node ID
-func (reg *DecoyRegistration) Obfs4NodeID() *ntor.NodeID {
-	return reg.Keys.Obfs4Keys.NodeID
+// TransportReader returns the obfs4 private key
+func (reg *DecoyRegistration) TransportReader() io.Reader {
+	if reg.Keys == nil {
+		return nil
+	}
+	return reg.Keys.TransportReader
 }
 
 // TransportType returns the protobuf transport type
@@ -331,6 +342,7 @@ func (reg *DecoyRegistration) TransportType() pb.TransportType {
 	return reg.Transport
 }
 
+// TransportParams returns the transport params associated with the registration
 func (reg *DecoyRegistration) TransportParams() any {
 	return reg.transportParams
 }

@@ -9,16 +9,16 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/refraction-networking/gotapdance/tapdance"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
-// Registration strategy using a centralized REST API to
-// create registrations. Only the Endpoint need be specified;
-// the remaining fields are valid with their zero values and
-// provide the opportunity for additional control over the process.
+// APIRegistrar implements a registration strategy using a centralized REST API to create
+// registrations. Only the Endpoint need be specified; the remaining fields are valid with their
+// zero values and provide the opportunity for additional control over the process.
 type APIRegistrar struct {
 	// endpoint to use in registration request
 	endpoint string
@@ -65,6 +65,11 @@ func NewAPIRegistrar(config *Config) (*APIRegistrar, error) {
 	}, nil
 }
 
+// PrepareRegKeys prepares key materials specific to the registrar
+func (r *APIRegistrar) PrepareRegKeys(pubkey [32]byte) error {
+	return nil
+}
+
 // registerUnidirectional sends unidirectional registration data to the registration server
 func (r *APIRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
@@ -72,13 +77,13 @@ func (r *APIRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession
 	reg, protoPayload, err := cjSession.UnidirectionalRegData(pb.RegistrationSource_API.Enum())
 	if err != nil {
 		logger.Errorf("Failed to prepare registration data: %v", err)
-		return nil, ErrRegFailed
+		return nil, lib.ErrRegFailed
 	}
 
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
 		logger.Errorf("failed to marshal ClientToStation payload: %v", err)
-		return nil, ErrRegFailed
+		return nil, lib.ErrRegFailed
 	}
 
 	r.setHTTPClient(reg)
@@ -102,7 +107,7 @@ func (r *APIRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession
 		return r.secondaryRegistrar.Register(cjSession, ctx)
 	}
 
-	return nil, ErrRegFailed
+	return nil, lib.ErrRegFailed
 }
 
 // registerBidirectional sends bidirectional registration data to the registration server and reads the response
@@ -112,13 +117,13 @@ func (r *APIRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession,
 	reg, protoPayload, err := cjSession.BidirectionalRegData(pb.RegistrationSource_BidirectionalAPI.Enum())
 	if err != nil {
 		logger.Errorf("Failed to prepare registration data: %v", err)
-		return nil, ErrRegFailed
+		return nil, lib.ErrRegFailed
 	}
 
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
 		logger.Errorf("failed to marshal ClientToStation payload: %v", err)
-		return nil, ErrRegFailed
+		return nil, lib.ErrRegFailed
 	}
 
 	r.setHTTPClient(reg)
@@ -148,7 +153,7 @@ func (r *APIRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession,
 		return r.secondaryRegistrar.Register(cjSession, ctx)
 	}
 
-	return nil, ErrRegFailed
+	return nil, lib.ErrRegFailed
 }
 
 func (r *APIRegistrar) setHTTPClient(reg *tapdance.ConjureReg) {
@@ -164,6 +169,7 @@ func (r *APIRegistrar) setHTTPClient(reg *tapdance.ConjureReg) {
 }
 
 func (r APIRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
+	defer lib.SleepWithContext(ctx, r.connectionDelay)
 	if r.bidirectional {
 		return r.registerBidirectional(cjSession, ctx)
 	}

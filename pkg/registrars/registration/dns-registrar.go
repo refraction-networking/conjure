@@ -10,14 +10,11 @@ import (
 
 	"github.com/pion/stun"
 	"github.com/refraction-networking/conjure/pkg/registrars/dns-registrar/requester"
+	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/refraction-networking/gotapdance/tapdance"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
-)
-
-var (
-	ErrRegFailed = errors.New("registration failed")
 )
 
 type DNSRegistrar struct {
@@ -88,7 +85,7 @@ func (r *DNSRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession
 	reg, protoPayload, err := cjSession.UnidirectionalRegData(pb.RegistrationSource_DNS.Enum())
 	if err != nil {
 		logger.Errorf("Failed to prepare registration data: %v", err)
-		return nil, ErrRegFailed
+		return nil, lib.ErrRegFailed
 	}
 
 	if reg.Dialer != nil {
@@ -103,7 +100,7 @@ func (r *DNSRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
 		logger.Errorf("failed to marshal ClientToStation payload: %v", err)
-		return nil, ErrRegFailed
+		return nil, lib.ErrRegFailed
 	}
 
 	logger.Debugf("DNS payload length: %d", len(payload))
@@ -123,7 +120,7 @@ func (r *DNSRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession
 
 	logger.WithField("maxTries", r.maxRetries).Warnf("all registration attempt(s) failed")
 
-	return nil, ErrRegFailed
+	return nil, lib.ErrRegFailed
 
 }
 
@@ -134,7 +131,7 @@ func (r *DNSRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession)
 	reg, protoPayload, err := cjSession.BidirectionalRegData(pb.RegistrationSource_BidirectionalDNS.Enum())
 	if err != nil {
 		logger.Errorf("Failed to prepare registration data: %v", err)
-		return nil, ErrRegFailed
+		return nil, lib.ErrRegFailed
 	}
 
 	if reg.Dialer != nil {
@@ -149,7 +146,7 @@ func (r *DNSRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession)
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
 		logger.Errorf("failed to marshal ClientToStation payload: %v", err)
-		return nil, ErrRegFailed
+		return nil, lib.ErrRegFailed
 	}
 
 	logger.Debugf("DNS payload length: %d", len(payload))
@@ -187,11 +184,12 @@ func (r *DNSRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession)
 
 	logger.WithField("maxTries", r.maxRetries).Warnf("all registration attemps failed")
 
-	return nil, ErrRegFailed
+	return nil, lib.ErrRegFailed
 }
 
 // Register prepares and sends the registration request.
 func (r *DNSRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
+	defer lib.SleepWithContext(ctx, r.connectionDelay)
 
 	if r.bidirectional {
 		return r.registerBidirectional(cjSession)
@@ -230,4 +228,9 @@ func getPublicIp(server string) ([]byte, error) {
 	}
 
 	return ip.To4(), nil
+}
+
+// PrepareRegKeys prepares key materials specific to the registrar
+func (r *DNSRegistrar) PrepareRegKeys(pubkey [32]byte) error {
+	return nil
 }

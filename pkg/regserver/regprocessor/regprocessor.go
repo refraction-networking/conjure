@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	zmq "github.com/pebbe/zmq4"
+	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regserver/overrides"
@@ -269,7 +270,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	clientLibVer := uint(c2s.GetClientLibVersion())
 
 	// Generate seed and phantom address
-	cjkeys, err := lib.GenSharedKeys(clientLibVer, c2sPayload.SharedSecret, c2s.GetTransport())
+	cjkeys, err := core.GenSharedKeys(clientLibVer, c2sPayload.SharedSecret, c2s.GetTransport())
 	if err != nil {
 		// p.logger.Println("Failed to generate the shared key using SharedSecret:", err)
 		return nil, ErrRegProcessFailed

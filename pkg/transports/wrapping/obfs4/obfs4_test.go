@@ -66,7 +66,8 @@ func TestSuccessfulWrap(t *testing.T) {
 
 	wrappedc2p := make(chan net.Conn)
 	stateDir := ""
-	go wrapConnection(c2p, reg.Keys.Obfs4Keys.NodeID.Hex(), reg.Keys.Obfs4Keys.PublicKey.Hex(), wrappedc2p, stateDir)
+	keys := reg.Keys.TransportKeys.(Obfs4Keys)
+	go wrapConnection(c2p, keys.NodeID.Hex(), keys.PublicKey.Hex(), wrappedc2p, stateDir)
 
 	var buf [4096]byte
 	var buffer bytes.Buffer
@@ -144,7 +145,8 @@ func TestSuccessfulWrapMulti(t *testing.T) {
 
 	wrappedc2p := make(chan net.Conn)
 	stateDir := ""
-	go wrapConnection(c2p, reg.Keys.Obfs4Keys.NodeID.Hex(), reg.Keys.Obfs4Keys.PublicKey.Hex(), wrappedc2p, stateDir)
+	keys := reg.Keys.TransportKeys.(Obfs4Keys)
+	go wrapConnection(c2p, keys.NodeID.Hex(), keys.PublicKey.Hex(), wrappedc2p, stateDir)
 
 	var buf [4096]byte
 	var buffer bytes.Buffer

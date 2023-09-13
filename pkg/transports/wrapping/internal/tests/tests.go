@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/refraction-networking/conjure/pkg/core"
 	dd "github.com/refraction-networking/conjure/pkg/station/lib"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/grpc/test/bufconn"
@@ -54,7 +55,7 @@ func SetupPhantomConnectionsSecret(manager *dd.RegistrationManager, transport pb
 
 	wg.Wait()
 
-	keys, err := dd.GenSharedKeys(libver, sharedSecret, transport)
+	keys, err := core.GenSharedKeys(libver, sharedSecret, transport)
 	if err != nil {
 		log.Fatalln("failed to generate shared keys:", err)
 	}
