@@ -96,7 +96,7 @@ func (t *ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.C
 		t.stunServer = defaultSTUNServer
 	}
 
-	privePort, pubPort, err := publicAddr(ctx, defaultSTUNServer, dialer)
+	privePort, pubPort, err := publicAddr(context.Background(), defaultSTUNServer, dialer)
 	if err != nil {
 		return fmt.Errorf("error finding public port: %v", err)
 	}
