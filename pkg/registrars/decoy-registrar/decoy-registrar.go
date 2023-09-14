@@ -209,7 +209,7 @@ func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Conte
 
 	logger.Debugf("Registering V4 and V6 via DecoyRegistrar")
 
-	reg, _, err := cjSession.UnidirectionalRegData(pb.RegistrationSource_API.Enum())
+	reg, _, err := cjSession.UnidirectionalRegData(ctx, pb.RegistrationSource_API.Enum())
 	if err != nil {
 		logger.Errorf("Failed to prepare registration data: %v", err)
 		return nil, lib.ErrRegFailed
