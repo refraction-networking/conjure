@@ -13,8 +13,6 @@ import (
 	pb "github.com/refraction-networking/conjure/proto"
 )
 
-var randomizePortDefault = false
-
 // IPSupport is a bitmask of supported IP versions.
 type IPSupport client.IPSupport
 

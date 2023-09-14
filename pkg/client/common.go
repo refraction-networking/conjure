@@ -1,11 +1,5 @@
 package client
 
-const timeoutMax = 30000
-const timeoutMin = 20000
-
-const sendLimitMax = 15614
-const sendLimitMin = 14400
-
 // Fixed-Size-Payload has a 1 byte flags field.
 // bit 0 (1 << 7) determines if flow is bidirectional(0) or upload-only(1)
 // bit 1 (1 << 6) enables dark-decoys

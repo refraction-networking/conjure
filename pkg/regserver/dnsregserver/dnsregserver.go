@@ -88,12 +88,12 @@ func (s *DNSRegServer) processRequest(reqIn []byte) ([]byte, error) {
 
 	reqIsBd := c2sPayload.GetRegistrationSource() == pb.RegistrationSource_BidirectionalDNS
 	if reqIsBd {
-		fields += fmt.Sprintf(", registration-type: bidirectional")
+		fields += ", registration-type: bidirectional"
 		var regResponse *pb.RegistrationResponse
 		regResponse, err = s.processor.RegisterBidirectional(c2sPayload, pb.RegistrationSource_BidirectionalDNS, nil)
 		dnsResp.BidirectionalResponse = regResponse
 	} else {
-		fields += fmt.Sprintf(", registration-type: unidirectional")
+		fields += ", registration-type: unidirectional"
 		err = s.processor.RegisterUnidirectional(c2sPayload, pb.RegistrationSource_DNS, nil)
 	}
 
