@@ -31,9 +31,6 @@ type ClientTransport struct {
 	// Parameters are fields that will be shared with the station in the registration
 	Parameters *pb.DTLSTransportParams
 
-	// // state tracks fields internal to the registrar that survive for the lifetime
-	// // of the transport session without being shared - i.e. local derived keys.
-	// state any
 	privPort            int
 	pubPort             int
 	psk                 []byte
@@ -47,7 +44,7 @@ type ClientConfig struct {
 
 	// DisableIRWorkaround disables sending an empty packet to workaround DTLS blocking in IR
 	//
-	// In Iran, blocking seems to happen by matching the first packet in a "flow" against DTLS packet format and blocking if it matches. 
+	// In Iran, blocking seems to happen by matching the first packet in a "flow" against DTLS packet format and blocking if it matches.
 	// If the first packet is anything else packets are permitted. UDP dst port does not seem to change this.
 	DisableIRWorkaround bool
 }
@@ -94,12 +91,12 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 
 // Prepare lets the transport use the dialer to prepare. This is called before GetParams to let the
 // transport prepare stuff such as nat traversal.
-func (t *ClientTransport) Prepare(dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
+func (t *ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
 	if t.stunServer == "" {
 		t.stunServer = defaultSTUNServer
 	}
 
-	privePort, pubPort, err := publicAddr(defaultSTUNServer, dialer)
+	privePort, pubPort, err := publicAddr(ctx, defaultSTUNServer, dialer)
 	if err != nil {
 		return fmt.Errorf("error finding public port: %v", err)
 	}

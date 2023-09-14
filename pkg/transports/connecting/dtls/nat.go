@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"syscall"
+	"time"
 
 	"github.com/pion/stun"
 )
@@ -80,13 +81,13 @@ var (
 	pubPortSingle  int
 )
 
-func publicAddr(stunServer string, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) (privatePort int, publicPort int, err error) {
+func publicAddr(ctx context.Context, stunServer string, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) (privatePort int, publicPort int, err error) {
 
 	if privPortSingle != 0 && pubPortSingle != 0 {
 		return privPortSingle, pubPortSingle, nil
 	}
 
-	udpConn, err := dialer(context.Background(), "udp", "", stunServer)
+	udpConn, err := dialer(ctx, "udp", "", stunServer)
 	if err != nil {
 		return 0, 0, fmt.Errorf("error connecting to STUN server: %v", err)
 	}
@@ -106,7 +107,7 @@ func publicAddr(stunServer string, dialer func(ctx context.Context, network, lad
 
 	var xorAddr stun.XORMappedAddress
 
-	err = client.Do(message, func(res stun.Event) {
+	err = client.Start(message, func(res stun.Event) {
 		if res.Error != nil {
 			err = res.Error
 			return
@@ -117,9 +118,14 @@ func publicAddr(stunServer string, dialer func(ctx context.Context, network, lad
 			return
 		}
 	})
-
 	if err != nil {
 		return 0, 0, fmt.Errorf("error getting address from STUN: %v", err)
+	}
+
+	defer client.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		timer := time.AfterFunc(time.Until(deadline), func() { client.Close() })
+		defer timer.Stop()
 	}
 
 	privPortSingle = localAddr.Port
