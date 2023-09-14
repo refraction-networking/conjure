@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"syscall"
 	"testing"
 
 	"github.com/refraction-networking/conjure/pkg/client/assets"
@@ -76,7 +77,8 @@ func TestConjureHMAC(t *testing.T) {
 	soln1Str := "d10b84f9e2cc57bb4294b8929a3fca25cce7f95eb226fa5bcddc5417e1d2eac2"
 
 	soln1 := make([]byte, hex.DecodedLen(len(soln1Str)))
-	hex.Decode(soln1, []byte(soln1Str))
+	_, e := hex.Decode(soln1, []byte(soln1Str))
+	require.Nil(t, e, "Failed to decode hex string")
 
 	test1 := core.ConjureHMAC([]byte("1abcd2efgh3ijkl4"), "customString")
 	test1Str := make([]byte, hex.EncodedLen(len(test1)))
@@ -105,7 +107,7 @@ func TestGenerateKeys(t *testing.T) {
 }
 
 func TestRegDigest(t *testing.T) {
-	reg := ConjureReg{}
+	reg := ConjureReg{ConjureSession: &ConjureSession{}}
 	soln1 := "{result:\"no stats tracked\"}"
 
 	if reg.digestStats() != soln1 {
@@ -131,7 +133,9 @@ func TestRegDigest(t *testing.T) {
 }
 
 func TestCheckV6Decoys(t *testing.T) {
-	assets.AssetsSetDir("./assets")
+	_, err := assets.AssetsSetDir("./assets")
+	require.ErrorIs(t, err, syscall.ENOENT) // ignore assets not found - expected
+
 	decoysV6 := assets.Assets().GetV6Decoys()
 	numDecoys := len(decoysV6)
 
@@ -179,7 +183,7 @@ func TestGetFirstConnection(t *testing.T) {
 
 func testGetFirstConn(t *testing.T, addrList []*net.IP, dialErr error, retErr error, i int) {
 	reg := ConjureReg{
-		sessionIDStr:   "test",
+		ConjureSession: &ConjureSession{},
 		phantomDstPort: 443,
 	}
 
@@ -210,8 +214,10 @@ func TestAssetsPhantoms(t *testing.T) {
 
 	var testPhantoms = phantoms.GetDefaultPhantomSubnets()
 
-	assets.AssetsSetDir(dir1)
-	err := assets.Assets().SetPhantomSubnets(testPhantoms)
+	_, err := assets.AssetsSetDir(dir1)
+	require.ErrorIs(t, err, syscall.ENOENT) // ignore assets not found - expected
+
+	err = assets.Assets().SetPhantomSubnets(testPhantoms)
 	if err != nil {
 		t.Fatal(err)
 	}
