@@ -290,7 +290,7 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 	tcpToDecoyStartTs := time.Now()
 
 	//[Note] decoy.GetIpAddrStr() will get only v4 addr if a decoy has both
-	dialConn, err := r.dialContex(childCtx, "tcp", decoy.GetIpAddrStr())
+	dialConn, err := cjSession.Dialer(childCtx, "tcp", "", decoy.GetIpAddrStr())
 
 	r.setTCPToDecoy(durationToU32ptrMs(time.Since(tcpToDecoyStartTs)))
 	if err != nil {
