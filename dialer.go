@@ -93,7 +93,7 @@ func (d *Dialer) Dial(network, address string) (net.Conn, error) {
 }
 
 // DialContext connects to the address on the named network using the provided context.
-// Long deadline is strongly advised, since tapdance will try multiple decoys.
+// Long deadline is advised, since conjure may try multiple registration strategies.
 //
 // The only supported network at this time: "tcp".
 // The address has the form "host:port".

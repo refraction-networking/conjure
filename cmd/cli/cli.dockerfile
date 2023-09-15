@@ -1,15 +1,11 @@
-FROM golang:1.20
+FROM golang:latest
 
 RUN apt-get update
 RUN apt-get install -y -f libzmq3-dev
 
-WORKDIR /go/src/github/refracction-networking/gotapdance
-COPY . .
+WORKDIR /go/src/github/refracction-networking/conjure
+COPY cmd/cli /cli
 
-# RUN go get -d -v ./...
 RUN go mod download
 RUN go mod tidy
-RUN go install ./cli 
-
-# no run / entrypoint specified. this containter is meant to be run w/
-# gns3 and connected to using terminal or telnet.
+RUN go install ./cmd/cli
