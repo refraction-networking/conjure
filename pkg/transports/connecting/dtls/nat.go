@@ -76,16 +76,7 @@ func openUDPLimitTTL(ctx context.Context, laddr, addr string, dialer dialFunc) e
 	return nil
 }
 
-var (
-	privPortSingle int
-	pubPortSingle  int
-)
-
 func publicAddr(ctx context.Context, stunServer string, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) (privatePort int, publicPort int, err error) {
-
-	if privPortSingle != 0 && pubPortSingle != 0 {
-		return privPortSingle, pubPortSingle, nil
-	}
 
 	udpConn, err := dialer(ctx, "udp", "", stunServer)
 	if err != nil {
@@ -136,9 +127,6 @@ func publicAddr(ctx context.Context, stunServer string, dialer func(ctx context.
 	case <-ctx.Done():
 		return 0, 0, fmt.Errorf("timeout: %v", ctx.Err())
 	}
-
-	privPortSingle = localAddr.Port
-	pubPortSingle = xorAddr.Port
 
 	return localAddr.Port, xorAddr.Port, nil
 }
