@@ -129,7 +129,7 @@ func (r *DecoyRegistrar) getTcpToDecoy() uint32 {
 	return 0
 }
 
-func (r DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostname string, deadline time.Time) (*tls.UConn, error) {
+func (r *DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostname string, deadline time.Time) (*tls.UConn, error) {
 	var err error
 	//[reference] TLS to Decoy
 	config := tls.Config{ServerName: hostname}
@@ -204,7 +204,7 @@ func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpe
 	return httpRequest, nil
 }
 
-func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Context) (*td.ConjureReg, error) {
+func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Context) (*td.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
 
 	logger.Debugf("Registering V4 and V6 via DecoyRegistrar")
