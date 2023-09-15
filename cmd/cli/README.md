@@ -1,10 +1,10 @@
-# Gotapdance CLI version
+# Conjure Client Test CLI
 
 # Build
 After [downloading Golang, TD and dependencies:](../README.md)
 
 ```sh
-   cd ${GOPATH:-~/go}/src/github.com/refraction-networking/gotapdance/cli # works even if GOPATH is not set
+   cd conjure/cmd/cli # works even if GOPATH is not set
    go build -a .
 ```
 
@@ -13,7 +13,7 @@ After [downloading Golang, TD and dependencies:](../README.md)
 Simply run
 
 ```sh
-./cli
+./cli -connect-addr="<host:port>"
 ```
 
 to listen to local connections on default 10500 port.
@@ -73,10 +73,10 @@ To build the docker environemnt use:
 
 ```sh
 # run from repo root
-docker build -t gotapdance/cli -f cli/cli.dockerfile .
+docker build -t conjure/cli -f cmd/cli/cli.dockerfile cmd/cli/
 ```
 
-The environemnt can then be attached to using a `docker exec` or using telnet
+The environment can then be attached to using a `docker exec` or using telnet
 in the case of gns3. See the [wiki page](https://docs.gns3.com/docs/emulators/create-a-docker-container-for-gns3)
 for local docker image builds in gns3 for more details on setting up local
 docker appliances in gns3.
