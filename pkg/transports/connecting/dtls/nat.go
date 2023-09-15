@@ -107,16 +107,16 @@ func publicAddr(ctx context.Context, stunServer string, dialer func(ctx context.
 
 	var xorAddr stun.XORMappedAddress
 
+	doneCh := make(chan error)
+
 	err = client.Start(message, func(res stun.Event) {
 		if res.Error != nil {
-			err = res.Error
+			doneCh <- err
 			return
 		}
 
 		err = xorAddr.GetFrom(res.Message)
-		if err != nil {
-			return
-		}
+		doneCh <- err
 	})
 	if err != nil {
 		return 0, 0, fmt.Errorf("error getting address from STUN: %v", err)
@@ -126,6 +126,15 @@ func publicAddr(ctx context.Context, stunServer string, dialer func(ctx context.
 	if deadline, ok := ctx.Deadline(); ok {
 		timer := time.AfterFunc(time.Until(deadline), func() { client.Close() })
 		defer timer.Stop()
+	}
+
+	select {
+	case err := <-doneCh:
+		if err != nil {
+			return 0, 0, fmt.Errorf("error during client: %v", err)
+		}
+	case <-ctx.Done():
+		return 0, 0, fmt.Errorf("timeout: %v", ctx.Err())
 	}
 
 	privPortSingle = localAddr.Port
