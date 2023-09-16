@@ -103,7 +103,7 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string) (*RegProcessor, error) {
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
-		return nil, ErrZmqSocket
+		return nil, fmt.Errorf("%w: %v", ErrZmqSocket, err)
 	}
 
 	// XXX: for some weird reason zmq takes just the private key portion of the keypair as the z85
@@ -118,17 +118,17 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 	// a change be sure to re-test that the keyed validation works how you expect it to.
 	err = zmq.AuthStart()
 	if err != nil {
-		return nil, ErrZmqAuthFail
+		return nil, fmt.Errorf("%w: %v", ErrZmqAuthFail, err)
 	}
 
 	err = sock.ServerAuthCurve("*", privkeyZ85)
 	if err != nil {
-		return nil, ErrZmqAuthFail
+		return nil, fmt.Errorf("%w: %v", ErrZmqAuthFail, err)
 	}
 
 	err = sock.Bind(fmt.Sprintf("tcp://%s:%d", zmqBindAddr, zmqPort))
 	if err != nil {
-		return nil, ErrZmqSocket
+		return nil, fmt.Errorf("%w: %v", ErrZmqSocket, err)
 	}
 
 	var regOverrides interfaces.Overrides = nil
