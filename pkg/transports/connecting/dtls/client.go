@@ -143,6 +143,8 @@ func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 }
 
 func (t *ClientTransport) listen(ctx context.Context, dialer dialFunc, address string) (net.Conn, error) {
+	return nil, fmt.Errorf("listen disabled for testing")
+
 	laddr := &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: t.privPort}
 
 	if t.disableIRWorkaround {
