@@ -83,13 +83,22 @@ impl Flow {
                 dst_port: udp_pkt.get_destination(),
                 proto: IpNextHeaderProtocols::Udp,
             },
-            IpPacket::V6(pkt) => Flow {
-                src_ip: IpAddr::V6(pkt.get_source()),
-                dst_ip: IpAddr::V6(pkt.get_destination()),
-                src_port: udp_pkt.get_source(),
-                dst_port: udp_pkt.get_destination(),
-                proto: IpNextHeaderProtocols::Udp,
-            },
+            IpPacket::V6(pkt) => {
+                report!(
+                    "tracking v6 udp pkt: src: {}:{}, dst: {}:{}",
+                    IpAddr::V6(pkt.get_source()),
+                    udp_pkt.get_source(),
+                    IpAddr::V6(pkt.get_destination()),
+                    udp_pkt.get_destination(),
+                );
+                Flow {
+                    src_ip: IpAddr::V6(pkt.get_source()),
+                    dst_ip: IpAddr::V6(pkt.get_destination()),
+                    src_port: udp_pkt.get_source(),
+                    dst_port: udp_pkt.get_destination(),
+                    proto: IpNextHeaderProtocols::Udp,
+                }
+            }
         }
     }
 
