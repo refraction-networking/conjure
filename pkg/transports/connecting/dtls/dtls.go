@@ -6,7 +6,6 @@ import (
 	"net"
 	"strings"
 
-	"github.com/libp2p/go-reuseport"
 	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/dtls"
@@ -68,34 +67,34 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 		return nil, transports.ErrNotTransport
 	}
 
-	clientAddr := net.UDPAddr{IP: net.ParseIP(reg.GetRegistrationAddress()), Port: int(reg.GetSrcPort())}
+	// clientAddr := net.UDPAddr{IP: net.ParseIP(reg.GetRegistrationAddress()), Port: int(reg.GetSrcPort())}
 
-	err := t.DNAT.AddEntry(&clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
-	if err != nil {
-		return nil, fmt.Errorf("error adding DNAT entry: %v", err)
-	}
+	// err := t.DNAT.AddEntry(&clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
+	// if err != nil {
+	// 	return nil, fmt.Errorf("error adding DNAT entry: %v", err)
+	// }
 
-	laddr := net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: listenPort}
+	// laddr := net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: listenPort}
 
 	connCh := make(chan net.Conn, 2)
 	errCh := make(chan error, 2)
 
-	go func() {
-		udpConn, err := reuseport.Dial("udp", laddr.String(), clientAddr.String())
-		if err != nil {
-			errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
-			return
-		}
+	// go func() {
+	// 	udpConn, err := reuseport.Dial("udp", laddr.String(), clientAddr.String())
+	// 	if err != nil {
+	// 		errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
+	// 		return
+	// 	}
 
-		dtlsConn, err := dtls.ClientWithContext(ctx, udpConn, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept})
-		if err != nil {
-			errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
-			return
-		}
-		t.logDialSuccess(&clientAddr.IP)
+	// 	dtlsConn, err := dtls.ClientWithContext(ctx, udpConn, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept})
+	// 	if err != nil {
+	// 		errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
+	// 		return
+	// 	}
+	// 	t.logDialSuccess(&clientAddr.IP)
 
-		connCh <- dtlsConn
-	}()
+	// 	connCh <- dtlsConn
+	// }()
 
 	go func() {
 		conn, err := t.dtlsListener.AcceptWithContext(ctx, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept})
@@ -103,7 +102,8 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 			errCh <- fmt.Errorf("error accepting dtls connection from secret: %v", err)
 			return
 		}
-		t.logListenSuccess(&clientAddr.IP)
+		logip := net.ParseIP(reg.GetRegistrationAddress())
+		t.logListenSuccess(&logip)
 
 		connCh <- conn
 	}()

@@ -47,6 +47,7 @@ func (l *Listener) acceptLoop() {
 		go func() {
 			newDTLSConn, err := dtls.Server(c, config)
 			if err != nil {
+				fmt.Printf("==============DTLS err: raddr: %v, laddr:%v err: %v", c.RemoteAddr().String(), c.LocalAddr().String(), err)
 				switch addr := c.RemoteAddr().(type) {
 				case *net.UDPAddr:
 					l.logIP(err, &addr.IP)
