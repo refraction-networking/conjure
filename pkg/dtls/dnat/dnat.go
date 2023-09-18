@@ -103,13 +103,32 @@ type dnat struct {
 }
 
 func (d *dnat) AddEntry(src *net.IP, sport uint16, dst *net.IP, dport uint16) error {
-	ipLayer := &layers.IPv4{
-		Version:  4,
-		IHL:      5,
-		TTL:      64,
-		SrcIP:    *src,
-		DstIP:    *dst,
-		Protocol: layers.IPProtocolUDP,
+	type networkAndSerializable interface {
+		gopacket.SerializableLayer
+		gopacket.NetworkLayer
+	}
+	var ipLayer networkAndSerializable
+
+	if src.To4() != nil && dst.To4() != nil {
+		ipLayer = &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			SrcIP:    *src,
+			DstIP:    *dst,
+			Protocol: layers.IPProtocolUDP,
+		}
+	} else if src.To16() != nil && dst.To16() != nil {
+		ipLayer = &layers.IPv6{
+			Version:      6,
+			TrafficClass: 0,
+			HopLimit:     64,
+			SrcIP:        *src,
+			DstIP:        *dst,
+			NextHeader:   layers.IPProtocolUDP,
+		}
+	} else {
+		return fmt.Errorf("both src and dst must be either IPv4 or IPv6")
 	}
 
 	udpLayer := &layers.UDP{
