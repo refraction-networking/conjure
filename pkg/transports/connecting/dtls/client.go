@@ -110,12 +110,12 @@ func (t *ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.C
 	wg.Add(2)
 
 	go func() {
-		privAddr4, pubAddr4, err4 = publicAddr(ctx, "udp4", t.stunServer, dialer)
+		privAddr4, pubAddr4, err4 = publicAddr(context.Background(), "udp4", t.stunServer, dialer)
 		wg.Done()
 	}()
 
 	go func() {
-		privAddr6, pubAddr6, err6 = publicAddr(ctx, "udp6", t.stunServer, dialer)
+		privAddr6, pubAddr6, err6 = publicAddr(context.Background(), "udp6", t.stunServer, dialer)
 		wg.Done()
 	}()
 
