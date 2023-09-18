@@ -41,8 +41,7 @@ type listener struct {
 	listener    net.Listener
 }
 
-// New creates a new station based on the given config.
-func New(ctx, conf *Config) (*Station, error) {
+func New(ctx context.Context, conf *Config) (*Station, error) {
 
 	connManager := connection.NewConnManager(nil)
 

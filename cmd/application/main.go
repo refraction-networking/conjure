@@ -33,6 +33,7 @@ func main() {
 
 	// Init stats
 	cj.Stat()
+	logger := log.New(os.Stdout, "", 0)
 
 	// parse toml station configuration
 	conf, err := station.ConfigFromEnv()
@@ -51,7 +52,9 @@ func main() {
 	}
 	log.SetLevel(logLevel)
 
-	cjStation, err := station.New(conf)
+	ctx := context.Background()
+
+	cjStation, err := station.New(ctx, conf)
 	if err != nil {
 		log.Fatalf("failed to create station: %v", err)
 	}
