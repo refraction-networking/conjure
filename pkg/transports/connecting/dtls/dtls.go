@@ -90,7 +90,6 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 
 		err := t.DNAT.AddEntry(&clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
 		if err != nil {
-			fmt.Printf("error adding DNAT entry: %v\n", err)
 			errCh <- fmt.Errorf("error adding DNAT entry: %v", err)
 			return
 		}
