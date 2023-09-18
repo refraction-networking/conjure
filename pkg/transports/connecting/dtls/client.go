@@ -21,7 +21,7 @@ const (
 	portRangeMin      = 1024
 	portRangeMax      = 65535
 	defaultPort       = 443
-	defaultSTUNServer = "stun.voip.blackberry.com:3478"
+	defaultSTUNServer = "stun.l.google.com:19302"
 )
 
 // ClientTransport implements the client side transport interface for the DTLS transport. The
