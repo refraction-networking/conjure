@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/refraction-networking/conjure/pkg/dtls"
@@ -98,8 +99,27 @@ func (t *ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.C
 		t.stunServer = defaultSTUNServer
 	}
 
-	privAddr4, pubAddr4, err4 := publicAddr(context.Background(), "udp4", t.stunServer, dialer)
-	privAddr6, pubAddr6, err6 := publicAddr(context.Background(), "udp6", t.stunServer, dialer)
+	var privAddr4 *net.UDPAddr
+	var pubAddr4 *net.UDPAddr
+	var privAddr6 *net.UDPAddr
+	var pubAddr6 *net.UDPAddr
+	var err4 error
+	var err6 error
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	go func() {
+		privAddr4, pubAddr4, err4 = publicAddr(context.Background(), "udp4", t.stunServer, dialer)
+		wg.Done()
+	}()
+
+	go func() {
+		privAddr6, pubAddr6, err6 = publicAddr(context.Background(), "udp6", t.stunServer, dialer)
+		wg.Done()
+	}()
+
+	wg.Wait()
 
 	if err4 != nil && err6 != nil {
 		return fmt.Errorf("error getting v4 public address: %v; error getting v6 public address: %v", err4, err6)
