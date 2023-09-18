@@ -68,20 +68,43 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 		return nil, transports.ErrNotTransport
 	}
 
-	clientAddr := net.UDPAddr{IP: net.ParseIP(reg.GetRegistrationAddress()), Port: int(reg.GetSrcPort())}
-
-	err := t.DNAT.AddEntry(&clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
-	if err != nil {
-		fmt.Printf("error adding DNAT entry: %v\n", err)
-		return nil, fmt.Errorf("error adding DNAT entry: %v", err)
+	params, ok := reg.TransportParams().(*pb.DTLSTransportParams)
+	if !ok {
+		return nil, fmt.Errorf("transport params is not *pb.DTLSTransportParams")
 	}
-
-	laddr := net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: listenPort}
 
 	connCh := make(chan net.Conn, 2)
 	errCh := make(chan error, 2)
 
 	go func() {
+
+		is4, err := addrIsV4(reg.PhantomIP().String())
+		if err != nil {
+			errCh <- fmt.Errorf("error finding phantom IP version: %v", err)
+		}
+
+		clientAddr := &net.UDPAddr{}
+
+		if is4 {
+			clientAddr = &net.UDPAddr{IP: params.SrcAddr4.GetIP(), Port: int(params.SrcAddr4.GetPort())}
+		} else {
+			clientAddr = &net.UDPAddr{IP: params.SrcAddr6.GetIP(), Port: int(params.SrcAddr6.GetPort())}
+		}
+
+		err = t.DNAT.AddEntry(&clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
+		if err != nil {
+			fmt.Printf("error adding DNAT entry: %v\n", err)
+			errCh <- fmt.Errorf("error adding DNAT entry: %v", err)
+		}
+
+		// reuseport checks for local address and distinguishes between v4 and v6
+		laddr := &net.UDPAddr{}
+		if is4 {
+			laddr = &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: listenPort}
+		} else {
+			laddr = &net.UDPAddr{IP: net.ParseIP("[::]"), Port: listenPort}
+		}
+
 		udpConn, err := reuseport.Dial("udp", laddr.String(), clientAddr.String())
 		if err != nil {
 			errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
@@ -135,15 +158,6 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 	}
 
 	return nil, combinedErr // if we reached here, both attempts failed
-}
-
-func (Transport) GetSrcPort(libVersion uint, seed []byte, params any) (uint16, error) {
-	parameters, ok := params.(*pb.DTLSTransportParams)
-	if !ok {
-		return 0, fmt.Errorf("bad parameters provided")
-	}
-
-	return uint16(parameters.GetSrcPort()), nil
 }
 
 func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, error) {

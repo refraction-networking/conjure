@@ -31,8 +31,10 @@ type ClientTransport struct {
 	// Parameters are fields that will be shared with the station in the registration
 	Parameters *pb.DTLSTransportParams
 
-	privPort            int
-	pubPort             int
+	privAddr4           *net.UDPAddr
+	pubAddr4            *net.UDPAddr
+	privAddr6           *net.UDPAddr
+	pubAddr6            *net.UDPAddr
 	psk                 []byte
 	stunServer          string
 	disableIRWorkaround bool
@@ -96,14 +98,27 @@ func (t *ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.C
 		t.stunServer = defaultSTUNServer
 	}
 
-	privePort, pubPort, err := publicAddr(context.Background(), defaultSTUNServer, dialer)
-	if err != nil {
-		return fmt.Errorf("error finding public port: %v", err)
+	privAddr4, pubAddr4, err4 := publicAddr(context.Background(), "udp4", t.stunServer, dialer)
+	privAddr6, pubAddr6, err6 := publicAddr(context.Background(), "udp6", t.stunServer, dialer)
+
+	if err4 != nil && err6 != nil {
+		return fmt.Errorf("error getting v4 public address: %v; error getting v6 public address: %v", err4, err6)
 	}
 
-	t.privPort = privePort
-	t.pubPort = pubPort
-	t.Parameters = &pb.DTLSTransportParams{SrcPort: proto.Uint32(uint32(pubPort))}
+	if t.Parameters == nil {
+		t.Parameters = &pb.DTLSTransportParams{}
+	}
+
+	if err4 == nil {
+		t.privAddr4 = privAddr4
+		t.pubAddr4 = pubAddr4
+		t.Parameters.SrcAddr4 = &pb.Addr{IP: pubAddr4.IP.To4(), Port: proto.Uint32(uint32(pubAddr4.Port))}
+	}
+	if err6 == nil {
+		t.privAddr6 = privAddr6
+		t.pubAddr6 = pubAddr6
+		t.Parameters.SrcAddr6 = &pb.Addr{IP: pubAddr6.IP.To16(), Port: proto.Uint32(uint32(pubAddr6.Port))}
+	}
 
 	return nil
 }
@@ -143,9 +158,29 @@ func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 }
 
 func (t *ClientTransport) listen(ctx context.Context, dialer dialFunc, address string) (net.Conn, error) {
-	return nil, fmt.Errorf("listen disabled for testing")
+	is4, err := addrIsV4(address)
+	if err != nil {
+		return nil, fmt.Errorf("error checking remote address ip version: %v", err)
+	}
 
-	laddr := &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: t.privPort}
+	if is4 {
+		return t.listenWithLaddr(ctx, dialer, t.privAddr4, address)
+	}
+
+	return t.listenWithLaddr(ctx, dialer, t.privAddr6, address)
+}
+
+func addrIsV4(address string) (bool, error) {
+	addr, err := net.ResolveUDPAddr("", address)
+	if err != nil {
+		return false, err
+	}
+
+	return addr.IP.To4() != nil, nil
+}
+
+func (t *ClientTransport) listenWithLaddr(ctx context.Context, dialer dialFunc, laddr *net.UDPAddr, address string) (net.Conn, error) {
+	return nil, fmt.Errorf("listen disabled for testing")
 
 	if t.disableIRWorkaround {
 		err := openUDPLimitTTL(ctx, laddr.String(), address, dialer)

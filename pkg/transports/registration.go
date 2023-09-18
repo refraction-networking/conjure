@@ -11,7 +11,6 @@ import (
 type Registration interface {
 	SharedSecret() []byte
 	GetRegistrationAddress() string
-	GetSrcPort() uint16
 	GetDstPort() uint16
 	PhantomIP() *net.IP
 

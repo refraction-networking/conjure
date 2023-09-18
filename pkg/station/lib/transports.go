@@ -80,7 +80,4 @@ type ConnectingTransport interface {
 	// Connect attempts to connect to the client from the phantom address derived in the
 	// registration.
 	Connect(context.Context, transports.Registration) (net.Conn, error)
-
-	// GetSrcPort reads client source port from transport parameters
-	GetSrcPort(libVersion uint, seed []byte, parameters any) (uint16, error)
 }

@@ -76,22 +76,22 @@ func openUDPLimitTTL(ctx context.Context, laddr, addr string, dialer dialFunc) e
 	return nil
 }
 
-func publicAddr(ctx context.Context, stunServer string, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) (privatePort int, publicPort int, err error) {
+func publicAddr(ctx context.Context, network string, stunServer string, dialer dialFunc) (privateAddr *net.UDPAddr, publicAddr *net.UDPAddr, err error) {
 
-	udpConn, err := dialer(ctx, "udp", "", stunServer)
+	udpConn, err := dialer(ctx, network, "", stunServer)
 	if err != nil {
-		return 0, 0, fmt.Errorf("error connecting to STUN server: %v", err)
+		return nil, nil, fmt.Errorf("error connecting to STUN server: %v", err)
 	}
 	defer udpConn.Close()
 
 	localAddr, err := net.ResolveUDPAddr(udpConn.LocalAddr().Network(), udpConn.LocalAddr().String())
 	if err != nil {
-		return 0, 0, fmt.Errorf("error resolving local address: %v", err)
+		return nil, nil, fmt.Errorf("error resolving local address: %v", err)
 	}
 
 	client, err := stun.NewClient(udpConn)
 	if err != nil {
-		return 0, 0, fmt.Errorf("error creating STUN client: %v", err)
+		return nil, nil, fmt.Errorf("error creating STUN client: %v", err)
 	}
 
 	message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
@@ -110,7 +110,7 @@ func publicAddr(ctx context.Context, stunServer string, dialer func(ctx context.
 		doneCh <- err
 	})
 	if err != nil {
-		return 0, 0, fmt.Errorf("error getting address from STUN: %v", err)
+		return nil, nil, fmt.Errorf("error getting address from STUN: %v", err)
 	}
 
 	defer client.Close()
@@ -122,11 +122,11 @@ func publicAddr(ctx context.Context, stunServer string, dialer func(ctx context.
 	select {
 	case err := <-doneCh:
 		if err != nil {
-			return 0, 0, fmt.Errorf("error during client: %v", err)
+			return nil, nil, fmt.Errorf("error during client: %v", err)
 		}
 	case <-ctx.Done():
-		return 0, 0, fmt.Errorf("timeout: %v", ctx.Err())
+		return nil, nil, fmt.Errorf("timeout: %v", ctx.Err())
 	}
 
-	return localAddr.Port, xorAddr.Port, nil
+	return localAddr, &net.UDPAddr{IP: xorAddr.IP, Port: xorAddr.Port}, nil
 }

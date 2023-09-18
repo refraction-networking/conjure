@@ -480,11 +480,6 @@ func (reg *DecoyRegistration) GetDstPort() uint16 {
 	return reg.PhantomPort
 }
 
-// GetSrcPort returns a source port if one was registered.
-func (reg *DecoyRegistration) GetSrcPort() uint16 {
-	return reg.clientPort
-}
-
 type regStatus int
 
 const (
@@ -846,13 +841,11 @@ func sendToDetector(reg *DecoyRegistration, duration uint64, op pb.StationOperat
 	src := reg.registrationAddr.String()
 	phantom := reg.PhantomIp.String()
 	// protocol := reg.GetProto()
-	srcPort := uint32(reg.GetSrcPort())
 	dstPort := uint32(reg.GetDstPort())
 	msg := &pb.StationToDetector{
 		PhantomIp: &phantom,
 		ClientIp:  &src,
 		DstPort:   &dstPort,
-		SrcPort:   &srcPort,
 		Proto:     &reg.PhantomProto,
 		TimeoutNs: &duration,
 		Operation: &op,
