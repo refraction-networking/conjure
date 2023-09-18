@@ -155,15 +155,13 @@ func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 	dtlsDialer := func(ctx context.Context, network, localAddr, address string) (net.Conn, error) {
 		// Create a context that will automatically cancel after 5 seconds or when the existing context is cancelled, whichever comes first.
-		parentctx, parentcancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer parentcancel()
-		ctxtimeout, cancel := context.WithTimeout(parentctx, 5*time.Second)
+		ctxtimeout, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
 
 		conn, errListen := t.listen(ctxtimeout, dialer, address)
 		if errListen != nil {
 			// fallback to dial
-			conn, errDial := t.dial(parentctx, dialer, address)
+			conn, errDial := t.dial(ctx, dialer, address)
 			if errDial != nil {
 				return nil, fmt.Errorf("error listening: %v, error dialing: %v", errListen, errDial)
 			}
@@ -200,7 +198,6 @@ func addrIsV4(address string) (bool, error) {
 }
 
 func (t *ClientTransport) listenWithLaddr(ctx context.Context, dialer dialFunc, laddr *net.UDPAddr, address string) (net.Conn, error) {
-	return nil, fmt.Errorf("listen disabled for test")
 
 	if t.disableIRWorkaround {
 		err := openUDPLimitTTL(ctx, laddr.String(), address, dialer)
