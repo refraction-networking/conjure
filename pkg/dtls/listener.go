@@ -47,7 +47,7 @@ func (l *Listener) acceptLoop() {
 		go func() {
 			newDTLSConn, err := dtls.Server(c, config)
 			if err != nil {
-				fmt.Printf("==============DTLS err: raddr: %v, laddr:%v err: %v", c.RemoteAddr().String(), c.LocalAddr().String(), err)
+				fmt.Printf("==============DTLS err: raddr: %v, laddr:%v err: %v\n", c.RemoteAddr().String(), c.LocalAddr().String(), err)
 				switch addr := c.RemoteAddr().(type) {
 				case *net.UDPAddr:
 					l.logIP(err, &addr.IP)
@@ -75,6 +75,8 @@ func (l *Listener) acceptLoop() {
 			acceptCh <- newDTLSConn
 
 			close(acceptCh)
+
+			fmt.Printf("==============DTLS layer connected: raddr: %v, laddr:%v\n", c.RemoteAddr().String(), c.LocalAddr().String())
 		}()
 	}
 }
@@ -183,8 +185,10 @@ func (l *Listener) AcceptWithContext(ctx context.Context, config *Config) (net.C
 	case conn := <-connCh:
 		wrappedConn, err := wrapSCTP(conn, config)
 		if err != nil {
+			fmt.Printf("**************SCTP layer err: raddr: %v, laddr:%v, err:%v\n", wrappedConn.RemoteAddr().String(), wrappedConn.LocalAddr().String(), err)
 			return nil, err
 		}
+		fmt.Printf("**************SCTP layer connected: raddr: %v, laddr:%v\n", wrappedConn.RemoteAddr().String(), wrappedConn.LocalAddr().String())
 		return wrappedConn, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
