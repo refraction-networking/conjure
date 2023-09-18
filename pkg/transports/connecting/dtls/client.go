@@ -180,7 +180,6 @@ func addrIsV4(address string) (bool, error) {
 }
 
 func (t *ClientTransport) listenWithLaddr(ctx context.Context, dialer dialFunc, laddr *net.UDPAddr, address string) (net.Conn, error) {
-	return nil, fmt.Errorf("listen disabled for testing")
 
 	if t.disableIRWorkaround {
 		err := openUDPLimitTTL(ctx, laddr.String(), address, dialer)
