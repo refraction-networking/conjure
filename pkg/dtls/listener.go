@@ -167,7 +167,7 @@ func (l *Listener) AcceptWithContext(ctx context.Context, config *Config) (net.C
 		return &dtls.Conn{}, err
 	}
 
-	l.registerCert(connID, clientCert, serverCert)
+	err = l.registerCert(connID, clientCert, serverCert)
 	if err != nil {
 		return nil, fmt.Errorf("error registering cert: %v", err)
 	}
@@ -195,7 +195,7 @@ func (l *Listener) registerCert(connID [handshake.RandomBytesLength]byte, client
 	l.connToCertMutex.Lock()
 	defer l.connToCertMutex.Unlock()
 
-	if _, ok := l.connToCert[connID]; ok {
+	if l.connToCert[connID] != nil {
 		return fmt.Errorf("seed already registered")
 	}
 
