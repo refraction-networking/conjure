@@ -25,8 +25,11 @@ func openUDP(ctx context.Context, laddr, addr string, dialer dialFunc) error {
 	}
 	defer conn.Close()
 
-	// Write data to the connection
-	_, err = conn.Write([]byte(""))
+	return sendPacket(ctx, conn)
+}
+
+func sendPacket(ctx context.Context, conn net.Conn) error {
+	_, err := conn.Write([]byte(""))
 	if err != nil {
 		return err
 	}
