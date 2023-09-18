@@ -1,16 +1,17 @@
-package lib
+package station
 
 import (
 	"fmt"
 	"os"
 
 	"github.com/BurntSushi/toml"
+	"github.com/refraction-networking/conjure/pkg/station/lib"
 )
 
 // Config - Station golang configuration struct
 type Config struct {
-	*ZMQConfig
-	*RegConfig
+	*lib.ZMQConfig
+	*lib.RegConfig
 
 	// Log verbosity level
 	LogLevel string `toml:"log_level"`
@@ -25,23 +26,24 @@ type Config struct {
 	DisableDefaultPrefixes bool   `toml:"disable_default_prefixes"`
 }
 
-// ParseConfig parses the config from the CJ_STATION_CONFIG environment
-// variable.
-func ParseConfig() (*Config, error) {
-	var c Config
+// ConfigFromEnv parses the config from the CJ_STATION_CONFIG environment variable.
+func ConfigFromEnv() (*Config, error) {
 	var envPath = os.Getenv("CJ_STATION_CONFIG")
-	_, err := toml.DecodeFile(envPath, &c)
+	return ParseConfig(envPath)
+}
+
+// ParseConfig parses the config from the given path.
+func ParseConfig(path string) (*Config, error) {
+	var c Config
+	_, err := toml.DecodeFile(path, &c)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config (%s): %v", envPath, err)
+		return nil, fmt.Errorf("failed to load config (%s): %v", path, err)
 	}
 
-	c.ParseBlocklists()
+	c.RegConfig.ParseBlocklists()
 
 	return &c, nil
 }
-
-// PrivateKeyLength is the expected length of the station (ed25519) private key in bytes.
-const PrivateKeyLength = 32
 
 // ParsePrivateKey tries to use either the PrivateKeyPath (`privkey_path`) config variable or the
 // CJ_PRIVKEY environment variable to locate the file from which it can parse the station private key

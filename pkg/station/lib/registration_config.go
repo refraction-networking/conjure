@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/station/geoip"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 )
@@ -47,7 +48,7 @@ type RegConfig struct {
 	phantomBlocklist []*net.IPNet
 
 	// ConnectingStats records stats related to connecting transports
-	ConnectingStats ConnectingTpStats
+	ConnectingStats interfaces.ConnectingTpStats
 }
 
 // ParseBlocklists converts string arrays of blocklisted domains, addresses and

@@ -259,7 +259,7 @@ func generateClientToStation(cjSession *td.ConjureSession) (*pb.ClientToStation,
 
 func generateFlags(cjSession *td.ConjureSession) *pb.RegistrationFlags {
 	flags := &pb.RegistrationFlags{}
-	mask := default_flags
+	mask := defaultFlags
 	if cjSession.UseProxyHeader {
 		mask |= tdFlagProxyHeader
 	}

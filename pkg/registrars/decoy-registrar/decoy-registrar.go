@@ -41,16 +41,9 @@ var (
 	tdFlagUseTIL      = uint8(1 << 0)
 )
 
-var default_flags = tdFlagUseTIL
-
-type DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error)
+var defaultFlags = tdFlagUseTIL
 
 type DecoyRegistrar struct {
-
-	// dialContex is a custom dialer to use when establishing TCP connections
-	// to decoys. When nil, Dialer.dialContex will be used.
-	dialContex DialFunc
-
 	logger logrus.FieldLogger
 
 	// Fields taken from ConjureReg struct
@@ -67,18 +60,6 @@ type DecoyRegistrar struct {
 
 func NewDecoyRegistrar() *DecoyRegistrar {
 	return &DecoyRegistrar{
-		logger:        td.Logger(),
-		ClientHelloID: tls.HelloChrome_62,
-		Width:         5,
-	}
-}
-
-// NewDecoyRegistrarWithDialer returns a decoy registrar with custom dialer.
-//
-// Deprecated: Set dialer in tapdace.Dialer.DialerWithLaddr instead.
-func NewDecoyRegistrarWithDialer(dialer DialFunc) *DecoyRegistrar {
-	return &DecoyRegistrar{
-		dialContex:    dialer,
 		logger:        td.Logger(),
 		ClientHelloID: tls.HelloChrome_62,
 		Width:         5,
@@ -129,7 +110,7 @@ func (r *DecoyRegistrar) getTcpToDecoy() uint32 {
 	return 0
 }
 
-func (r DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostname string, deadline time.Time) (*tls.UConn, error) {
+func (r *DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostname string, deadline time.Time) (*tls.UConn, error) {
 	var err error
 	//[reference] TLS to Decoy
 	config := tls.Config{ServerName: hostname}
@@ -204,7 +185,8 @@ func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpe
 	return httpRequest, nil
 }
 
-func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Context) (*td.ConjureReg, error) {
+// Register implements the Registrar interface for he DecoyRegistrar type
+func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Context) (*td.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
 
 	logger.Debugf("Registering V4 and V6 via DecoyRegistrar")
@@ -222,10 +204,6 @@ func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Conte
 		return nil, err
 	}
 
-	if r.dialContex != nil {
-		reg.Dialer = r.dialContex
-	}
-
 	// //[TODO]{priority:later} How to pass context to multiple registration goroutines?
 	if ctx == nil {
 		ctx = context.Background()
@@ -241,7 +219,7 @@ func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Conte
 	for _, decoy := range decoys {
 		logger.Debugf("Sending Reg: %v, %v", decoy.GetHostname(), decoy.GetIpAddrStr())
 		//decoyAddr := decoy.GetIpAddrStr()
-		go r.Send(ctx, cjSession, decoy, dialErrors)
+		go r.send(ctx, cjSession, decoy, dialErrors)
 	}
 
 	//[reference] Dial errors happen immediately so block until all N dials complete
@@ -277,7 +255,7 @@ func (r DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Conte
 	return reg, nil
 }
 
-func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession, decoy *pb.TLSDecoySpec, dialError chan error) {
+func (r *DecoyRegistrar) send(ctx context.Context, cjSession *td.ConjureSession, decoy *pb.TLSDecoySpec, dialError chan error) {
 
 	deadline, deadlineAlreadySet := ctx.Deadline()
 	if !deadlineAlreadySet {
@@ -289,8 +267,18 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 	//[reference] TCP to decoy
 	tcpToDecoyStartTs := time.Now()
 
+	var dial func(ctx context.Context, network, raddr string) (net.Conn, error)
+	if cjSession.Dialer != nil {
+		dial = func(ctx context.Context, network, raddr string) (net.Conn, error) {
+			return cjSession.Dialer(ctx, network, "", raddr)
+		}
+	} else {
+		d := net.Dialer{}
+		dial = d.DialContext
+	}
+
 	//[Note] decoy.GetIpAddrStr() will get only v4 addr if a decoy has both
-	dialConn, err := r.dialContex(childCtx, "tcp", decoy.GetIpAddrStr())
+	dialConn, err := dial(childCtx, "tcp", decoy.GetIpAddrStr())
 
 	r.setTCPToDecoy(durationToU32ptrMs(time.Since(tcpToDecoyStartTs)))
 	if err != nil {

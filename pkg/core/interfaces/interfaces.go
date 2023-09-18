@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 
+	"github.com/refraction-networking/conjure/pkg/station/log"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -98,3 +99,21 @@ type DNAT interface {
 
 // DnatBuilder function type alias for building a DNAT object
 type DnatBuilder func() (DNAT, error)
+
+// ConnectingTpStats is an interface for tracking statistics about the connecting transports
+type ConnectingTpStats interface {
+	AddCreatedConnecting(asn uint, cc string, tp string)
+	AddCreatedToSuccessfulConnecting(asn uint, cc string, tp string)
+	AddCreatedToTimeoutConnecting(asn uint, cc string, tp string)
+	AddSuccessfulToDiscardedConnecting(asn uint, cc string, tp string)
+	AddOtherFailConnecting(asn uint, cc string, tp string)
+}
+
+type Stats interface {
+	// PrintAndReset is intended to allow each stats module to summarize metrics
+	// from the current epoch out through the logger and then reset any stats
+	// that need reset as the start of a new epoch.
+	PrintAndReset(logger *log.Logger)
+
+	Reset()
+}

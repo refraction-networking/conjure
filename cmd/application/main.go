@@ -6,15 +6,11 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strconv"
-	"sync"
 	"syscall"
-	"time"
 
-	"github.com/refraction-networking/conjure/pkg/dtls/dnat"
+	"github.com/refraction-networking/conjure/pkg/station"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/station/log"
-	"github.com/refraction-networking/conjure/pkg/transports/connecting/dtls"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
@@ -22,7 +18,6 @@ import (
 )
 
 var sharedLogger *log.Logger
-var logClientIP = false
 
 var enabledTransports = map[pb.TransportType]cj.Transport{
 	pb.TransportType_Min:    min.Transport{},
@@ -40,7 +35,7 @@ func main() {
 	cj.Stat()
 
 	// parse toml station configuration
-	conf, err := cj.ParseConfig()
+	conf, err := station.ConfigFromEnv()
 	if err != nil {
 		log.Fatalf("failed to parse app config: %v", err)
 	}
@@ -56,110 +51,18 @@ func main() {
 	}
 	log.SetLevel(logLevel)
 
-	connManager := newConnManager(nil)
-
-	conf.RegConfig.ConnectingStats = connManager
-
-	regManager := cj.NewRegistrationManager(conf.RegConfig)
-
-	logIPDTLS := func(logger func(asn uint, cc, tp string)) func(*net.IP) {
-		return func(ip *net.IP) {
-			cc, err := regManager.GeoIP.CC(*ip)
-			if err != nil {
-				return
-			}
-
-			var asn uint = 0
-			if cc != "unk" {
-				asn, err = regManager.GeoIP.ASN(*ip)
-				if err != nil {
-					return
-				}
-			}
-
-			logger(asn, cc, "dtls")
-		}
-	}
-
-	dtlsbuilder := dnat.NewDNAT
-	dtlsTransport, err := dtls.NewTransport(logIPDTLS(connManager.AddAuthFailConnecting), logIPDTLS(connManager.AddOtherFailConnecting), logIPDTLS(connManager.AddCreatedToDialSuccessfulConnecting), logIPDTLS(connManager.AddCreatedToListenSuccessfulConnecting), dtlsbuilder)
-
+	cjStation, err := station.New(conf)
 	if err != nil {
-		log.Fatalf("failed to setup dtls: %v", err)
+		log.Fatalf("failed to create station: %v", err)
 	}
-	enabledTransports[pb.TransportType_DTLS] = dtlsTransport
-
-	sharedLogger = regManager.Logger
-	logger := sharedLogger
-	defer regManager.Cleanup()
-
-	// Should we log client IP addresses
-	logClientIP, err = strconv.ParseBool(os.Getenv("LOG_CLIENT_IP"))
-	if err != nil {
-		logger.Errorf("failed parse client ip logging setting: %v\n", err)
-		logClientIP = false
-	}
-
-	privkey, err := conf.ParsePrivateKey()
-	if err != nil {
-		logger.Fatalf("error parseing private key: %s", err)
-	}
-
-	var prefixTransport cj.Transport
-	if conf.DisableDefaultPrefixes {
-		prefixTransport, err = prefix.New(privkey, conf.PrefixFilePath)
-	} else {
-		prefixTransport, err = prefix.Default(privkey, conf.PrefixFilePath)
-	}
-	if err != nil {
-		logger.Errorf("Failed to parse provided custom prefix transport file: %s", err)
-	} else {
-		enabledTransports[pb.TransportType_Prefix] = prefixTransport
-	}
-
-	// Add supported transport options for registration validation
-	for transportType, transport := range enabledTransports {
-		err = regManager.AddTransport(transportType, transport)
-		if err != nil {
-			logger.Errorf("failed to add transport: %v", err)
-		}
-	}
+	defer func() {
+		station.Shutdown()
+		logger.Infof("shutdown complete")
+	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	wg := new(sync.WaitGroup)
-	regChan := make(chan interface{}, 10000)
-	zmqIngester, err := cj.NewZMQIngest(zmqAddress, regChan, privkey, conf.ZMQConfig)
-	if err != nil {
-		logger.Fatal("error creating ZMQ Ingest: %w", err)
-	}
 
-	cj.Stat().AddStatsModule(zmqIngester, false)
-	cj.Stat().AddStatsModule(regManager.LivenessTester, false)
-	cj.Stat().AddStatsModule(cj.GetProxyStats(), false)
-	cj.Stat().AddStatsModule(regManager, false)
-	cj.Stat().AddStatsModule(connManager, true)
-
-	// Periodically clean old registrations
-	wg.Add(1)
-	go func(ctx context.Context, wg *sync.WaitGroup) {
-		defer wg.Done()
-
-		ticker := time.NewTicker(3 * time.Minute)
-		for {
-			select {
-			case <-ticker.C:
-				regManager.RemoveOldRegistrations()
-			case <-ctx.Done():
-				return
-			}
-		}
-	}(ctx, wg)
-
-	// Receive registration updates from ZMQ Proxy as subscriber
-	go zmqIngester.RunZMQ(ctx)
-	wg.Add(1)
-	go regManager.HandleRegUpdates(ctx, regChan, wg)
-	go connManager.acceptConnections(ctx, regManager, logger)
+	go acceptConnections(ctx, cjStation, logger)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
@@ -175,7 +78,7 @@ func main() {
 
 		// parse toml station configuration. If parse fails, log and abort
 		// reload.
-		newConf, err := cj.ParseConfig()
+		newConf, err := station.ConfigFromEnv()
 		if err != nil {
 			log.Errorf("failed to parse app config: %v", err)
 		} else {
@@ -184,6 +87,36 @@ func main() {
 	}
 
 	cancel()
-	wg.Wait()
-	logger.Infof("shutdown complete")
+}
+
+func acceptConnections(ctx context.Context, config *station.Station, logger *log.Logger) {
+
+	// listen for and handle incoming proxy traffic
+	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
+	ln := cjStation.Listen(listenAddr)
+	if err != nil {
+		logger.Fatalf("failed to listen on %v: %v\n", listenAddr, err)
+	}
+	defer ln.Close()
+	logger.Infof("[STARTUP] Listening on %v\n", ln.Addr())
+
+	for {
+		select {
+		case <-ctx.Done():
+			break
+		default:
+			newConn, err := ln.Accept()
+			if err != nil {
+				logger.Errorf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
+				continue
+			}
+			go func(conn net.Conn) {
+				defer conn.Close()
+				err := cjStation.ForwardProxy(conn)
+				if err != nil {
+					logger.Errorf("[ERROR] failed while proxying: %v\n", err)
+				}
+			}(newConn)
+		}
+	}
 }

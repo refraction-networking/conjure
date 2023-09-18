@@ -8,18 +8,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/station/log"
 	pb "github.com/refraction-networking/conjure/proto"
 )
-
-type stats interface {
-	// PrintAndReset is intended to allow each stats module to summarize metrics
-	// from the current epoch out through the logger and then reset any stats
-	// that need reset as the start of a new epoch.
-	PrintAndReset(logger *log.Logger)
-
-	Reset()
-}
 
 // Stats contains counts of many things we want to keep track of in any given epoch
 // as well as reference to modular metrics interfaces from related modules. These
@@ -30,8 +22,8 @@ type stats interface {
 type Stats struct {
 	logger *log.Logger
 
-	moduleStats  []stats
-	verboseStats []stats
+	moduleStats  []interfaces.Stats
+	verboseStats []interfaces.Stats
 
 	// TODO JMWAMPLE REMOVE
 	activeConns            int64 // incremented on add, decremented on remove, not reset
@@ -70,7 +62,7 @@ func Stat() *Stats {
 	return &statInstance
 }
 
-func (s *Stats) AddStatsModule(sm stats, isVerbose bool) {
+func (s *Stats) AddStatsModule(sm interfaces.Stats, isVerbose bool) {
 	if sm == nil {
 		return
 	}

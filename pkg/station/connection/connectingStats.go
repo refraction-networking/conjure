@@ -1,13 +1,13 @@
-package main
+package connection
 
 import (
 	"fmt"
 	"sync/atomic"
 
-	cj "github.com/refraction-networking/conjure/pkg/station/lib"
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 )
 
-var _ cj.ConnectingTpStats = &connStats{}
+var _ interfaces.ConnectingTpStats = &connStats{}
 
 type connectingCounts struct {
 	numCreatedConnecting          int64

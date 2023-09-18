@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/refraction-networking/conjure/pkg/core"
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/station/geoip"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 	"github.com/refraction-networking/conjure/pkg/station/log"
@@ -45,7 +46,7 @@ type RegistrationManager struct {
 	GeoIP            geoip.Database
 
 	// ConnectingStats records stats related to connecting transports
-	connectingStats ConnectingTpStats
+	connectingStats interfaces.ConnectingTpStats
 
 	// ingestChan is included here so that the capacity and use is available to
 	// stats

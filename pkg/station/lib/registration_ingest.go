@@ -567,10 +567,3 @@ func handleConnectingTpReg(regManager *RegistrationManager, reg *DecoyRegistrati
 	}
 }
 
-type ConnectingTpStats interface {
-	AddCreatedConnecting(asn uint, cc string, tp string)
-	AddCreatedToSuccessfulConnecting(asn uint, cc string, tp string)
-	AddCreatedToTimeoutConnecting(asn uint, cc string, tp string)
-	AddSuccessfulToDiscardedConnecting(asn uint, cc string, tp string)
-	AddOtherFailConnecting(asn uint, cc string, tp string)
-}

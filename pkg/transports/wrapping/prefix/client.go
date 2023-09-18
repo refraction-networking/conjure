@@ -108,12 +108,7 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 	}
 
 	if t.parameters == nil {
-		id := int32(t.Prefix.ID())
-		F := false
-		t.parameters = &pb.PrefixTransportParams{
-			PrefixId:         &id,
-			RandomizeDstPort: &F,
-		}
+		t.parameters = defaultParams()
 	}
 
 	return t.parameters, nil
@@ -129,6 +124,24 @@ func (t ClientTransport) ParseParams(data *anypb.Any) (any, error) {
 	var m = &pb.PrefixTransportParams{}
 	err := transports.UnmarshalAnypbTo(data, m)
 	return m, err
+}
+
+// DefaultParams returns the default parameters for the transport
+func DefaultParams() *ClientParams {
+	return &ClientParams{
+		RandomizeDstPort: false,
+		FlushAfterPrefix: DefaultFlush,
+		PrefixID:         int32(Rand),
+	}
+}
+
+// defaultParams returns the internal default parameters for the transport
+func defaultParams() *pb.PrefixTransportParams {
+	return &pb.PrefixTransportParams{
+		PrefixId:          proto.Int32(int32(Rand)),
+		RandomizeDstPort:  proto.Bool(false),
+		CustomFlushPolicy: proto.Int32(DefaultFlush),
+	}
 }
 
 // SetParams allows the caller to set parameters associated with the transport, returning an
@@ -256,6 +269,10 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 		t.TagObfuscator = transports.CTRObfuscator{}
 	}
 
+	if t.parameters == nil {
+		t.parameters = defaultParams()
+	}
+
 	obfuscatedID, err := t.TagObfuscator.Obfuscate(t.connectTag, t.stationPublicKey[:])
 	if err != nil {
 		return nil, err
@@ -269,8 +286,7 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 		return nil, err
 	}
 
-	// Maybe flush based on prefix spec and client param override
-	switch *t.parameters.CustomFlushPolicy {
+	switch t.parameters.GetCustomFlushPolicy() {
 	case NoAddedFlush:
 		break
 	case FlushAfterPrefix:
@@ -299,7 +315,7 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 	}
 
 	// Maybe flush based on prefix spec and client param override
-	switch *t.parameters.CustomFlushPolicy {
+	switch t.parameters.GetCustomFlushPolicy() {
 	case NoAddedFlush:
 		break
 	case FlushAfterTag:

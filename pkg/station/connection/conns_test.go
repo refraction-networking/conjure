@@ -1,4 +1,4 @@
-package main
+package connection
 
 import (
 	"fmt"
@@ -49,7 +49,7 @@ func TestConnHandleNewTCPConn(t *testing.T) {
 	db := &MockGeoIP{}
 	rm.GeoIP = db
 
-	connManager := newConnManager(nil)
+	connManager := NewConnManager(nil)
 	ip := net.ParseIP("8.8.8.8")
 	clientConn, serverConn := net.Pipe()
 	defer clientConn.Close()
@@ -94,7 +94,7 @@ func TestConnHandleNewTCPConn(t *testing.T) {
 
 func TestConnPrintAndReset(t *testing.T) {
 	logger := log.New(os.Stdout, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
-	connManager := newConnManager(nil)
+	connManager := NewConnManager(nil)
 	v4GeoIPMap := make(map[uint]*asnCounts)
 	v4GeoIPMap[0] = &asnCounts{
 		cc: "unk",
