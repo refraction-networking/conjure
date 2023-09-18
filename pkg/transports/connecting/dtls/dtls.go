@@ -92,6 +92,7 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 		if err != nil {
 			fmt.Printf("error adding DNAT entry: %v\n", err)
 			errCh <- fmt.Errorf("error adding DNAT entry: %v", err)
+			return
 		}
 
 		// reuseport checks for local address and distinguishes between v4 and v6
