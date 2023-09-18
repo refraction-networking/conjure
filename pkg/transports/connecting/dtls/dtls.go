@@ -78,10 +78,7 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 
 	go func() {
 
-		is4, err := addrIsV4(reg.PhantomIP().String())
-		if err != nil {
-			errCh <- fmt.Errorf("error finding phantom IP version: %v", err)
-		}
+		is4 := reg.PhantomIP().To4() != nil
 
 		clientAddr := &net.UDPAddr{}
 
@@ -91,7 +88,7 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 			clientAddr = &net.UDPAddr{IP: params.SrcAddr6.GetIP(), Port: int(params.SrcAddr6.GetPort())}
 		}
 
-		err = t.DNAT.AddEntry(&clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
+		err := t.DNAT.AddEntry(&clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
 		if err != nil {
 			fmt.Printf("error adding DNAT entry: %v\n", err)
 			errCh <- fmt.Errorf("error adding DNAT entry: %v", err)
