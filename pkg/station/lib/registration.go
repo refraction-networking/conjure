@@ -293,7 +293,6 @@ type DecoyRegistration struct {
 	DecoyListVersion   uint32
 	regCount           int32
 	clientLibVer       uint32
-	clientPort         uint16
 
 	tunnelCount int64
 
