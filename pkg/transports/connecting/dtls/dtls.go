@@ -121,7 +121,6 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 	go func() {
 		conn, err := t.dtlsListener.AcceptWithContext(ctx, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept})
 		if err != nil {
-			fmt.Printf("============DTLS: error eccept: %v", err)
 			errCh <- fmt.Errorf("error accepting dtls connection from secret: %v", err)
 			return
 		}

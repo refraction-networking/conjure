@@ -233,12 +233,12 @@ func (t *ClientTransport) dial(ctx context.Context, dialer dialFunc, address str
 		return nil, fmt.Errorf("error dialing udp: %v", err)
 	}
 
-	// if !t.disableIRWorkaround {
-	// 	err := sendPacket(ctx, udpConn)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// }
+	if !t.disableIRWorkaround {
+		err := sendPacket(ctx, udpConn)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	conn, err := dtls.ClientWithContext(ctx, udpConn, &dtls.Config{PSK: t.psk, SCTP: dtls.ClientOpen})
 	if err != nil {
