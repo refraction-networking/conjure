@@ -72,9 +72,6 @@ func (l *Listener) acceptLoop() {
 			}
 
 			acceptCh <- newDTLSConn
-
-			close(acceptCh)
-
 		}()
 	}
 }
