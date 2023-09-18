@@ -191,6 +191,11 @@ func (l *Listener) AcceptWithContext(ctx context.Context, config *Config) (net.C
 func (l *Listener) registerCert(connID [handshake.RandomBytesLength]byte, clientCert, serverCert *tls.Certificate) {
 	l.connToCertMutex.Lock()
 	defer l.connToCertMutex.Unlock()
+
+	if _, ok := l.connToCert[connID]; ok {
+		return
+	}
+
 	l.connToCert[connID] = &certPair{clientCert: clientCert, serverCert: serverCert}
 }
 
