@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -418,46 +419,61 @@ func TestPrefixEndToEnd(t *testing.T) {
 	}
 	message := []byte(`test message!`)
 
-	for idx := range defaultPrefixes {
+	for _, flushPolicy := range []int32{DefaultFlush, NoAddedFlush, FlushAfterPrefix} {
+		for idx := range defaultPrefixes {
 
-		var p int32 = int32(idx)
-		params := &pb.PrefixTransportParams{PrefixId: &p}
-		manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
-		c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, params, randomizeDstPortMinVersion)
-		defer c2p.Close()
-		defer sfp.Close()
-		require.NotNil(t, reg)
+			t.Logf("testing prefix %d, %s", idx, idx.Name())
 
-		go func() {
-			var buf [4096]byte
-			n, _ := sfp.Read(buf[:])
-			buffer := bytes.NewBuffer(buf[:n])
+			var p int32 = int32(idx)
+			params := &pb.PrefixTransportParams{PrefixId: &p, CustomFlushPolicy: &flushPolicy}
+			manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
+			c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, params, uint(core.CurrentClientLibraryVersion()))
+			defer c2p.Close()
+			defer sfp.Close()
+			require.NotNil(t, reg)
 
-			_, c, err := transport.WrapConnection(buffer, sfp, reg.PhantomIp, manager)
+			go func() {
+
+				var c net.Conn
+				var err error
+				var buf [4096]byte
+				for {
+					n, _ := sfp.Read(buf[:])
+					// t.Logf("%d %s\t %s", n, hex.EncodeToString(buf[:n]), string(buf[:n]))
+					buffer := bytes.NewBuffer(buf[:n])
+					_, c, err = transport.WrapConnection(buffer, sfp, reg.PhantomIp, manager)
+					if err == nil {
+						break
+					} else if !errors.Is(err, transports.ErrTryAgain) {
+						t.Errorf("error getting wrapped connection %s", err)
+						return
+					}
+				}
+
+				received := make([]byte, len(message))
+				_, err = io.ReadFull(c, received)
+				require.Nil(t, err, "failed reading from server connection")
+				_, err = c.Write(received)
+				require.Nil(t, err, "failed writing to server connection")
+			}()
+
+			clientPrefix, err := TryFromID(PrefixID(p))
+			require.Nil(t, err)
+			ClientTransport := &ClientTransport{Prefix: clientPrefix, parameters: params}
+			err = ClientTransport.PrepareKeys(curve25519Public, reg.Keys.SharedSecret, reg.Keys.TransportReader)
+			require.Nil(t, err)
+			clientConn, err := ClientTransport.WrapConn(c2p)
 			require.Nil(t, err, "error getting wrapped connection")
 
-			received := make([]byte, len(message))
-			_, err = io.ReadFull(c, received)
-			require.Nil(t, err, "failed reading from connection")
-			_, err = c.Write(received)
-			require.Nil(t, err, "failed writing to connection")
-		}()
+			err = clientConn.SetDeadline(time.Now().Add(3 * time.Second))
+			require.Nil(t, err, "error setting deadline")
 
-		clientPrefix, err := TryFromID(PrefixID(p))
-		require.Nil(t, err)
-		ClientTransport := &ClientTransport{Prefix: clientPrefix, parameters: params}
-		err = ClientTransport.PrepareKeys(curve25519Public, reg.Keys.SharedSecret, reg.Keys.TransportReader)
-		clientConn, err := ClientTransport.WrapConn(c2p)
-		require.Nil(t, err, "error getting wrapped connection")
-
-		err = clientConn.SetDeadline(time.Now().Add(3 * time.Second))
-		require.Nil(t, err, "error setting deadline")
-
-		_, err = clientConn.Write(message)
-		require.Nil(t, err, "failed writing to connection")
-		cbuf := make([]byte, len(message))
-		_, err = io.ReadFull(clientConn, cbuf)
-		require.Nil(t, err, "failed reading from connection")
-		require.True(t, bytes.Equal(message, cbuf), "%s\n%s", string(message), string(cbuf))
+			_, err = clientConn.Write(message)
+			require.Nil(t, err, "failed writing to client connection")
+			cbuf := make([]byte, len(message))
+			_, err = io.ReadFull(clientConn, cbuf)
+			require.Nil(t, err, "failed reading from client connection")
+			require.True(t, bytes.Equal(message, cbuf), "%s\n%s", string(message), string(cbuf))
+		}
 	}
 }
