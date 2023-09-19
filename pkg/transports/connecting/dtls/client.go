@@ -154,8 +154,8 @@ func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 
 func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 	dtlsDialer := func(ctx context.Context, network, localAddr, address string) (net.Conn, error) {
-		// Create a context that will automatically cancel after 5 seconds or when the existing context is cancelled, whichever comes first.
-		ctxtimeout, cancel := context.WithTimeout(ctx, 2*time.Second)
+		// Create a context that will automatically cancel after 3 seconds or when the existing context is cancelled, whichever comes first.
+		ctxtimeout, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 
 		conn, errListen := t.listen(ctxtimeout, dialer, address)
