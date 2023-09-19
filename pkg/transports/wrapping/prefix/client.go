@@ -43,19 +43,13 @@ const (
 	// FlushAfterPrefix flush after the prefix before the tag (if possible), but not after tag
 	// before client data is sent over the connection
 	FlushAfterPrefix
-	// FlushAfterTag do not flush after the prefix before the tag, but do flush after tag before
-	// client data is sent over the connection
-	FlushAfterTag
-	// FlushAfterPrefixAndTag flush after both the prefix before the tag (if possible), as well as
-	// after the tag before client data is sent over the connection
-	FlushAfterPrefixAndTag
 )
 
 // ClientParams are parameters available to a calling library to configure the Prefix transport
 // outside of the specific Prefix
 type ClientParams struct {
 	RandomizeDstPort bool
-	FlushAfterPrefix int32
+	FlushPolicy      int32
 	PrefixID         int32
 }
 
@@ -108,12 +102,7 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 	}
 
 	if t.parameters == nil {
-		id := int32(t.Prefix.ID())
-		F := false
-		t.parameters = &pb.PrefixTransportParams{
-			PrefixId:         &id,
-			RandomizeDstPort: &F,
-		}
+		t.parameters = defaultParams()
 	}
 
 	return t.parameters, nil
@@ -131,6 +120,24 @@ func (t ClientTransport) ParseParams(data *anypb.Any) (any, error) {
 	return m, err
 }
 
+// DefaultParams returns the default parameters for the transport
+func DefaultParams() *ClientParams {
+	return &ClientParams{
+		RandomizeDstPort: false,
+		FlushPolicy:      DefaultFlush,
+		PrefixID:         int32(Rand),
+	}
+}
+
+// defaultParams returns the internal default parameters for the transport
+func defaultParams() *pb.PrefixTransportParams {
+	return &pb.PrefixTransportParams{
+		PrefixId:          proto.Int32(int32(Rand)),
+		RandomizeDstPort:  proto.Bool(false),
+		CustomFlushPolicy: proto.Int32(DefaultFlush),
+	}
+}
+
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible or the parameters are otherwise invalid
 func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
@@ -145,13 +152,13 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 	} else if clientParams, ok := p.(*ClientParams); ok {
 		prefixParams = &pb.PrefixTransportParams{
 			PrefixId:          &clientParams.PrefixID,
-			CustomFlushPolicy: &clientParams.FlushAfterPrefix,
+			CustomFlushPolicy: &clientParams.FlushPolicy,
 			RandomizeDstPort:  &clientParams.RandomizeDstPort,
 		}
 	} else if clientParams, ok := p.(ClientParams); ok {
 		prefixParams = &pb.PrefixTransportParams{
 			PrefixId:          &clientParams.PrefixID,
-			CustomFlushPolicy: &clientParams.FlushAfterPrefix,
+			CustomFlushPolicy: &clientParams.FlushPolicy,
 			RandomizeDstPort:  &clientParams.RandomizeDstPort,
 		}
 	} else {
@@ -256,6 +263,10 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 		t.TagObfuscator = transports.CTRObfuscator{}
 	}
 
+	if t.parameters == nil {
+		t.parameters = defaultParams()
+	}
+
 	obfuscatedID, err := t.TagObfuscator.Obfuscate(t.connectTag, t.stationPublicKey[:])
 	if err != nil {
 		return nil, err
@@ -270,12 +281,10 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 	}
 
 	// Maybe flush based on prefix spec and client param override
-	switch *t.parameters.CustomFlushPolicy {
+	switch t.parameters.GetCustomFlushPolicy() {
 	case NoAddedFlush:
 		break
 	case FlushAfterPrefix:
-		w.Flush()
-	case FlushAfterPrefixAndTag:
 		w.Flush()
 	case DefaultFlush:
 		fallthrough
@@ -285,37 +294,22 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 			break
 		case FlushAfterPrefix:
 			w.Flush()
-		case FlushAfterPrefixAndTag:
-			w.Flush()
 		case DefaultFlush:
 			fallthrough
 		default:
-			break
 		}
 	}
 
-	if _, err := w.Write(obfuscatedID); err != nil {
+	n, err := w.Write(obfuscatedID)
+	if err != nil {
 		return nil, err
+	} else if n != len(obfuscatedID) {
+		return nil, fmt.Errorf("failed to write all bytes of obfuscated ID")
 	}
 
-	// Maybe flush based on prefix spec and client param override
-	switch *t.parameters.CustomFlushPolicy {
-	case NoAddedFlush:
-		break
-	case FlushAfterTag:
-		w.Flush()
-	case FlushAfterPrefixAndTag:
-		w.Flush()
-	case DefaultFlush:
-		fallthrough
-	default:
-		switch t.Prefix.FlushPolicy() {
-		case NoAddedFlush:
-			break
-		default:
-			w.Flush()
-		}
-	}
+	// We are **REQUIRED** to flush here otherwise the prefix and tag will not be written into
+	// the wrapped net.Conn So FlushAfterTag does not make much sense.
+	w.Flush()
 	return conn, nil
 }
 
