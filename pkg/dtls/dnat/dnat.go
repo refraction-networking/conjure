@@ -118,7 +118,7 @@ func (d *dnat) AddEntry(src *net.IP, sport uint16, dst *net.IP, dport uint16) er
 			DstIP:    *dst,
 			Protocol: layers.IPProtocolUDP,
 		}
-	} else if src.To16() != nil && dst.To16() != nil {
+	} else if src.To4() == nil && dst.To4() == nil {
 		ipLayer = &layers.IPv6{
 			Version:      6,
 			TrafficClass: 0,
