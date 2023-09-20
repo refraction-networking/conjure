@@ -101,7 +101,7 @@ func publicAddr(ctx context.Context, network string, stunServer string, dialer d
 
 	var xorAddr stun.XORMappedAddress
 
-	doneCh := make(chan error)
+	doneCh := make(chan error, 1)
 
 	err = client.Start(message, func(res stun.Event) {
 		if res.Error != nil {
