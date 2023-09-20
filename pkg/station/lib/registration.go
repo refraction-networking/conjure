@@ -479,6 +479,13 @@ func (reg *DecoyRegistration) GetDstPort() uint16 {
 	return reg.PhantomPort
 }
 
+// GetSrcPort returns a source port if one was registered. Currently this is not
+// supported -- for now  this is intended as plumbing for potentially supporting
+// seeded source port selection for the client.
+func (reg *DecoyRegistration) GetSrcPort() uint16 {
+	return 0
+}
+
 type regStatus int
 
 const (
