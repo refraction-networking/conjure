@@ -23,6 +23,7 @@ const (
 	portRangeMax      = 65535
 	defaultPort       = 443
 	defaultSTUNServer = "stun.l.google.com:19302"
+	defaultListenTime = 5 * time.Second
 )
 
 // ClientTransport implements the client side transport interface for the DTLS transport. The
@@ -39,6 +40,7 @@ type ClientTransport struct {
 	psk                 []byte
 	stunServer          string
 	disableIRWorkaround bool
+	listenTimeout       *time.Duration
 }
 
 type ClientConfig struct {
@@ -50,6 +52,11 @@ type ClientConfig struct {
 	// In Iran, blocking seems to happen by matching the first packet in a "flow" against DTLS packet format and blocking if it matches.
 	// If the first packet is anything else packets are permitted. UDP dst port does not seem to change this.
 	DisableIRWorkaround bool
+
+	// ListenTimeout is the duration to listen for the DTLS handshake sent by station. After this duration, the
+	// client will initiate the handshake instead in case there are NAT issues preventing the station from reaching
+	// the client.
+	ListenTimeout *time.Duration
 }
 
 // Name returns a string identifier for the Transport for logging
@@ -87,6 +94,7 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 	case *ClientConfig:
 		t.stunServer = params.STUNServer
 		t.disableIRWorkaround = params.DisableIRWorkaround
+		t.listenTimeout = params.ListenTimeout
 	}
 
 	return nil
@@ -154,8 +162,13 @@ func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 
 func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 	dtlsDialer := func(ctx context.Context, network, localAddr, address string) (net.Conn, error) {
-		// Create a context that will automatically cancel after 3 seconds or when the existing context is cancelled, whichever comes first.
-		ctxtimeout, cancel := context.WithTimeout(ctx, 3*time.Second)
+		// Create a context that will automatically cancel after 5 seconds or when the existing context is cancelled, whichever comes first.
+		timeout := t.listenTimeout
+		if timeout == nil {
+			time := defaultListenTime
+			timeout = &time
+		}
+		ctxtimeout, cancel := context.WithTimeout(ctx, *timeout)
 		defer cancel()
 
 		conn, errListen := t.listen(ctxtimeout, dialer, address)
