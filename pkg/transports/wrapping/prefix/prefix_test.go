@@ -15,16 +15,17 @@ import (
 	"golang.org/x/crypto/curve25519"
 
 	"github.com/refraction-networking/conjure/internal/conjurepath"
+	tests "github.com/refraction-networking/conjure/internal/testutils"
 	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/transports"
-	"github.com/refraction-networking/conjure/pkg/transports/wrapping/internal/tests"
+
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/refraction-networking/ed25519"
 	"github.com/refraction-networking/ed25519/extra25519"
 )
 
 func TestSuccessfulWrap(t *testing.T) {
-	testSubnetPath := conjurepath.Root + "/pkg/station/lib/test/phantom_subnets.toml"
+	testSubnetPath := conjurepath.Root + "/internal/test_assets/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	_, private, _ := ed25519.GenerateKey(rand.Reader)
@@ -403,7 +404,7 @@ func TestSuccessfulWrapBase64(t *testing.T) {
 
 // Test End to End client WrapConn to Server WrapConnection
 func TestPrefixEndToEnd(t *testing.T) {
-	testSubnetPath := conjurepath.Root + "/pkg/station/lib/test/phantom_subnets.toml"
+	testSubnetPath := conjurepath.Root + "/internal/test_assets/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	_, private, _ := ed25519.GenerateKey(rand.Reader)

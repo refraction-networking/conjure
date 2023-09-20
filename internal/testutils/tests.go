@@ -1,4 +1,4 @@
-package tests
+package testutils
 
 import (
 	"log"
@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/refraction-networking/conjure/internal/conjurepath"
 	"github.com/refraction-networking/conjure/pkg/core"
 	dd "github.com/refraction-networking/conjure/pkg/station/lib"
 	pb "github.com/refraction-networking/conjure/proto"
@@ -24,8 +25,7 @@ var SharedSecret = []byte(`6a328b8ec2024dd92dd64332164cc0425ddbde40cb7b81e055bf7
 // SetupPhantomConnections registers one session with the provided transport and
 // registration manager using a pre-determined kay and phantom subnet file.
 func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.TransportType, params protoreflect.ProtoMessage, libver uint) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
-	cwd, _ := os.Getwd()
-	testSubnetPath := cwd + "/../internal/tests/phantom_subnets.toml"
+	testSubnetPath := conjurepath.Root + "/internal/test_assets/phantom_subnets.toml"
 
 	return SetupPhantomConnectionsSecret(manager, transport, params, SharedSecret, libver, testSubnetPath)
 }

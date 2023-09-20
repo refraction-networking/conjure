@@ -142,6 +142,9 @@ func defaultParams() *pb.PrefixTransportParams {
 // error if the provided generic message is not compatible or the parameters are otherwise invalid
 func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 	if genericParams, ok := p.(*pb.GenericTransportParams); ok {
+		if t.parameters == nil {
+			t.parameters = defaultParams()
+		}
 		t.parameters.RandomizeDstPort = proto.Bool(genericParams.GetRandomizeDstPort())
 		return nil
 	}
@@ -161,6 +164,8 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 			CustomFlushPolicy: &clientParams.FlushPolicy,
 			RandomizeDstPort:  &clientParams.RandomizeDstPort,
 		}
+	} else if p == nil {
+		prefixParams = defaultParams()
 	} else {
 		return fmt.Errorf("%w, incorrect param type", ErrBadParams)
 	}
