@@ -55,6 +55,9 @@ type RegistrationManager struct {
 
 // NewRegistrationManager returns a newly initialized registration Manager
 func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
+	if conf == nil {
+		return nil
+	}
 
 	logger := log.New(os.Stdout, "[REG] ", golog.Ldate|golog.Lmicroseconds)
 
@@ -137,7 +140,7 @@ func (regManager *RegistrationManager) OnReload(conf *RegConfig) {
 // clients register.
 func (regManager *RegistrationManager) AddTransport(index pb.TransportType, t Transport) error {
 	if regManager == nil {
-		regManager = NewRegistrationManager(regManager.RegConfig)
+		return fmt.Errorf("registration manager cannot be nil")
 	}
 	if regManager.registeredDecoys == nil {
 		regManager.registeredDecoys = NewRegisteredDecoys()

@@ -12,15 +12,15 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/refraction-networking/conjure/internal/conjurepath"
+	tests "github.com/refraction-networking/conjure/internal/testutils"
 	core "github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/transports"
-	"github.com/refraction-networking/conjure/pkg/transports/wrapping/internal/tests"
 	pb "github.com/refraction-networking/conjure/proto"
 )
 
 func TestSuccessfulWrap(t *testing.T) {
 	root := conjurepath.Root
-	os.Setenv("PHANTOM_SUBNET_LOCATION", root+"/pkg/transports/wrapping/internal/tests/phantom_subnets.toml")
+	os.Setenv("PHANTOM_SUBNET_LOCATION", root+"/internal/test_assets/phantom_subnets.toml")
 
 	var transport Transport
 	manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Min, Transport: transport})
