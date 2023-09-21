@@ -53,6 +53,14 @@ type ClientParams struct {
 	PrefixID         int32
 }
 
+func (c *ClientParams) String() string {
+	return fmt.Sprintf("RandomizeDstPort: %t, FlushPolicy: %d, Prefix: %d", c.RandomizeDstPort, c.FlushPolicy, c.PrefixID)
+}
+
+func (c *ClientParams) GetParams() any {
+	return c
+}
+
 // Prefix struct used by, selected by, or given to the client. This interface allows for non-uniform
 // behavior like a rand prefix for example.
 type Prefix interface {

@@ -432,32 +432,42 @@ func TestPrefixEndToEnd(t *testing.T) {
 			defer c2p.Close()
 			defer sfp.Close()
 			require.NotNil(t, reg)
+			sch := make(chan struct{}, 1)
 
 			go func() {
-
 				var c net.Conn
 				var err error
 				var buf [4096]byte
+				received := bytes.Buffer{}
+
+				sch <- struct{}{}
 				for {
-					n, _ := sfp.Read(buf[:])
-					// t.Logf("%d %s\t %s", n, hex.EncodeToString(buf[:n]), string(buf[:n]))
-					buffer := bytes.NewBuffer(buf[:n])
-					_, c, err = transport.WrapConnection(buffer, sfp, reg.PhantomIp, manager)
+					n, err := sfp.Read(buf[:])
+					if err != nil {
+						t.Errorf("error reading from server connection after %d bytes %s", n, err)
+						t.Fail()
+						return
+					}
+
+					received.Write(buf[:n])
+					_, c, err = transport.WrapConnection(&received, sfp, reg.PhantomIp, manager)
 					if err == nil {
 						break
 					} else if !errors.Is(err, transports.ErrTryAgain) {
-						t.Errorf("error getting wrapped connection %s", err)
+						t.Errorf("error getting wrapped connection %s - expected %s, %d", err, idx.Name(), flushPolicy)
+						t.Fail()
 						return
 					}
 				}
 
-				received := make([]byte, len(message))
-				_, err = io.ReadFull(c, received)
+				recvBuf := make([]byte, len(message))
+				_, err = io.ReadFull(c, recvBuf)
 				require.Nil(t, err, "failed reading from server connection")
-				_, err = c.Write(received)
+				_, err = c.Write(recvBuf)
 				require.Nil(t, err, "failed writing to server connection")
 			}()
 
+			<-sch
 			clientPrefix, err := TryFromID(PrefixID(p))
 			require.Nil(t, err)
 			ClientTransport := &ClientTransport{Prefix: clientPrefix, parameters: params}

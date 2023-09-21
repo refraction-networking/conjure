@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -21,7 +22,6 @@ import (
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
-	prefixTest "github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix/test"
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/refraction-networking/ed25519"
 	"github.com/refraction-networking/ed25519/extra25519"
@@ -36,6 +36,12 @@ var (
 	_false bool = false
 )
 
+type TestParams interface {
+	// GetParams returns the protobuf representation of the parameters
+	GetParams() any
+	String() string
+}
+
 type stationBuilder = func([32]byte) lib.WrappingTransport
 
 func TestTransportsEndToEnd(t *testing.T) {
@@ -45,7 +51,7 @@ func TestTransportsEndToEnd(t *testing.T) {
 	testCases := []struct {
 		stationTransportBuilder     stationBuilder
 		clientTransport             interfaces.WrappingTransport
-		clientParamPermuteGenerator func() []any
+		clientParamPermuteGenerator func() []TestParams
 	}{
 		{
 			func(privKey [32]byte) lib.WrappingTransport {
@@ -54,7 +60,7 @@ func TestTransportsEndToEnd(t *testing.T) {
 				return tr
 			},
 			&prefix.ClientTransport{},
-			prefixTest.ClientParamPermutations,
+			prefixClientParamPermutations,
 		},
 		{
 			func(privKey [32]byte) lib.WrappingTransport {
@@ -79,7 +85,7 @@ func TestTransportsEndToEnd(t *testing.T) {
 }
 
 // Test End to End client WrapConn to Server WrapConnection
-func testTransportsEndToEnd(t *testing.T, builder stationBuilder, clientTransport interfaces.WrappingTransport, clientParamPermuteGenerator func() []any) {
+func testTransportsEndToEnd(t *testing.T, builder stationBuilder, clientTransport interfaces.WrappingTransport, clientParamPermuteGenerator func() []TestParams) {
 	testSubnetPath := conjurepath.Root + "/pkg/station/lib/test/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
@@ -95,82 +101,144 @@ func testTransportsEndToEnd(t *testing.T, builder stationBuilder, clientTranspor
 
 	// Ensure that we test all given parameter permutations as well as nil params
 	// paramSet := append([]any{nil}, clientParamPermuteGenerator())
-	paramSet := append([]any{nil}, clientParamPermuteGenerator()...)
+	paramSet := append([]TestParams{nil}, clientParamPermuteGenerator()...)
 
 	// for _, flushPolicy := range []int32{DefaultFlush, NoAddedFlush, FlushAfterPrefix} {
 	// 	for idx := range defaultPrefixes {
-	for _, params := range paramSet {
+	for _, testParams := range paramSet {
 
-		err := clientTransport.SetParams(params)
+		if testParams == nil {
+			testParams = &nilParams{}
+		}
+		params := testParams.GetParams()
+		clientKeys, err := core.GenerateClientSharedKeys(curve25519Public)
+		require.Nil(t, err)
+
+		err = clientTransport.SetParams(params)
 		require.Nil(t, err)
 		protoParams, err := clientTransport.GetParams()
 		require.Nil(t, err)
+		t.Logf("running %s w/ %s", clientTransport.Name(), testParams.String())
 
 		manager := testutils.SetupRegistrationManager(testutils.Transport{Index: pb.TransportType_Prefix, Transport: transport})
 		require.NotNil(t, manager)
-		c2p, sfp, reg := testutils.SetupPhantomConnections(manager, pb.TransportType_Prefix, protoParams, uint(core.CurrentClientLibraryVersion()))
+		c2p, sfp, serverReg := testutils.SetupPhantomConnectionsSecret(manager, pb.TransportType_Prefix, protoParams, clientKeys.SharedSecret, uint(core.CurrentClientLibraryVersion()), testutils.TestSubnetPath)
 		defer c2p.Close()
 		defer sfp.Close()
-		require.NotNil(t, reg)
-
+		require.NotNil(t, serverReg)
+		sch := make(chan struct{}, 1)
 		go func() {
 
 			var c net.Conn
 			var err error
 			var buf [10240]byte
-			var nRead = 0
-			for {
-				n, _ := sfp.Read(buf[:])
-				// t.Logf("%d %s\t %s", n, hex.EncodeToString(buf[:n]), string(buf[:n]))
-				buffer := bytes.NewBuffer(buf[nRead : nRead+n])
-				nRead += n
+			received := bytes.Buffer{}
+			sch <- struct{}{}
 
-				_, c, err = transport.WrapConnection(buffer, sfp, reg.PhantomIp, manager)
+			for {
+				n, err := sfp.Read(buf[:])
+				if err != nil {
+					t.Errorf("error reading from server connection after %d bytes %s", n, err)
+					t.Fail()
+					return
+				}
+
+				received.Write(buf[:n])
+				_, c, err = transport.WrapConnection(&received, sfp, serverReg.PhantomIp, manager)
 				if err == nil {
 					break
 				} else if !errors.Is(err, transports.ErrTryAgain) {
-					t.Errorf("error getting wrapped connection %s", err)
+					if prm, ok := params.(*prefix.ClientParams); ok {
+						t.Errorf("error getting wrapped connection %s - expected %s, %d", err, prefix.PrefixID(prm.PrefixID).Name(), prm.FlushPolicy)
+					} else if prm, ok := params.(*pb.PrefixTransportParams); ok {
+						t.Errorf("error getting wrapped connection %s - expected %s, %d", err, prefix.PrefixID(prm.GetPrefixId()).Name(), prm.GetCustomFlushPolicy())
+					} else {
+						t.Errorf("error getting wrapped connection %s", err)
+					}
 					t.Fail()
 					return
 				}
 			}
 
-			received := make([]byte, len(message))
-			_, err = io.ReadFull(c, received)
+			recvBuf := make([]byte, len(message))
+			_, err = io.ReadFull(c, recvBuf)
 			require.Nil(t, err, "failed reading from server connection")
-			_, err = c.Write(received)
+			_, err = c.Write(recvBuf)
 			require.Nil(t, err, "failed writing to server connection")
 		}()
 
-		err = clientTransport.PrepareKeys(curve25519Public, reg.Keys.SharedSecret, reg.Keys.TransportReader)
-		require.Nil(t, err)
+		<-sch
+		clientErr := clientTransport.PrepareKeys(curve25519Public, serverReg.Keys.SharedSecret, clientKeys.Reader)
+		require.Nil(t, clientErr)
 
-		err = c2p.SetDeadline(time.Now().Add(15 * time.Second))
-		require.Nil(t, err)
+		clientErr = c2p.SetDeadline(time.Now().Add(15 * time.Second))
+		require.Nil(t, clientErr)
 
-		clientConn, err := clientTransport.WrapConn(c2p)
-		require.Nil(t, err, "error getting wrapped connection")
+		clientConn, clientErr := clientTransport.WrapConn(c2p)
+		require.Nil(t, clientErr, "error getting wrapped connection")
+		require.NotNil(t, clientConn, "returned client wrapped connection nil")
 
-		err = clientConn.SetDeadline(time.Now().Add(3 * time.Second))
-		require.Nil(t, err, "error setting deadline")
-
-		_, err = clientConn.Write(message)
-		require.Nil(t, err, "failed writing to client connection")
+		_, clientErr = clientConn.Write(message)
+		require.Nil(t, clientErr, "failed writing to client connection")
 
 		cbuf := make([]byte, len(message))
-		_, err = io.ReadFull(clientConn, cbuf)
-		require.Nil(t, err, "failed reading from client connection")
+		_, clientErr = io.ReadFull(clientConn, cbuf)
+		require.Nil(t, clientErr, "failed reading from client connection")
 		require.True(t, bytes.Equal(message, cbuf), "%s\n%s", string(message), string(cbuf))
 	}
 }
 
-func genericParamPermutations() []any {
-	return []any{
-		&pb.GenericTransportParams{
-			RandomizeDstPort: &_true,
-		},
-		&pb.GenericTransportParams{
-			RandomizeDstPort: &_false,
-		},
+func genericParamPermutations() []TestParams {
+	return []TestParams{
+		&genericParams{
+			&pb.GenericTransportParams{
+				RandomizeDstPort: &_true,
+			}},
+		&genericParams{
+			&pb.GenericTransportParams{
+				RandomizeDstPort: &_false,
+			}},
 	}
+}
+
+type nilParams struct{}
+
+func (p *nilParams) GetParams() any {
+	return nil
+}
+
+func (p *nilParams) String() string {
+	return "nil"
+}
+
+type genericParams struct {
+	*pb.GenericTransportParams
+}
+
+func (p *genericParams) GetParams() any {
+	return p.GenericTransportParams
+}
+
+func (p *genericParams) String() string {
+	return fmt.Sprintf("randDstPort: %t", p.GetRandomizeDstPort())
+}
+
+// ClientParamPermutations returns a list of client parameters for inclusions in tests that require
+// variance.
+func prefixClientParamPermutations() []TestParams {
+	paramSet := []TestParams{}
+	for _, flushPolicy := range []int32{prefix.DefaultFlush, prefix.NoAddedFlush, prefix.FlushAfterPrefix} {
+		for idx := prefix.Rand; idx <= prefix.OpenSSH2; idx++ {
+			for _, rand := range []bool{true, false} {
+				var p int32 = int32(idx)
+				params := &prefix.ClientParams{
+					PrefixID:         p,
+					RandomizeDstPort: rand,
+					FlushPolicy:      flushPolicy,
+				}
+				paramSet = append(paramSet, params)
+			}
+		}
+	}
+	return paramSet
 }
