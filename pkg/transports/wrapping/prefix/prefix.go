@@ -269,7 +269,7 @@ func (t Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16,
 //
 // If the returned error is nil or non-nil and non-{ transports.ErrTryAgain,
 // transports.ErrNotTransport }, the caller may no longer use data or conn.
-func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager interfaces.RegManager) (interfaces.Registration, net.Conn, error) {
+func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager interfaces.RegManager) (interfaces.RegistrationSS, net.Conn, error) {
 	if data.Len() < minTagLength {
 		return nil, nil, transports.ErrTryAgain
 	}
@@ -282,7 +282,7 @@ func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst ne
 	return reg, transports.PrependToConn(c, data), nil
 }
 
-func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager interfaces.RegManager) (interfaces.Registration, error) {
+func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager interfaces.RegManager) (interfaces.RegistrationSS, error) {
 	if data.Len() == 0 {
 		return nil, transports.ErrTryAgain
 	}

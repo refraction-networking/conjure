@@ -159,10 +159,10 @@ func (cjSession *ConjureSession) conjureReg() *ConjureReg {
 }
 
 // BidirectionalRegData returns a C2SWrapper for bidirectional registration
-func (cjSession *ConjureSession) BidirectionalRegData(regSource *pb.RegistrationSource) (*ConjureReg, *pb.C2SWrapper, error) {
+func (cjSession *ConjureSession) BidirectionalRegData(ctx context.Context, regSource *pb.RegistrationSource) (*ConjureReg, *pb.C2SWrapper, error) {
 	reg := cjSession.conjureReg()
 
-	c2s, err := reg.generateClientToStation()
+	c2s, err := reg.generateClientToStation(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -176,7 +176,7 @@ func (cjSession *ConjureSession) BidirectionalRegData(regSource *pb.Registration
 }
 
 // UnidirectionalRegData returns a C2SWrapper for unidirectional registration
-func (cjSession *ConjureSession) UnidirectionalRegData(regSource *pb.RegistrationSource) (*ConjureReg, *pb.C2SWrapper, error) {
+func (cjSession *ConjureSession) UnidirectionalRegData(ctx context.Context, regSource *pb.RegistrationSource) (*ConjureReg, *pb.C2SWrapper, error) {
 	reg := cjSession.conjureReg()
 
 	phantom4, phantom6, supportRandomPort, err := SelectPhantom(cjSession.Keys.ConjureSeed, cjSession.V6Support)
@@ -196,7 +196,7 @@ func (cjSession *ConjureSession) UnidirectionalRegData(regSource *pb.Registratio
 		return nil, nil, err
 	}
 
-	c2s, err := reg.generateClientToStation()
+	c2s, err := reg.generateClientToStation(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

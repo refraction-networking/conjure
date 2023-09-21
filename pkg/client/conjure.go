@@ -298,7 +298,7 @@ func (reg *ConjureReg) generateFlags() *pb.RegistrationFlags {
 	return flags
 }
 
-func (reg *ConjureReg) generateClientToStation() (*pb.ClientToStation, error) {
+func (reg *ConjureReg) generateClientToStation(ctx context.Context) (*pb.ClientToStation, error) {
 	var covert *string
 	if len(reg.covertAddress) > 0 {
 		//[TODO]{priority:medium} this isn't the correct place to deal with signaling to the station
@@ -312,7 +312,7 @@ func (reg *ConjureReg) generateClientToStation() (*pb.ClientToStation, error) {
 	currentLibVer := core.CurrentClientLibraryVersion()
 	transport := reg.getPbTransport()
 
-	err := reg.Transport.Prepare(reg.ConjureSession.Dialer)
+	err := reg.Transport.Prepare(ctx, reg.ConjureSession.Dialer)
 	if err != nil {
 		return nil, fmt.Errorf("error preparing transport: %v", err)
 	}
