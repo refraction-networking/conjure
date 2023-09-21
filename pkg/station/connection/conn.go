@@ -19,5 +19,9 @@ func (c *Conn) Close() error {
 	if c.closeHook != nil {
 		c.closeHook(c)
 	}
+	if c.Conn == nil {
+		return nil
+	}
+
 	return c.Conn.Close()
 }

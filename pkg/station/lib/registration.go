@@ -272,6 +272,12 @@ func (regManager *RegistrationManager) Cleanup() {
 	clearDetector()
 }
 
+// Shutdown closes any actively tracked threads, allowing a clean close of the station.
+func (regManager *RegistrationManager) Shutdown() {
+	// TODO: more cleanup here
+	regManager.Cleanup()
+}
+
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
 	PhantomIp    net.IP

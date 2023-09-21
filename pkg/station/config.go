@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
+	"github.com/refraction-networking/conjure/pkg/station/connection"
 	"github.com/refraction-networking/conjure/pkg/station/lib"
 )
 
@@ -12,9 +13,11 @@ import (
 type Config struct {
 	*lib.ZMQConfig
 	*lib.RegConfig
+	*connection.ConnManagerConfig
 
 	// Log verbosity level
-	LogLevel string `toml:"log_level"`
+	LogLevel    string `toml:"log_level"`
+	LogClientIP bool   `toml:"log_client_ip"` // also available from the CJ_LOG_CLIENT_IP environment variable
 
 	// Path to private key file
 	PrivateKeyPath string `toml:"privkey_path"`

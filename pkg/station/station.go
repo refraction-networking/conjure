@@ -3,18 +3,20 @@ package station
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/dtls/dnat"
+	"github.com/refraction-networking/conjure/pkg/log"
 	"github.com/refraction-networking/conjure/pkg/station/connection"
 	"github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
+	pb "github.com/refraction-networking/conjure/proto"
 )
 
 // PrivateKeyLength is the expected length of the station (ed25519) private key in bytes.
@@ -28,12 +30,20 @@ var (
 	errNonConjureConn = "cannot use %s on non-conjure connection"
 )
 
+var (
+	// sharedLogger is the default logger for the station package.
+	sharedLogger *log.Logger
+)
+
 // Station is a Conjure station. Running all required routines based on the provided configuration.
 type Station struct {
 	regManager  *lib.RegistrationManager
 	connManager *connection.ConnHandler
 	stats       []*lib.Stats
-	wg          *sync.WaitGroup
+
+	enabledTransports map[pb.TransportType]interfaces.TransportSS
+
+	wg *sync.WaitGroup
 }
 
 type listener struct {
@@ -43,7 +53,8 @@ type listener struct {
 
 func New(ctx context.Context, conf *Config) (*Station, error) {
 
-	connManager := connection.NewConnManager(nil)
+	connManager := connection.NewConnManager(conf.ConnManagerConfig)
+	enabledTransports := make(map[pb.TransportType]interfaces.TransportSS)
 
 	conf.RegConfig.ConnectingStats = connManager
 
@@ -85,6 +96,8 @@ func New(ctx context.Context, conf *Config) (*Station, error) {
 	if err != nil {
 		logger.Errorf("failed parse client ip logging setting: %v\n", err)
 		logClientIP = false
+	} else {
+		conf.LogClientIP = logClientIP
 	}
 
 	privkey, err := conf.ParsePrivateKey()
@@ -114,7 +127,7 @@ func New(ctx context.Context, conf *Config) (*Station, error) {
 
 	wg := new(sync.WaitGroup)
 	regChan := make(chan interface{}, 10000)
-	zmqIngester, err := lib.NewZMQIngest(zmqAddress, regChan, privkey, conf.ZMQConfig)
+	zmqIngester, err := lib.NewZMQIngest(conf.ZMQConfig.LocalZmqAddress, regChan, privkey, conf.ZMQConfig)
 	if err != nil {
 		logger.Fatal("error creating ZMQ Ingest: %w", err)
 	}
@@ -147,18 +160,37 @@ func New(ctx context.Context, conf *Config) (*Station, error) {
 	go regManager.HandleRegUpdates(ctx, regChan, wg)
 
 	return &Station{
-		regManager:  regManager,
-		connManager: connManager,
-		stats:       []*lib.Stats{lib.Stat()},
-
-		wg: wg,
+		regManager:        regManager,
+		connManager:       &connManager,
+		stats:             []*lib.Stats{lib.Stat()},
+		enabledTransports: enabledTransports,
+		wg:                wg,
 	}, nil
 }
 
 // Listen creates a new listener for the station which gives back a listener that can be used to
 // accept connections in the pattern of the net package.
-func (s *Station) Listen(addr net.Addr) net.Listener {
-	return s
+func Listen(network, address string) (net.Listener, error) {
+	conf, err := ConfigFromEnv()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx := context.Background()
+
+	station, err := New(ctx, conf)
+	if err != nil {
+		return nil, err
+	}
+
+	return station.Listen(ctx, network, address)
+}
+
+// Listen creates a new listener for the station which gives back a listener that can be used to
+// accept connections in the pattern of the net package. Building a listener in this way allows the
+// caller to specify the context.
+func (s *Station) Listen(ctx context.Context, network, addr string) (net.Listener, error) {
+	return s, nil
 }
 
 // Accept accepts a new connection from the listener.

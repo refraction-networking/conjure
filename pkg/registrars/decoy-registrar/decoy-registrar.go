@@ -276,9 +276,9 @@ func (r *DecoyRegistrar) Register(ctx context.Context, cjSession *client.Conjure
 	return reg, nil
 }
 
-// Send constructs a decoy registration and sends the encoded request to the decoy completing the
+// send constructs a decoy registration and sends the encoded request to the decoy completing the
 // registration.
-func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *client.ConjureSession, decoy *pb.TLSDecoySpec, dialError chan error) {
+func (r *DecoyRegistrar) send(ctx context.Context, cjSession *client.ConjureSession, decoy *pb.TLSDecoySpec, dialError chan error) {
 
 	deadline, deadlineAlreadySet := ctx.Deadline()
 	if !deadlineAlreadySet {

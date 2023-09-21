@@ -59,7 +59,7 @@ func main() {
 		log.Fatalf("failed to create station: %v", err)
 	}
 	defer func() {
-		station.Shutdown()
+		cjStation.Shutdown()
 		logger.Infof("shutdown complete")
 	}()
 
@@ -85,20 +85,20 @@ func main() {
 		if err != nil {
 			log.Errorf("failed to parse app config: %v", err)
 		} else {
-			regManager.OnReload(newConf.RegConfig)
+			cjStation.OnReload(newConf.RegConfig)
 		}
 	}
 
 	cancel()
 }
 
-func acceptConnections(ctx context.Context, config *station.Station, logger *log.Logger) {
+func acceptConnections(ctx context.Context, cjStation *station.Station, logger *log.Logger) {
 
 	// listen for and handle incoming proxy traffic
 	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
 	ln := cjStation.Listen(listenAddr)
-	if err != nil {
-		logger.Fatalf("failed to listen on %v: %v\n", listenAddr, err)
+	if ln == nil {
+		logger.Fatalf("failed to listen on %v: %v\n", listenAddr)
 	}
 	defer ln.Close()
 	logger.Infof("[STARTUP] Listening on %v\n", ln.Addr())

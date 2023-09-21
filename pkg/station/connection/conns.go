@@ -13,19 +13,18 @@ import (
 	"time"
 
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
+	"github.com/refraction-networking/conjure/pkg/log"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
-	"github.com/refraction-networking/conjure/pkg/station/log"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	"github.com/refraction-networking/conjure/pkg/transports/connecting/dtls"
 )
 
 // ConnManagerConfig
 type ConnManagerConfig struct {
-	NewConnDeadline string
-	newConnDeadline time.Duration
 	TraceDebugRate  int // rate at which to print Debug logging for connections. Rate is computed as 1/n - 0 indicates off.
 	Logger          *log.Logger
 	LogClientIP     bool
+	NewConnDeadline time.Duration
 }
 
 type connManager struct {
@@ -48,8 +47,7 @@ func NewConnManager(conf *ConnManagerConfig) ConnHandler {
 func newConnManager(conf *ConnManagerConfig) *connManager {
 	if conf == nil {
 		conf = &ConnManagerConfig{
-			NewConnDeadline: "10s",
-			newConnDeadline: 10 * time.Second,
+			NewConnDeadline: 10 * time.Second,
 			TraceDebugRate:  0,
 		}
 	}

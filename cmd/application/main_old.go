@@ -12,11 +12,10 @@ import (
 	"time"
 
 	"github.com/refraction-networking/conjure/pkg/dtls/dnat"
+	"github.com/refraction-networking/conjure/pkg/log"
 	"github.com/refraction-networking/conjure/pkg/station"
 	"github.com/refraction-networking/conjure/pkg/station/connection"
-	"github.com/refraction-networking/conjure/pkg/station/lib"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
-	"github.com/refraction-networking/conjure/pkg/station/log"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
@@ -190,28 +189,28 @@ func main() {
 	logger.Infof("shutdown complete")
 }
 
-func acceptConnections(ctx context.Context, rm *lib.RegistrationManager, logger *log.Logger) {
+// func acceptConnections(ctx context.Context, rm *lib.RegistrationManager, logger *log.Logger) {
 
-	// listen for and handle incoming proxy traffic
-	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
-	ln, err := net.ListenTCP("tcp", listenAddr)
-	if err != nil {
-		logger.Fatalf("failed to listen on %v: %v\n", listenAddr, err)
-	}
-	defer ln.Close()
-	logger.Infof("[STARTUP] Listening on %v\n", ln.Addr())
+// 	// listen for and handle incoming proxy traffic
+// 	listenAddr := &net.TCPAddr{IP: nil, Port: 41245, Zone: ""}
+// 	ln, err := net.ListenTCP("tcp", listenAddr)
+// 	if err != nil {
+// 		logger.Fatalf("failed to listen on %v: %v\n", listenAddr, err)
+// 	}
+// 	defer ln.Close()
+// 	logger.Infof("[STARTUP] Listening on %v\n", ln.Addr())
 
-	for {
-		select {
-		case <-ctx.Done():
-			break
-		default:
-			newConn, err := ln.AcceptTCP()
-			if err != nil {
-				logger.Errorf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
-				continue
-			}
-			go cm.handleNewConn(rm, newConn)
-		}
-	}
-}
+// 	for {
+// 		select {
+// 		case <-ctx.Done():
+// 			break
+// 		default:
+// 			newConn, err := ln.AcceptTCP()
+// 			if err != nil {
+// 				logger.Errorf("[ERROR] failed to AcceptTCP on %v: %v\n", ln.Addr(), err)
+// 				continue
+// 			}
+// 			go cm.handleNewConn(rm, newConn)
+// 		}
+// 	}
+// }

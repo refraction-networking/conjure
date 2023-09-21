@@ -18,6 +18,8 @@ import (
 
 // ZMQConfig - Configuration options relevant to the ZMQ Proxy utility
 type ZMQConfig struct {
+	LocalZmqAddress string `toml:"local_zmq_address"`
+
 	SocketName        string         `toml:"socket_name"`
 	ConnectSockets    []socketConfig `toml:"connect_sockets"`
 	HeartbeatInterval int            `toml:"heartbeat_interval"`

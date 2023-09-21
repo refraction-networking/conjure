@@ -84,38 +84,6 @@ type ConnectingTransport interface {
 	DisableRegDelay() bool
 }
 
-// Overrides makes it possible to treat an array of overrides as a single override note that the
-// subsequent overrides are not aware of those that come before so they may end up undoing their
-// changes.
-type Overrides []RegOverride
-
-// Override implements the RegOverride interface.
-func (o Overrides) Override(reg *pb.C2SWrapper, randReader io.Reader) error {
-	var err error
-	for _, override := range o {
-		err = override.Override(reg, randReader)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// RegOverride provides a generic way for the station to mutate an incoming registration before
-// handing it off to the stations or returning it to the client as part of the RegResponse protobuf.
-type RegOverride interface {
-	Override(*pb.C2SWrapper, io.Reader) error
-}
-
-// DNAT used by the station side DTLS transport implementation to warm up the DNAT table such that
-// we are able to handle incoming client connections.
-type DNAT interface {
-	AddEntry(clientAddr *net.IP, clientPort uint16, phantomIP *net.IP, phantomPort uint16) error
-}
-
-// DnatBuilder function type alias for building a DNAT object
-type DnatBuilder func() (DNAT, error)
-
 // ConnectingTpStats is an interface for tracking statistics about the connecting transports
 type ConnectingTpStats interface {
 	AddCreatedConnecting(asn uint, cc string, tp string)
@@ -138,53 +106,3 @@ type Stats interface {
 // a connection after registering their session with the station. This acts as a kind of ticket,
 // holding the information necessary to (re-)establish the connection to the phantom.
 type Registration interface{}
-
-// Overrides makes it possible to treat an array of overrides as a single override note that the
-// subsequent overrides are not aware of those that come before so they may end up undoing their
-// changes.
-type Overrides []RegOverride
-
-// Override implements the RegOverride interface.
-func (o Overrides) Override(reg *pb.C2SWrapper, randReader io.Reader) error {
-	var err error
-	for _, override := range o {
-		err = override.Override(reg, randReader)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// RegOverride provides a generic way for the station to mutate an incoming registration before
-// handing it off to the stations or returning it to the client as part of the RegResponse protobuf.
-type RegOverride interface {
-	Override(*pb.C2SWrapper, io.Reader) error
-}
-
-// DNAT used by the station side DTLS transport implementation to warm up the DNAT table such that
-// we are able to handle incoming client connections.
-type DNAT interface {
-	AddEntry(clientAddr *net.IP, clientPort uint16, phantomIP *net.IP, phantomPort uint16) error
-}
-
-// DnatBuilder function type alias for building a DNAT object
-type DnatBuilder func() (DNAT, error)
-
-// ConnectingTpStats is an interface for tracking statistics about the connecting transports
-type ConnectingTpStats interface {
-	AddCreatedConnecting(asn uint, cc string, tp string)
-	AddCreatedToSuccessfulConnecting(asn uint, cc string, tp string)
-	AddCreatedToTimeoutConnecting(asn uint, cc string, tp string)
-	AddSuccessfulToDiscardedConnecting(asn uint, cc string, tp string)
-	AddOtherFailConnecting(asn uint, cc string, tp string)
-}
-
-type Stats interface {
-	// PrintAndReset is intended to allow each stats module to summarize metrics
-	// from the current epoch out through the logger and then reset any stats
-	// that need reset as the start of a new epoch.
-	PrintAndReset(logger *log.Logger)
-
-	Reset()
-}

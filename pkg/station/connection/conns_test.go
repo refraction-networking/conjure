@@ -49,7 +49,7 @@ func TestConnHandleNewTCPConn(t *testing.T) {
 	db := &MockGeoIP{}
 	rm.GeoIP = db
 
-	connManager := NewConnManager(nil)
+	connMgr := NewConnManager(nil)
 	ip := net.ParseIP("8.8.8.8")
 	clientConn, serverConn := net.Pipe()
 	defer clientConn.Close()
@@ -61,7 +61,7 @@ func TestConnHandleNewTCPConn(t *testing.T) {
 
 	// Call the handleNewTCPConn function in a separate goroutine
 	go func() {
-		connManager.handleNewTCPConn(rm, serverConn, ip)
+		connMgr.(*connManager).handleNewTCPConn(rm, serverConn, ip)
 		wg.Done()
 	}()
 
@@ -94,7 +94,7 @@ func TestConnHandleNewTCPConn(t *testing.T) {
 
 func TestConnPrintAndReset(t *testing.T) {
 	logger := log.New(os.Stdout, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
-	connManager := NewConnManager(nil)
+	connMgr := NewConnManager(nil)
 	v4GeoIPMap := make(map[uint]*asnCounts)
 	v4GeoIPMap[0] = &asnCounts{
 		cc: "unk",
@@ -130,13 +130,13 @@ func TestConnPrintAndReset(t *testing.T) {
 		},
 	}
 
-	connManager.connStats.ipv4.numCreated = 55
-	connManager.connStats.ipv4.numCheckToError = 1
-	connManager.connStats.ipv6.numReset = 17
-	connManager.connStats.v4geoIPMap = v4GeoIPMap
-	connManager.connStats.v6geoIPMap = v6GeoIPMap
-	// connManager.connStats.v6geoIPMap = make(map[uint]*asnCounts)
-	connManager.connStats.PrintAndReset(logger)
+	connMgr.(*connManager).connStats.ipv4.numCreated = 55
+	connMgr.(*connManager).connStats.ipv4.numCheckToError = 1
+	connMgr.(*connManager).connStats.ipv6.numReset = 17
+	connMgr.(*connManager).connStats.v4geoIPMap = v4GeoIPMap
+	connMgr.(*connManager).connStats.v6geoIPMap = v6GeoIPMap
+	// connMgr.(*connManager).connStats.v6geoIPMap = make(map[uint]*asnCounts)
+	connMgr.(*connManager).connStats.PrintAndReset(logger)
 }
 
 func TestConnHandleConcurrent(t *testing.T) {
