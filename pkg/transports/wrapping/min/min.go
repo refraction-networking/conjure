@@ -88,7 +88,7 @@ func (t Transport) ParamStrings(p any) []string {
 //
 // If the returned error is nil or non-nil and non-{ transports.ErrTryAgain,
 // transports.ErrNotTransport }, the caller may no longer use data or conn.
-func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager interfaces.RegManager) (interfaces.Registration, net.Conn, error) {
+func (Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager interfaces.RegManager) (interfaces.RegistrationSS, net.Conn, error) {
 	if data.Len() < minTagLength {
 		return nil, nil, transports.ErrTryAgain
 	}
