@@ -185,13 +185,16 @@ func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpe
 	return httpRequest, nil
 }
 
+<<<<<<< HEAD
 // Register implements the Registrar interface for he DecoyRegistrar type
+=======
+>>>>>>> 2e05f53 (Several DTLS fixes (#228))
 func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Context) (*td.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
 
 	logger.Debugf("Registering V4 and V6 via DecoyRegistrar")
 
-	reg, _, err := cjSession.UnidirectionalRegData(pb.RegistrationSource_API.Enum())
+	reg, _, err := cjSession.UnidirectionalRegData(ctx, pb.RegistrationSource_API.Enum())
 	if err != nil {
 		logger.Errorf("Failed to prepare registration data: %v", err)
 		return nil, lib.ErrRegFailed

@@ -79,10 +79,10 @@ func NewDNSRegistrar(config *Config) (*DNSRegistrar, error) {
 }
 
 // registerUnidirectional sends unidirectional registration data to the registration server
-func (r *DNSRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession) (*tapdance.ConjureReg, error) {
+func (r *DNSRegistrar) registerUnidirectional(ctx context.Context, cjSession *tapdance.ConjureSession) (*tapdance.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
 
-	reg, protoPayload, err := cjSession.UnidirectionalRegData(pb.RegistrationSource_DNS.Enum())
+	reg, protoPayload, err := cjSession.UnidirectionalRegData(ctx, pb.RegistrationSource_DNS.Enum())
 	if err != nil {
 		logger.Errorf("Failed to prepare registration data: %v", err)
 		return nil, lib.ErrRegFailed
@@ -125,10 +125,10 @@ func (r *DNSRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession
 }
 
 // registerBidirectional sends bidirectional registration data to the registration server and reads the response
-func (r *DNSRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession) (*tapdance.ConjureReg, error) {
+func (r *DNSRegistrar) registerBidirectional(ctx context.Context, cjSession *tapdance.ConjureSession) (*tapdance.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "bidirectional", "sessionID": cjSession.IDString()})
 
-	reg, protoPayload, err := cjSession.BidirectionalRegData(pb.RegistrationSource_BidirectionalDNS.Enum())
+	reg, protoPayload, err := cjSession.BidirectionalRegData(ctx, pb.RegistrationSource_BidirectionalDNS.Enum())
 	if err != nil {
 		logger.Errorf("Failed to prepare registration data: %v", err)
 		return nil, lib.ErrRegFailed
@@ -192,9 +192,9 @@ func (r *DNSRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.
 	defer lib.SleepWithContext(ctx, r.connectionDelay)
 
 	if r.bidirectional {
-		return r.registerBidirectional(cjSession)
+		return r.registerBidirectional(ctx, cjSession)
 	}
-	return r.registerUnidirectional(cjSession)
+	return r.registerUnidirectional(ctx, cjSession)
 }
 
 func getPublicIp(server string) ([]byte, error) {

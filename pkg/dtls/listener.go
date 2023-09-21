@@ -72,8 +72,6 @@ func (l *Listener) acceptLoop() {
 			}
 
 			acceptCh <- newDTLSConn
-
-			close(acceptCh)
 		}()
 	}
 }
@@ -169,7 +167,10 @@ func (l *Listener) AcceptWithContext(ctx context.Context, config *Config) (net.C
 		return &dtls.Conn{}, err
 	}
 
-	l.registerCert(connID, clientCert, serverCert)
+	err = l.registerCert(connID, clientCert, serverCert)
+	if err != nil {
+		return nil, fmt.Errorf("error registering cert: %v", err)
+	}
 	defer l.removeCert(connID)
 
 	connCh, err := l.registerChannel(connID)
@@ -190,10 +191,16 @@ func (l *Listener) AcceptWithContext(ctx context.Context, config *Config) (net.C
 	}
 }
 
-func (l *Listener) registerCert(connID [handshake.RandomBytesLength]byte, clientCert, serverCert *tls.Certificate) {
+func (l *Listener) registerCert(connID [handshake.RandomBytesLength]byte, clientCert, serverCert *tls.Certificate) error {
 	l.connToCertMutex.Lock()
 	defer l.connToCertMutex.Unlock()
+
+	if l.connToCert[connID] != nil {
+		return fmt.Errorf("seed already registered")
+	}
+
 	l.connToCert[connID] = &certPair{clientCert: clientCert, serverCert: serverCert}
+	return nil
 }
 
 func (l *Listener) removeCert(connID [handshake.RandomBytesLength]byte) {

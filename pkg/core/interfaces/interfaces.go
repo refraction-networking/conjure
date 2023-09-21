@@ -42,7 +42,7 @@ type Transport interface {
 
 	// Prepare lets the transport use the dialer to prepare. This is called before GetParams to let the
 	// transport prepare stuff such as nat traversal.
-	Prepare(dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error
+	Prepare(ctx context.Context, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error
 
 	// GetDstPort returns the destination port that the client should open the phantom connection with.
 	GetDstPort(seed []byte) (uint16, error)

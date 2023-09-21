@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"syscall"
+	"time"
 
 	"github.com/pion/stun"
 )
@@ -24,8 +25,11 @@ func openUDP(ctx context.Context, laddr, addr string, dialer dialFunc) error {
 	}
 	defer conn.Close()
 
-	// Write data to the connection
-	_, err = conn.Write([]byte(""))
+	return sendPacket(ctx, conn)
+}
+
+func sendPacket(ctx context.Context, conn net.Conn) error {
+	_, err := conn.Write([]byte(""))
 	if err != nil {
 		return err
 	}
@@ -75,55 +79,57 @@ func openUDPLimitTTL(ctx context.Context, laddr, addr string, dialer dialFunc) e
 	return nil
 }
 
-var (
-	privPortSingle int
-	pubPortSingle  int
-)
+func publicAddr(ctx context.Context, network string, stunServer string, dialer dialFunc) (privateAddr *net.UDPAddr, publicAddr *net.UDPAddr, err error) {
 
-func publicAddr(stunServer string, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) (privatePort int, publicPort int, err error) {
-
-	if privPortSingle != 0 && pubPortSingle != 0 {
-		return privPortSingle, pubPortSingle, nil
-	}
-
-	udpConn, err := dialer(context.Background(), "udp", "", stunServer)
+	udpConn, err := dialer(ctx, network, "", stunServer)
 	if err != nil {
-		return 0, 0, fmt.Errorf("error connecting to STUN server: %v", err)
+		return nil, nil, fmt.Errorf("error connecting to STUN server: %v", err)
 	}
 	defer udpConn.Close()
 
 	localAddr, err := net.ResolveUDPAddr(udpConn.LocalAddr().Network(), udpConn.LocalAddr().String())
 	if err != nil {
-		return 0, 0, fmt.Errorf("error resolving local address: %v", err)
+		return nil, nil, fmt.Errorf("error resolving local address: %v", err)
 	}
 
 	client, err := stun.NewClient(udpConn)
 	if err != nil {
-		return 0, 0, fmt.Errorf("error creating STUN client: %v", err)
+		return nil, nil, fmt.Errorf("error creating STUN client: %v", err)
 	}
 
 	message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
 
 	var xorAddr stun.XORMappedAddress
 
-	err = client.Do(message, func(res stun.Event) {
+	doneCh := make(chan error, 1)
+
+	err = client.Start(message, func(res stun.Event) {
 		if res.Error != nil {
-			err = res.Error
+			doneCh <- err
 			return
 		}
 
 		err = xorAddr.GetFrom(res.Message)
-		if err != nil {
-			return
-		}
+		doneCh <- err
 	})
-
 	if err != nil {
-		return 0, 0, fmt.Errorf("error getting address from STUN: %v", err)
+		return nil, nil, fmt.Errorf("error getting address from STUN: %v", err)
 	}
 
-	privPortSingle = localAddr.Port
-	pubPortSingle = xorAddr.Port
+	defer client.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		timer := time.AfterFunc(time.Until(deadline), func() { client.Close() })
+		defer timer.Stop()
+	}
 
-	return localAddr.Port, xorAddr.Port, nil
+	select {
+	case err := <-doneCh:
+		if err != nil {
+			return nil, nil, fmt.Errorf("error during client: %v", err)
+		}
+	case <-ctx.Done():
+		return nil, nil, fmt.Errorf("timeout: %v", ctx.Err())
+	}
+
+	return localAddr, &net.UDPAddr{IP: xorAddr.IP, Port: xorAddr.Port}, nil
 }
