@@ -6,7 +6,6 @@ require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/flynn/noise v1.0.0
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/golang/protobuf v1.5.3
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/golang-lru v1.0.2
@@ -52,5 +51,3 @@ require (
 replace github.com/pion/dtls/v2 => github.com/mingyech/dtls/v2 v2.0.0
 
 replace github.com/pion/transport/v2 => github.com/mingyech/transport/v2 v2.0.0
-
-replace github.com/refraction-networking/gotapdance => github.com/refraction-networking/gotapdance v1.7.3-0.20230914182507-7d8ccbce6eb2
