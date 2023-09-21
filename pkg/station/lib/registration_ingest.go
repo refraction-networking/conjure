@@ -370,11 +370,6 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		return nil, fmt.Errorf("error determining phantom connection proto: %s", err)
 	}
 
-	srcPort, err := rm.getClientSrcPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer)
-	if err != nil {
-		return nil, fmt.Errorf("error determining client source port: %s", err)
-	}
-
 	reg := DecoyRegistration{
 		DecoyListVersion: c2s.GetDecoyListGeneration(),
 		Keys:             conjureKeys,
@@ -383,7 +378,6 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		TransportPtr:     &transport,
 		transportParams:  transportParams,
 		Flags:            c2s.Flags,
-		clientPort:       srcPort,
 
 		PhantomIp:    *phantomAddr.IP,
 		PhantomPort:  phantomPort,
@@ -499,22 +493,6 @@ func (rm *RegistrationManager) getPhantomDstPort(t pb.TransportType, params any,
 	// will attempt to reach. The libVersion is provided incase of version dependent changes in the
 	// transport selection algorithms themselves.
 	return transport.GetDstPort(libVer, seed, params)
-}
-
-// getPhantomDstPort returns the proper phantom port based on registration type, transport
-// parameters provided by the client and session details (also provided by the client).
-func (rm *RegistrationManager) getClientSrcPort(t pb.TransportType, params any, seed []byte, libVer uint) (uint16, error) {
-	var transport, ok = rm.registeredDecoys.transports[t].(ConnectingTransport)
-	if !ok {
-		// non-connecting transports do not have a set source port
-		return 0, nil
-	}
-
-	// GetDstPort Given the library version, a seed, and a generic object containing parameters the
-	// transport should be able to return the destination port that a clients phantom connection
-	// will attempt to reach. The libVersion is provided incase of version dependent changes in the
-	// transport selection algorithms themselves.
-	return transport.GetSrcPort(libVer, seed, params)
 }
 
 // Handle new registration from client for UDP Transports

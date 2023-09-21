@@ -74,7 +74,7 @@ func (r *APIRegistrar) PrepareRegKeys(pubkey [32]byte) error {
 func (r *APIRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
 
-	reg, protoPayload, err := cjSession.UnidirectionalRegData(pb.RegistrationSource_API.Enum())
+	reg, protoPayload, err := cjSession.UnidirectionalRegData(ctx, pb.RegistrationSource_API.Enum())
 	if err != nil {
 		logger.Errorf("Failed to prepare registration data: %v", err)
 		return nil, lib.ErrRegFailed
@@ -114,7 +114,7 @@ func (r *APIRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession
 func (r *APIRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "bidirectional", "sessionID": cjSession.IDString()})
 
-	reg, protoPayload, err := cjSession.BidirectionalRegData(pb.RegistrationSource_BidirectionalAPI.Enum())
+	reg, protoPayload, err := cjSession.BidirectionalRegData(ctx, pb.RegistrationSource_BidirectionalAPI.Enum())
 	if err != nil {
 		logger.Errorf("Failed to prepare registration data: %v", err)
 		return nil, lib.ErrRegFailed

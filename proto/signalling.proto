@@ -192,9 +192,15 @@ message WebRTCSignal {
     required WebRTCSDP sdp = 2;
 }
 
+message Addr {
+    optional bytes IP = 1;
+    optional uint32 Port = 2;
+}
+
 message DTLSTransportParams {
-    optional uint32 src_port = 1;
-    optional bool randomize_dst_port = 2;
+    optional Addr src_addr4 = 1;
+    optional Addr src_addr6 = 2;
+    optional bool randomize_dst_port = 3;
 }
 
 message StationToClient {

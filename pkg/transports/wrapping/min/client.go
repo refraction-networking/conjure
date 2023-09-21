@@ -39,7 +39,7 @@ func (*ClientTransport) ID() pb.TransportType {
 	return pb.TransportType_Min
 }
 
-func (*ClientTransport) Prepare(dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
+func (*ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
 	return nil
 }
 

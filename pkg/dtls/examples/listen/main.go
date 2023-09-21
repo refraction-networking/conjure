@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	var localAddr = flag.String("laddr", "127.0.0.1:6666", "source address")
+	var localAddr = flag.String("laddr", "[::]:6666", "source address")
 	var secret = flag.String("secret", "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", "shared secret")
 	flag.Parse()
 
