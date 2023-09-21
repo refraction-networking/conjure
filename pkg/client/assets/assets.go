@@ -11,8 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/refraction-networking/conjure/pkg/log"
 	ps "github.com/refraction-networking/conjure/pkg/phantoms"
-	"github.com/refraction-networking/conjure/pkg/station/log"
 	pb "github.com/refraction-networking/conjure/proto"
 
 	"google.golang.org/protobuf/proto"
@@ -26,6 +26,13 @@ const (
 	sendLimitMin = 14400
 )
 
+// ClientInterface is an interface for accessing assets
+type ClientInterface interface {
+	GetClientConfig() *pb.ClientConf
+	SetClientConfig(*pb.ClientConf) error
+	GetPublicKey() *[32]byte
+}
+
 type assets struct {
 	sync.RWMutex
 	path string
@@ -33,8 +40,6 @@ type assets struct {
 	config *pb.ClientConf
 
 	filenameClientConf string
-
-	socksAddr string
 }
 
 // could reset this internally to refresh assets and avoid woes of singleton testing
@@ -136,10 +141,25 @@ func initAssets(path string) error {
 		path:               path,
 		config:             &defaultClientConf,
 		filenameClientConf: "ClientConf",
-		socksAddr:          "",
 	}
 	err := assetsInstance.readConfigs()
 	return err
+}
+func (a *assets) GetClientConfig() *pb.ClientConf {
+	return a.config
+}
+func (a *assets) SetClientConfig(clientConf *pb.ClientConf) error {
+	a.Lock()
+	defer a.Unlock()
+	a.config = clientConf
+	return a.saveClientConf()
+}
+
+func (a *assets) GetPublicKey() *[32]byte {
+	if a.config == nil {
+		return nil
+	}
+	return a.GetConjurePubkey()
 }
 
 func (a *assets) GetAssetsDir() string {
@@ -279,14 +299,15 @@ func (a *assets) GetV6Decoy() *pb.TLSDecoySpec {
 	return chosenDecoy
 }
 
-func (a *assets) GetPubkey() *[32]byte {
-	a.RLock()
-	defer a.RUnlock()
+// // Deprecated - Tapdance Public Key
+// func (a *assets) GetPubkey() *[32]byte {
+// 	a.RLock()
+// 	defer a.RUnlock()
 
-	var pKey [32]byte
-	copy(pKey[:], a.config.GetDefaultPubkey().GetKey()[:])
-	return &pKey
-}
+// 	var pKey [32]byte
+// 	copy(pKey[:], a.config.GetDefaultPubkey().GetKey()[:])
+// 	return &pKey
+// }
 
 func (a *assets) GetConjurePubkey() *[32]byte {
 	a.RLock()
@@ -386,11 +407,6 @@ func (a *assets) saveClientConf() error {
 	}
 
 	return os.Rename(tmpFilename, filename)
-}
-
-// SetStatsSocksAddr - Provide a socks address for reporting stats from the client in the form "addr:port"
-func (a *assets) SetStatsSocksAddr(addr string) {
-	a.socksAddr = addr
 }
 
 // GetPhantomSubnets -

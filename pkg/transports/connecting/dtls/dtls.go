@@ -35,7 +35,7 @@ func (Transport) LogPrefix() string {
 }
 
 // GetIdentifier returns an identifier unique a registration
-func (Transport) GetIdentifier(reg transports.Registration) string {
+func (Transport) GetIdentifier(reg interfaces.RegistrationSS) string {
 	return string(core.ConjureHMAC(reg.SharedSecret(), "dtlsTrasportHMACString"))
 }
 
@@ -62,8 +62,8 @@ func NewTransport(logAuthFail func(*net.IP), logOtherFail func(*net.IP), logDial
 	}, nil
 }
 
-// Connect takes a registraion and returns a dtls Conn connected to the client
-func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (net.Conn, error) {
+// Connect takes a registration and returns a dtls Conn connected to the client
+func (t *Transport) Connect(ctx context.Context, reg interfaces.RegistrationSS) (net.Conn, error) {
 	if reg.TransportType() != pb.TransportType_DTLS {
 		return nil, transports.ErrNotTransport
 	}

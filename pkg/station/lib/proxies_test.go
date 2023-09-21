@@ -18,7 +18,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/log"
 )
 
 var errNotExist = errors.New("not implemented")

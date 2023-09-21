@@ -13,7 +13,7 @@ import (
 
 	zmq "github.com/pebbe/zmq4"
 
-	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/log"
 )
 
 // ZMQConfig - Configuration options relevant to the ZMQ Proxy utility

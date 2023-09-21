@@ -3,38 +3,38 @@
 CC		 = ${CROSS_COMPILE}gcc #--platform=native
 
 DEBUG_OR_RELEASE = release
-RUST_LIB=./target/release/librust_dark_decoy.a
-TD_LIB=./libtapdance/libtapdance.a
+RUST_LIB=./target/release/libdetector_rs.a
+TD_LIB=./cmd/detector/libtapdance/libtapdance.a
 LIBS=${RUST_LIB} ${TD_LIB} -L/usr/local/lib -lpcap -lpfring -lzmq -lcrypto -lpthread -lrt -lgmp -ldl -lm
 CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_RING_ZERO_COPY -O2 # -g
-PROTO_RS_PATH=src/signalling.rs
+PROTO_RS_PATH=./cmd/detector/src/signalling.rs
 EXE_DIR=./bin
 
 all: rust libtd conjure app registration-server ${PROTO_RS_PATH}
 
 sim: rust libtd conjure-sim app registration-server ${PROTO_RS_PATH}
 
-rust: ./src/*.rs
-	cargo build --${DEBUG_OR_RELEASE}
+rust:
+	cd ./cmd/detector/ && cargo build --${DEBUG_OR_RELEASE}
 
 test:
-	cargo test --${DEBUG_OR_RELEASE}
+	cd ./cmd/detector/ && cargo test --${DEBUG_OR_RELEASE}
 
 app:
 	[ -d $(EXE_DIR) ] || mkdir -p $(EXE_DIR)
 	go build -o ${EXE_DIR}/application ./cmd/application
 
 libtd:
-	cd ./libtapdance/ && make libtapdance.a
+	cd ./cmd/detector/libtapdance/ && make libtapdance.a
 
-conjure: detect.c loadkey.c rust_util.c rust libtapdance
+conjure: rust ./cmd/detector/libtapdance
 	[ -d $(EXE_DIR) ] || mkdir -p $(EXE_DIR)
-	${CC} ${CFLAGS} -o ${EXE_DIR}/$@ detect.c loadkey.c rust_util.c ${LIBS}
+	${CC} ${CFLAGS} -o ${EXE_DIR}/$@ ./cmd/detector/detect.c ./cmd/detector/loadkey.c ./cmd/detector/rust_util.c ${LIBS}
 
 
-conjure-sim: detect.c loadkey.c rust_util.c rust libtapdance
+conjure-sim: rust ./cmd/detector/libtapdance
 	[ -d $(EXE_DIR) ] || mkdir -p $(EXE_DIR)
-	${CC} -Wall -O2 -o ${EXE_DIR}/conjure detect.c loadkey.c rust_util.c ${LIBS}
+	${CC} -Wall -O2 -o ${EXE_DIR}/conjure ./cmd/detector/detect.c ./cmd/detector/loadkey.c ./cmd/detector/rust_util.c ${LIBS}
 
 registration-server:
 	[ -d $(EXE_DIR) ] || mkdir -p $(EXE_DIR)
@@ -84,7 +84,7 @@ endif
 	$(RM) -rf backup
 
 clean:
-	cargo clean
+	cd ./cmd/detector/ && cargo clean
 	$(RM) -rf *.o *~ ${EXE_DIR}
 	cd ./libtapdance/ && make clean
 

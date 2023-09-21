@@ -11,11 +11,11 @@ import (
 	"sync"
 
 	"github.com/gorilla/mux"
+	"github.com/refraction-networking/conjure/pkg/log"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regserver/regprocessor"
 	"github.com/refraction-networking/conjure/pkg/station/lib"
 	pb "github.com/refraction-networking/conjure/proto"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -29,7 +29,7 @@ type APIRegServer struct {
 	latestClientConf *pb.ClientConf // Latest clientConf for sharing over RegistrationResponse channel.
 	ccMutex          sync.RWMutex
 	processor        registrar
-	logger           log.FieldLogger
+	logger           *log.Logger
 	logClientIP      bool
 	metrics          *metrics.Metrics
 }
@@ -118,14 +118,14 @@ func (s *APIRegServer) getC2SFromReq(w http.ResponseWriter, r *http.Request) (*p
 
 	in, err := io.ReadAll(r.Body)
 	if err != nil {
-		s.logger.Errorf("failed to read request body:", err)
+		s.logger.Errorf("failed to read request body: %s", err)
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return nil, errors.New("failed to read request body")
 	}
 
 	payload := &pb.C2SWrapper{}
 	if err = proto.Unmarshal(in, payload); err != nil {
-		s.logger.Errorf("failed to decode protobuf body:", err)
+		s.logger.Errorf("failed to decode protobuf body: %s", err)
 		http.Error(w, "Failed to decode protobuf body", http.StatusBadRequest)
 		return nil, errors.New("failed to decode protobuf body")
 	}
@@ -142,21 +142,22 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logFields := log.Fields{"http_method": r.Method, "content_length": r.ContentLength, "registration_type": "unidirectional"}
-	if s.logClientIP {
-		logFields["ip_address"] = clientAddr.String()
-	}
-	reqLogger := s.logger.WithFields(logFields)
+	logFields := fmt.Sprintf("http_method: %s, content_length: %d, registration_type: %s",
+		r.Method,
+		r.ContentLength,
+		"unidirectional")
 
-	reqLogger.Debugf("recived new request")
+	if s.logClientIP {
+		logFields += fmt.Sprintf(", client_ip: %s", clientAddr.String())
+	}
+
+	s.logger.Debugf("received new request: [%s]", logFields)
 
 	payload, err := s.getC2SFromReq(w, r)
 	if err != nil {
-		reqLogger.Errorf("registration failed: %v", err)
+		s.logger.Errorf("registration failed: %v", err)
 		return
 	}
-
-	reqLogger = reqLogger.WithField("reg_id", hex.EncodeToString(payload.GetSharedSecret()))
 
 	var clientAddrBytes = make([]byte, 16)
 	if clientAddr != nil {
@@ -170,7 +171,7 @@ func (s *APIRegServer) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reqLogger.Debugf("registration successful")
+	s.logger.Debugf("registration successful: [%s]", logFields)
 
 	// We could send an HTTP response earlier to avoid waiting
 	// while the zmq socket is locked, but this ensures that
@@ -187,20 +188,22 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	logFields := log.Fields{"http_method": r.Method, "content_length": r.ContentLength, "registration_type": "bidirectional"}
-	if s.logClientIP {
-		logFields["ip_address"] = clientAddr.String()
-	}
-	reqLogger := s.logger.WithFields(logFields)
+	logFields := fmt.Sprintf("http_method: %s, content_length: %d, registration_type: %s",
+		r.Method,
+		r.ContentLength,
+		"bidirectional")
 
-	reqLogger.Debugf("received new request")
+	if s.logClientIP {
+		logFields += fmt.Sprintf(", client_ip: %s", clientAddr.String())
+	}
+	s.logger.Debugf("received new request: [%s]", logFields)
 
 	payload, err := s.getC2SFromReq(w, r)
 	if err != nil {
 		return
 	}
 
-	reqLogger = reqLogger.WithField("reg_id", hex.EncodeToString(payload.GetSharedSecret()))
+	logFields += fmt.Sprintf(", reg_id: %s", hex.EncodeToString(payload.GetSharedSecret()))
 
 	var clientAddrBytes = make([]byte, 16)
 	if clientAddr != nil {
@@ -224,7 +227,7 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 		case lib.ErrLegacyAddrSelectBug:
 			http.Error(w, "bad seed", http.StatusBadRequest)
 		default:
-			reqLogger.Errorf("failed to create registration response: %v", err)
+			s.logger.Errorf("failed to create registration response: %v, [%s]", err, logFields)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		return
@@ -240,17 +243,17 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 	// Marshal (serialize) registration response object and then write it to w
 	body, err := proto.Marshal(regResp)
 	if err != nil {
-		reqLogger.Errorf("failed to write registration into response: %v", err)
+		s.logger.Errorf("failed to write registration into response: %v, [%s]", err, logFields)
 		return
 	}
 
 	_, err = w.Write(body)
 	if err != nil {
-		reqLogger.Errorf("failed to write registration into response: %v", err)
+		s.logger.Errorf("failed to write registration into response: %v, [%s]", err, logFields)
 		return
 	}
 
-	reqLogger.Debugf("registration successful")
+	s.logger.Debugf("registration successful %s", logFields)
 
 } // registerBidirectional()
 
@@ -316,7 +319,7 @@ func (s *APIRegServer) ListenAndServe() error {
 	return err
 }
 
-func NewAPIRegServer(apiPort uint16, regprocessor *regprocessor.RegProcessor, latestCC *pb.ClientConf, logger log.FieldLogger, logClientIP bool, metrics *metrics.Metrics) (*APIRegServer, error) {
+func NewAPIRegServer(apiPort uint16, regprocessor *regprocessor.RegProcessor, latestCC *pb.ClientConf, logger *log.Logger, logClientIP bool, metrics *metrics.Metrics) (*APIRegServer, error) {
 	if regprocessor == nil || latestCC == nil || logger == nil {
 		return nil, errors.New("arguments cannot be nil")
 	}
