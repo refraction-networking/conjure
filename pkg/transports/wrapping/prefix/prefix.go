@@ -341,7 +341,7 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 				// If the registration we found has no params specified (invalid and shouldn't have
 				// been ingested) or if the prefix ID does not match the expected prefix, set the
 				// err to return if we can't match any other prefixes.
-				eWrongPrefix = ErrIncorrectPrefix
+				eWrongPrefix = fmt.Errorf("%w: e %d != %d", ErrIncorrectPrefix, params.GetPrefixId(), id)
 				continue
 			}
 		}
@@ -353,7 +353,7 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 		return reg, nil
 	}
 
-	if err == transports.ErrNotTransport && eWrongPrefix == ErrIncorrectPrefix {
+	if errors.Is(err, transports.ErrNotTransport) && errors.Is(eWrongPrefix, ErrIncorrectPrefix) {
 		// If we found a match and it was the only one that matched (i.e. none of the other prefixes
 		// could possibly match even if we read more bytes). Then something went wrong and the
 		// client is attempting to connect with the wrong prefix.

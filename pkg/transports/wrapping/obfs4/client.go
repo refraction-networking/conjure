@@ -52,12 +52,16 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible.
 func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
-	params, ok := p.(*pb.GenericTransportParams)
-	if !ok {
+	var parsedParams *pb.GenericTransportParams
+	if params, ok := p.(*pb.GenericTransportParams); ok {
+		parsedParams = params
+	} else if p == nil {
+		parsedParams = &pb.GenericTransportParams{}
+		parsedParams.RandomizeDstPort = proto.Bool(true)
+	} else {
 		return fmt.Errorf("unable to parse params")
 	}
-	t.Parameters = params
-
+	t.Parameters = parsedParams
 	return nil
 }
 

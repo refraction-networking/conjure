@@ -15,16 +15,17 @@ import (
 	"golang.org/x/crypto/curve25519"
 
 	"github.com/refraction-networking/conjure/internal/conjurepath"
+	tests "github.com/refraction-networking/conjure/internal/testutils"
 	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/transports"
-	"github.com/refraction-networking/conjure/pkg/transports/wrapping/internal/tests"
+
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/refraction-networking/ed25519"
 	"github.com/refraction-networking/ed25519/extra25519"
 )
 
 func TestSuccessfulWrap(t *testing.T) {
-	testSubnetPath := conjurepath.Root + "/pkg/station/lib/test/phantom_subnets.toml"
+	testSubnetPath := conjurepath.Root + "/internal/test_assets/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	_, private, _ := ed25519.GenerateKey(rand.Reader)
@@ -403,7 +404,7 @@ func TestSuccessfulWrapBase64(t *testing.T) {
 
 // Test End to End client WrapConn to Server WrapConnection
 func TestPrefixEndToEnd(t *testing.T) {
-	testSubnetPath := conjurepath.Root + "/pkg/station/lib/test/phantom_subnets.toml"
+	testSubnetPath := conjurepath.Root + "/internal/test_assets/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	_, private, _ := ed25519.GenerateKey(rand.Reader)
@@ -431,32 +432,42 @@ func TestPrefixEndToEnd(t *testing.T) {
 			defer c2p.Close()
 			defer sfp.Close()
 			require.NotNil(t, reg)
+			sch := make(chan struct{}, 1)
 
 			go func() {
-
 				var c net.Conn
 				var err error
 				var buf [4096]byte
+				received := bytes.Buffer{}
+
+				sch <- struct{}{}
 				for {
-					n, _ := sfp.Read(buf[:])
-					// t.Logf("%d %s\t %s", n, hex.EncodeToString(buf[:n]), string(buf[:n]))
-					buffer := bytes.NewBuffer(buf[:n])
-					_, c, err = transport.WrapConnection(buffer, sfp, reg.PhantomIp, manager)
+					n, err := sfp.Read(buf[:])
+					if err != nil {
+						t.Errorf("error reading from server connection after %d bytes %s", n, err)
+						t.Fail()
+						return
+					}
+
+					received.Write(buf[:n])
+					_, c, err = transport.WrapConnection(&received, sfp, reg.PhantomIp, manager)
 					if err == nil {
 						break
 					} else if !errors.Is(err, transports.ErrTryAgain) {
-						t.Errorf("error getting wrapped connection %s", err)
+						t.Errorf("error getting wrapped connection %s - expected %s, %d", err, idx.Name(), flushPolicy)
+						t.Fail()
 						return
 					}
 				}
 
-				received := make([]byte, len(message))
-				_, err = io.ReadFull(c, received)
+				recvBuf := make([]byte, len(message))
+				_, err = io.ReadFull(c, recvBuf)
 				require.Nil(t, err, "failed reading from server connection")
-				_, err = c.Write(received)
+				_, err = c.Write(recvBuf)
 				require.Nil(t, err, "failed writing to server connection")
 			}()
 
+			<-sch
 			clientPrefix, err := TryFromID(PrefixID(p))
 			require.Nil(t, err)
 			ClientTransport := &ClientTransport{Prefix: clientPrefix, parameters: params}
