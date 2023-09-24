@@ -85,6 +85,9 @@ func NewDecoyRegistrarWithDialer(dialer DialFunc) *DecoyRegistrar {
 	}
 }
 
+// setTCPToDecoy takes in a value for the measured RTT, if the value is greater
+// than 1.5 seconds (1500 ms) then that value will be used to limit the RTT
+// used in future delay calculations.
 func (r *DecoyRegistrar) setTCPToDecoy(tcprtt *uint32) {
 	r.m.Lock()
 	defer r.m.Unlock()
@@ -92,6 +95,14 @@ func (r *DecoyRegistrar) setTCPToDecoy(tcprtt *uint32) {
 	if r.stats == nil {
 		r.stats = &pb.SessionStats{}
 	}
+
+	var maxRTT uint32 = 1500
+
+	if *tcprtt > maxRTT {
+		tcprtt = &maxRTT
+	}
+
+	r.logger.Println("setting tcp rtt: ", *tcprtt)
 	r.stats.TcpToDecoy = tcprtt
 }
 
@@ -99,9 +110,16 @@ func (r *DecoyRegistrar) setTLSToDecoy(tlsrtt *uint32) {
 	r.m.Lock()
 	defer r.m.Unlock()
 
+	var maxRTT uint32 = 1500
+
 	if r.stats == nil {
 		r.stats = &pb.SessionStats{}
 	}
+
+	if *tlsrtt > maxRTT {
+		tlsrtt = &maxRTT
+	}
+
 	r.stats.TlsToDecoy = tlsrtt
 }
 
@@ -209,7 +227,7 @@ func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Cont
 
 	logger.Debugf("Registering V4 and V6 via DecoyRegistrar")
 
-	reg, _, err := cjSession.UnidirectionalRegData(ctx, pb.RegistrationSource_API.Enum())
+	reg, _, err := cjSession.UnidirectionalRegData(ctx, pb.RegistrationSource_Detector.Enum())
 	if err != nil {
 		logger.Errorf("Failed to prepare registration data: %v", err)
 		return nil, lib.ErrRegFailed

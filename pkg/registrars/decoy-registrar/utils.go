@@ -72,7 +72,7 @@ func getRandomDuration(min int, max int) time.Duration {
 // Returns a pointer to u32, because protobuf wants pointers.
 // Max valid input duration (that fits into uint32): 49.71 days.
 func durationToU32ptrMs(d time.Duration) *uint32 {
-	i := uint32(d.Nanoseconds() / int64(time.Millisecond))
+	i := uint32(d.Milliseconds())
 	return &i
 }
 
