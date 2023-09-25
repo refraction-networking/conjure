@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+/*
+// Example testing liveness test function overrides.
 func alwaysLive(addr string) (bool, error) {
 	return true, ErrLiveHost
 }
@@ -17,6 +19,7 @@ func alwaysLive(addr string) (bool, error) {
 func alwaysNotLive(addr string) (bool, error) {
 	return false, NotLive
 }
+*/
 
 func customLiveness(addr string) (bool, error) {
 
