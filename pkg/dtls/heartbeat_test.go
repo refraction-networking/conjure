@@ -1,7 +1,10 @@
 package dtls
 
 import (
+	"context"
+	"errors"
 	"net"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,41 +26,63 @@ func TestHeartbeatReadWrite(t *testing.T) {
 	sent := uint32(0)
 	recvd := uint32(0)
 	toSend := []byte("testtt")
-	stop := time.After(conf.Interval * 2)
+	sleepInterval := 100 * time.Millisecond
+	var wg sync.WaitGroup
 
-	go func() {
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		time.Duration(10*sleepInterval+sleepInterval/2))
+
+	defer cancel()
+
+	wg.Add(1)
+	go func(ctx1 context.Context) {
+		defer wg.Done()
 		for {
 			select {
-			case <-stop:
+			case <-ctx1.Done():
+				server.Close()
 				return
 			default:
 				buffer := make([]byte, 4096)
 				n, err := s.Read(buffer)
 				if err != nil {
-					continue
+					return
 				}
-				require.Equal(t, toSend, buffer[:n])
+				if string(toSend) != string(buffer[:n]) {
+					t.Log("read incorrect value", toSend, buffer[:n])
+					t.Fail()
+					return
+				}
 				atomic.AddUint32(&recvd, 1)
 			}
 		}
-	}()
+	}(ctx)
 
-	go func() {
+	wg.Add(1)
+	go func(ctx2 context.Context) {
+		defer wg.Done()
 		for {
 			select {
-			case <-stop:
+			case <-ctx2.Done():
+				client.Close()
 				return
 			default:
 				_, err := client.Write(toSend)
-				require.Nil(t, err)
+				if err != nil {
+					if !errors.Is(err, net.ErrClosed) {
+						t.Log("encountered error writing", err)
+						t.Fail()
+					}
+					return
+				}
 				atomic.AddUint32(&sent, 1)
-				time.Sleep(10 * time.Millisecond)
 			}
+			time.Sleep(sleepInterval)
 		}
-	}()
+	}(ctx)
 
-	<-stop
-
+	wg.Wait()
 	require.Equal(t, atomic.LoadUint32(&sent), atomic.LoadUint32(&recvd))
 }
 
@@ -82,7 +107,11 @@ func TestHeartbeatSend(t *testing.T) {
 	require.Nil(t, err)
 
 	duration := 2
-	stop := time.After(conf.Interval*time.Duration(duration) + 10*time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		2*conf.Interval+10*time.Millisecond)
+	defer cancel()
 
 	hbCount := 0
 	for {
@@ -90,7 +119,7 @@ func TestHeartbeatSend(t *testing.T) {
 		case b := <-readCh:
 			require.Equal(t, conf.Heartbeat, b)
 			hbCount++
-		case <-stop:
+		case <-ctx.Done():
 			require.Equal(t, duration*2+1, hbCount)
 			return
 		}
