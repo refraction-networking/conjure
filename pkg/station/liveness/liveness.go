@@ -11,13 +11,23 @@ import (
 	"github.com/refraction-networking/conjure/pkg/station/log"
 )
 
-// ErrCachedPhantom provides a constant expected error returned for cached
-// liveness hits
-var ErrCachedPhantom = errors.New("cached live host")
+var (
+	// ErrCachedPhantom provides a constant expected error returned for cached
+	// liveness hits
+	ErrCachedPhantom = errors.New("cached live host")
 
-// ErrNotImplemented indicates that a feature will be implemented at some point
-// but is not yet completed.
-var ErrNotImplemented = errors.New("not supported yet")
+	// ErrNotImplemented indicates that a feature will be implemented at some point
+	// but is not yet completed.
+	ErrNotImplemented = errors.New("not supported yet")
+
+	// NotLive is an error returned when a liveness test reaches timeout, giving
+	// confidence that the host in question is not live
+	NotLive = errors.New("reached statistical timeout")
+
+	// ErrLiveHost indicates that an error occurred or a successful connection
+	// was formed with the host in question indicating that the host is live.
+	ErrLiveHost = errors.New("phantom picked up the connection")
+)
 
 // Tester provides a generic interface for testing hosts in phantom
 // subnets for liveness. This prevents potential interference in connection
@@ -105,12 +115,14 @@ func New(c *Config) (Tester, error) {
 
 	if c.CacheDuration == "" && c.CacheDurationNonLive == "" {
 		return &UncachedLivenessTester{
-			stats: &stats{},
+			stats:         &stats{},
+			phantomIsLive: phantomIsLive,
 		}, nil
 	}
 
 	clt := &CachedLivenessTester{
-		stats: &stats{},
+		stats:         &stats{},
+		phantomIsLive: phantomIsLive,
 	}
 
 	return clt, clt.Init(c)
@@ -142,14 +154,14 @@ func phantomIsLive(address string) (bool, error) {
 	select {
 	case err := <-dialError:
 		if e, ok := err.(net.Error); ok && e.Timeout() {
-			return false, fmt.Errorf("reached connection timeout")
+			return false, NotLive
 		}
 		if err != nil {
 			return true, err
 		}
-		return true, fmt.Errorf("phantom picked up the connection")
+		return true, ErrLiveHost
 	default:
-		return false, fmt.Errorf("reached statistical timeout %v", timeout)
+		return false, fmt.Errorf("%w %v", NotLive, timeout)
 	}
 }
 
