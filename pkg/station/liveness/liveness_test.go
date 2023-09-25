@@ -1,6 +1,8 @@
 package liveness
 
 import (
+	"fmt"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -8,12 +10,49 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func alwaysLive(addr string) (bool, error) {
+	return true, ErrLiveHost
+}
+
+func alwaysNotLive(addr string) (bool, error) {
+	return false, NotLive
+}
+
+func customLiveness(addr string) (bool, error) {
+
+	a, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return true, err
+	}
+
+	oracle := map[string]bool{
+		"1.1.1.1":            true,
+		"2606:4700:4700::64": true,
+		"192.0.0.2":          false,
+	}
+
+	var live bool
+	if l, ok := oracle[a]; ok {
+		live = l
+	} else {
+		fmt.Println("failed lookup:", addr)
+		live = true
+	}
+
+	if live {
+		return true, ErrLiveHost
+	}
+
+	return false, NotLive
+}
+
 func TestUncachedLiveness(t *testing.T) {
 
 	ult, err := New(&Config{})
+	ult.(*UncachedLivenessTester).phantomIsLive = customLiveness
 	require.Nil(t, err)
 
-	liveness, response := ult.PhantomIsLive("1.1.1.1.", 80)
+	liveness, response := ult.PhantomIsLive("1.1.1.1", 80)
 
 	if liveness != true {
 		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
@@ -32,19 +71,20 @@ func TestUncachedLiveness(t *testing.T) {
 
 func TestCachedLiveness(t *testing.T) {
 	clt := CachedLivenessTester{
-		stats: &stats{},
+		stats:         &stats{},
+		phantomIsLive: customLiveness,
 	}
 	err := clt.Init(&Config{"1h", 0, "5m", 0})
 	require.Nil(t, err)
 
-	liveness, response := clt.PhantomIsLive("1.1.1.1.", 80)
+	liveness, response := clt.PhantomIsLive("1.1.1.1", 80)
 	if liveness != true {
 		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
-	if status, ok := clt.ipCacheLive.(*mapCache).ipCache["1.1.1.1."]; !ok || status == nil {
+	if status, ok := clt.ipCacheLive.(*mapCache).ipCache["1.1.1.1"]; !ok || status == nil {
 		// Entry should be in live cache
 		t.Fatalf("Host is live, but not cached as live")
-	} else if status, ok := clt.ipCacheNonLive.(*mapCache).ipCache["1.1.1.1."]; ok || status != nil {
+	} else if status, ok := clt.ipCacheNonLive.(*mapCache).ipCache["1.1.1.1"]; ok || status != nil {
 		// Entry should NOT be in non-live cache
 		t.Fatalf("Host is live but cached as non-live")
 	}
@@ -72,7 +112,7 @@ func TestCachedLiveness(t *testing.T) {
 	// lookup for known live cached values should be fast since it doesn't go to network.
 	start := time.Now()
 	_, _ = clt.PhantomIsLive("2606:4700:4700::64", 443)
-	_, _ = clt.PhantomIsLive("1.1.1.1.", 80)
+	_, _ = clt.PhantomIsLive("1.1.1.1", 80)
 	if time.Since(start) > time.Duration(1*time.Millisecond) {
 		t.Fatal("Lookup for cached live entries taking too long")
 	}
@@ -82,13 +122,14 @@ func TestCachedLiveness(t *testing.T) {
 func TestCachedLivenessLiveOnly(t *testing.T) {
 
 	clt, err := New(&Config{"1h", 0, "", 0})
+	clt.(*CachedLivenessTester).phantomIsLive = customLiveness
 	require.Nil(t, err)
 
-	liveness, response := clt.PhantomIsLive("1.1.1.1.", 80)
+	liveness, response := clt.PhantomIsLive("1.1.1.1", 80)
 	if liveness != true {
 		t.Fatalf("Host is live, detected as NOT live: %v\n", response)
 	}
-	if status, ok := clt.(*CachedLivenessTester).ipCacheLive.(*mapCache).ipCache["1.1.1.1."]; !ok || status == nil {
+	if status, ok := clt.(*CachedLivenessTester).ipCacheLive.(*mapCache).ipCache["1.1.1.1"]; !ok || status == nil {
 		// Entry should be in live cache
 		t.Fatalf("Host is live, but not cached as live")
 	}
@@ -126,6 +167,7 @@ func TestCachedLivenessThreaded(t *testing.T) {
 		CacheDuration:        "1h",
 		CacheDurationNonLive: "1m",
 	})
+	clt.(*CachedLivenessTester).phantomIsLive = customLiveness
 	require.Nil(t, err)
 
 	for i := 0; i < iterations; i++ {
