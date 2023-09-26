@@ -23,6 +23,7 @@ func tryDecrypt(b []byte, sharedSecret []byte) (*pb.ClientToStation, *oldSharedK
 		return nil, nil, fmt.Errorf("payload too small %d", l)
 	}
 	b = b[5:]
+	l = len(b)
 
 	// We have the shared secret already so we don't need to generate it from the tag.
 	// Instead we can generate the keys directly.

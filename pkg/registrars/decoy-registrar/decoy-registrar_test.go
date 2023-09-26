@@ -233,18 +233,25 @@ func (c *catchReg) Read(b []byte) (int, error) {
 		return nn, err
 	}
 
-	log.Printf("read %d\n", nn)
-	// try decrypt with shared secret and generated oldClientSharedKeys
-	c.c2s, c.keys, err = tryDecrypt(b[:nn], c.sharedSecret)
-	if err != nil || c.c2s == nil {
-		c.err = err
-		return nn, nil
-
+	if nn < 112 {
+		return nn, err
 	}
 
-	c.found = true
-	c.n = nn
-	copy(c.buf, b[:nn])
+	if nn > 5 && b[0] == 0x17 {
+		log.Printf("read %d: %s\n", nn, hex.EncodeToString(b[:nn]))
 
+		// try decrypt with shared secret and generated oldClientSharedKeys
+		c.c2s, c.keys, err = tryDecrypt(b[:nn], c.sharedSecret)
+		if err != nil || c.c2s == nil {
+			c.err = err
+			return nn, nil
+
+		}
+
+		c.found = true
+		c.n = nn
+		copy(c.buf, b[:nn])
+
+	}
 	return nn, err
 }
