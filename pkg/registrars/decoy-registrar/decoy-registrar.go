@@ -22,10 +22,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// timeout for sending TD request and getting a response
-const deadlineConnectTDStationMin = 11175
-const deadlineConnectTDStationMax = 14231
-
 // deadline to establish TCP connection to decoy - magic numbers chosen arbitrarily to prevent
 // distribution from aligning directly with second boundaries. These are intentionally short as TCP
 // establishment is one round trip and we do not want to block our dial any longer than we

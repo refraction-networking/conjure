@@ -136,7 +136,8 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 			return client, nil
 		},
 	}
-	reg.PrepareRegKeys(*pubkey, session.Keys.SharedSecret)
+	err = reg.PrepareRegKeys(*pubkey, session.Keys.SharedSecret)
+	require.Nil(t, err)
 	decoy := &pb.TLSDecoySpec{
 		Ipv4Addr: proto.Uint32(uint32(0x7f000001)),
 		Hostname: proto.String("a.example.com"),
@@ -237,7 +238,8 @@ func (c *catchReg) Read(b []byte) (int, error) {
 		return nn, err
 	}
 
-	if nn > 5 && b[0] == 0x17 {
+	// did we get a tls data packet?
+	if nn > 5 && b[0] == 0x17 && b[1] == 0x03 && b[2] == 0x03 {
 		log.Printf("read %d: %s\n", nn, hex.EncodeToString(b[:nn]))
 
 		// try decrypt with shared secret and generated oldClientSharedKeys

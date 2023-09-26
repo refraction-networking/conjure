@@ -170,13 +170,6 @@ func builldClientSharedKeysOld(sharedSecret []byte) (*oldSharedKeys, error) {
 	return keys, nil
 }
 
-func unwrap[T any](t T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return t
-}
-
 // Extracts 3 stego'd bytes inBuf to 'outBuf', from the 4 bytes of AES
 // ciphertext at 'inBuf'.
 func extractStegoBytes(inBuf []byte) ([]byte, error) {
