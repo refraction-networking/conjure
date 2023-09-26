@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"strconv"
 	"time"
@@ -232,7 +231,7 @@ func getPublicIp(server string) ([]byte, error) {
 }
 
 // PrepareRegKeys prepares key materials specific to the registrar
-func (r *DNSRegistrar) PrepareRegKeys(stationPubkey [32]byte, sessionSecret []byte, reader io.Reader) error {
+func (r *DNSRegistrar) PrepareRegKeys(stationPubkey [32]byte, sessionSecret []byte) error {
 
 	return nil
 }

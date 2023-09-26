@@ -2,8 +2,8 @@ package decoy
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
-	"io"
 	"math/big"
 	"net"
 	"sync"
@@ -14,6 +14,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
+	"golang.org/x/crypto/hkdf"
 
 	// td imports assets, RegError, generateHTTPRequestBeginning
 	td "github.com/refraction-networking/gotapdance/tapdance"
@@ -25,9 +26,12 @@ import (
 const deadlineConnectTDStationMin = 11175
 const deadlineConnectTDStationMax = 14231
 
-// deadline to establish TCP connection to decoy
-const deadlineTCPtoDecoyMin = deadlineConnectTDStationMin
-const deadlineTCPtoDecoyMax = deadlineConnectTDStationMax
+// deadline to establish TCP connection to decoy - magic numbers chosen arbitrarily to prevent
+// distribution from aligning directly with second boundaries. These are intentionally short as TCP
+// establishment is one round trip and we do not want to block our dial any longer than we
+// absolutely have to to ensure that at least one TCP connection to a decoy could be established.
+const deadlineTCPtoDecoyMin = 1931
+const deadlineTCPtoDecoyMax = 4013
 
 // Fixed-Size-Payload has a 1 byte flags field.
 // bit 0 (1 << 7) determines if flow is bidirectional(0) or upload-only(1)
@@ -109,7 +113,6 @@ func (r *DecoyRegistrar) setTCPToDecoy(tcprtt *uint32) {
 		tcprtt = &maxRTT
 	}
 
-	r.logger.Println("setting tcp rtt: ", *tcprtt)
 	r.stats.TcpToDecoy = tcprtt
 }
 
@@ -130,8 +133,12 @@ func (r *DecoyRegistrar) setTLSToDecoy(tlsrtt *uint32) {
 	r.stats.TlsToDecoy = tlsrtt
 }
 
+var conjureGeneralHkdfSalt = []byte("conjureconjureconjureconjure")
+
 // PrepareRegKeys prepares key materials specific to the registrar
-func (r *DecoyRegistrar) PrepareRegKeys(stationPubkey [32]byte, sessionSecret []byte, reader io.Reader) error {
+func (r *DecoyRegistrar) PrepareRegKeys(stationPubkey [32]byte, sessionSecret []byte) error {
+
+	reader := hkdf.New(sha256.New, sessionSecret, conjureGeneralHkdfSalt, nil)
 
 	r.fspKey = make([]byte, 16)
 	r.fspIv = make([]byte, 12)
@@ -283,7 +290,7 @@ func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Cont
 	//[reference] Send registrations to each decoy
 	dialErrors := make(chan error, width)
 	for _, decoy := range decoys {
-		logger.Debugf("Sending Reg: %v, %v", decoy.GetHostname(), decoy.GetIpAddrStr())
+		logger.Debugf("\tSending Reg: %v, %v", decoy.GetHostname(), decoy.GetIpAddrStr())
 		//decoyAddr := decoy.GetIpAddrStr()
 		go r.Send(ctx, cjSession, decoy, dialErrors)
 	}

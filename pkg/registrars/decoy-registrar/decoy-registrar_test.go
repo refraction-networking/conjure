@@ -2,9 +2,9 @@ package decoy
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -13,6 +13,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,6 +25,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	pb "github.com/refraction-networking/conjure/proto"
 	td "github.com/refraction-networking/gotapdance/tapdance"
+	tls "github.com/refraction-networking/utls"
 )
 
 func TestSelectDecoys(t *testing.T) {
@@ -131,7 +133,7 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 			return client, nil
 		},
 	}
-	reg.PrepareRegKeys(*pubkey, session.Keys.SharedSecret, session.Keys.RegistrarReader)
+	reg.PrepareRegKeys(*pubkey, session.Keys.SharedSecret)
 	decoy := &pb.TLSDecoySpec{
 		Ipv4Addr: proto.Uint32(uint32(0x7f000001)),
 		Hostname: proto.String("a.example.com"),
@@ -148,40 +150,35 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 		serverConfig.Certificates[0].Certificate = [][]byte{testECDSACertificate}
 		serverConfig.Certificates[0].PrivateKey = testECDSAPrivateKey
 
-		l := tls.Server(server, serverConfig)
+		clientHello := make([]byte, 10240)
+		s := &wrapFirst{Conn: server, buf: clientHello}
+
+		l := tls.Server(s, serverConfig)
 		if l == nil {
 			t.Log("failed to create listener")
 			t.Fail()
 			return
 		}
-		err := l.Handshake()
+		defer l.Close()
+
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+		defer cancel()
+
+		err := l.HandshakeContext(ctx)
 		if err != nil {
 			t.Log("failed to handshake", err)
 			t.Fail()
 			return
 		}
+		t.Logf("bytes: %s", string(hex.EncodeToString(clientHello[:s.n])))
 
-		buf := make([]byte, 10240)
-		_, err = l.Read(buf)
+		b := make([]byte, 1024)
+		_, err = l.Read(b)
 		if err != nil {
-			t.Log("failed to read read after handshake", err)
+			t.Log("failed to read", err)
 			t.Fail()
 			return
 		}
-		// // The request may not fully properly parse as http
-		// req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(buf[:n])))
-		// if err != nil {
-		// 	t.Log("failed to parse http request", err)
-		// 	t.Fail()
-		// 	return
-		// }
-
-		// xignore := req.Header.Get("X-Ignore")
-		// if xignore != "" {
-		// 	t.Log("failed to handshake")
-		// 	t.Fail()
-		// 	return
-		// }
 	}()
 
 	errch := make(chan error, 1)
@@ -197,4 +194,29 @@ var testECDSACertificate = fromHex("3082020030820162020900b8bf2d47a0d2ebf4300906
 func fromHex(s string) []byte {
 	b, _ := hex.DecodeString(s)
 	return b
+}
+
+type wrapFirst struct {
+	net.Conn
+	buf []byte
+	n   int
+}
+
+func (c *wrapFirst) Read(b []byte) (int, error) {
+	nn, err := c.Conn.Read(b)
+	if err != nil {
+		return nn, err
+	}
+
+	if nn > len(c.buf) {
+		return nn, fmt.Errorf("incoming bytes do not fit in buffer %d > %d", nn, len(c.buf))
+	}
+
+	// copy the bytes read to the buffer
+	n := copy(c.buf, b[:nn])
+	if n != nn {
+		return nn, fmt.Errorf("failed to copy bytes to buf %d != %d", n, nn)
+	}
+	c.n = nn
+	return nn, nil
 }
