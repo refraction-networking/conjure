@@ -19,6 +19,8 @@ type CachedLivenessTester struct {
 	ipCacheNonLive cache
 	signal         chan bool
 	*stats
+
+	phantomIsLive func(address string) (bool, error)
 }
 
 // Init parses cache expiry duration and initializes the Cache.
@@ -86,6 +88,9 @@ func (blt *CachedLivenessTester) ClearExpiredCache() {
 // Lock on mutex is taken for lookup, then for cache update. Do NOT hold mutex
 // while scanning for liveness as this will make cache extremely slow.
 func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, error) {
+	if blt.phantomIsLive == nil {
+		blt.phantomIsLive = phantomIsLive
+	}
 	// cache lookup internal function to use RLock
 	if live, err := blt.phantomLookup(addr, port); live || err != nil {
 		// add to stats
@@ -93,8 +98,7 @@ func (blt *CachedLivenessTester) PhantomIsLive(addr string, port uint16) (bool, 
 		return live, err
 	}
 
-	// existing phantomIsLive() implementation
-	isLive, err := phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
+	isLive, err := blt.phantomIsLive(net.JoinHostPort(addr, strconv.Itoa(int(port))))
 
 	var val = &cacheElement{
 		cachedTime: time.Now(),
