@@ -66,7 +66,8 @@ func NewAPIRegistrar(config *Config) (*APIRegistrar, error) {
 }
 
 // PrepareRegKeys prepares key materials specific to the registrar
-func (r *APIRegistrar) PrepareRegKeys(pubkey [32]byte) error {
+func (r *APIRegistrar) PrepareRegKeys(stationPubkey [32]byte, sessionSecret []byte, reader io.Reader) error {
+
 	return nil
 }
 

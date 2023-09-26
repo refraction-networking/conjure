@@ -387,6 +387,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 
 		RegistrationSource: registrationSource,
 		RegistrationTime:   time.Now(),
+		clientLibVer:       uint32(clientLibVer),
 		regCount:           0,
 		tunnelCount:        0,
 	}

@@ -208,6 +208,9 @@ func generateVSP(cjSession *td.ConjureSession) ([]byte, error) {
 }
 
 func generateClientToStation(cjSession *td.ConjureSession) (*pb.ClientToStation, error) {
+	if cjSession == nil {
+		return nil, fmt.Errorf("cannot generate C2S with nil session")
+	}
 	var covert *string
 	if len(cjSession.CovertAddress) > 0 {
 		//[TODO]{priority:medium} this isn't the correct place to deal with signaling to the station
@@ -219,6 +222,10 @@ func generateClientToStation(cjSession *td.ConjureSession) (*pb.ClientToStation,
 	// transition := pb.C2S_Transition_C2S_SESSION_INIT
 	currentGen := td.Assets().GetGeneration()
 	currentLibVer := core.CurrentClientLibraryVersion()
+
+	if cjSession.Transport == nil {
+		return nil, fmt.Errorf("nil transport not allowed")
+	}
 	transport := cjSession.Transport.ID()
 
 	transportParams, err := getPbTransportParams(cjSession)

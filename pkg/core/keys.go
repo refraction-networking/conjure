@@ -100,6 +100,7 @@ type SharedKeys struct {
 	SharedSecret, Representative []byte
 	ConjureSeed                  []byte
 	Reader                       io.Reader
+	RegistrarReader              io.Reader
 }
 
 func GenerateClientSharedKeys(pubkey [32]byte) (*SharedKeys, error) {
@@ -108,12 +109,15 @@ func GenerateClientSharedKeys(pubkey [32]byte) (*SharedKeys, error) {
 		return nil, err
 	}
 
+	regHkdf := hkdf.New(sha256.New, sharedSecret, []byte("ConjureRegistrationHKDFSalt"), nil)
+
 	cjHkdf := hkdf.New(sha256.New, sharedSecret, []byte("conjureconjureconjureconjure"), nil)
 	keys := &SharedKeys{
-		SharedSecret:   sharedSecret,
-		Representative: representative,
-		ConjureSeed:    make([]byte, 16),
-		Reader:         cjHkdf,
+		SharedSecret:    sharedSecret,
+		Representative:  representative,
+		ConjureSeed:     make([]byte, 16),
+		Reader:          cjHkdf,
+		RegistrarReader: regHkdf,
 	}
 
 	if _, err := cjHkdf.Read(keys.ConjureSeed); err != nil {

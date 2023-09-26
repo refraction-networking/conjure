@@ -3,6 +3,7 @@ package decoy
 import (
 	"context"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"sync"
@@ -47,15 +48,21 @@ type DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error
 
 type DecoyRegistrar struct {
 
-	// dialContex is a custom dialer to use when establishing TCP connections
+	// dialContext is a custom dialer to use when establishing TCP connections
 	// to decoys. When nil, Dialer.dialContex will be used.
-	dialContex DialFunc
+	dialContext DialFunc
 
 	logger logrus.FieldLogger
 
+	// Only used for testing. Always false otherwise.
+	insecureSkipVerify bool
+
 	// Fields taken from ConjureReg struct
-	m     sync.Mutex
-	stats *pb.SessionStats
+	m       sync.Mutex
+	stats   *pb.SessionStats
+	onceTCP sync.Once
+	onceTLS sync.Once
+
 	// add Width, sharedKeys necessary stuff (2nd line in struct except ConjureSeed)
 	// Keys
 	fspKey, fspIv, vspKey, vspIv []byte
@@ -78,7 +85,7 @@ func NewDecoyRegistrar() *DecoyRegistrar {
 // Deprecated: Set dialer in tapdace.Dialer.DialerWithLaddr instead.
 func NewDecoyRegistrarWithDialer(dialer DialFunc) *DecoyRegistrar {
 	return &DecoyRegistrar{
-		dialContex:    dialer,
+		dialContext:   dialer,
 		logger:        td.Logger(),
 		ClientHelloID: tls.HelloChrome_62,
 		Width:         5,
@@ -124,7 +131,26 @@ func (r *DecoyRegistrar) setTLSToDecoy(tlsrtt *uint32) {
 }
 
 // PrepareRegKeys prepares key materials specific to the registrar
-func (r *DecoyRegistrar) PrepareRegKeys(pubkey [32]byte) error {
+func (r *DecoyRegistrar) PrepareRegKeys(stationPubkey [32]byte, sessionSecret []byte, reader io.Reader) error {
+
+	r.fspKey = make([]byte, 16)
+	r.fspIv = make([]byte, 12)
+	r.vspKey = make([]byte, 16)
+	r.vspIv = make([]byte, 12)
+
+	if _, err := reader.Read(r.fspKey); err != nil {
+		return err
+	}
+	if _, err := reader.Read(r.fspIv); err != nil {
+		return err
+	}
+	if _, err := reader.Read(r.vspKey); err != nil {
+		return err
+	}
+	if _, err := reader.Read(r.vspIv); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -150,7 +176,7 @@ func (r *DecoyRegistrar) getTcpToDecoy() uint32 {
 func (r *DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostname string, deadline time.Time) (*tls.UConn, error) {
 	var err error
 	//[reference] TLS to Decoy
-	config := tls.Config{ServerName: hostname}
+	config := tls.Config{ServerName: hostname, InsecureSkipVerify: r.insecureSkipVerify}
 	if config.ServerName == "" {
 		// if SNI is unset -- try IP
 		config.ServerName, _, err = net.SplitHostPort(address)
@@ -240,8 +266,8 @@ func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Cont
 		return nil, err
 	}
 
-	if r.dialContex != nil {
-		reg.Dialer = r.dialContex
+	if r.dialContext != nil {
+		reg.Dialer = r.dialContext
 	}
 
 	// //[TODO]{priority:later} How to pass context to multiple registration goroutines?
@@ -310,7 +336,10 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 	//[Note] decoy.GetIpAddrStr() will get only v4 addr if a decoy has both
 	dialConn, err := cjSession.Dialer(childCtx, "tcp", "", decoy.GetIpAddrStr())
 
-	r.setTCPToDecoy(durationToU32ptrMs(time.Since(tcpToDecoyStartTs)))
+	setTCPRtt := func() {
+		r.setTCPToDecoy(durationToU32ptrMs(time.Since(tcpToDecoyStartTs)))
+	}
+	r.onceTCP.Do(setTCPRtt)
 	if err != nil {
 		if opErr, ok := err.(*net.OpError); ok && opErr.Err.Error() == "connect: network is unreachable" {
 			dialError <- td.NewRegError(td.Unreachable, err.Error())
@@ -333,7 +362,11 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 		dialError <- td.NewRegError(td.TLSError, msg)
 		return
 	}
-	r.setTLSToDecoy(durationToU32ptrMs(time.Since(tlsToDecoyStartTs)))
+
+	setTLSRtt := func() {
+		r.setTLSToDecoy(durationToU32ptrMs(time.Since(tlsToDecoyStartTs)))
+	}
+	r.onceTLS.Do(setTLSRtt)
 
 	//[reference] Create the HTTP request for the registration
 	httpRequest, err := r.createRequest(tlsConn, decoy, cjSession)
