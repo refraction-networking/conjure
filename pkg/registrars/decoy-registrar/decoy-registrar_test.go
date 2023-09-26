@@ -2,9 +2,7 @@ package decoy
 
 import (
 	"context"
-	"crypto/x509"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -108,6 +106,10 @@ func TestSelectDecoysErrorHandling(t *testing.T) {
 	assert.Equal(t, "tapdance1.freeaeskey.xyz", decoy[0].GetHostname())
 }
 
+// TestDecoyRegSendRegistration - Test that the decoy registrar sending a registration request to
+// a local mock decoy server. This allows capture of the ClientHello message containing the
+// stegonographically encoded registration information. We ensure that this information can be
+// extracted as expected and contains the correct information.
 func TestDecoyRegSendRegistration(t *testing.T) {
 	dir := t.TempDir()
 	err := copyFile(conjurepath.Root+"/internal/test_assets/ClientConf", dir+"/ClientConf")
@@ -126,9 +128,10 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 	require.Nil(t, err)
 
 	session := &td.ConjureSession{
-		V6Support: &td.V6{},
-		Keys:      keys,
-		Transport: &min.ClientTransport{},
+		CovertAddress: "1.1.1.1:443",
+		V6Support:     &td.V6{},
+		Keys:          keys,
+		Transport:     &min.ClientTransport{},
 		Dialer: func(ctx context.Context, network string, laddr string, raddr string) (net.Conn, error) {
 			return client, nil
 		},
@@ -139,7 +142,10 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 		Hostname: proto.String("a.example.com"),
 	}
 
+	var stationC2S *pb.ClientToStation
+	var expectedKeys *oldSharedKeys
 	var wg sync.WaitGroup
+	var stationErr error
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -150,8 +156,8 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 		serverConfig.Certificates[0].Certificate = [][]byte{testECDSACertificate}
 		serverConfig.Certificates[0].PrivateKey = testECDSAPrivateKey
 
-		clientHello := make([]byte, 10240)
-		s := &wrapFirst{Conn: server, buf: clientHello}
+		clientData := make([]byte, 10240)
+		s := &catchReg{Conn: server, buf: clientData, sharedSecret: session.Keys.SharedSecret}
 
 		l := tls.Server(s, serverConfig)
 		if l == nil {
@@ -170,7 +176,6 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 			t.Fail()
 			return
 		}
-		t.Logf("bytes: %s", string(hex.EncodeToString(clientHello[:s.n])))
 
 		b := make([]byte, 1024)
 		_, err = l.Read(b)
@@ -179,6 +184,13 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 			t.Fail()
 			return
 		}
+
+		expectedKeys = s.keys
+		if s.found {
+			stationC2S = s.c2s
+		} else {
+			stationErr = s.err
+		}
 	}()
 
 	errch := make(chan error, 1)
@@ -186,37 +198,53 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 	err = <-errch
 	require.Nil(t, err)
 	wg.Wait()
+
+	require.Nil(t, stationErr)
+	require.NotNil(t, expectedKeys)
+	require.Equal(t, expectedKeys.SharedSecret, session.Keys.SharedSecret)
+	require.Equal(t, expectedKeys.FspIv, reg.fspIv)
+	require.Equal(t, expectedKeys.FspKey, reg.fspKey)
+	require.Equal(t, expectedKeys.VspIv, reg.vspIv)
+	require.Equal(t, expectedKeys.VspKey, reg.vspKey)
+
+	require.NotNil(t, stationC2S)
+	require.Equal(t, core.CurrentClientLibraryVersion(), stationC2S.GetClientLibVersion())
+	require.Equal(t, pb.TransportType_Min, stationC2S.GetTransport())
+	require.Equal(t, pb.TransportType_Min, stationC2S.GetTransport())
+	require.Equal(t, "1.1.1.1:443", stationC2S.GetCovertAddress())
+	require.Equal(t, td.Assets().GetGeneration(), stationC2S.GetDecoyListGeneration())
 }
 
-var testECDSAPrivateKey, _ = x509.ParseECPrivateKey(fromHex("3081dc0201010442019883e909ad0ac9ea3d33f9eae661f1785206970f8ca9a91672f1eedca7a8ef12bd6561bb246dda5df4b4d5e7e3a92649bc5d83a0bf92972e00e62067d0c7bd99d7a00706052b81040023a18189038186000400c4a1edbe98f90b4873367ec316561122f23d53c33b4d213dcd6b75e6f6b0dc9adf26c1bcb287f072327cb3642f1c90bcea6823107efee325c0483a69e0286dd33700ef0462dd0da09c706283d881d36431aa9e9731bd96b068c09b23de76643f1a5c7fe9120e5858b65f70dd9bd8ead5d7f5d5ccb9b69f30665b669a20e227e5bffe3b"))
-var testECDSACertificate = fromHex("3082020030820162020900b8bf2d47a0d2ebf4300906072a8648ce3d04013045310b3009060355040613024155311330110603550408130a536f6d652d53746174653121301f060355040a1318496e7465726e6574205769646769747320507479204c7464301e170d3132313132323135303633325a170d3232313132303135303633325a3045310b3009060355040613024155311330110603550408130a536f6d652d53746174653121301f060355040a1318496e7465726e6574205769646769747320507479204c746430819b301006072a8648ce3d020106052b81040023038186000400c4a1edbe98f90b4873367ec316561122f23d53c33b4d213dcd6b75e6f6b0dc9adf26c1bcb287f072327cb3642f1c90bcea6823107efee325c0483a69e0286dd33700ef0462dd0da09c706283d881d36431aa9e9731bd96b068c09b23de76643f1a5c7fe9120e5858b65f70dd9bd8ead5d7f5d5ccb9b69f30665b669a20e227e5bffe3b300906072a8648ce3d040103818c0030818802420188a24febe245c5487d1bacf5ed989dae4770c05e1bb62fbdf1b64db76140d311a2ceee0b7e927eff769dc33b7ea53fcefa10e259ec472d7cacda4e970e15a06fd00242014dfcbe67139c2d050ebd3fa38c25c13313830d9406bbd4377af6ec7ac9862eddd711697f857c56defb31782be4c7780daecbbe9e4e3624317b6a0f399512078f2a")
-
-func fromHex(s string) []byte {
-	b, _ := hex.DecodeString(s)
-	return b
-}
-
-type wrapFirst struct {
+type catchReg struct {
 	net.Conn
-	buf []byte
-	n   int
+	sharedSecret []byte
+
+	buf   []byte
+	n     int
+	found bool
+	c2s   *pb.ClientToStation
+	keys  *oldSharedKeys
+	err   error
 }
 
-func (c *wrapFirst) Read(b []byte) (int, error) {
+func (c *catchReg) Read(b []byte) (int, error) {
 	nn, err := c.Conn.Read(b)
 	if err != nil {
 		return nn, err
 	}
 
-	if nn > len(c.buf) {
-		return nn, fmt.Errorf("incoming bytes do not fit in buffer %d > %d", nn, len(c.buf))
+	log.Printf("read %d\n", nn)
+	// try decrypt with shared secret and generated oldClientSharedKeys
+	c.c2s, c.keys, err = tryDecrypt(b[:nn], c.sharedSecret)
+	if err != nil || c.c2s == nil {
+		c.err = err
+		return nn, nil
+
 	}
 
-	// copy the bytes read to the buffer
-	n := copy(c.buf, b[:nn])
-	if n != nn {
-		return nn, fmt.Errorf("failed to copy bytes to buf %d != %d", n, nn)
-	}
+	c.found = true
 	c.n = nn
-	return nn, nil
+	copy(c.buf, b[:nn])
+
+	return nn, err
 }
