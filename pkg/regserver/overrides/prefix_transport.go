@@ -25,10 +25,10 @@ import (
 )
 
 type fieldsToOverwrite struct {
-	prefix           []byte
-	port             int
-	id               int
-	flushAfterPrefix bool
+	prefix      []byte
+	port        int
+	id          int
+	flushPolicy int32
 }
 
 type prefixIface interface {
@@ -59,7 +59,7 @@ func (pfs prefixes) selectPrefix(r io.Reader, c2s *pb.C2SWrapper) (*fieldsToOver
 type barPrefix struct {
 	max, bar, id, port int
 	prefix             []byte
-	flushAfterPrefix   bool
+	flushPolicy        int32
 }
 
 func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.C2SWrapper) (*fieldsToOverwrite, bool) {
@@ -70,7 +70,7 @@ func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.C2SWrapper) (*fieldsToOver
 		return nil, false
 	}
 	if bp.bar >= bp.max {
-		return &fieldsToOverwrite{bp.prefix, bp.port, bp.id, bp.flushAfterPrefix}, true
+		return &fieldsToOverwrite{bp.prefix, bp.port, bp.id, bp.flushPolicy}, true
 	}
 
 	N := big.NewInt(int64(bp.max))
@@ -80,7 +80,7 @@ func (bp barPrefix) selectPrefix(r io.Reader, c2s *pb.C2SWrapper) (*fieldsToOver
 	}
 	B := big.NewInt(int64(bp.bar))
 	if q.Cmp(B) < 0 {
-		return &fieldsToOverwrite{bp.prefix, bp.port, bp.id, bp.flushAfterPrefix}, true
+		return &fieldsToOverwrite{bp.prefix, bp.port, bp.id, bp.flushPolicy}, true
 	}
 	return nil, false
 }
@@ -147,7 +147,7 @@ func ParsePrefixes(conf io.Reader) (*PrefixOverride, error) {
 			int(id),
 			int(port),
 			[]byte(items[4]),
-			false, // TODO - make this not static
+			prefix.NoAddedFlush, // TODO - make this not static
 		})
 	}
 	return &PrefixOverride{(*prefixes)(&prefixSelectors)}, nil
@@ -194,7 +194,7 @@ func (po *PrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader) err
 	params.Prefix = fields.prefix
 	var i int32 = int32(fields.id)
 	params.PrefixId = &i
-	params.FlushAfterPrefix = &fields.flushAfterPrefix
+	params.CustomFlushPolicy = &fields.flushPolicy
 
 	if reg.GetRegistrationResponse() == nil {
 		reg.RegistrationResponse = &pb.RegistrationResponse{}
@@ -251,10 +251,10 @@ func (rpo *RandPrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader
 		return err
 	}
 
-	var fp = newPrefix.FlushAfterPrefix()
+	var fp = newPrefix.FlushPolicy()
 	var i int32 = int32(newPrefix.ID())
 	params.PrefixId = &i
-	params.FlushAfterPrefix = &fp
+	params.CustomFlushPolicy = &fp
 	params.Prefix = newPrefix.Bytes()
 
 	if reg.GetRegistrationResponse() == nil {
@@ -307,10 +307,10 @@ func (fpo *FixedPrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reade
 		return err
 	}
 
-	var fp = fpo.p.FlushAfterPrefix()
+	var fp = fpo.p.FlushPolicy()
 	var i int32 = int32(fpo.p.ID())
 	params.PrefixId = &i
-	params.FlushAfterPrefix = &fp
+	params.CustomFlushPolicy = &fp
 	params.Prefix = fpo.p.Bytes()
 
 	if reg.GetRegistrationResponse() == nil {

@@ -21,12 +21,11 @@ import (
 	"github.com/refraction-networking/conjure/pkg/core"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
-	"github.com/refraction-networking/conjure/pkg/transports/wrapping/internal/tests"
 	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
 )
 
-var testSubnetPath = conjurepath.Root + "/pkg/transports/wrapping/internal/tests/phantom_subnets.toml"
+var testSubnetPath = conjurepath.Root + "/internal/test_assets/phantom_subnets.toml"
 
 func connect(conn net.Conn, reg *cj.DecoyRegistration) (net.Conn, error) {
 	// TODO: put these in params

@@ -7,7 +7,7 @@ ARG GID=1000
 RUN groupadd -g $GID -o $UNAME
 RUN useradd -m -u $UID -g $GID -o -s /bin/bash $UNAME
 
-RUN apt-get update && apt-get install -yq sudo apt-utils software-properties-common
+RUN apt-get update && apt-get install -yq sudo apt-utils software-properties-common iproute2 ethtool
 
 # install pf_ring deps
 
@@ -62,8 +62,8 @@ COPY cmd/ /opt/conjure/cmd
 COPY pkg/ /opt/conjure/pkg
 COPY proto/ /opt/conjure/proto
 
-RUN PATH="$HOME/.go/bin/:$PATH" make app
-RUN PATH="$HOME/.go/bin/:$PATH" make registration-server
+RUN PATH="$HOME/.go/bin/:/usr/local/go/bin:$PATH" make app
+RUN PATH="$HOME/.go/bin/:/usr/local/go/bin:$PATH" make registration-server
 
 # Add default configs and launch scripts
 COPY sysconfig/conjure.conf /opt/conjure/sysconfig/

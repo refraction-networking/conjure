@@ -95,8 +95,8 @@ func TestConnHandleNewTCPConn(t *testing.T) {
 func TestConnPrintAndReset(t *testing.T) {
 	logger := log.New(os.Stdout, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
 	connManager := newConnManager(nil)
-	newGeoIPMap := make(map[uint]*asnCounts)
-	newGeoIPMap[0] = &asnCounts{
+	v4GeoIPMap := make(map[uint]*asnCounts)
+	v4GeoIPMap[0] = &asnCounts{
 		cc: "unk",
 		statCounts: statCounts{
 			numCreatedToDiscard: 1,
@@ -106,7 +106,7 @@ func TestConnPrintAndReset(t *testing.T) {
 			numCreatedToError:   5,
 		},
 	}
-	newGeoIPMap[1] = &asnCounts{
+	v4GeoIPMap[1] = &asnCounts{
 		cc: "US",
 		statCounts: statCounts{
 			numCreatedToDiscard: 6,
@@ -117,10 +117,25 @@ func TestConnPrintAndReset(t *testing.T) {
 			totalTransitions:    2,
 		},
 	}
-	connManager.connStats.numCreated = 55
-	connManager.connStats.numCheckToError = 1
-	connManager.connStats.numReset = 17
-	connManager.connStats.geoIPMap = newGeoIPMap
+
+	v6GeoIPMap := make(map[uint]*asnCounts)
+	v6GeoIPMap[3] = &asnCounts{
+		cc: "IN",
+		statCounts: statCounts{
+			numCreatedToDiscard: 71,
+			numCreatedToCheck:   72,
+			numCreatedToReset:   73,
+			numCreatedToTimeout: 74,
+			numCreatedToError:   75,
+		},
+	}
+
+	connManager.connStats.ipv4.numCreated = 55
+	connManager.connStats.ipv4.numCheckToError = 1
+	connManager.connStats.ipv6.numReset = 17
+	connManager.connStats.v4geoIPMap = v4GeoIPMap
+	connManager.connStats.v6geoIPMap = v6GeoIPMap
+	// connManager.connStats.v6geoIPMap = make(map[uint]*asnCounts)
 	connManager.connStats.PrintAndReset(logger)
 }
 
@@ -194,7 +209,7 @@ func TestConnHandleConcurrent(t *testing.T) {
 func TestConnForceRace(t *testing.T) {
 	// We don't actually care about what gets written
 	logger := log.New(io.Discard, "[TEST CONN STATS] ", golog.Ldate|golog.Lmicroseconds)
-	cs := &connStats{geoIPMap: make(map[uint]*asnCounts)}
+	cs := &connStats{v4geoIPMap: make(map[uint]*asnCounts), v6geoIPMap: make(map[uint]*asnCounts)}
 	exit := make(chan struct{})
 
 	go func() {
@@ -217,25 +232,25 @@ func TestConnForceRace(t *testing.T) {
 				im := int(math.Max(float64(il), 1)) // prevent div by 0
 				asn := uint(j % im)
 				cc := fmt.Sprintf("%d", uint(j/im))
-				cs.addCreated(asn, cc)
-				cs.createdToDiscard(asn, cc)
-				cs.createdToCheck(asn, cc)
-				cs.createdToReset(asn, cc)
-				cs.createdToTimeout(asn, cc)
-				cs.createdToError(asn, cc)
-				cs.readToCheck(asn, cc)
-				cs.readToTimeout(asn, cc)
-				cs.readToReset(asn, cc)
-				cs.readToError(asn, cc)
-				cs.checkToCreated(asn, cc)
-				cs.checkToRead(asn, cc)
-				cs.checkToFound(asn, cc)
-				cs.checkToError(asn, cc)
-				cs.checkToDiscard(asn, cc)
-				cs.discardToReset(asn, cc)
-				cs.discardToTimeout(asn, cc)
-				cs.discardToError(asn, cc)
-				cs.discardToClose(asn, cc)
+				cs.addCreated(asn, cc, true)
+				cs.createdToDiscard(asn, cc, true)
+				cs.createdToCheck(asn, cc, true)
+				cs.createdToReset(asn, cc, true)
+				cs.createdToTimeout(asn, cc, true)
+				cs.createdToError(asn, cc, true)
+				cs.readToCheck(asn, cc, true)
+				cs.readToTimeout(asn, cc, true)
+				cs.readToReset(asn, cc, true)
+				cs.readToError(asn, cc, true)
+				cs.checkToCreated(asn, cc, true)
+				cs.checkToRead(asn, cc, true)
+				cs.checkToFound(asn, cc, true)
+				cs.checkToError(asn, cc, true)
+				cs.checkToDiscard(asn, cc, true)
+				cs.discardToReset(asn, cc, true)
+				cs.discardToTimeout(asn, cc, true)
+				cs.discardToError(asn, cc, true)
+				cs.discardToClose(asn, cc, true)
 			}
 			wg.Done()
 		}(i)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	golog "log"
 	"net"
 	"os"
@@ -14,9 +15,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/station/geoip"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/transports"
 
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
@@ -41,6 +44,9 @@ type RegistrationManager struct {
 	LivenessTester   liveness.Tester
 	GeoIP            geoip.Database
 
+	// ConnectingStats records stats related to connecting transports
+	connectingStats ConnectingTpStats
+
 	// ingestChan is included here so that the capacity and use is available to
 	// stats
 	ingestChan <-chan interface{}
@@ -48,6 +54,9 @@ type RegistrationManager struct {
 
 // NewRegistrationManager returns a newly initialized registration Manager
 func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
+	if conf == nil {
+		return nil
+	}
 
 	logger := log.New(os.Stdout, "[REG] ", golog.Ldate|golog.Lmicroseconds)
 
@@ -79,6 +88,7 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 		PhantomSelector:   p,
 		LivenessTester:    lt,
 		GeoIP:             geoipDB,
+		connectingStats:   conf.ConnectingStats,
 	}
 }
 
@@ -129,7 +139,7 @@ func (regManager *RegistrationManager) OnReload(conf *RegConfig) {
 // clients register.
 func (regManager *RegistrationManager) AddTransport(index pb.TransportType, t Transport) error {
 	if regManager == nil {
-		regManager = NewRegistrationManager(regManager.RegConfig)
+		return fmt.Errorf("registration manager cannot be nil")
 	}
 	if regManager.registeredDecoys == nil {
 		regManager.registeredDecoys = NewRegisteredDecoys()
@@ -216,8 +226,15 @@ func (regManager *RegistrationManager) RegistrationExists(reg *DecoyRegistration
 }
 
 // GetRegistrations returns registrations associated with a specific phantom address.
-func (regManager *RegistrationManager) GetRegistrations(phantomAddr net.IP) map[string]*DecoyRegistration {
-	return regManager.registeredDecoys.getRegistrations(phantomAddr)
+func (regManager *RegistrationManager) GetRegistrations(phantomAddr net.IP) map[string]transports.Registration {
+	regs := regManager.registeredDecoys.getRegistrations(phantomAddr)
+
+	convertedRegs := make(map[string]transports.Registration)
+	for id, reg := range regs {
+		convertedRegs[id] = reg
+	}
+
+	return convertedRegs
 }
 
 // CountRegistrations counts the number of registrations tracked that are using a
@@ -268,12 +285,12 @@ type DecoyRegistration struct {
 	regCC            string
 	regASN           uint
 
-	Keys               *ConjureSharedKeys
+	Keys               *core.ConjureSharedKeys
 	Covert, Mask       string
 	Flags              *pb.RegistrationFlags
 	Transport          pb.TransportType
 	TransportPtr       *Transport
-	TransportParams    any
+	transportParams    any
 	RegistrationTime   time.Time
 	RegistrationSource *pb.RegistrationSource
 	DecoyListVersion   uint32
@@ -285,6 +302,51 @@ type DecoyRegistration struct {
 	// validity marks whether the registration has been validated through liveness and other checks.
 	// This also denotes whether the registration has been shared with the detector.
 	Valid bool
+}
+
+// SharedSecret returns the shared secret of the registration
+func (reg *DecoyRegistration) SharedSecret() []byte {
+	return reg.Keys.SharedSecret
+}
+
+// PhantomIP returns the phantom IP
+func (reg *DecoyRegistration) PhantomIP() *net.IP {
+	return &reg.PhantomIp
+}
+
+// TransportKeys returns the obfs4 public key
+func (reg *DecoyRegistration) TransportKeys() interface{} {
+	if reg.Keys == nil {
+		return nil
+	}
+	return reg.Keys.TransportKeys
+}
+
+// SetTransportKeys returns the obfs4 public key
+func (reg *DecoyRegistration) SetTransportKeys(k interface{}) error {
+	if reg.Keys == nil {
+		return fmt.Errorf("broken registration")
+	}
+	reg.Keys.TransportKeys = k
+	return nil
+}
+
+// TransportReader returns the obfs4 private key
+func (reg *DecoyRegistration) TransportReader() io.Reader {
+	if reg.Keys == nil {
+		return nil
+	}
+	return reg.Keys.TransportReader
+}
+
+// TransportType returns the protobuf transport type
+func (reg *DecoyRegistration) TransportType() pb.TransportType {
+	return reg.Transport
+}
+
+// TransportParams returns the transport params associated with the registration
+func (reg *DecoyRegistration) TransportParams() any {
+	return reg.transportParams
 }
 
 // String -- Print a digest of the important identifying information for this registration.
@@ -788,13 +850,11 @@ func sendToDetector(reg *DecoyRegistration, duration uint64, op pb.StationOperat
 	src := reg.registrationAddr.String()
 	phantom := reg.PhantomIp.String()
 	// protocol := reg.GetProto()
-	srcPort := uint32(reg.GetSrcPort())
 	dstPort := uint32(reg.GetDstPort())
 	msg := &pb.StationToDetector{
 		PhantomIp: &phantom,
 		ClientIp:  &src,
 		DstPort:   &dstPort,
-		SrcPort:   &srcPort,
 		Proto:     &reg.PhantomProto,
 		TimeoutNs: &duration,
 		Operation: &op,
@@ -830,4 +890,21 @@ func clearDetector() {
 
 	ctx := context.Background()
 	client.Publish(ctx, DETECTOR_REG_CHANNEL, string(s2d))
+}
+
+// GetConnectingTransports Returns a map of the connecting transport types to their transports. This return value
+// can be mutated freely.
+func (regManager *RegistrationManager) GetConnectingTransports() map[pb.TransportType]ConnectingTransport {
+	m := make(map[pb.TransportType]ConnectingTransport)
+	regManager.registeredDecoys.m.RLock()
+	defer regManager.registeredDecoys.m.RUnlock()
+
+	for k, v := range regManager.registeredDecoys.transports {
+		ct, ok := v.(ConnectingTransport)
+		if ok {
+			m[k] = ct
+		}
+	}
+
+	return m
 }

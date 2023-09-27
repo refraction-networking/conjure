@@ -1,6 +1,7 @@
 package interfaces
 
 import (
+	"context"
 	"io"
 	"net"
 
@@ -8,6 +9,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
+
+type dialFunc = func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)
 
 // Transport provides a generic interface for utilities that allow the client to dial and connect to
 // a phantom address when creating a Conjure connection.
@@ -36,6 +39,10 @@ type Transport interface {
 	// handle, but are outside of the clients sanity checks. (see prefix transport for an example)
 	SetParams(any, ...bool) error
 
+	// Prepare lets the transport use the dialer to prepare. This is called before GetParams to let the
+	// transport prepare stuff such as nat traversal.
+	Prepare(ctx context.Context, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error
+
 	// GetDstPort returns the destination port that the client should open the phantom connection with.
 	GetDstPort(seed []byte) (uint16, error)
 
@@ -43,9 +50,21 @@ type Transport interface {
 	// as well as bytes from the deterministic random generator associated with the registration
 	// that this ClientTransport is attached to.
 	PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRand io.Reader) error
+}
+
+type WrappingTransport interface {
+	Transport
 
 	// Connect returns a net.Conn connection given a context and ConjureReg
 	WrapConn(conn net.Conn) (net.Conn, error)
+}
+
+type ConnectingTransport interface {
+	Transport
+
+	WrapDial(dialer dialFunc) (dialFunc, error)
+
+	DisableRegDelay() bool
 }
 
 // Overrides makes it possible to treat an array of overrides as a single override note that the
@@ -70,3 +89,12 @@ func (o Overrides) Override(reg *pb.C2SWrapper, randReader io.Reader) error {
 type RegOverride interface {
 	Override(*pb.C2SWrapper, io.Reader) error
 }
+
+// DNAT used by the station side DTLS transport implementation to warm up the DNAT table such that
+// we are able to handle incoming client connections.
+type DNAT interface {
+	AddEntry(clientAddr *net.IP, clientPort uint16, phantomIP *net.IP, phantomPort uint16) error
+}
+
+// DnatBuilder function type alias for building a DNAT object
+type DnatBuilder func() (DNAT, error)

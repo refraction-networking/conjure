@@ -45,6 +45,9 @@ type RegConfig struct {
 	// Local list of disallowed subnets patterns for phantom addresses.
 	PhantomBlocklist []string `toml:"phantom_blocklist"`
 	phantomBlocklist []*net.IPNet
+
+	// ConnectingStats records stats related to connecting transports
+	ConnectingStats ConnectingTpStats
 }
 
 // ParseBlocklists converts string arrays of blocklisted domains, addresses and

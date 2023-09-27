@@ -6,23 +6,26 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/curve25519"
 
 	"github.com/refraction-networking/conjure/internal/conjurepath"
+	tests "github.com/refraction-networking/conjure/internal/testutils"
 	"github.com/refraction-networking/conjure/pkg/core"
-	"github.com/refraction-networking/conjure/pkg/ed25519"
-	"github.com/refraction-networking/conjure/pkg/ed25519/extra25519"
 	"github.com/refraction-networking/conjure/pkg/transports"
-	"github.com/refraction-networking/conjure/pkg/transports/wrapping/internal/tests"
+
 	pb "github.com/refraction-networking/conjure/proto"
+	"github.com/refraction-networking/ed25519"
+	"github.com/refraction-networking/ed25519/extra25519"
 )
 
 func TestSuccessfulWrap(t *testing.T) {
-	testSubnetPath := conjurepath.Root + "/pkg/station/lib/test/phantom_subnets.toml"
+	testSubnetPath := conjurepath.Root + "/internal/test_assets/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	_, private, _ := ed25519.GenerateKey(rand.Reader)
@@ -64,11 +67,10 @@ func TestSuccessfulWrap(t *testing.T) {
 				require.Nil(t, err)
 
 				var buf [4096]byte
-				var buffer bytes.Buffer
 				n, _ := sfp.Read(buf[:])
-				buffer.Write(buf[:n])
+				buffer := bytes.NewBuffer(buf[:n])
 
-				_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+				_, wrapped, err := transport.WrapConnection(buffer, sfp, reg.PhantomIp, manager)
 				if id != idx {
 					require.ErrorIs(t, err, ErrIncorrectPrefix)
 					continue
@@ -190,28 +192,28 @@ var _cases = []struct {
 
 	// because the Prefix object is defined the client doesn't care that the id isn't in the
 	// set of defaults, because the Prefix can give the dst port.
-	{"3", &clientPrefix{[]byte{}, 22, 1025, false}, &ptp{RandomizeDstPort: &f, PrefixId: &i22}, 1025, 0, nil, ErrUnknownPrefix, ErrUnknownPrefix},
-	{"4", &clientPrefix{[]byte{}, 22, 1025, false}, &ptp{RandomizeDstPort: &t, PrefixId: &i22}, 58047, 0, nil, ErrUnknownPrefix, ErrBadParams},
+	{"3", &clientPrefix{[]byte{}, 22, 1025, NoAddedFlush}, &ptp{RandomizeDstPort: &f, PrefixId: &i22}, 1025, 0, nil, ErrUnknownPrefix, ErrUnknownPrefix},
+	{"4", &clientPrefix{[]byte{}, 22, 1025, NoAddedFlush}, &ptp{RandomizeDstPort: &t, PrefixId: &i22}, 58047, 0, nil, ErrUnknownPrefix, ErrBadParams},
 
 	// Properly working examples
-	{"5", &clientPrefix{[]byte{}, 0, 443, false}, &ptp{RandomizeDstPort: &t}, 58047, 58047, nil, nil, nil},
-	{"6", &clientPrefix{[]byte{}, 0, 443, false}, &ptp{RandomizeDstPort: &f}, 443, 443, nil, nil, nil},
+	{"5", &clientPrefix{[]byte{}, 0, 443, NoAddedFlush}, &ptp{RandomizeDstPort: &t}, 58047, 58047, nil, nil, nil},
+	{"6", &clientPrefix{[]byte{}, 0, 443, NoAddedFlush}, &ptp{RandomizeDstPort: &f}, 443, 443, nil, nil, nil},
 
 	// // This will result in a broken connection, valid for both client and server. but unable to
 	// // connect since they will disagree about the expected port. This is not taking into account
 	// // the overrides system which could also cause this, but will be valid and applied properly
 	// // so as not to cause something like this from happening.
-	{"7", &clientPrefix{[]byte{}, 0, 1025, false}, &ptp{RandomizeDstPort: &f}, 1025, 443, nil, nil, nil},
-	{"8", &clientPrefix{[]byte{}, 1, 1025, false}, &ptp{RandomizeDstPort: &f, PrefixId: &i1}, 1025, 80, nil, nil, ErrBadParams},
+	{"7", &clientPrefix{[]byte{}, 0, 1025, NoAddedFlush}, &ptp{RandomizeDstPort: &f}, 1025, 443, nil, nil, nil},
+	{"8", &clientPrefix{[]byte{}, 1, 1025, NoAddedFlush}, &ptp{RandomizeDstPort: &f, PrefixId: &i1}, 1025, 80, nil, nil, ErrBadParams},
 
 	// Params nil. Prefix not nil
-	{"9", &clientPrefix{[]byte{}, -2, 1025, false}, nil, 1025, 0, nil, ErrBadParams, ErrUnknownPrefix},
-	{"10", &clientPrefix{[]byte{}, -2, 443, false}, nil, 443, 0, nil, ErrBadParams, nil},
+	{"9", &clientPrefix{[]byte{}, -2, 1025, NoAddedFlush}, nil, 1025, 0, nil, ErrBadParams, ErrUnknownPrefix},
+	{"10", &clientPrefix{[]byte{}, -2, 443, NoAddedFlush}, nil, 443, 0, nil, ErrBadParams, nil},
 
 	// Random prefix, resolved by client into another prefix BEFORE calling GetParams. This means
 	// that none of ClientTransport.GetParams, ClientTransport.DstPort, or Transport.GetDstPort are
 	// aware of a PrefixID of -1 (Rand)
-	{"11", &clientPrefix{[]byte{}, -1, 1025, false}, &ptp{RandomizeDstPort: &t, PrefixId: &in1}, 0, 0, ErrUnknownPrefix, ErrUnknownPrefix, ErrUnknownPrefix},
+	{"11", &clientPrefix{[]byte{}, -1, 1025, NoAddedFlush}, &ptp{RandomizeDstPort: &t, PrefixId: &in1}, 0, 0, ErrUnknownPrefix, ErrUnknownPrefix, ErrUnknownPrefix},
 }
 
 func TestPrefixGetDstPortServer(t *testing.T) {
@@ -332,17 +334,17 @@ func TestClientTransportFromID(t *testing.T) {
 
 	p, err := TryFromID(Min)
 	require.Nil(t, err)
-	require.Equal(t, &clientPrefix{defaultPrefixes[0].StaticMatch, 0, 443, false}, p)
+	require.Equal(t, &clientPrefix{defaultPrefixes[0].StaticMatch, 0, 443, NoAddedFlush}, p)
 
 	p, err = TryFromID(OpenSSH2)
 	require.Nil(t, err)
-	require.Equal(t, &clientPrefix{defaultPrefixes[OpenSSH2].StaticMatch, OpenSSH2, 22, false}, p)
+	require.Equal(t, &clientPrefix{defaultPrefixes[OpenSSH2].StaticMatch, OpenSSH2, 22, NoAddedFlush}, p)
 
 	b, _ := hex.DecodeString("010000")
 	r := bytes.NewReader(b)
 	p, err = pickRandomPrefix(r)
 	require.Nil(t, err)
-	require.Equal(t, &clientPrefix{defaultPrefixes[1].StaticMatch, 1, 80, false}, p)
+	require.Equal(t, &clientPrefix{defaultPrefixes[1].StaticMatch, 1, 80, NoAddedFlush}, p)
 }
 
 /*
@@ -399,3 +401,90 @@ func TestSuccessfulWrapBase64(t *testing.T) {
 
 }
 */
+
+// Test End to End client WrapConn to Server WrapConnection
+func TestPrefixEndToEnd(t *testing.T) {
+	testSubnetPath := conjurepath.Root + "/internal/test_assets/phantom_subnets.toml"
+	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
+
+	_, private, _ := ed25519.GenerateKey(rand.Reader)
+
+	var curve25519Public, curve25519Private [32]byte
+	extra25519.PrivateKeyToCurve25519(&curve25519Private, private)
+	curve25519.ScalarBaseMult(&curve25519Public, &curve25519Private)
+
+	var transport = Transport{
+		TagObfuscator:     transports.CTRObfuscator{},
+		Privkey:           curve25519Private,
+		SupportedPrefixes: defaultPrefixes,
+	}
+	message := []byte(`test message!`)
+
+	for _, flushPolicy := range []int32{DefaultFlush, NoAddedFlush, FlushAfterPrefix} {
+		for idx := range defaultPrefixes {
+
+			t.Logf("testing prefix %d, %s", idx, idx.Name())
+
+			var p int32 = int32(idx)
+			params := &pb.PrefixTransportParams{PrefixId: &p, CustomFlushPolicy: &flushPolicy}
+			manager := tests.SetupRegistrationManager(tests.Transport{Index: pb.TransportType_Prefix, Transport: transport})
+			c2p, sfp, reg := tests.SetupPhantomConnections(manager, pb.TransportType_Prefix, params, uint(core.CurrentClientLibraryVersion()))
+			defer c2p.Close()
+			defer sfp.Close()
+			require.NotNil(t, reg)
+			sch := make(chan struct{}, 1)
+
+			go func() {
+				var c net.Conn
+				var err error
+				var buf [4096]byte
+				received := bytes.Buffer{}
+
+				sch <- struct{}{}
+				for {
+					n, err := sfp.Read(buf[:])
+					if err != nil {
+						t.Errorf("error reading from server connection after %d bytes %s", n, err)
+						t.Fail()
+						return
+					}
+
+					received.Write(buf[:n])
+					_, c, err = transport.WrapConnection(&received, sfp, reg.PhantomIp, manager)
+					if err == nil {
+						break
+					} else if !errors.Is(err, transports.ErrTryAgain) {
+						t.Errorf("error getting wrapped connection %s - expected %s, %d", err, idx.Name(), flushPolicy)
+						t.Fail()
+						return
+					}
+				}
+
+				recvBuf := make([]byte, len(message))
+				_, err = io.ReadFull(c, recvBuf)
+				require.Nil(t, err, "failed reading from server connection")
+				_, err = c.Write(recvBuf)
+				require.Nil(t, err, "failed writing to server connection")
+			}()
+
+			<-sch
+			clientPrefix, err := TryFromID(PrefixID(p))
+			require.Nil(t, err)
+			ClientTransport := &ClientTransport{Prefix: clientPrefix, parameters: params}
+			err = ClientTransport.PrepareKeys(curve25519Public, reg.Keys.SharedSecret, reg.Keys.TransportReader)
+			require.Nil(t, err)
+			clientConn, err := ClientTransport.WrapConn(c2p)
+			require.Nil(t, err, "error getting wrapped connection")
+
+			err = clientConn.SetDeadline(time.Now().Add(3 * time.Second))
+			require.Nil(t, err, "error setting deadline")
+
+			_, err = clientConn.Write(message)
+			require.Nil(t, err, "failed writing to client connection")
+			cbuf := make([]byte, len(message))
+			_, err = io.ReadFull(clientConn, cbuf)
+			require.Nil(t, err, "failed reading from client connection")
+			require.True(t, bytes.Equal(message, cbuf), "%s\n%s", string(message), string(cbuf))
+		}
+	}
+}

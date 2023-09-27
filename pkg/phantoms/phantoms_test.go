@@ -24,7 +24,7 @@ func TestIPSelectionBasic(t *testing.T) {
 	_, net1, err := net.ParseCIDR(netStr)
 	require.Nil(t, err)
 
-	addr, err := SelectAddrFromSubnetOffset(net1, offset)
+	addr, err := SelectAddrFromSubnetOffset(&phantomNet{IPNet: net1}, offset)
 	require.Nil(t, err)
 	//require.Equal(t, "2001:48a8:687f:1:5fa4:c34c:434e:ddd", addr.String())
 	require.Equal(t, "2001:48a8:687f:1:7ead:beef:cafe:d00d", addr.String())
@@ -38,14 +38,14 @@ func TestOffsetTooLarge(t *testing.T) {
 	require.Nil(t, err)
 
 	// Offset too big
-	addr, err := SelectAddrFromSubnetOffset(net1, offset)
+	addr, err := SelectAddrFromSubnetOffset(&phantomNet{IPNet: net1}, offset)
 	if err == nil {
 		t.Fatalf("Error: expected error, got address %v", addr)
 	}
 
 	// Offset that is just fine
 	offset = big.NewInt(255)
-	addr, err = SelectAddrFromSubnetOffset(net1, offset)
+	addr, err = SelectAddrFromSubnetOffset(&phantomNet{IPNet: net1}, offset)
 	require.Nil(t, err)
 	require.Equal(t, "10.1.2.255", addr.String())
 }
@@ -83,9 +83,9 @@ func TestSelectWeightedMany(t *testing.T) {
 			t.Fatalf("Failed to select adddress: %v -- %s, %v, %v, %v -- %v", err, hex.EncodeToString(seed), ps, "None", true, count)
 		}
 
-		if net1.Contains(*addr) {
+		if net1.Contains(*addr.IP()) {
 			count[0]++
-		} else if net2.Contains(*addr) {
+		} else if net2.Contains(*addr.IP()) {
 			count[1]++
 		} else {
 			t.Fatalf("failed to parse pb.PhantomSubnetsList: %v, %v, %v", seed, true, ps)
@@ -100,10 +100,12 @@ func TestWeightedSelection(t *testing.T) {
 	loops := 1000
 	r := rand.New(rand.NewSource(5421212341231))
 	w := uint32(1)
+	subnet1 := "1.1.1.1/32"
+	subnet2 := "2.2.2.2/32"
 	var ps = &pb.PhantomSubnetsList{
 		WeightedSubnets: []*pb.PhantomSubnets{
-			{Weight: &w, Subnets: []string{"1"}},
-			{Weight: &w, Subnets: []string{"2"}},
+			{Weight: &w, Subnets: []string{subnet1}},
+			{Weight: &w, Subnets: []string{subnet2}},
 		},
 	}
 
@@ -114,13 +116,15 @@ func TestWeightedSelection(t *testing.T) {
 			t.Fatalf("Failed to generate seed: %v", err)
 		}
 
-		sa := getSubnets(ps, seed, true)
+		sa, err := getSubnets(ps, seed, true)
+		require.Nil(t, err)
+
 		if sa == nil {
 			t.Fatalf("failed to parse pb.PhantomSubnetsList: %v, %v, %v", seed, true, ps)
 
-		} else if sa[0] == "1" {
+		} else if sa[0].String() == subnet1 {
 			count[0]++
-		} else if sa[0] == "2" {
+		} else if sa[0].String() == subnet2 {
 			count[1]++
 		}
 
@@ -159,7 +163,7 @@ func TestSelectFilter(t *testing.T) {
 
 func TestPhantomsV6OnlyFilter(t *testing.T) {
 	testNets := []string{"192.122.190.0/24", "2001:48a8:687f:1::/64", "2001:48a8:687f:1::/64"}
-	testNetsParsed, err := parseSubnets(testNets)
+	testNetsParsed, err := parseSubnets(&pb.PhantomSubnets{Subnets: testNets})
 	require.Nil(t, err)
 	require.Equal(t, 3, len(testNetsParsed))
 
@@ -172,7 +176,7 @@ func TestPhantomsV6OnlyFilter(t *testing.T) {
 // they re useful to test limitations (i.e. multiple clients sharing a phantom
 // address)
 func TestPhantomsSeededSelectionV4Min(t *testing.T) {
-	subnets, err := parseSubnets([]string{"192.122.190.0/32", "2001:48a8:687f:1::/128"})
+	subnets, err := parseSubnets(&pb.PhantomSubnets{Subnets: []string{"192.122.190.0/32", "2001:48a8:687f:1::/128"}})
 	require.Nil(t, err)
 
 	seed, err := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
@@ -201,7 +205,7 @@ func TestPhantomSeededSelectionFuzz(t *testing.T) {
 		_, variableSubnet, err := net.ParseCIDR(s)
 		require.Nil(t, err)
 
-		subnets := []*net.IPNet{defaultV6, variableSubnet}
+		subnets := []*phantomNet{{IPNet: defaultV6}, {IPNet: variableSubnet}}
 
 		var seed = make([]byte, 32)
 		for j := 0; j < 10000; j++ {
@@ -252,7 +256,7 @@ func TestForDuplicates(t *testing.T) {
 	weights := map[string]int{}
 
 	totWeights := 0
-	snets, err := parseSubnets(getSubnets(ps, nil, false))
+	snets, err := getSubnets(ps, nil, false)
 	require.Nil(t, err)
 	for _, phantomSubnet := range ps.WeightedSubnets {
 		snet := phantomSubnet.Subnets[0]
@@ -284,7 +288,7 @@ func TestForDuplicates(t *testing.T) {
 		ipSet[addr.String()] = i
 
 		for _, snet := range snets {
-			if snet.Contains(*addr) {
+			if snet.Contains(*addr.IP()) {
 				netMap[snet.String()] += 1
 			}
 		}

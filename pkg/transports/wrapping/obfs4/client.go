@@ -1,14 +1,16 @@
 package obfs4
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
 
-	pt "git.torproject.org/pluggable-transports/goptlib.git"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
-	"gitlab.com/yawning/obfs4.git/transports/obfs4"
+	"github.com/refraction-networking/obfs4/transports/obfs4"
+
+	pt "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -37,6 +39,10 @@ func (*ClientTransport) ID() pb.TransportType {
 	return pb.TransportType_Obfs4
 }
 
+func (*ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
+	return nil
+}
+
 // GetParams returns a generic protobuf with any parameters from both the registration and the
 // transport.
 func (t *ClientTransport) GetParams() (proto.Message, error) {
@@ -46,12 +52,16 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible.
 func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
-	params, ok := p.(*pb.GenericTransportParams)
-	if !ok {
+	var parsedParams *pb.GenericTransportParams
+	if params, ok := p.(*pb.GenericTransportParams); ok {
+		parsedParams = params
+	} else if p == nil {
+		parsedParams = &pb.GenericTransportParams{}
+		parsedParams.RandomizeDstPort = proto.Bool(true)
+	} else {
 		return fmt.Errorf("unable to parse params")
 	}
-	t.Parameters = params
-
+	t.Parameters = parsedParams
 	return nil
 }
 

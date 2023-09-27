@@ -2,6 +2,7 @@ package transports_test
 
 import (
 	"crypto/rand"
+	"strings"
 	"testing"
 
 	"github.com/refraction-networking/conjure/pkg/transports"
@@ -42,6 +43,14 @@ func TestWrongType(t *testing.T) {
 	require.NotNil(t, err)
 }
 
+func TestMissingType(t *testing.T) {
+	src, err := anypb.New(&pb.ClientToStation{Padding: []byte{0, 1}})
+	require.Nil(t, err)
+
+	err = transports.UnmarshalAnypbTo(src, nil)
+	require.NotNil(t, err)
+}
+
 func TestGarbage(t *testing.T) {
 	src, err := anypb.New(&pb.GenericTransportParams{RandomizeDstPort: proto.Bool(true)})
 	require.Nil(t, err)
@@ -54,4 +63,24 @@ func TestGarbage(t *testing.T) {
 
 	err = proto.Unmarshal(garbagebytes, dstAnypb)
 	require.NotNil(t, err)
+}
+
+func TestEmpty(t *testing.T) {
+	dstAnypb := &anypb.Any{}
+
+	err := transports.UnmarshalAnypbTo(nil, dstAnypb)
+	require.Nil(t, err)
+}
+
+func TestOldProto(t *testing.T) {
+	src, err := anypb.New(&pb.GenericTransportParams{RandomizeDstPort: proto.Bool(true)})
+	require.Nil(t, err)
+
+	src.TypeUrl = strings.ReplaceAll(src.TypeUrl, "proto.", "tapdance.")
+
+	dst := &pb.GenericTransportParams{}
+	err = transports.UnmarshalAnypbTo(src, dst)
+	require.Nil(t, err)
+
+	require.True(t, dst.GetRandomizeDstPort())
 }

@@ -22,7 +22,7 @@ type Config struct {
 	UtlsDistribution string
 
 	// DialTransport allows for a custom dialer to be used for the underlying TCP/UDP transport
-	DialTransport DialFunc
+	DialTransport dialFunc
 }
 
 // TransportMethodType declares the transport method to be used
@@ -34,12 +34,12 @@ const (
 	UDP
 )
 
-func defaultDialTransport() DialFunc {
+func defaultDialTransport() dialFunc {
 	dialer := net.Dialer{}
 	return dialer.DialContext
 }
 
-func (c *Config) dialTransport() DialFunc {
+func (c *Config) dialTransport() dialFunc {
 	if c.DialTransport == nil {
 		return defaultDialTransport()
 	}

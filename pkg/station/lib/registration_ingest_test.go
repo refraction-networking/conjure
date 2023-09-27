@@ -79,7 +79,7 @@ func TestIngestPortHandlingFunctionality(t *testing.T) {
 	seed, _ := hex.DecodeString("0000000000000000000000000000000000000000000000000000000000000000")
 
 	for _, testCase := range goodCases {
-		port, err := rm.getPhantomDstPort(testCase.t, testCase.p, seed, testCase.v)
+		port, err := rm.getPhantomDstPort(testCase.t, testCase.p, seed, testCase.v, true)
 		require.Nil(t, err)
 		require.Equal(t, testCase.expected, port, "case: %v", testCase)
 	}
@@ -115,7 +115,7 @@ func TestIngestPortHandlingCorners(t *testing.T) {
 	seed, _ := hex.DecodeString("0000000000000000000000000000000000000000000000000000000000000000")
 
 	for _, testCase := range cases {
-		_, err := rm.getPhantomDstPort(testCase.t, testCase.p, seed, testCase.v)
+		_, err := rm.getPhantomDstPort(testCase.t, testCase.p, seed, testCase.v, true)
 		require.NotNil(t, err, "case: %v", testCase)
 		require.Equal(t, testCase.err, err.Error(), "case: %v", testCase)
 	}

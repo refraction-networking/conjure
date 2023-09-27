@@ -10,12 +10,13 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 	"github.com/refraction-networking/conjure/pkg/station/log"
+	pb "github.com/refraction-networking/conjure/proto"
 )
 
 const (
@@ -231,6 +232,7 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 	logger.Debugf("Adding registration %v\n", reg.IDString())
 	Stat().AddReg(reg.DecoyListVersion, reg.RegistrationSource)
 	rm.AddRegStats(reg)
+	handleConnectingTpReg(rm, reg, logger)
 }
 
 func tryShareRegistrationOverAPI(reg *DecoyRegistration, apiEndpoint string, logger *log.Logger) {
@@ -334,7 +336,7 @@ func (rm *RegistrationManager) parseRegMessage(msg []byte) ([]*DecoyRegistration
 // NewRegistration creates a new registration from details provided. Adds the registration
 // to tracking map, But marks it as not valid. This is a utility function, it its not
 // used in the ingest pipeline
-func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
+func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureKeys *core.ConjureSharedKeys, includeV6 bool, registrationSource *pb.RegistrationSource) (*DecoyRegistration, error) {
 	gen := uint(c2s.GetDecoyListGeneration())
 	clientLibVer := uint(c2s.GetClientLibVersion())
 	phantomAddr, err := rm.PhantomSelector.Select(
@@ -358,7 +360,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		return nil, fmt.Errorf("error handling transport params: %s", err)
 	}
 
-	phantomPort, err := rm.getPhantomDstPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer)
+	phantomPort, err := rm.getPhantomDstPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer, phantomAddr.SupportsPortRand)
 	if err != nil {
 		return nil, fmt.Errorf("error selecting phantom dst port: %s", err)
 	}
@@ -374,10 +376,10 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		Covert:           c2s.GetCovertAddress(),
 		Transport:        c2s.GetTransport(),
 		TransportPtr:     &transport,
-		TransportParams:  transportParams,
+		transportParams:  transportParams,
 		Flags:            c2s.Flags,
 
-		PhantomIp:    phantomAddr,
+		PhantomIp:    *phantomAddr.IP,
 		PhantomPort:  phantomPort,
 		PhantomProto: phantomProto,
 
@@ -385,6 +387,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 
 		RegistrationSource: registrationSource,
 		RegistrationTime:   time.Now(),
+		clientLibVer:       uint32(clientLibVer),
 		regCount:           0,
 		tunnelCount:        0,
 	}
@@ -398,7 +401,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	c2s := c2sw.GetRegistrationPayload()
 
 	// Generate keys from shared secret using HKDF
-	conjureKeys, err := GenSharedKeys(uint(c2s.GetClientLibVersion()), c2sw.GetSharedSecret(), c2s.GetTransport())
+	conjureKeys, err := core.GenSharedKeys(uint(c2s.GetClientLibVersion()), c2sw.GetSharedSecret(), c2s.GetTransport())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate keys: %v", err)
 	}
@@ -474,13 +477,13 @@ func (rm *RegistrationManager) getTransportProto(t pb.TransportType, params any,
 
 // getPhantomDstPort returns the proper phantom port based on registration type, transport
 // parameters provided by the client and session details (also provided by the client).
-func (rm *RegistrationManager) getPhantomDstPort(t pb.TransportType, params any, seed []byte, libVer uint) (uint16, error) {
+func (rm *RegistrationManager) getPhantomDstPort(t pb.TransportType, params any, seed []byte, libVer uint, supportsRandom bool) (uint16, error) {
 	var transport, ok = rm.registeredDecoys.transports[t]
 	if !ok {
 		return 0, fmt.Errorf("unknown transport")
 	}
 
-	if libVer < randomizeDstPortMinVersion {
+	if libVer < randomizeDstPortMinVersion || !supportsRandom {
 		// Before randomizeDstPortMinVersion all transport (min and obfs4) exclusively used 443 as
 		// their destination port.
 		return 443, nil
@@ -491,4 +494,62 @@ func (rm *RegistrationManager) getPhantomDstPort(t pb.TransportType, params any,
 	// will attempt to reach. The libVersion is provided incase of version dependent changes in the
 	// transport selection algorithms themselves.
 	return transport.GetDstPort(libVer, seed, params)
+}
+
+// Handle new registration from client for UDP Transports
+// NOTE: this is called within a goroutine in get_zmq_updates
+func handleConnectingTpReg(regManager *RegistrationManager, reg *DecoyRegistration, logger *log.Logger) {
+	// using a Connecting Transport
+	for tptype, tp := range regManager.GetConnectingTransports() {
+		if tptype == reg.Transport { // correct transport name
+			ctx, cancelFunc := context.WithTimeout(context.Background(), 15*time.Second)
+			go func(transport ConnectingTransport) {
+				defer cancelFunc()
+
+				cc, err := regManager.GeoIP.CC(reg.registrationAddr)
+				if err != nil {
+					logger.Errorln("Failed to get CC:", err)
+					return
+				}
+
+				var asn uint = 0
+				if cc != "unk" {
+					asn, err = regManager.GeoIP.ASN(reg.registrationAddr)
+					if err != nil {
+						logger.Errorln("Failed to get ASN:", err)
+						return
+					}
+				}
+
+				regManager.connectingStats.AddCreatedConnecting(asn, cc, transport.Name())
+
+				conn, err := transport.Connect(ctx, reg)
+				if err != nil {
+					if errors.Is(err, context.DeadlineExceeded) {
+						regManager.connectingStats.AddCreatedToTimeoutConnecting(asn, cc, transport.Name())
+					} else {
+						regManager.connectingStats.AddOtherFailConnecting(asn, cc, transport.Name())
+					}
+					return
+				}
+
+				// regManager.connectingStats.AddCreatedToSuccessfulConnecting(asn, cc, transport.Name())
+
+				Stat().AddConn()
+				Proxy(reg, conn, logger)
+				Stat().CloseConn()
+
+				regManager.connectingStats.AddSuccessfulToDiscardedConnecting(asn, cc, transport.Name())
+
+			}(tp)
+		}
+	}
+}
+
+type ConnectingTpStats interface {
+	AddCreatedConnecting(asn uint, cc string, tp string)
+	AddCreatedToSuccessfulConnecting(asn uint, cc string, tp string)
+	AddCreatedToTimeoutConnecting(asn uint, cc string, tp string)
+	AddSuccessfulToDiscardedConnecting(asn uint, cc string, tp string)
+	AddOtherFailConnecting(asn uint, cc string, tp string)
 }

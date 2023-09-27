@@ -7,7 +7,6 @@ import (
 	"net"
 
 	"github.com/refraction-networking/conjure/pkg/core"
-	dd "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -65,7 +64,7 @@ type prefix struct {
 
 	// Flush Indicates whether the client is expected to flush the write buffer after the prefix
 	// before writing the tag. This would allow the whole first packet to be a prefix (with no tag).
-	Flush bool
+	Flush int32
 }
 
 // PrefixID provide an integer Identifier for each individual prefixes allowing clients to indicate
@@ -84,9 +83,7 @@ const (
 	TLSAlertFatal
 	DNSOverTCP
 	OpenSSH2
-	TLSCompleteCHNoSNI
-	TLSCompleteCHSNI
-	HTTPGetComplete
+
 	// GetShortBase64
 )
 
@@ -132,12 +129,7 @@ func (id PrefixID) Name() string {
 		return "DNSOverTCP"
 	case OpenSSH2:
 		return "OpenSSH2"
-	case TLSCompleteCHNoSNI:
-		return "TLSFullCHNoSNI"
-	case TLSCompleteCHSNI:
-		return "TLSFullCH"
-	case HTTPGetComplete:
-		return "HTTPFull"
+
 	// case GetShort:
 	// 	return "GetShort"
 	default:
@@ -149,31 +141,25 @@ func (id PrefixID) Name() string {
 // initializing the prefix transport.
 var defaultPrefixes = map[PrefixID]prefix{
 	//Min - Empty prefix
-	Min: {[]byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion, 443, false},
+	Min: {[]byte{}, 0, minTagLength, minTagLength, randomizeDstPortMinVersion, 443, NoAddedFlush},
 	// HTTP GET
-	GetLong: {[]byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion, 80, false},
+	GetLong: {[]byte("GET / HTTP/1.1\r\n"), 16, 16 + minTagLength, 16 + minTagLength, randomizeDstPortMinVersion, 80, NoAddedFlush},
 	// HTTP POST
-	PostLong: {[]byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion, 80, false},
+	PostLong: {[]byte("POST / HTTP/1.1\r\n"), 17, 17 + minTagLength, 17 + minTagLength, randomizeDstPortMinVersion, 80, NoAddedFlush},
 	// HTTP Response
-	HTTPResp: {[]byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion, 80, false},
+	HTTPResp: {[]byte("HTTP/1.1 200\r\n"), 14, 14 + minTagLength, 14 + minTagLength, randomizeDstPortMinVersion, 80, NoAddedFlush},
 	// TLS Client Hello
-	TLSClientHello: {[]byte("\x16\x03\x03\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 443, false},
+	TLSClientHello: {[]byte("\x16\x03\x03\x40\x00\x01"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 443, NoAddedFlush},
 	// TLS Server Hello
-	TLSServerHello: {[]byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion, 443, false},
+	TLSServerHello: {[]byte("\x16\x03\x03\x40\x00\x02\r\n"), 8, 8 + minTagLength, 8 + minTagLength, randomizeDstPortMinVersion, 443, NoAddedFlush},
 	// TLS Alert Warning
-	TLSAlertWarning: {[]byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443, false},
+	TLSAlertWarning: {[]byte("\x15\x03\x01\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443, NoAddedFlush},
 	// TLS Alert Fatal
-	TLSAlertFatal: {[]byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443, false},
+	TLSAlertFatal: {[]byte("\x15\x03\x02\x00\x02"), 5, 5 + minTagLength, 5 + minTagLength, randomizeDstPortMinVersion, 443, NoAddedFlush},
 	// DNS over TCP
-	DNSOverTCP: {[]byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 53, false},
+	DNSOverTCP: {[]byte("\x05\xDC\x5F\xE0\x01\x20"), 6, 6 + minTagLength, 6 + minTagLength, randomizeDstPortMinVersion, 53, NoAddedFlush},
 	// SSH-2.0-OpenSSH_8.9p1
-	OpenSSH2: {[]byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion, 22, false},
-	// TLS 1.3 ClientHello complete without an SNI. Flushes after Prefix
-	TLSCompleteCHNoSNI: {tlsCompleteCHNoSNI, len(tlsCompleteCHNoSNI), len(tlsCompleteCHNoSNI) + minTagLength, len(tlsCompleteCHNoSNI) + minTagLength, randomizeDstPortMinVersion, 443, true},
-	// TLS 1.3 ClientHello complete with an SNI. Flushes after Prefix
-	TLSCompleteCHSNI: {tlsCompleteCHSNI, len(tlsCompleteCHSNI), len(tlsCompleteCHSNI) + minTagLength, len(tlsCompleteCHSNI) + minTagLength, randomizeDstPortMinVersion, 443, true},
-	// HTTP Get complete packet. Flushes after the prefix before the tag.
-	HTTPGetComplete: {httpGetComplete, len(httpGetComplete), len(httpGetComplete) + minTagLength, len(httpGetComplete) + minTagLength, randomizeDstPortMinVersion, 80, true},
+	OpenSSH2: {[]byte("SSH-2.0-OpenSSH_8.9p1"), 21, 21 + minTagLength, 21 + minTagLength, randomizeDstPortMinVersion, 22, NoAddedFlush},
 
 	// // HTTP GET base64 in url min tag length 88 because 64 bytes base64 encoded should be length 88
 	// GetShort: {base64TagDecode, []byte("GET /"), 5, 5 + 88, 5 + 88, randomizeDstPortMinVersion},
@@ -198,8 +184,8 @@ func (Transport) LogPrefix() string { return "PREF" }
 // GetIdentifier takes in a registration and returns an identifier for it. This
 // identifier should be unique for each registration on a given phantom;
 // registrations on different phantoms can have the same identifier.
-func (Transport) GetIdentifier(d *dd.DecoyRegistration) string {
-	return string(core.ConjureHMAC(d.Keys.SharedSecret, "PrefixTransportHMACString"))
+func (Transport) GetIdentifier(d transports.Registration) string {
+	return string(core.ConjureHMAC(d.SharedSecret(), "PrefixTransportHMACString"))
 }
 
 // GetProto returns the next layer protocol that the transport uses. Implements
@@ -282,7 +268,7 @@ func (t Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16,
 //
 // If the returned error is nil or non-nil and non-{ transports.ErrTryAgain,
 // transports.ErrNotTransport }, the caller may no longer use data or conn.
-func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, net.Conn, error) {
+func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager transports.RegManager) (transports.Registration, net.Conn, error) {
 	if data.Len() < minTagLength {
 		return nil, nil, transports.ErrTryAgain
 	}
@@ -295,7 +281,7 @@ func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst ne
 	return reg, transports.PrependToConn(c, data), nil
 }
 
-func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, error) {
+func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager transports.RegManager) (transports.Registration, error) {
 	if data.Len() == 0 {
 		return nil, transports.ErrTryAgain
 	}
@@ -348,14 +334,14 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 			continue
 		}
 
-		if reg.Transport != pb.TransportType_Prefix {
+		if reg.TransportType() != pb.TransportType_Prefix {
 			return nil, ErrIncorrectTransport
-		} else if params, ok := reg.TransportParams.(*pb.PrefixTransportParams); ok {
+		} else if params, ok := reg.TransportParams().(*pb.PrefixTransportParams); ok {
 			if params == nil || params.GetPrefixId() != int32(id) {
 				// If the registration we found has no params specified (invalid and shouldn't have
 				// been ingested) or if the prefix ID does not match the expected prefix, set the
 				// err to return if we can't match any other prefixes.
-				eWrongPrefix = ErrIncorrectPrefix
+				eWrongPrefix = fmt.Errorf("%w: e %d != %d", ErrIncorrectPrefix, params.GetPrefixId(), id)
 				continue
 			}
 		}
@@ -367,7 +353,7 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 		return reg, nil
 	}
 
-	if err == transports.ErrNotTransport && eWrongPrefix == ErrIncorrectPrefix {
+	if errors.Is(err, transports.ErrNotTransport) && errors.Is(eWrongPrefix, ErrIncorrectPrefix) {
 		// If we found a match and it was the only one that matched (i.e. none of the other prefixes
 		// could possibly match even if we read more bytes). Then something went wrong and the
 		// client is attempting to connect with the wrong prefix.

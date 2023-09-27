@@ -14,17 +14,17 @@ import (
 	"time"
 
 	"github.com/refraction-networking/conjure/internal/conjurepath"
+	tests "github.com/refraction-networking/conjure/internal/testutils"
 	dd "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
-	"github.com/refraction-networking/conjure/pkg/transports/wrapping/internal/tests"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	pt "git.torproject.org/pluggable-transports/goptlib.git"
+	"github.com/refraction-networking/obfs4/common/drbg"
+	"github.com/refraction-networking/obfs4/common/ntor"
+	"github.com/refraction-networking/obfs4/transports/obfs4"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/yawning/obfs4.git/common/drbg"
-	"gitlab.com/yawning/obfs4.git/common/ntor"
-	"gitlab.com/yawning/obfs4.git/transports/obfs4"
+	pt "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib"
 )
 
 func wrapConnection(conn net.Conn, nodeID, publicKey string, wrapped chan (net.Conn), stateDir string) {
@@ -55,7 +55,7 @@ func wrapConnection(conn net.Conn, nodeID, publicKey string, wrapped chan (net.C
 
 func TestSuccessfulWrap(t *testing.T) {
 	var err error
-	testSubnetPath := conjurepath.Root + "/pkg/transports/wrapping/internal/tests/phantom_subnets.toml"
+	testSubnetPath := conjurepath.Root + "/internal/test_assets/phantom_subnets.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	var transport Transport
@@ -66,7 +66,8 @@ func TestSuccessfulWrap(t *testing.T) {
 
 	wrappedc2p := make(chan net.Conn)
 	stateDir := ""
-	go wrapConnection(c2p, reg.Keys.Obfs4Keys.NodeID.Hex(), reg.Keys.Obfs4Keys.PublicKey.Hex(), wrappedc2p, stateDir)
+	keys := reg.Keys.TransportKeys.(Obfs4Keys)
+	go wrapConnection(c2p, keys.NodeID.Hex(), keys.PublicKey.Hex(), wrappedc2p, stateDir)
 
 	var buf [4096]byte
 	var buffer bytes.Buffer
@@ -115,10 +116,7 @@ func TestSuccessfulWrap(t *testing.T) {
 // last connection.
 func TestSuccessfulWrapMulti(t *testing.T) {
 	var err error
-
-	cwd, err := os.Getwd()
-	require.Nil(t, err)
-	testSubnetPath := cwd + "/../internal/tests/phantom_subnets_min.toml"
+	testSubnetPath := conjurepath.Root + "/internal/test_assets/phantom_subnets_min.toml"
 	os.Setenv("PHANTOM_SUBNET_LOCATION", testSubnetPath)
 
 	sharedSecrets := [][]byte{
@@ -144,7 +142,8 @@ func TestSuccessfulWrapMulti(t *testing.T) {
 
 	wrappedc2p := make(chan net.Conn)
 	stateDir := ""
-	go wrapConnection(c2p, reg.Keys.Obfs4Keys.NodeID.Hex(), reg.Keys.Obfs4Keys.PublicKey.Hex(), wrappedc2p, stateDir)
+	keys := reg.Keys.TransportKeys.(Obfs4Keys)
+	go wrapConnection(c2p, keys.NodeID.Hex(), keys.PublicKey.Hex(), wrappedc2p, stateDir)
 
 	var buf [4096]byte
 	var buffer bytes.Buffer

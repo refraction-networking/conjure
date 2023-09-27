@@ -4,15 +4,14 @@ extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate aes_gcm;
-extern crate chrono;
 extern crate errno;
 extern crate hex;
 extern crate pnet;
-extern crate rand;
-
 extern crate protobuf;
+extern crate rand;
 extern crate redis;
 extern crate serde;
+extern crate time;
 extern crate toml;
 extern crate tuntap; // https://github.com/ewust/tuntap.rs
 extern crate zmq;
