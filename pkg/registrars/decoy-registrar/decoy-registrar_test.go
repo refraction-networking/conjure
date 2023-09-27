@@ -178,7 +178,7 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 			return
 		}
 
-		b := make([]byte, 1024)
+		b := make([]byte, 10240)
 		_, err = l.Read(b)
 		if err != nil {
 			t.Log("failed to read", err)
@@ -217,15 +217,20 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 }
 
 type catchReg struct {
+	// functional
 	net.Conn
 	sharedSecret []byte
 
-	buf   []byte
-	n     int
-	found bool
-	c2s   *pb.ClientToStation
-	keys  *oldSharedKeys
-	err   error
+	// packet
+	buf         []byte
+	n           int
+	expectedLen int
+	found       bool
+
+	// Result
+	c2s  *pb.ClientToStation
+	keys *oldSharedKeys
+	err  error
 }
 
 func (c *catchReg) Read(b []byte) (int, error) {
@@ -234,26 +239,54 @@ func (c *catchReg) Read(b []byte) (int, error) {
 		return nn, err
 	}
 
-	if nn < 112 {
-		return nn, err
+	if c.found && c.n >= c.expectedLen {
+		// we already found the packet containing our registration
+		return nn, nil
 	}
 
 	// did we get a tls data packet?
 	if nn > 5 && b[0] == 0x17 && b[1] == 0x03 && b[2] == 0x03 {
-		log.Printf("read %d: %s\n", nn, hex.EncodeToString(b[:nn]))
 
-		// try decrypt with shared secret and generated oldClientSharedKeys
-		c.c2s, c.keys, err = tryDecrypt(b[:nn], c.sharedSecret)
-		if err != nil || c.c2s == nil {
-			c.err = err
+		// Did we recieve the entire packet?
+		c.expectedLen = int(b[3])<<8 + int(b[4]) + 5 // plus 5 for TLS header
+		if nn < c.expectedLen {
+			// if we did not receive the entire packet, copy the data and return
+			copy(c.buf, b[:nn])
+			c.n += nn
 			return nn, nil
-
 		}
 
-		c.found = true
-		c.n = nn
-		copy(c.buf, b[:nn])
+		copy(c.buf, b[:c.expectedLen])
+		c.n = c.expectedLen
 
+	} else if c.expectedLen != 0 && c.expectedLen > c.n {
+		// Did we recieve the entire packet this time?
+		if c.n+nn < c.expectedLen {
+			// if we did not receive the entire packet, copy the data and return
+			copy(c.buf[c.n:], b[:nn])
+			c.n += nn
+			return nn, nil
+		}
+
+		copy(c.buf[c.n:], b[:c.expectedLen-c.n])
+		c.n = c.expectedLen
+	} else {
+		return nn, nil
 	}
+
+	// try decrypt with shared secret and generated oldClientSharedKeys
+	c.c2s, c.keys, err = tryDecrypt(c.buf[:c.n], c.sharedSecret)
+	if err != nil || c.c2s == nil {
+		// this is not our packet, return an error and reset the counters
+		c.err = err
+		// c.found = false
+		// c.n = 0
+		// c.expectedLen = 0
+		return nn, nil
+	}
+
+	c.found = true
+	c.n = nn
+
 	return nn, err
 }

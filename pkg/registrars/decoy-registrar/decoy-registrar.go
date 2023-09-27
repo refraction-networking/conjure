@@ -251,6 +251,8 @@ func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpe
 	return httpRequest, nil
 }
 
+// Register initiates the decoy registrar to connect and send the multiple registration requests
+// to the various decoys.
 func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Context) (*td.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
 
