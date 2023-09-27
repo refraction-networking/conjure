@@ -297,6 +297,21 @@ message ClientToStation {
 }
 
 
+message UTLSTransportParams {
+    optional int32 ch_id = 1;
+
+    optional bytes ch_spec = 2;
+
+    optional int32 ciphersuite = 3;
+
+    optional bytes sni = 8;
+
+    // Indicates whether the client has elected to use destination port randomization. Should be
+    // checked against selected transport to ensure that destination port randomization is
+    // supported.
+    optional bool randomize_dst_port = 13;
+}
+
 message PrefixTransportParams {
     // Prefix Identifier
     optional int32 prefix_id = 1;

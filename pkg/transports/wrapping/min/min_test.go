@@ -29,7 +29,10 @@ func TestSuccessfulWrap(t *testing.T) {
 	defer sfp.Close()
 	require.NotNil(t, reg)
 
-	hmacID := core.ConjureHMAC(reg.Keys.SharedSecret, "MinTrasportHMACString")
+	phantom := reg.PhantomIP()
+	require.NotNil(t, phantom)
+
+	hmacID := core.ConjureHMAC(reg.SharedSecret(), "MinTrasportHMACString")
 	message := []byte(`test message!`)
 
 	_, err := c2p.Write(append(hmacID, message...))
@@ -40,7 +43,7 @@ func TestSuccessfulWrap(t *testing.T) {
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
 
-	_, wrapped, err := transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	_, wrapped, err := transport.WrapConnection(&buffer, sfp, *phantom, manager)
 	require.Nil(t, err, "error getting wrapped connection")
 
 	received := make([]byte, len(message))
@@ -56,6 +59,9 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 
+	phantom := reg.PhantomIP()
+	require.NotNil(t, phantom)
+
 	// No real reason for sending the shared secret; it's just 32 bytes
 	// (same length as HMAC ID) that should have no significance.
 	_, err := c2p.Write(tests.SharedSecret)
@@ -66,7 +72,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
 
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}
@@ -80,6 +86,9 @@ func TestTryAgain(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 
+	phantom := reg.PhantomIP()
+	require.NotNil(t, phantom)
+
 	var buf [32]byte
 	var buffer bytes.Buffer
 	for _, b := range tests.SharedSecret[:31] {
@@ -89,7 +98,7 @@ func TestTryAgain(t *testing.T) {
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])
 
-		_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+		_, _, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 		if !errors.Is(err, transports.ErrTryAgain) {
 			t.Fatalf("expected ErrTryAgain, got %v", err)
 		}
@@ -100,7 +109,7 @@ func TestTryAgain(t *testing.T) {
 
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}

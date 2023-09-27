@@ -136,7 +136,7 @@ FROM base_pfring as conjure
 COPY sysconfig/conjure.conf /opt/conjure/sysconfig/
 COPY scripts/ /opt/conjure/scripts/
 
-RUN apt update && apt install -yq libzmq3-dev iproute2
+RUN apt update && apt install -yq libzmq3-dev iproute2 ethtool
 COPY --from=dev_img /opt/conjure/bin/ /opt/conjure/bin/
 
 # ENTRYPOINT /bin/bash
