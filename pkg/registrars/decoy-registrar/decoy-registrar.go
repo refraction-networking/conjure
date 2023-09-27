@@ -2,6 +2,7 @@ package decoy
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"math/big"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
+	"golang.org/x/crypto/hkdf"
 
 	// td imports assets, RegError, generateHTTPRequestBeginning
 	td "github.com/refraction-networking/gotapdance/tapdance"
@@ -20,13 +22,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// timeout for sending TD request and getting a response
-const deadlineConnectTDStationMin = 11175
-const deadlineConnectTDStationMax = 14231
-
-// deadline to establish TCP connection to decoy
-const deadlineTCPtoDecoyMin = deadlineConnectTDStationMin
-const deadlineTCPtoDecoyMax = deadlineConnectTDStationMax
+// deadline to establish TCP connection to decoy - magic numbers chosen arbitrarily to prevent
+// distribution from aligning directly with second boundaries. These are intentionally short as TCP
+// establishment is one round trip and we do not want to block our dial any longer than we
+// absolutely have to to ensure that at least one TCP connection to a decoy could be established.
+const deadlineTCPtoDecoyMin = 1931
+const deadlineTCPtoDecoyMax = 4013
 
 // Fixed-Size-Payload has a 1 byte flags field.
 // bit 0 (1 << 7) determines if flow is bidirectional(0) or upload-only(1)
@@ -47,15 +48,21 @@ type DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error
 
 type DecoyRegistrar struct {
 
-	// dialContex is a custom dialer to use when establishing TCP connections
+	// dialContext is a custom dialer to use when establishing TCP connections
 	// to decoys. When nil, Dialer.dialContex will be used.
-	dialContex DialFunc
+	dialContext DialFunc
 
 	logger logrus.FieldLogger
 
+	// Only used for testing. Always false otherwise.
+	insecureSkipVerify bool
+
 	// Fields taken from ConjureReg struct
-	m     sync.Mutex
-	stats *pb.SessionStats
+	m       sync.Mutex
+	stats   *pb.SessionStats
+	onceTCP sync.Once
+	onceTLS sync.Once
+
 	// add Width, sharedKeys necessary stuff (2nd line in struct except ConjureSeed)
 	// Keys
 	fspKey, fspIv, vspKey, vspIv []byte
@@ -78,13 +85,16 @@ func NewDecoyRegistrar() *DecoyRegistrar {
 // Deprecated: Set dialer in tapdace.Dialer.DialerWithLaddr instead.
 func NewDecoyRegistrarWithDialer(dialer DialFunc) *DecoyRegistrar {
 	return &DecoyRegistrar{
-		dialContex:    dialer,
+		dialContext:   dialer,
 		logger:        td.Logger(),
 		ClientHelloID: tls.HelloChrome_62,
 		Width:         5,
 	}
 }
 
+// setTCPToDecoy takes in a value for the measured RTT, if the value is greater
+// than 1.5 seconds (1500 ms) then that value will be used to limit the RTT
+// used in future delay calculations.
 func (r *DecoyRegistrar) setTCPToDecoy(tcprtt *uint32) {
 	r.m.Lock()
 	defer r.m.Unlock()
@@ -92,6 +102,13 @@ func (r *DecoyRegistrar) setTCPToDecoy(tcprtt *uint32) {
 	if r.stats == nil {
 		r.stats = &pb.SessionStats{}
 	}
+
+	var maxRTT uint32 = 1500
+
+	if *tcprtt > maxRTT {
+		tcprtt = &maxRTT
+	}
+
 	r.stats.TcpToDecoy = tcprtt
 }
 
@@ -99,14 +116,44 @@ func (r *DecoyRegistrar) setTLSToDecoy(tlsrtt *uint32) {
 	r.m.Lock()
 	defer r.m.Unlock()
 
+	var maxRTT uint32 = 1500
+
 	if r.stats == nil {
 		r.stats = &pb.SessionStats{}
 	}
+
+	if *tlsrtt > maxRTT {
+		tlsrtt = &maxRTT
+	}
+
 	r.stats.TlsToDecoy = tlsrtt
 }
 
+var conjureGeneralHkdfSalt = []byte("conjureconjureconjureconjure")
+
 // PrepareRegKeys prepares key materials specific to the registrar
-func (r *DecoyRegistrar) PrepareRegKeys(pubkey [32]byte) error {
+func (r *DecoyRegistrar) PrepareRegKeys(stationPubkey [32]byte, sessionSecret []byte) error {
+
+	reader := hkdf.New(sha256.New, sessionSecret, conjureGeneralHkdfSalt, nil)
+
+	r.fspKey = make([]byte, 16)
+	r.fspIv = make([]byte, 12)
+	r.vspKey = make([]byte, 16)
+	r.vspIv = make([]byte, 12)
+
+	if _, err := reader.Read(r.fspKey); err != nil {
+		return err
+	}
+	if _, err := reader.Read(r.fspIv); err != nil {
+		return err
+	}
+	if _, err := reader.Read(r.vspKey); err != nil {
+		return err
+	}
+	if _, err := reader.Read(r.vspIv); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -132,7 +179,7 @@ func (r *DecoyRegistrar) getTcpToDecoy() uint32 {
 func (r *DecoyRegistrar) createTLSConn(dialConn net.Conn, address string, hostname string, deadline time.Time) (*tls.UConn, error) {
 	var err error
 	//[reference] TLS to Decoy
-	config := tls.Config{ServerName: hostname}
+	config := tls.Config{ServerName: hostname, InsecureSkipVerify: r.insecureSkipVerify}
 	if config.ServerName == "" {
 		// if SNI is unset -- try IP
 		config.ServerName, _, err = net.SplitHostPort(address)
@@ -204,12 +251,14 @@ func (r *DecoyRegistrar) createRequest(tlsConn *tls.UConn, decoy *pb.TLSDecoySpe
 	return httpRequest, nil
 }
 
+// Register initiates the decoy registrar to connect and send the multiple registration requests
+// to the various decoys.
 func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Context) (*td.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "unidirectional", "sessionID": cjSession.IDString()})
 
 	logger.Debugf("Registering V4 and V6 via DecoyRegistrar")
 
-	reg, _, err := cjSession.UnidirectionalRegData(ctx, pb.RegistrationSource_API.Enum())
+	reg, _, err := cjSession.UnidirectionalRegData(ctx, pb.RegistrationSource_Detector.Enum())
 	if err != nil {
 		logger.Errorf("Failed to prepare registration data: %v", err)
 		return nil, lib.ErrRegFailed
@@ -222,8 +271,8 @@ func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Cont
 		return nil, err
 	}
 
-	if r.dialContex != nil {
-		reg.Dialer = r.dialContex
+	if r.dialContext != nil {
+		reg.Dialer = r.dialContext
 	}
 
 	// //[TODO]{priority:later} How to pass context to multiple registration goroutines?
@@ -239,7 +288,7 @@ func (r *DecoyRegistrar) Register(cjSession *td.ConjureSession, ctx context.Cont
 	//[reference] Send registrations to each decoy
 	dialErrors := make(chan error, width)
 	for _, decoy := range decoys {
-		logger.Debugf("Sending Reg: %v, %v", decoy.GetHostname(), decoy.GetIpAddrStr())
+		logger.Debugf("\tSending Reg: %v, %v", decoy.GetHostname(), decoy.GetIpAddrStr())
 		//decoyAddr := decoy.GetIpAddrStr()
 		go r.Send(ctx, cjSession, decoy, dialErrors)
 	}
@@ -292,7 +341,10 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 	//[Note] decoy.GetIpAddrStr() will get only v4 addr if a decoy has both
 	dialConn, err := cjSession.Dialer(childCtx, "tcp", "", decoy.GetIpAddrStr())
 
-	r.setTCPToDecoy(durationToU32ptrMs(time.Since(tcpToDecoyStartTs)))
+	setTCPRtt := func() {
+		r.setTCPToDecoy(durationToU32ptrMs(time.Since(tcpToDecoyStartTs)))
+	}
+	r.onceTCP.Do(setTCPRtt)
 	if err != nil {
 		if opErr, ok := err.(*net.OpError); ok && opErr.Err.Error() == "connect: network is unreachable" {
 			dialError <- td.NewRegError(td.Unreachable, err.Error())
@@ -315,7 +367,11 @@ func (r *DecoyRegistrar) Send(ctx context.Context, cjSession *td.ConjureSession,
 		dialError <- td.NewRegError(td.TLSError, msg)
 		return
 	}
-	r.setTLSToDecoy(durationToU32ptrMs(time.Since(tlsToDecoyStartTs)))
+
+	setTLSRtt := func() {
+		r.setTLSToDecoy(durationToU32ptrMs(time.Since(tlsToDecoyStartTs)))
+	}
+	r.onceTLS.Do(setTLSRtt)
 
 	//[reference] Create the HTTP request for the registration
 	httpRequest, err := r.createRequest(tlsConn, decoy, cjSession)

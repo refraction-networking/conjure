@@ -178,7 +178,7 @@ func (a *assets) readConfigs() error {
 	if err != nil {
 		log.Warn("Assets: failed to read ClientConf file: " + err.Error())
 	} else {
-		log.Infoln("Client config successfully read from " + clientConfFilename)
+		log.Infof("Client config %d successfully read from %s", a.config.GetGeneration(), clientConfFilename)
 	}
 
 	return err

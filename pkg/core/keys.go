@@ -102,13 +102,15 @@ type SharedKeys struct {
 	Reader                       io.Reader
 }
 
+var conjureGeneralHkdfSalt = []byte("conjureconjureconjureconjure")
+
 func GenerateClientSharedKeys(pubkey [32]byte) (*SharedKeys, error) {
 	sharedSecret, representative, err := generateEligatorTransformedKey(pubkey[:])
 	if err != nil {
 		return nil, err
 	}
 
-	cjHkdf := hkdf.New(sha256.New, sharedSecret, []byte("conjureconjureconjureconjure"), nil)
+	cjHkdf := hkdf.New(sha256.New, sharedSecret, conjureGeneralHkdfSalt, nil)
 	keys := &SharedKeys{
 		SharedSecret:   sharedSecret,
 		Representative: representative,

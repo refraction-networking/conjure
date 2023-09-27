@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	zmq "github.com/pebbe/zmq4"
+	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/regserver/overrides"
@@ -51,7 +52,6 @@ func generateC2SWrapperPayload() (c2sPayload *pb.C2SWrapper, c2sPayloadBytes []b
 	// We need pointers to bools. This is nasty D:
 	trueBool := true
 	falseBool := false
-	v := uint32(1)
 	t := pb.TransportType_Min
 
 	c2s := pb.ClientToStation{
@@ -60,7 +60,7 @@ func generateC2SWrapperPayload() (c2sPayload *pb.C2SWrapper, c2sPayloadBytes []b
 		CovertAddress:       &covert,
 		V4Support:           &trueBool,
 		V6Support:           &trueBool,
-		ClientLibVersion:    &v,
+		ClientLibVersion:    proto.Uint32(core.CurrentClientLibraryVersion()),
 		Flags: &pb.RegistrationFlags{
 			ProxyHeader: &trueBool,
 			Use_TIL:     &trueBool,
