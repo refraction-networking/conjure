@@ -22,6 +22,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
+	"github.com/refraction-networking/conjure/pkg/transports/wrapping/utls"
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/refraction-networking/ed25519"
 	"github.com/refraction-networking/ed25519/extra25519"
@@ -74,6 +75,13 @@ func TestTransportsEndToEnd(t *testing.T) {
 				return &min.Transport{}
 			},
 			&min.ClientTransport{},
+			genericParamPermutations,
+		},
+		{
+			func(privKey [32]byte) lib.WrappingTransport {
+				return &utls.Transport{}
+			},
+			&utls.ClientTransport{},
 			genericParamPermutations,
 		},
 	}
@@ -223,7 +231,7 @@ func (p *genericParams) String() string {
 	return fmt.Sprintf("randDstPort: %t", p.GetRandomizeDstPort())
 }
 
-// ClientParamPermutations returns a list of client parameters for inclusions in tests that require
+// prefixClientParamPermutations returns a list of client parameters for inclusions in tests that require
 // variance.
 func prefixClientParamPermutations() []TestParams {
 	paramSet := []TestParams{}
@@ -238,6 +246,23 @@ func prefixClientParamPermutations() []TestParams {
 				}
 				paramSet = append(paramSet, params)
 			}
+		}
+	}
+	return paramSet
+}
+
+// utlsClientParamPermutations returns a list of client parameters for inclusions in tests that require
+// variance.
+func utlsClientParamPermutations() []TestParams {
+	paramSet := []TestParams{}
+	for _, chID := range []int32{0, 1, 2, 3, 4, 5} {
+		for _, rand := range []bool{true, false} {
+			var p int32 = int32(chID)
+			params := &utls.ClientParams{
+				ClientHelloID:    p,
+				RandomizeDstPort: rand,
+			}
+			paramSet = append(paramSet, params)
 		}
 	}
 	return paramSet

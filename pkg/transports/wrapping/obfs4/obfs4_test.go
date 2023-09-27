@@ -64,9 +64,12 @@ func TestSuccessfulWrap(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 
+	phantom := reg.PhantomIP()
+	require.NotNil(t, phantom)
+
 	wrappedc2p := make(chan net.Conn)
 	stateDir := ""
-	keys := reg.Keys.TransportKeys.(Obfs4Keys)
+	keys := reg.TransportKeys().(Obfs4Keys)
 	go wrapConnection(c2p, keys.NodeID.Hex(), keys.PublicKey.Hex(), wrappedc2p, stateDir)
 
 	var buf [4096]byte
@@ -76,7 +79,7 @@ func TestSuccessfulWrap(t *testing.T) {
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])
 
-		_, wrappedsfp, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+		_, wrappedsfp, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 		if errors.Is(err, transports.ErrTryAgain) {
 			continue
 		} else if err != nil {
@@ -191,6 +194,9 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 
+	phantom := reg.PhantomIP()
+	require.NotNil(t, phantom)
+
 	_, err = io.Copy(c2p, io.LimitReader(rand.New(rand.NewSource(0)), 8192))
 	require.Nil(t, err)
 
@@ -199,7 +205,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	n, _ := io.ReadFull(sfp, buf[:])
 	buffer.Write(buf[:n])
 
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}
@@ -213,6 +219,9 @@ func TestTryAgain(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 
+	phantom := reg.PhantomIP()
+	require.NotNil(t, phantom)
+
 	r := rand.New(rand.NewSource(0))
 	var buf [8192]byte
 	var buffer bytes.Buffer
@@ -225,7 +234,7 @@ func TestTryAgain(t *testing.T) {
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])
 
-		_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+		_, _, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 		if !errors.Is(err, transports.ErrTryAgain) {
 			t.Fatalf("expected ErrTryAgain, got %v", err)
 		}
@@ -236,7 +245,7 @@ func TestTryAgain(t *testing.T) {
 
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}

@@ -1,6 +1,7 @@
 package utls
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -11,7 +12,34 @@ import (
 	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
+
+// ClientParams is a struct that can be used to set parameters for the client side
+// without relying on the raw protobuf.
+type ClientParams struct {
+	// RandomizeDstPort indicates whether the client should randomize the destination port
+	RandomizeDstPort bool
+
+	// SNI is the server name indication to send to the server
+	SNI string
+
+	// ClientHelloID allows the user to choose the uTLS client hello fingerprint after which
+	// to model the TLS client hello that open's their session.
+	ClientHelloID int32
+}
+
+func (cp *ClientParams) GetParams() any {
+	return &pb.UTLSTransportParams{
+		RandomizeDstPort: proto.Bool(cp.RandomizeDstPort),
+		Sni:              []byte(cp.SNI),
+		ChId:             proto.Int32(cp.ClientHelloID),
+	}
+}
+
+func (cp *ClientParams) String() string {
+	return fmt.Sprintf("RandomizeDstPort: %t, SNI: %s, CH_ID: %d", cp.RandomizeDstPort, cp.SNI, cp.ClientHelloID)
+}
 
 // ClientTransport implements the client side transport interface for the Min transport. The
 // significant difference is that there is an instance of this structure per client session, where
@@ -50,13 +78,29 @@ func (*ClientTransport) ID() pb.TransportType {
 
 // GetParams returns a generic protobuf with any parameters from both the registration and the
 // transport.
-func (t *ClientTransport) GetParams() proto.Message {
-	return t.Parameters
+func (t *ClientTransport) GetParams() (proto.Message, error) {
+	return t.Parameters, nil
+}
+
+// ParseParams gives the specific transport an option to parse a generic object into parameters
+// provided by the station in the registration response during registration.
+func (t *ClientTransport) ParseParams(data *anypb.Any) (any, error) {
+	if data == nil {
+		return nil, nil
+	}
+
+	var m = &pb.UTLSTransportParams{}
+	err := transports.UnmarshalAnypbTo(data, m)
+	return m, err
+}
+
+func (*ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
+	return nil
 }
 
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible.
-func (t *ClientTransport) SetParams(p any) error {
+func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 	params, ok := p.(*pb.UTLSTransportParams)
 	if !ok {
 		return fmt.Errorf("unable to parse params")
@@ -67,7 +111,7 @@ func (t *ClientTransport) SetParams(p any) error {
 }
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
-func (t *ClientTransport) GetDstPort(seed []byte, params any) (uint16, error) {
+func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 	if t.Parameters == nil || !t.Parameters.GetRandomizeDstPort() {
 		return defaultPort, nil
 	}

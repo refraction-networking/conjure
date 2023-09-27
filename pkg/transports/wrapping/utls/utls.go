@@ -9,7 +9,6 @@ import (
 	"regexp"
 
 	"github.com/refraction-networking/conjure/pkg/core"
-	dd "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
@@ -59,8 +58,8 @@ func (Transport) LogPrefix() string { return "UTLS" }
 // GetIdentifier takes in a registration and returns an identifier for it. This
 // identifier should be unique for each registration on a given phantom;
 // registrations on different phantoms can have the same identifier.
-func (Transport) GetIdentifier(d *dd.DecoyRegistration) string {
-	return string(core.ConjureHMAC(d.Keys.SharedSecret, hmacString))
+func (Transport) GetIdentifier(d transports.Registration) string {
+	return string(core.ConjureHMAC(d.SharedSecret(), hmacString))
 }
 
 // GetProto returns the next layer protocol that the transport uses. Implements
@@ -76,16 +75,7 @@ func (Transport) ParseParams(libVersion uint, data *anypb.Any) (any, error) {
 		return nil, nil
 	}
 
-	// For backwards compatibility we create a generic transport params object
-	// for transports that existed before the transportParams fields existed.
-	if libVersion < randomizeDstPortMinVersion {
-		f := false
-		return &pb.GenericTransportParams{
-			RandomizeDstPort: &f,
-		}, nil
-	}
-
-	var m = &pb.GenericTransportParams{}
+	var m = &pb.UTLSTransportParams{}
 	err := anypb.UnmarshalTo(data, m, proto.UnmarshalOptions{})
 	return m, err
 }
@@ -121,7 +111,7 @@ func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, e
 	return defaultPort, nil
 }
 
-func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, error) {
+func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager transports.RegManager) (transports.Registration, error) {
 	dataLen := data.Len()
 
 	if dataLen == 0 {
@@ -183,13 +173,13 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 //
 // If the returned error is nil or non-nil and non-{ transports.ErrTryAgain,
 // transports.ErrNotTransport }, the caller may no longer use data or conn.
-func (t *Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager *dd.RegistrationManager) (*dd.DecoyRegistration, net.Conn, error) {
+func (t *Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager transports.RegManager) (transports.Registration, net.Conn, error) {
 	reg, err := t.tryFindReg(data, originalDst, regManager)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	secret := reg.Keys.SharedSecret
+	secret := reg.SharedSecret()
 
 	cert, err := newCertificate(secret)
 	config := &tls.Config{
@@ -201,8 +191,6 @@ func (t *Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst n
 		VerifyConnection:       buildSymmetricVerifier(secret),
 		CipherSuites:           []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
 	}
-
-	config.BuildNameToCertificate()
 
 	s32 := [32]byte{}
 	copy(s32[:], secret)

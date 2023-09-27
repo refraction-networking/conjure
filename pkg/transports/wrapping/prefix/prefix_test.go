@@ -52,7 +52,10 @@ func TestSuccessfulWrap(t *testing.T) {
 			defer sfp.Close()
 			require.NotNil(t, reg)
 
-			hmacID := core.ConjureHMAC(reg.Keys.SharedSecret, "PrefixTransportHMACString")
+			phantom := reg.PhantomIP()
+			require.NotNil(t, phantom)
+
+			hmacID := core.ConjureHMAC(reg.SharedSecret(), "PrefixTransportHMACString")
 
 			for id, prefix := range defaultPrefixes {
 				// if prefix.fn != nil {
@@ -70,7 +73,7 @@ func TestSuccessfulWrap(t *testing.T) {
 				n, _ := sfp.Read(buf[:])
 				buffer := bytes.NewBuffer(buf[:n])
 
-				_, wrapped, err := transport.WrapConnection(buffer, sfp, reg.PhantomIp, manager)
+				_, wrapped, err := transport.WrapConnection(buffer, sfp, *phantom, manager)
 				if id != idx {
 					require.ErrorIs(t, err, ErrIncorrectPrefix)
 					continue
@@ -102,6 +105,9 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 
+	phantom := reg.PhantomIP()
+	require.NotNil(t, phantom)
+
 	// Write enough bytes that it can tell the message is definitively not associated with any prefix
 	randMsg := make([]byte, 100)
 	n, _ := rand.Read(randMsg)
@@ -114,7 +120,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 
 	buffer.Write(buf[:n])
 
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}
@@ -136,6 +142,9 @@ func TestTryAgain(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 
+	phantom := reg.PhantomIP()
+	require.NotNil(t, phantom)
+
 	msgBuf := make([]byte, 100)
 	// Start out matching an expected prefix
 	// Should match Min prefix until 64 bytes and GET prefix until 64+16 bytes
@@ -150,7 +159,7 @@ func TestTryAgain(t *testing.T) {
 		n, _ := sfp.Read(buf[:])
 		buffer.Write(buf[:n])
 
-		_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+		_, _, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 		if !errors.Is(err, transports.ErrTryAgain) {
 			t.Fatalf("expected ErrTryAgain, got %v", err)
 		}
@@ -161,7 +170,7 @@ func TestTryAgain(t *testing.T) {
 
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 	if !errors.Is(err, transports.ErrNotTransport) {
 		t.Fatalf("expected ErrNotTransport, got %v", err)
 	}
@@ -434,6 +443,9 @@ func TestPrefixEndToEnd(t *testing.T) {
 			require.NotNil(t, reg)
 			sch := make(chan struct{}, 1)
 
+			phantom := reg.PhantomIP()
+			require.NotNil(t, phantom)
+
 			go func() {
 				var c net.Conn
 				var err error
@@ -450,7 +462,7 @@ func TestPrefixEndToEnd(t *testing.T) {
 					}
 
 					received.Write(buf[:n])
-					_, c, err = transport.WrapConnection(&received, sfp, reg.PhantomIp, manager)
+					_, c, err = transport.WrapConnection(&received, sfp, *phantom, manager)
 					if err == nil {
 						break
 					} else if !errors.Is(err, transports.ErrTryAgain) {
@@ -471,7 +483,7 @@ func TestPrefixEndToEnd(t *testing.T) {
 			clientPrefix, err := TryFromID(PrefixID(p))
 			require.Nil(t, err)
 			ClientTransport := &ClientTransport{Prefix: clientPrefix, parameters: params}
-			err = ClientTransport.PrepareKeys(curve25519Public, reg.Keys.SharedSecret, reg.Keys.TransportReader)
+			err = ClientTransport.PrepareKeys(curve25519Public, reg.SharedSecret(), reg.TransportReader())
 			require.Nil(t, err)
 			clientConn, err := ClientTransport.WrapConn(c2p)
 			require.Nil(t, err, "error getting wrapped connection")

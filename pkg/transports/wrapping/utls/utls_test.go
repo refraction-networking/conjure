@@ -20,7 +20,6 @@ import (
 	"github.com/refraction-networking/conjure/internal/conjurepath"
 	tests "github.com/refraction-networking/conjure/internal/testutils"
 	"github.com/refraction-networking/conjure/pkg/core"
-	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	tls "github.com/refraction-networking/utls"
@@ -28,13 +27,13 @@ import (
 
 var testSubnetPath = conjurepath.Root + "/internal/test_assets/phantom_subnets.toml"
 
-func connect(conn net.Conn, reg *cj.DecoyRegistration) (net.Conn, error) {
+func connect(conn net.Conn, reg transports.Registration) (net.Conn, error) {
 	// TODO: put these in params
 	helloID := tls.HelloChrome_62
 	config := tls.Config{ServerName: "", InsecureSkipVerify: true}
 
 	uTLSConn := tls.UClient(conn, &config, helloID)
-	hmacID := core.ConjureHMAC(reg.Keys.SharedSecret, hmacString)
+	hmacID := core.ConjureHMAC(reg.SharedSecret(), hmacString)
 
 	newRand := make([]byte, 32)
 	_, err := rand.Read(newRand)
@@ -106,6 +105,8 @@ func TestSuccessfulWrap(t *testing.T) {
 	defer sfp.Close()
 	require.NotNil(t, reg)
 
+	phantom := reg.PhantomIP()
+	require.NotNil(t, phantom)
 	message := []byte(`test message!`)
 
 	go func() {
@@ -119,7 +120,7 @@ func TestSuccessfulWrap(t *testing.T) {
 				panic("station read error")
 			}
 
-			reg, wrapped, err = transport.WrapConnection(bytes.NewBuffer(buf[:n]), sfp, reg.PhantomIp, manager)
+			reg, wrapped, err = transport.WrapConnection(bytes.NewBuffer(buf[:n]), sfp, *phantom, manager)
 			if errors.Is(err, transports.ErrNotTransport) {
 				panic("failed to find registration")
 			} else if errors.Is(err, transports.ErrTransportNotSupported) {
@@ -159,6 +160,9 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 
+	phantom := reg.PhantomIP()
+	require.NotNil(t, phantom)
+
 	message := []byte(`test message!`)
 
 	// No real reason for sending the shared secret; it's just 32 bytes
@@ -174,7 +178,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
 
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 	require.ErrorIs(t, err, transports.ErrNotTransport)
 }
 
@@ -186,11 +190,14 @@ func TestTryAgain(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 
+	phantom := reg.PhantomIP()
+	require.NotNil(t, phantom)
+
 	var buffer bytes.Buffer
 
 	// The only way that we should be able to get ErrTryAgain is if it was
 	// called on a read with 0 bytes
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 	require.ErrorIs(t, err, transports.ErrTryAgain)
 	message := []byte(`test message!`)
 
@@ -206,7 +213,7 @@ func TestTryAgain(t *testing.T) {
 	n, _ := sfp.Read(buf[:])
 	buffer.Write(buf[:n])
 
-	_, _, err = transport.WrapConnection(&buffer, sfp, reg.PhantomIp, manager)
+	_, _, err = transport.WrapConnection(&buffer, sfp, *phantom, manager)
 	require.ErrorIs(t, err, transports.ErrNotTransport)
 }
 
@@ -219,6 +226,9 @@ func TestSuccessfulWrapLargeMessage(t *testing.T) {
 	defer c2p.Close()
 	defer sfp.Close()
 	require.NotNil(t, reg)
+
+	phantom := reg.PhantomIP()
+	require.NotNil(t, phantom)
 
 	message := make([]byte, 10000)
 	_, err := rand.Read(message)
@@ -235,7 +245,7 @@ func TestSuccessfulWrapLargeMessage(t *testing.T) {
 				panic("station read error")
 			}
 
-			reg, wrapped, err = transport.WrapConnection(bytes.NewBuffer(buf[:n]), sfp, reg.PhantomIp, manager)
+			reg, wrapped, err = transport.WrapConnection(bytes.NewBuffer(buf[:n]), sfp, *phantom, manager)
 			if errors.Is(err, transports.ErrNotTransport) {
 				panic("failed to find registration")
 			} else if errors.Is(err, transports.ErrTransportNotSupported) {
@@ -281,7 +291,9 @@ func TestTryParamsToDstPort(t *testing.T) {
 		ct := ClientTransport{Parameters: &pb.UTLSTransportParams{RandomizeDstPort: &testCase.r}}
 		var transport Transport
 
-		rawParams, err := anypb.New(ct.GetParams())
+		pms, err := ct.GetParams()
+		require.Nil(t, err)
+		rawParams, err := anypb.New(pms)
 		require.Nil(t, err)
 
 		params, err := transport.ParseParams(clv, rawParams)

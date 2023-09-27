@@ -9,6 +9,7 @@ import (
 	"github.com/refraction-networking/conjure/internal/conjurepath"
 	"github.com/refraction-networking/conjure/pkg/core"
 	dd "github.com/refraction-networking/conjure/pkg/station/lib"
+	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -25,7 +26,7 @@ var TestSubnetPath = conjurepath.Root + "/internal/test_assets/phantom_subnets.t
 
 // SetupPhantomConnections registers one session with the provided transport and
 // registration manager using a pre-determined kay and phantom subnet file.
-func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.TransportType, params protoreflect.ProtoMessage, libver uint) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg *dd.DecoyRegistration) {
+func SetupPhantomConnections(manager *dd.RegistrationManager, transport pb.TransportType, params protoreflect.ProtoMessage, libver uint) (clientToPhantom net.Conn, serverFromPhantom net.Conn, reg transports.Registration) {
 	return SetupPhantomConnectionsSecret(manager, transport, params, SharedSecret, libver, TestSubnetPath)
 }
 
