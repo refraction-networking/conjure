@@ -79,10 +79,12 @@ func TestTransportsEndToEnd(t *testing.T) {
 		},
 		{
 			func(privKey [32]byte) lib.WrappingTransport {
-				return &utls.Transport{}
+				tr, err := utls.New(privKey)
+				require.Nil(t, err)
+				return tr
 			},
 			&utls.ClientTransport{},
-			genericParamPermutations,
+			utlsClientParamPermutations,
 		},
 	}
 	for _, testCase := range testCases {

@@ -132,6 +132,10 @@ func (t *ClientTransport) PrepareKeys(pubkey [32]byte, sharedSecret []byte, dRan
 // WrapConn returns a net.Conn connection given a context and ConjureReg
 func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 
+	if t.TagObfuscator == nil {
+		t.TagObfuscator = transports.CTRObfuscator{}
+	}
+
 	randVal := [32]byte{}
 	n, err := rand.Read(randVal[:])
 	if err != nil {
@@ -145,6 +149,10 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 	}
 
 	cert, err := newCertificate(randVal[:])
+	if err != nil {
+		return nil, err
+	}
+
 	serverConfig := &tls.Config{
 		Certificates:           []tls.Certificate{*cert},
 		MinVersion:             tls.VersionTLS10,
@@ -156,8 +164,14 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 	}
 
 	serverSession, err := tls.ForgeServerSessionState(randVal[:], serverConfig, tls.HelloChrome_Auto)
+	if err != nil {
+		return nil, err
+	}
 
 	sessionTicket, err := serverSession.MakeEncryptedTicket(randVal, &tls.Config{})
+	if err != nil {
+		return nil, err
+	}
 
 	// Create a session ticket that wasn't actually issued by the server.
 	sessionState := tls.MakeClientSessionState(sessionTicket, uint16(tls.VersionTLS12),

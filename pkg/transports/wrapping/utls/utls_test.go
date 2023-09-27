@@ -45,7 +45,10 @@ func connect(conn net.Conn, reg transports.Registration) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	uTLSConn.SetClientRandom(newRand)
+	err = uTLSConn.SetClientRandom(newRand)
+	if err != nil {
+		return nil, err
+	}
 	// fmt.Printf("clientRandom set - handshaking %s\n", hex.EncodeToString(hmacID))
 
 	uTLSConn.HandshakeState.Hello.SessionId = xorBytes(hmacID, newRand)
@@ -318,6 +321,7 @@ func TestUtlsSessionResumption(t *testing.T) {
 	domainName := "abc.def.com"
 
 	cert, err := newCertificate(randVal[:])
+	require.Nil(t, err)
 	serverConfig := &tls.Config{
 		Certificates:           []tls.Certificate{*cert},
 		MinVersion:             tls.VersionTLS10,
@@ -331,7 +335,6 @@ func TestUtlsSessionResumption(t *testing.T) {
 	go func() {
 		config := *serverConfig
 
-		config.BuildNameToCertificate()
 		config.SetSessionTicketKeys([][32]byte{randVal})
 
 		wrapped := tls.Server(sfp, &config)
@@ -353,8 +356,10 @@ func TestUtlsSessionResumption(t *testing.T) {
 	}()
 
 	serverSession, err := tls.ForgeServerSessionState(randVal[:], serverConfig, tls.HelloChrome_Auto)
+	require.Nil(t, err)
 
 	sessionTicket, err := serverSession.MakeEncryptedTicket(randVal, &tls.Config{})
+	require.Nil(t, err)
 
 	// Create a session ticket that wasn't actually issued by the server.
 	sessionState := tls.MakeClientSessionState(sessionTicket, uint16(tls.VersionTLS12),
@@ -401,6 +406,8 @@ func TestUtlsSessionResumptionTCP(t *testing.T) {
 	domainName := "abc.def.com"
 	ordering := make(chan struct{})
 	cert, err := newCertificate(randVal[:])
+	require.Nil(t, err)
+
 	serverConfig := &tls.Config{
 		Certificates:           []tls.Certificate{*cert},
 		MinVersion:             tls.VersionTLS10,
@@ -414,7 +421,6 @@ func TestUtlsSessionResumptionTCP(t *testing.T) {
 	go func() {
 		config := *serverConfig
 
-		config.BuildNameToCertificate()
 		config.SetSessionTicketKeys([][32]byte{randVal})
 
 		l, err := net.ListenTCP("tcp", listenAddr)
@@ -492,12 +498,12 @@ func TestUtlsSessionResumptionTCP(t *testing.T) {
 	require.True(t, bytes.Equal(message, received))
 }
 
-const (
-	// ticketKeyNameLen is the number of bytes of identifier that is prepended to
-	// an encrypted session ticket in order to identify the key used to encrypt it.
-	ticketKeyNameLen = 16
-)
-
+// const (
+// 	// ticketKeyNameLen is the number of bytes of identifier that is prepended to
+// 	// an encrypted session ticket in order to identify the key used to encrypt it.
+// 	ticketKeyNameLen = 16
+// )
+//
 // // returns the session state and the marshalled sessionTicket, or an error should one occur.
 // func forgeSession(secret [32]byte, chID tls.ClientHelloID, r io.Reader) (*tls.ClientSessionState, []byte, error) {
 // 	key := tls.TicketKeyFromBytes(secret)

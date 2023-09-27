@@ -163,6 +163,9 @@ func newCertificate(seed []byte) (*tls.Certificate, error) {
 func buildSymmetricVerifier(psk []byte) func(cs tls.ConnectionState) error {
 	return func(cs tls.ConnectionState) error {
 		expected, err := newCertificate(psk)
+		if err != nil {
+			return fmt.Errorf("error creating expected certificate: %w", err)
+		}
 		// expected.Leaf.KeyUsage |= x509.KeyUsageCertSign
 
 		if !cs.DidResume {

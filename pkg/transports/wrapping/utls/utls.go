@@ -47,6 +47,14 @@ type Transport struct {
 	Privkey       [32]byte
 }
 
+// New Given a private key this builds the server side transport.
+func New(privkey [32]byte) (*Transport, error) {
+	return &Transport{
+		Privkey:       privkey,
+		TagObfuscator: &transports.CTRObfuscator{},
+	}, nil
+}
+
 // Name returns the human-friendly name of the transport, implementing the
 // Transport interface..
 func (Transport) Name() string { return "UTLSTransport" }
@@ -173,7 +181,7 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 //
 // If the returned error is nil or non-nil and non-{ transports.ErrTryAgain,
 // transports.ErrNotTransport }, the caller may no longer use data or conn.
-func (t *Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager transports.RegManager) (transports.Registration, net.Conn, error) {
+func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst net.IP, regManager transports.RegManager) (transports.Registration, net.Conn, error) {
 	reg, err := t.tryFindReg(data, originalDst, regManager)
 	if err != nil {
 		return nil, nil, err
