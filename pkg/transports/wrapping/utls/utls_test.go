@@ -18,6 +18,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/refraction-networking/conjure/internal/conjurepath"
+	tests "github.com/refraction-networking/conjure/internal/testutils"
 	"github.com/refraction-networking/conjure/pkg/core"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
