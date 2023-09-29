@@ -74,6 +74,8 @@ func openSCTP(conn net.Conn, unordered bool) (net.Conn, error) {
 		return nil, fmt.Errorf("error setting up stream: %v", err)
 	}
 
+	sctpStream.SetReliabilityParams(unordered, sctp.ReliabilityTypeReliable, 0)
+
 	sctpConn := newSCTPConn(sctpStream, conn)
 
 	err = heartbeatClient(sctpConn, &heartbeatConfig{Interval: 10 * time.Second})
@@ -101,6 +103,8 @@ func acceptSCTP(conn net.Conn, unordered bool) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	sctpStream.SetReliabilityParams(unordered, sctp.ReliabilityTypeReliable, 0)
 
 	sctpConn := newSCTPConn(sctpStream, conn)
 
