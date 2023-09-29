@@ -91,6 +91,8 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 		}
 
 		t.Parameters.RandomizeDstPort = proto.Bool(params.GetRandomizeDstPort())
+	case *pb.DTLSTransportParams:
+		t.Parameters = params
 	case *ClientConfig:
 		t.stunServer = params.STUNServer
 		t.disableIRWorkaround = params.DisableIRWorkaround
