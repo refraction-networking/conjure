@@ -201,6 +201,8 @@ message DTLSTransportParams {
     optional Addr src_addr4 = 1;
     optional Addr src_addr6 = 2;
     optional bool randomize_dst_port = 3;
+    // Unordered sets the reliability of the DTLS stream to unordered
+    optional bool unordered = 4;
 }
 
 message StationToClient {
