@@ -5,6 +5,7 @@ import "net"
 type Config struct {
 	PSK         []byte
 	SCTP        SCTPType
+	Unordered   bool
 	LogAuthFail func(*net.IP)
 	LogOther    func(*net.IP)
 }
