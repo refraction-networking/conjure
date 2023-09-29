@@ -502,7 +502,7 @@ func handleConnectingTpReg(regManager *RegistrationManager, reg *DecoyRegistrati
 	// using a Connecting Transport
 	for tptype, tp := range regManager.GetConnectingTransports() {
 		if tptype == reg.Transport { // correct transport name
-			ctx, cancelFunc := context.WithTimeout(context.Background(), 15*time.Second)
+			ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 			go func(transport ConnectingTransport) {
 				defer cancelFunc()
 

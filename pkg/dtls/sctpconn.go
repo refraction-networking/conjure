@@ -55,7 +55,7 @@ func (s *SCTPConn) SetReadDeadline(t time.Time) error {
 	return s.stream.SetReadDeadline(t)
 }
 
-func openSCTP(conn net.Conn) (net.Conn, error) {
+func openSCTP(conn net.Conn, unordered bool) (net.Conn, error) {
 	// Start SCTP
 	sctpConf := sctp.Config{
 		NetConn:       conn,
@@ -74,6 +74,8 @@ func openSCTP(conn net.Conn) (net.Conn, error) {
 		return nil, fmt.Errorf("error setting up stream: %v", err)
 	}
 
+	sctpStream.SetReliabilityParams(unordered, sctp.ReliabilityTypeReliable, 0)
+
 	sctpConn := newSCTPConn(sctpStream, conn)
 
 	err = heartbeatClient(sctpConn, &heartbeatConfig{Interval: 10 * time.Second})
@@ -84,7 +86,7 @@ func openSCTP(conn net.Conn) (net.Conn, error) {
 	return sctpConn, nil
 }
 
-func acceptSCTP(conn net.Conn) (net.Conn, error) {
+func acceptSCTP(conn net.Conn, unordered bool) (net.Conn, error) {
 
 	// Start SCTP over DTLS connection
 	sctpConfig := sctp.Config{
@@ -102,6 +104,8 @@ func acceptSCTP(conn net.Conn) (net.Conn, error) {
 		return nil, err
 	}
 
+	sctpStream.SetReliabilityParams(unordered, sctp.ReliabilityTypeReliable, 0)
+
 	sctpConn := newSCTPConn(sctpStream, conn)
 
 	heartbeatConn, err := heartbeatServer(sctpConn, nil)
@@ -115,8 +119,8 @@ func acceptSCTP(conn net.Conn) (net.Conn, error) {
 
 func wrapSCTP(conn net.Conn, config *Config) (net.Conn, error) {
 	if config.SCTP == ServerAccept {
-		return acceptSCTP(conn)
+		return acceptSCTP(conn, config.Unordered)
 	}
 
-	return openSCTP(conn)
+	return openSCTP(conn, config.Unordered)
 }

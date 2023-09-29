@@ -40,7 +40,7 @@ func (Transport) GetIdentifier(reg transports.Registration) string {
 }
 
 // NewTransport creates a new dtls transport
-func NewTransport(logAuthFail func(*net.IP), logOtherFail func(*net.IP), logDialSuccess func(*net.IP), logListenSuccess func(*net.IP), buildDnat interfaces.DnatBuilder) (*Transport, error) {
+func NewTransport(logAuthFail, logOtherFail, logDialSuccess, logListenSuccess func(*net.IP), buildDnat interfaces.DnatBuilder) (*Transport, error) {
 	addr := &net.UDPAddr{Port: listenPort}
 
 	listener, err := dtls.Listen("udp", addr, &dtls.Config{LogAuthFail: logAuthFail, LogOther: logAuthFail})
@@ -108,7 +108,7 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 			return
 		}
 
-		dtlsConn, err := dtls.ClientWithContext(ctx, udpConn, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept})
+		dtlsConn, err := dtls.ClientWithContext(ctx, udpConn, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept, Unordered: params.GetUnordered()})
 		if err != nil {
 			errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
 			return
@@ -119,7 +119,7 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 	}()
 
 	go func() {
-		conn, err := t.dtlsListener.AcceptWithContext(ctx, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept})
+		conn, err := t.dtlsListener.AcceptWithContext(ctx, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept, Unordered: params.GetUnordered()})
 		if err != nil {
 			errCh <- fmt.Errorf("error accepting dtls connection from secret: %v", err)
 			return
