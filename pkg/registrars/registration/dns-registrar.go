@@ -10,6 +10,7 @@ import (
 
 	"github.com/pion/stun"
 	"github.com/refraction-networking/conjure/pkg/registrars/dns-registrar/requester"
+	"github.com/refraction-networking/conjure/pkg/registrars/dns-registrar/tworeqresp"
 	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/refraction-networking/gotapdance/tapdance"
@@ -18,7 +19,7 @@ import (
 )
 
 type DNSRegistrar struct {
-	req             *requester.Requester
+	req             *tworeqresp.Requester
 	maxRetries      int
 	connectionDelay time.Duration
 	bidirectional   bool
@@ -63,13 +64,18 @@ func NewDNSRegistrar(config *Config) (*DNSRegistrar, error) {
 		return nil, fmt.Errorf("error creating requester: %v", err)
 	}
 
+	tworeq, err := tworeqresp.NewRequester(req, 80)
+	if err != nil {
+		return nil, fmt.Errorf("error adding fragmentation layer: %v", err)
+	}
+
 	ip, err := getPublicIp(config.STUNAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get public IP: %v", err)
 	}
 
 	return &DNSRegistrar{
-		req:             req,
+		req:             tworeq,
 		ip:              ip,
 		maxRetries:      config.MaxRetries,
 		bidirectional:   config.Bidirectional,

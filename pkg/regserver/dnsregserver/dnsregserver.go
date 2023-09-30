@@ -8,6 +8,7 @@ import (
 
 	"github.com/refraction-networking/conjure/pkg/metrics"
 	"github.com/refraction-networking/conjure/pkg/registrars/dns-registrar/responder"
+	"github.com/refraction-networking/conjure/pkg/registrars/dns-registrar/tworeqresp"
 	"github.com/refraction-networking/conjure/pkg/regserver/regprocessor"
 	pb "github.com/refraction-networking/conjure/proto"
 	log "github.com/sirupsen/logrus"
@@ -22,7 +23,7 @@ type registrar interface {
 // DNSRegServer provides an interface to forward DNS registration requests. Use a dns responder to receive requests and send responses.
 type DNSRegServer struct {
 	// dns responder to recieve and forward responses with
-	dnsResponder *responder.Responder
+	dnsResponder *tworeqresp.Responder
 	processor    registrar
 	latestCCGen  uint32
 	logger       log.FieldLogger
@@ -45,8 +46,13 @@ func NewDNSRegServer(domain string, udpAddr string, privkey []byte, regprocessor
 		return nil, fmt.Errorf("failed to create DNS responder: %v", err)
 	}
 
+	tworesponder, err := tworeqresp.NewResponder(respder)
+	if err != nil {
+		return nil, fmt.Errorf("error adding fragmentation layer: %v", err)
+	}
+
 	return &DNSRegServer{
-		dnsResponder: respder,
+		dnsResponder: tworesponder,
 		processor:    regprocessor,
 		latestCCGen:  latestClientConfGeneration,
 		logger:       logger,

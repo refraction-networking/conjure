@@ -439,3 +439,15 @@ message DnsResponse {
     optional bool clientconf_outdated = 2;
     optional RegistrationResponse bidirectional_response = 3;
 }
+
+message DnsPartReq {
+    optional bytes id  = 1;
+    optional uint32 partNum = 2;
+    optional uint32 totalParts = 3;
+    optional bytes data = 4;
+
+}
+message DnsPartResp {
+    optional bool waiting = 1;
+    optional bytes data = 2;
+}
