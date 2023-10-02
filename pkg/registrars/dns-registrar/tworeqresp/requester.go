@@ -16,11 +16,14 @@ type onerequester interface {
 
 type Requester struct {
 	parent onerequester
+	mtu    uint
+}
+
+func NewRequester(parent onerequester, mtu uint) (*Requester, error) {
+	return &Requester{parent: parent, mtu: mtu}, nil
 }
 
 func (r *Requester) RequestAndRecv(sendBytes []byte) ([]byte, error) {
-	firstHalf := sendBytes[:len(sendBytes)/2]
-	secondHalf := sendBytes[len(sendBytes)/2:]
 
 	id := [idLen]byte{}
 	_, err := rand.Read(id[:])
@@ -28,7 +31,7 @@ func (r *Requester) RequestAndRecv(sendBytes []byte) ([]byte, error) {
 		return nil, fmt.Errorf("error generating id: %v", err)
 	}
 
-	parts := [][]byte{firstHalf, secondHalf}
+	parts := splitIntoChunks(sendBytes, int(r.mtu))
 
 	for i, partBytes := range parts {
 		toSend := &pb.DnsPartReq{Id: id[:], PartNum: proto.Uint32(uint32(i)), Data: partBytes}
@@ -56,4 +59,20 @@ func (r *Requester) RequestAndRecv(sendBytes []byte) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("no response")
+}
+
+func splitIntoChunks(data []byte, mtu int) [][]byte {
+	var chunks [][]byte
+
+	for i := 0; i < len(data); i += mtu {
+		end := i + mtu
+
+		if end > len(data) {
+			end = len(data)
+		}
+
+		chunks = append(chunks, data[i:end])
+	}
+
+	return chunks
 }
