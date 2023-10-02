@@ -3,6 +3,9 @@ package tworeqresp
 import (
 	"crypto/rand"
 	"fmt"
+
+	pb "github.com/refraction-networking/conjure/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 const idLen = 8
@@ -28,8 +31,8 @@ func (r *Requester) RequestAndRecv(sendBytes []byte) ([]byte, error) {
 	parts := [][]byte{firstHalf, secondHalf}
 
 	for i, partBytes := range parts {
-		toSend := part{id: id, partNum: uint8(i), data: partBytes}
-		toSendBytes, err := toSend.marshal()
+		toSend := &pb.DnsPartReq{Id: id[:], PartNum: proto.Uint32(uint32(i)), Data: partBytes}
+		toSendBytes, err := proto.Marshal(toSend)
 		if err != nil {
 			return nil, fmt.Errorf("error marshal part %v: %v", i, err)
 		}
@@ -38,43 +41,19 @@ func (r *Requester) RequestAndRecv(sendBytes []byte) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error request part %v: %v", i, err)
 		}
+
+		resp := &pb.DnsPartResp{}
+		err = proto.Unmarshal(respBytes, resp)
+		if err != nil {
+			return nil, fmt.Errorf("error unmarshal response: %v", err)
+		}
+
+		if resp.GetWaiting() {
+			continue
+		}
+
+		return resp.GetData(), nil
 	}
 
 	return nil, fmt.Errorf("no response")
-}
-
-type part struct {
-	id      [idLen]byte
-	partNum uint8
-	data    []byte
-}
-
-func (p *part) marshal() ([]byte, error) {
-	if p.data == nil {
-		return nil, fmt.Errorf("data cannot be nil")
-	}
-
-	result := make([]byte, 0, idLen+1+len(p.data))
-
-	result = append(result, p.id[:]...)
-
-	result = append(result, p.partNum)
-
-	result = append(result, p.data...)
-
-	return result, nil
-}
-
-func (p *part) unmarshal(data []byte) error {
-	if len(data) < idLen+1 {
-		return fmt.Errorf("data is too short to unmarshal")
-	}
-
-	copy(p.id[:], data[:idLen])
-
-	p.partNum = data[idLen]
-
-	p.data = data[idLen+1:]
-
-	return nil
 }
