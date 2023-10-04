@@ -158,7 +158,10 @@ func (*ClientTransport) DisableRegDelay() bool {
 }
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
-func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
+func (t *ClientTransport) GetDstPort(seed []byte, phantomSubnetSupportsRandPort bool) (uint16, error) {
+	if !phantomSubnetSupportsRandPort {
+		return 443, nil
+	}
 	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 }
 

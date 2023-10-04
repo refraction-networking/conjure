@@ -10,6 +10,7 @@ import (
 	"net"
 
 	"github.com/refraction-networking/conjure/pkg/core"
+	"github.com/refraction-networking/conjure/pkg/station/log"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
@@ -150,6 +151,9 @@ func defaultParams() *pb.PrefixTransportParams {
 // error if the provided generic message is not compatible or the parameters are otherwise invalid
 func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 	if genericParams, ok := p.(*pb.GenericTransportParams); ok {
+		// If the parameters are nil, set them to the default otherwise leave them alone so that
+		// this can be used to override the RandomizeDstPort parameter for phantoms that do not
+		// support it. HOWEVER, THAT WILL PERSIST if the Params are re-used.
 		if t.parameters == nil {
 			t.parameters = defaultParams()
 		}
@@ -228,7 +232,9 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 }
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
-func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
+func (t *ClientTransport) GetDstPort(seed []byte, randomizeDstPorSupported bool) (uint16, error) {
+
+	log.Infof("%t, %t", t.parameters.GetRandomizeDstPort(), randomizeDstPorSupported)
 
 	if t == nil {
 		return 0, ErrBadParams
@@ -249,7 +255,7 @@ func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 		t.parameters = &pb.PrefixTransportParams{PrefixId: &p}
 	}
 
-	if t.parameters.GetRandomizeDstPort() {
+	if t.parameters.GetRandomizeDstPort() && randomizeDstPorSupported {
 		return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 	}
 
