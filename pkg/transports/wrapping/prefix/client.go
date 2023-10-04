@@ -10,7 +10,6 @@ import (
 	"net"
 
 	"github.com/refraction-networking/conjure/pkg/core"
-	"github.com/refraction-networking/conjure/pkg/station/log"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
@@ -163,18 +162,19 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 
 	var prefixParams *pb.PrefixTransportParams
 	if clientParams, ok := p.(*pb.PrefixTransportParams); ok {
-		prefixParams = clientParams
+		// make a copy of params so that we don't modify the original during an active session.
+		prefixParams = proto.Clone(clientParams).(*pb.PrefixTransportParams)
 	} else if clientParams, ok := p.(*ClientParams); ok {
 		prefixParams = &pb.PrefixTransportParams{
-			PrefixId:          &clientParams.PrefixID,
-			CustomFlushPolicy: &clientParams.FlushPolicy,
-			RandomizeDstPort:  &clientParams.RandomizeDstPort,
+			PrefixId:          proto.Int32(clientParams.PrefixID),
+			CustomFlushPolicy: proto.Int32(clientParams.FlushPolicy),
+			RandomizeDstPort:  proto.Bool(clientParams.RandomizeDstPort),
 		}
 	} else if clientParams, ok := p.(ClientParams); ok {
 		prefixParams = &pb.PrefixTransportParams{
-			PrefixId:          &clientParams.PrefixID,
-			CustomFlushPolicy: &clientParams.FlushPolicy,
-			RandomizeDstPort:  &clientParams.RandomizeDstPort,
+			PrefixId:          proto.Int32(clientParams.PrefixID),
+			CustomFlushPolicy: proto.Int32(clientParams.FlushPolicy),
+			RandomizeDstPort:  proto.Bool(clientParams.RandomizeDstPort),
 		}
 	} else if p == nil {
 		prefixParams = defaultParams()
@@ -233,8 +233,6 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
 func (t *ClientTransport) GetDstPort(seed []byte, randomizeDstPorSupported bool) (uint16, error) {
-
-	log.Infof("%t, %t", t.parameters.GetRandomizeDstPort(), randomizeDstPorSupported)
 
 	if t == nil {
 		return 0, ErrBadParams

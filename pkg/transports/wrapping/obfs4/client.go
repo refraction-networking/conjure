@@ -54,7 +54,8 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 	var parsedParams *pb.GenericTransportParams
 	if params, ok := p.(*pb.GenericTransportParams); ok {
-		parsedParams = params
+		// make a copy of params so that we don't modify the original during an active session.
+		parsedParams = proto.Clone(params).(*pb.GenericTransportParams)
 	} else if p == nil {
 		parsedParams = &pb.GenericTransportParams{}
 		parsedParams.RandomizeDstPort = proto.Bool(true)
