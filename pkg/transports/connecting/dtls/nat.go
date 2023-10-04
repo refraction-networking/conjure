@@ -105,11 +105,11 @@ func publicAddr(ctx context.Context, network string, stunServer string, dialer d
 
 	err = client.Start(message, func(res stun.Event) {
 		if res.Error != nil {
-			doneCh <- err
+			doneCh <- res.Error
 			return
 		}
 
-		err = xorAddr.GetFrom(res.Message)
+		err := xorAddr.GetFrom(res.Message)
 		doneCh <- err
 	})
 	if err != nil {
