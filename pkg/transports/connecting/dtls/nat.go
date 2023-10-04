@@ -109,8 +109,8 @@ func publicAddr(ctx context.Context, network string, stunServer string, dialer d
 			return
 		}
 
-		err := xorAddr.GetFrom(res.Message)
-		doneCh <- err
+		resErr := xorAddr.GetFrom(res.Message)
+		doneCh <- resErr
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("error getting address from STUN: %v", err)
