@@ -30,8 +30,12 @@ const (
 // significant difference is that there is an instance of this structure per client session, where
 // the station side Transport struct has one instance to be re-used for all sessions.
 type ClientTransport struct {
-	// Parameters are fields that will be shared with the station in the registration
+	// Parameters are fields that will be shared with the station in the registration. This object
+	// should be considered immutable after initialization otherwise changes will persist across
+	// subsequent dials.
 	Parameters *pb.DTLSTransportParams
+	// SessionParams are fields that will be used for the current session only
+	sessionParams *pb.DTLSTransportParams
 
 	privAddr4           *net.UDPAddr
 	pubAddr4            *net.UDPAddr
@@ -78,12 +82,43 @@ func (*ClientTransport) ID() pb.TransportType {
 // GetParams returns a generic protobuf with any parameters from both the registration and the
 // transport.
 func (t *ClientTransport) GetParams() (proto.Message, error) {
-	return t.Parameters, nil
+	return t.sessionParams, nil
+}
+
+// SetSessionParams allows the session to apply updated params that are only used within an
+// individual dial, returning an error if the provided generic message is not compatible. the
+// variadic bool parameter is used to indicate whether the client should sanity check the params
+// or just apply them. This is useful in cases where the registrar may provide options to the
+// client that it is able to handle, but are outside of the clients sanity checks. (see prefix
+// transport for an example)
+func (t *ClientTransport) SetSessionParams(incoming *anypb.Any, unchecked ...bool) error {
+	if incoming == nil {
+		return nil
+	}
+
+	p, err := t.ParseParams(incoming)
+	if err != nil {
+		return err
+	}
+
+	switch params := p.(type) {
+	case *pb.GenericTransportParams:
+		if t.sessionParams == nil {
+			t.sessionParams = &pb.DTLSTransportParams{}
+		}
+
+		t.sessionParams.RandomizeDstPort = proto.Bool(params.GetRandomizeDstPort())
+	case *pb.DTLSTransportParams:
+		// make a copy of params so that we don't modify the original during an active session.
+		t.sessionParams = proto.Clone(params).(*pb.DTLSTransportParams)
+	}
+
+	return nil
 }
 
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible.
-func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
+func (t *ClientTransport) SetParams(p any) error {
 	switch params := p.(type) {
 	case *pb.GenericTransportParams:
 		if t.Parameters == nil {
@@ -117,6 +152,11 @@ func (t *ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.C
 	var err4 error
 	var err6 error
 
+	if t.Parameters == nil {
+		t.Parameters = &pb.DTLSTransportParams{}
+	}
+	t.sessionParams = proto.Clone(t.Parameters).(*pb.DTLSTransportParams)
+
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 
@@ -136,19 +176,15 @@ func (t *ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.C
 		return fmt.Errorf("error getting v4 public address: %v; error getting v6 public address: %v", err4, err6)
 	}
 
-	if t.Parameters == nil {
-		t.Parameters = &pb.DTLSTransportParams{}
-	}
-
 	if err4 == nil {
 		t.privAddr4 = privAddr4
 		t.pubAddr4 = pubAddr4
-		t.Parameters.SrcAddr4 = &pb.Addr{IP: pubAddr4.IP.To4(), Port: proto.Uint32(uint32(pubAddr4.Port))}
+		t.sessionParams.SrcAddr4 = &pb.Addr{IP: pubAddr4.IP.To4(), Port: proto.Uint32(uint32(pubAddr4.Port))}
 	}
 	if err6 == nil {
 		t.privAddr6 = privAddr6
 		t.pubAddr6 = pubAddr6
-		t.Parameters.SrcAddr6 = &pb.Addr{IP: pubAddr6.IP.To16(), Port: proto.Uint32(uint32(pubAddr6.Port))}
+		t.sessionParams.SrcAddr6 = &pb.Addr{IP: pubAddr6.IP.To16(), Port: proto.Uint32(uint32(pubAddr6.Port))}
 	}
 
 	return nil

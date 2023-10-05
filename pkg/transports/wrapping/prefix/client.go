@@ -22,7 +22,8 @@ import (
 //
 // External libraries must set parameters through SetParams using PrefixTransportParams.
 type ClientTransport struct {
-	parameters *pb.PrefixTransportParams
+	parameters    *pb.PrefixTransportParams
+	sessionParams *pb.PrefixTransportParams
 
 	// // state tracks fields internal to the registrar that survive for the lifetime
 	// // of the transport session without being shared - i.e. local derived keys.
@@ -94,7 +95,9 @@ func (*ClientTransport) ID() pb.TransportType {
 
 // Prepare lets the transport use the dialer to prepare. This is called before GetParams to let the
 // transport prepare stuff such as nat traversal.
-func (*ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
+func (t *ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
+	// make a fresh copy of the parameters so that we don't modify the original during an active session.
+	t.sessionParams = proto.Clone(t.parameters).(*pb.PrefixTransportParams)
 	return nil
 }
 
@@ -109,11 +112,14 @@ func (t *ClientTransport) GetParams() (proto.Message, error) {
 		return nil, fmt.Errorf("%w: empty or invalid Prefix provided", ErrBadParams)
 	}
 
-	if t.parameters == nil {
-		t.parameters = defaultParams()
+	if t.sessionParams == nil {
+		if t.parameters != nil {
+			t.sessionParams = proto.Clone(t.parameters).(*pb.PrefixTransportParams)
+		} else {
+			t.sessionParams = defaultParams()
+		}
 	}
-
-	return t.parameters, nil
+	return t.sessionParams, nil
 }
 
 // ParseParams gives the specific transport an option to parse a generic object into parameters
@@ -146,9 +152,99 @@ func defaultParams() *pb.PrefixTransportParams {
 	}
 }
 
+// SetSessionParams allows the session to apply updated params that are only used within an
+// individual dial, returning an error if the provided generic message is not compatible. the
+// variadic bool parameter is used to indicate whether the client should sanity check the params
+// or just apply them. This is useful in cases where the registrar may provide options to the
+// client that it is able to handle, but are outside of the clients sanity checks. (see prefix
+// transport for an example)
+func (t *ClientTransport) SetSessionParams(incoming *anypb.Any, unchecked ...bool) error {
+	if incoming == nil {
+		return nil
+	}
+
+	p, err := t.ParseParams(incoming)
+	if err != nil {
+		return err
+	}
+
+	if t.sessionParams == nil {
+		t.sessionParams = proto.Clone(defaultParams()).(*pb.PrefixTransportParams)
+	}
+
+	var prefixParams *pb.PrefixTransportParams
+	switch px := p.(type) {
+	case *pb.GenericTransportParams:
+		// If the parameters are nil, set them to the default otherwise leave them alone so that
+		// this can be used to override the RandomizeDstPort parameter for phantoms that do not
+		// support it. HOWEVER, THAT WILL PERSIST if the Params are re-used.
+		if t.sessionParams == nil {
+			t.sessionParams = defaultParams()
+		}
+		t.sessionParams.RandomizeDstPort = proto.Bool(p.(*pb.GenericTransportParams).GetRandomizeDstPort())
+		return nil
+	case *pb.PrefixTransportParams:
+		// make a copy of params so that we don't modify the original during an active session.
+		prefixParams = proto.Clone(px).(*pb.PrefixTransportParams)
+	}
+
+	if prefixParams == nil {
+		return fmt.Errorf("%w, nil params", ErrBadParams)
+	}
+
+	if len(unchecked) != 0 && unchecked[0] {
+		// Overwrite the prefix bytes and type without checking the default set. This is used for
+		// RegResponse where the registrar may override the chosen prefix with a prefix outside of
+		// the prefixes that the client known about.
+		t.sessionParams = prefixParams
+		t.Prefix = &clientPrefix{
+			bytes:       prefixParams.GetPrefix(),
+			id:          PrefixID(prefixParams.GetPrefixId()),
+			flushPolicy: prefixParams.GetCustomFlushPolicy(),
+		}
+
+		return nil
+	}
+
+	if prefix, ok := DefaultPrefixes[PrefixID(prefixParams.GetPrefixId())]; ok {
+		t.Prefix = prefix
+		t.sessionParams = prefixParams
+
+		// clear the prefix if it was set. this is used only when we don't have a known prefix
+		t.sessionParams.Prefix = []byte{}
+		return nil
+	}
+
+	if prefixParams.GetPrefixId() == int32(Rand) {
+		newPrefix, err := pickRandomPrefix(rand.Reader)
+		if err != nil {
+			return err
+		}
+
+		t.Prefix = newPrefix
+
+		if t.sessionParams == nil {
+			if t.parameters != nil {
+				t.sessionParams = proto.Clone(t.parameters).(*pb.PrefixTransportParams)
+			} else {
+				t.parameters = &pb.PrefixTransportParams{}
+			}
+		}
+
+		id := int32(t.Prefix.ID())
+		t.sessionParams.PrefixId = &id
+		t.sessionParams.RandomizeDstPort = prefixParams.RandomizeDstPort
+
+		return nil
+	}
+
+	return ErrUnknownPrefix
+
+}
+
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible or the parameters are otherwise invalid
-func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
+func (t *ClientTransport) SetParams(p any) error {
 	if genericParams, ok := p.(*pb.GenericTransportParams); ok {
 		// If the parameters are nil, set them to the default otherwise leave them alone so that
 		// this can be used to override the RandomizeDstPort parameter for phantoms that do not
@@ -186,19 +282,7 @@ func (t *ClientTransport) SetParams(p any, unchecked ...bool) error {
 		return fmt.Errorf("%w, nil params", ErrBadParams)
 	}
 
-	if len(unchecked) != 0 && unchecked[0] {
-		// Overwrite the prefix bytes and type without checking the default set. This is used for
-		// RegResponse where the registrar may override the chosen prefix with a prefix outside of
-		// the prefixes that the client known about.
-		t.parameters = prefixParams
-		t.Prefix = &clientPrefix{
-			bytes:       prefixParams.GetPrefix(),
-			id:          PrefixID(prefixParams.GetPrefixId()),
-			flushPolicy: prefixParams.GetCustomFlushPolicy(),
-		}
-
-		return nil
-	}
+	// Parameters set by user SetParams must either be random or known Prefix ID.
 
 	if prefix, ok := DefaultPrefixes[PrefixID(prefixParams.GetPrefixId())]; ok {
 		t.Prefix = prefix
@@ -248,12 +332,12 @@ func (t *ClientTransport) GetDstPort(seed []byte, randomizeDstPorSupported bool)
 		return 0, fmt.Errorf("%w: use SetParams or FromID if using Rand prefix", ErrUnknownPrefix)
 	}
 
-	if t.parameters == nil {
+	if t.sessionParams == nil {
 		p := int32(prefixID)
-		t.parameters = &pb.PrefixTransportParams{PrefixId: &p}
+		t.sessionParams = &pb.PrefixTransportParams{PrefixId: &p}
 	}
 
-	if t.parameters.GetRandomizeDstPort() && randomizeDstPorSupported {
+	if t.sessionParams.GetRandomizeDstPort() && randomizeDstPorSupported {
 		return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 	}
 
@@ -280,8 +364,11 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 		t.TagObfuscator = transports.CTRObfuscator{}
 	}
 
-	if t.parameters == nil {
-		t.parameters = defaultParams()
+	if t.sessionParams == nil {
+		if t.parameters == nil {
+			t.sessionParams = defaultParams()
+		}
+		t.sessionParams = proto.Clone(t.parameters).(*pb.PrefixTransportParams)
 	}
 
 	obfuscatedID, err := t.TagObfuscator.Obfuscate(t.connectTag, t.stationPublicKey[:])
@@ -298,7 +385,7 @@ func (t *ClientTransport) WrapConn(conn net.Conn) (net.Conn, error) {
 	}
 
 	// Maybe flush based on prefix spec and client param override
-	switch t.parameters.GetCustomFlushPolicy() {
+	switch t.sessionParams.GetCustomFlushPolicy() {
 	case NoAddedFlush:
 		break
 	case FlushAfterPrefix:

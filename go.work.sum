@@ -44,6 +44,7 @@ github.com/pkg/profile v1.7.0 h1:hnbDkaNWPCLMO9wGLdBFTIZvzDrDfBM2072E1S9gJkA=
 github.com/pkg/profile v1.7.0/go.mod h1:8Uer0jas47ZQMJ7VD+OHknK4YDY07LPUC6dEvqDjvNo=
 github.com/refraction-networking/gotapdance v1.6.2 h1:pDC12wdSCE4Afh31NcNAIcjIhO6Mb/qiIscwbGOhhRA=
 github.com/refraction-networking/gotapdance v1.6.2/go.mod h1:m82n2v+yNr3+E/dttji+qO2hEjcXgIYj2szuieEMTts=
+github.com/refraction-networking/gotapdance v1.7.5-0.20231005212606-d502537b1f19/go.mod h1:uUZDICZjk37aExgntA92OPL5Q7LrZgvpQncYNrO4sKg=
 github.com/stretchr/objx v0.5.0 h1:1zr/of2m5FGMsad5YfcqgdqdWrIhu+EBEJRhR1U7z/c=
 github.com/yuin/goldmark v1.4.13 h1:fVcFKWvrslecOb/tg+Cc05dkeYx540o0FuFt3nUVDoE=
 golang.org/x/lint v0.0.0-20200302205851-738671d3881b h1:Wh+f8QHJXR411sJR8/vRBTZ7YapZaRvUcLFFJhusH0k=

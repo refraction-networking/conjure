@@ -2,6 +2,7 @@ package prefix
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -245,12 +246,16 @@ func TestPrefixGetDstPortClient(t *testing.T) {
 
 	// Check nil ClientParams
 	ct := &ClientTransport{Prefix: DefaultPrefixes[0], parameters: nil}
+	err := ct.Prepare(context.Background(), nil)
+	require.Nil(t, err)
 	port, err := ct.GetDstPort(seed, true)
 	require.Nil(t, err)
 	require.Equal(t, uint16(443), port)
 
 	for _, testCase := range _cases {
 		ct := &ClientTransport{Prefix: testCase.x, parameters: testCase.r}
+		err := ct.Prepare(context.Background(), nil)
+		require.Nil(t, err)
 
 		// check client get destination.
 		clientPort, err := ct.GetDstPort(seed, true)
