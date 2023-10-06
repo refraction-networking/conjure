@@ -325,19 +325,6 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		return nil, fmt.Errorf("failed to parse transport parameters: %w", err)
 	}
 
-	if phantomSubnetSupportsRandPort {
-		dstPort, err := t.GetDstPort(uint(c2s.GetClientLibVersion()), cjkeys.ConjureSeed, params)
-		if err != nil {
-			return nil, fmt.Errorf("error determining destination port: %w", err)
-		}
-
-		// we have to cast to uint32 because protobuf using varint for all int / uint types and doesn't
-		// have an outward facing uint16 type.
-		regResp.DstPort = proto.Uint32(uint32(dstPort))
-	} else {
-		regResp.DstPort = proto.Uint32(443)
-	}
-
 	// Overrides will modify the C2SWrapper and put the updated registrationResponse inside to be
 	// forwarded to the station.
 	c2sPayload.RegistrationResponse = regResp
@@ -353,6 +340,19 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 			c2sPayload.RegistrationResponse.TransportParams = nil
 		}
 		regResp = c2sPayload.GetRegistrationResponse()
+	}
+
+	if phantomSubnetSupportsRandPort {
+		dstPort, err := t.GetDstPort(uint(c2s.GetClientLibVersion()), cjkeys.ConjureSeed, params)
+		if err != nil {
+			return nil, fmt.Errorf("error determining destination port: %w", err)
+		}
+
+		// we have to cast to uint32 because protobuf using varint for all int / uint types and doesn't
+		// have an outward facing uint16 type.
+		regResp.DstPort = proto.Uint32(uint32(dstPort))
+	} else {
+		regResp.DstPort = proto.Uint32(443)
 	}
 
 	return regResp, nil
