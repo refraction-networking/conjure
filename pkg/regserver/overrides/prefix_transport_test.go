@@ -182,13 +182,16 @@ func TestPrefixOverride_Override(t *testing.T) {
 	t.Run("select prefix with port override disabled", test)
 
 	// Phantom supports random port, but user disabled it - use default port from prefix
+	conf = strings.NewReader("100 1 0x22 22 SSH")
+	po, err = ParsePrefixes(conf)
+	require.Nil(t, err)
 	c.RegistrationResponse = &pb.RegistrationResponse{
 		PhantomsSupportPortRand: proto.Bool(true),
 	}
 	paramsPref, _ = anypb.New(&pb.PrefixTransportParams{RandomizeDstPort: proto.Bool(false)})
 	c.RegistrationPayload.TransportParams = paramsPref
-	out = expected{false, nil, 1024, []byte("ABC")}
-	t.Run("select prefix with port override disabled", test)
+	out = expected{false, nil, 22, []byte("SSH")}
+	t.Run("select prefix with user disabled port randomization", test)
 
 	// Phantom supports random port, and user enables it - use port set in the registration response
 	c.RegistrationResponse = &pb.RegistrationResponse{
@@ -197,18 +200,28 @@ func TestPrefixOverride_Override(t *testing.T) {
 	}
 	paramsPref, _ = anypb.New(&pb.PrefixTransportParams{RandomizeDstPort: proto.Bool(true)})
 	c.RegistrationPayload.TransportParams = paramsPref
-	out = expected{false, nil, 12345, []byte("ABC")}
-	t.Run("select prefix with port override disabled", test)
+	out = expected{false, nil, 12345, []byte("SSH")}
+	t.Run("select prefix with randomization already applied", test)
 
 	// Phantom does not support random port,  user enables it - use port set in the registration response
 	c.RegistrationResponse = &pb.RegistrationResponse{
-		PhantomsSupportPortRand: proto.Bool(true),
+		PhantomsSupportPortRand: proto.Bool(false),
 		DstPort:                 proto.Uint32(12345),
 	}
 	paramsPref, _ = anypb.New(&pb.PrefixTransportParams{RandomizeDstPort: proto.Bool(true)})
 	c.RegistrationPayload.TransportParams = paramsPref
-	out = expected{false, nil, 12345, []byte("ABC")}
-	t.Run("select prefix with port override disabled", test)
+	out = expected{false, nil, 443, []byte("SSH")}
+	t.Run("select prefix with where random has been applied, but phantom doesnt support", test)
+
+	// Phantom does not support random port,  user enables it - use port set in the registration response
+	c.RegistrationResponse = &pb.RegistrationResponse{
+		PhantomsSupportPortRand: proto.Bool(false),
+		DstPort:                 proto.Uint32(12345),
+	}
+	paramsPref, _ = anypb.New(&pb.PrefixTransportParams{RandomizeDstPort: proto.Bool(false)})
+	c.RegistrationPayload.TransportParams = paramsPref
+	out = expected{false, nil, 443, []byte("SSH")}
+	t.Run("select prefix with where random has been incorrectly applied, but phantom doesnt support", test)
 }
 
 func d(s string) []byte {
