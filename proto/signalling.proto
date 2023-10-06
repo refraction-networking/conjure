@@ -360,6 +360,8 @@ message C2SWrapper {
   optional RegistrationResponse registration_response = 8;
   optional bytes RegRespBytes = 9;
   optional bytes RegRespSignature = 10;
+
+
 }
 
 message SessionStats {
@@ -423,6 +425,10 @@ message RegistrationResponse {
 
   // Transport Params to if `allow_registrar_overrides` is set.
   optional google.protobuf.Any transport_params = 10;
+
+  // PhantomsSupportPortRand is a flag that indicates whether the selected phantoms are able to
+  // handle phantom connections to randomized ports.
+  optional bool phantoms_support_port_rand = 11;
 }
 
 // response from dns

@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
@@ -200,9 +201,16 @@ func (po *PrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader) err
 		reg.RegistrationResponse = &pb.RegistrationResponse{}
 	}
 
-	if fields.port > 0 {
-		p := uint32(fields.port)
-		reg.RegistrationResponse.DstPort = &p
+	if reg.GetRegistrationResponse().GetPhantomsSupportPortRand() {
+		if !params.GetRandomizeDstPort() || reg.GetRegistrationResponse().GetDstPort() == 0 {
+			if fields.port > 0 {
+				reg.RegistrationResponse.DstPort = proto.Uint32(uint32(fields.port))
+			}
+		}
+	} else {
+		if reg.GetRegistrationResponse().GetDstPort() != 443 {
+			reg.RegistrationResponse.DstPort = proto.Uint32(443)
+		}
 	}
 
 	anypbParams, err := anypb.New(params)
