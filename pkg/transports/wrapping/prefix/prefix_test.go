@@ -173,7 +173,7 @@ type ptp = pb.PrefixTransportParams
 var f = false
 var t = true
 var i1 int32 = 1
-var in1 int32 = -1
+var in1 int32 = int32(Rand)
 var i22 int32 = 22
 
 var _cases = []struct {
@@ -211,10 +211,10 @@ var _cases = []struct {
 	{"9", &clientPrefix{[]byte{}, -2, 1025, NoAddedFlush}, nil, 1025, 0, nil, ErrBadParams, ErrUnknownPrefix},
 	{"10", &clientPrefix{[]byte{}, -2, 443, NoAddedFlush}, nil, 443, 0, nil, ErrBadParams, nil},
 
-	// Random prefix, resolved by client into another prefix BEFORE calling GetParams. This means
-	// that none of ClientTransport.GetParams, ClientTransport.DstPort, or Transport.GetDstPort are
-	// aware of a PrefixID of -1 (Rand)
-	{"11", &clientPrefix{[]byte{}, -1, 1025, NoAddedFlush}, &ptp{RandomizeDstPort: &t, PrefixId: &in1}, 0, 0, ErrUnknownPrefix, ErrUnknownPrefix, ErrUnknownPrefix},
+	// Random prefix, resolved by client into another prefix _after_ calling GetParams. This means
+	// that ClientTransport.GetParams, and ClientTransport.DstPort are aware of a PrefixID of -1
+	// (Rand), but the server side functions (e.g Transport.GetDstPort) are not.
+	{"11", &clientPrefix{[]byte{}, -1, 1025, NoAddedFlush}, &ptp{RandomizeDstPort: &t, PrefixId: &in1}, 58047, 58047, nil, ErrUnknownPrefix, nil},
 }
 
 func TestPrefixGetDstPortServer(t *testing.T) {
@@ -296,8 +296,11 @@ func TestPrefixSetParamsClient(t *testing.T) {
 	ct := &ClientTransport{}
 	err := ct.SetParams(params)
 	require.Nil(t, err)
+	err = ct.Prepare(context.Background(), nil)
+	require.Nil(t, err)
 	require.NotEqual(t, -1, int(ct.Prefix.ID()))
-	require.Equal(t, ct.Prefix.ID(), PrefixID(ct.parameters.GetPrefixId()))
+	require.Equal(t, ct.Prefix.ID(), PrefixID(ct.sessionParams.GetPrefixId()))
+	require.Equal(t, Rand, PrefixID(ct.parameters.GetPrefixId()))
 
 	id = int32(Min)
 	params = &pb.PrefixTransportParams{PrefixId: &id}

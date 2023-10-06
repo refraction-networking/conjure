@@ -98,6 +98,23 @@ func (*ClientTransport) ID() pb.TransportType {
 func (t *ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
 	// make a fresh copy of the parameters so that we don't modify the original during an active session.
 	t.sessionParams = proto.Clone(t.parameters).(*pb.PrefixTransportParams)
+
+	if t.sessionParams == nil {
+		t.sessionParams = &pb.PrefixTransportParams{}
+	}
+
+	// If the user set random Prefix ID in the immutable params then we need to pick a random prefix
+	// for the sessions.
+	if t.sessionParams.GetPrefixId() == int32(Rand) {
+		newPrefix, err := pickRandomPrefix(rand.Reader)
+		if err != nil {
+			return err
+		}
+
+		t.Prefix = newPrefix
+		t.sessionParams.PrefixId = proto.Int32(int32(newPrefix.ID()))
+	}
+
 	return nil
 }
 
@@ -291,24 +308,15 @@ func (t *ClientTransport) SetParams(p any) error {
 		// clear the prefix if it was set. this is used for RegResponse only.
 		t.parameters.Prefix = []byte{}
 		return nil
-	}
+	} else if prefixParams.GetPrefixId() == int32(Rand) {
 
-	if prefixParams.GetPrefixId() == int32(Rand) {
 		newPrefix, err := pickRandomPrefix(rand.Reader)
 		if err != nil {
 			return err
 		}
 
 		t.Prefix = newPrefix
-
-		if t.parameters == nil {
-			t.parameters = &pb.PrefixTransportParams{}
-		}
-
-		id := int32(t.Prefix.ID())
-		t.parameters.PrefixId = &id
-		t.parameters.RandomizeDstPort = prefixParams.RandomizeDstPort
-
+		t.parameters = prefixParams
 		return nil
 	}
 
