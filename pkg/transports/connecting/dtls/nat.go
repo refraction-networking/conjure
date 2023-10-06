@@ -92,9 +92,19 @@ func publicAddr(ctx context.Context, network string, stunServer string, dialer d
 		return nil, nil, fmt.Errorf("error resolving local address: %v", err)
 	}
 
+	pubAddr, err := doSTUN(ctx, udpConn)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return localAddr, pubAddr, nil
+}
+
+func doSTUN(ctx context.Context, udpConn net.Conn) (*net.UDPAddr, error) {
+
 	client, err := stun.NewClient(udpConn)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating STUN client: %v", err)
+		return nil, fmt.Errorf("error creating STUN client: %v", err)
 	}
 
 	message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
@@ -105,15 +115,16 @@ func publicAddr(ctx context.Context, network string, stunServer string, dialer d
 
 	err = client.Start(message, func(res stun.Event) {
 		if res.Error != nil {
-			doneCh <- err
+			doneCh <- res.Error
 			return
 		}
 
-		err = xorAddr.GetFrom(res.Message)
-		doneCh <- err
+		resErr := xorAddr.GetFrom(res.Message)
+		doneCh <- resErr
 	})
+
 	if err != nil {
-		return nil, nil, fmt.Errorf("error getting address from STUN: %v", err)
+		return nil, fmt.Errorf("error getting address from STUN: %v", err)
 	}
 
 	defer client.Close()
@@ -125,11 +136,12 @@ func publicAddr(ctx context.Context, network string, stunServer string, dialer d
 	select {
 	case err := <-doneCh:
 		if err != nil {
-			return nil, nil, fmt.Errorf("error during client: %v", err)
+			return nil, fmt.Errorf("error during client: %v", err)
 		}
 	case <-ctx.Done():
-		return nil, nil, fmt.Errorf("timeout: %v", ctx.Err())
+		return nil, fmt.Errorf("timeout: %v", ctx.Err())
 	}
 
-	return localAddr, &net.UDPAddr{IP: xorAddr.IP, Port: xorAddr.Port}, nil
+	return &net.UDPAddr{IP: xorAddr.IP, Port: xorAddr.Port}, nil
+
 }
