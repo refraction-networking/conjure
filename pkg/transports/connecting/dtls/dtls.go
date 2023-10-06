@@ -158,7 +158,20 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 }
 
 func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, error) {
-	return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
+	if params == nil {
+		return defaultPort, nil
+	}
+
+	dtlsParams, ok := params.(*pb.DTLSTransportParams)
+	if !ok {
+		return 0, fmt.Errorf("bad parameters provided")
+	}
+
+	if dtlsParams.GetRandomizeDstPort() {
+		return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
+	}
+
+	return defaultPort, nil
 }
 
 func (Transport) GetProto() pb.IPProto {
