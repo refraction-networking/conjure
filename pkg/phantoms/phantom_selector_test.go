@@ -1,18 +1,17 @@
-package lib
+package phantoms
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
-	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"testing"
 
+	"github.com/refraction-networking/conjure/pkg/core"
+	pb "github.com/refraction-networking/conjure/proto"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/hkdf"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestPhantomsIPSelectionAlt(t *testing.T) {
@@ -91,7 +90,7 @@ func TestPhantomsSelectFromUnknownGen(t *testing.T) {
 
 	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
 
-	phantomAddr, err := phantomSelector.Select(seed, 0, phantomSelectionMinGeneration, false)
+	phantomAddr, err := phantomSelector.Select(seed, 0, core.PhantomSelectionMinGeneration, false)
 	require.Equal(t, err.Error(), "generation number not recognized")
 	assert.Nil(t, phantomAddr)
 }
@@ -102,9 +101,9 @@ func TestPhantomsSeededSelectionV4(t *testing.T) {
 	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
 
 	var newConf = &SubnetConfig{
-		WeightedSubnets: []ConjurePhantomSubnet{
-			{Weight: 9, Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}, RandomizeDstPort: true},
-			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: true},
+		WeightedSubnets: []*pb.PhantomSubnets{
+			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}, RandomizeDstPort: proto.Bool(true)},
+			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: proto.Bool(true)},
 		},
 	}
 
@@ -113,7 +112,7 @@ func TestPhantomsSeededSelectionV4(t *testing.T) {
 	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
 	expectedAddr := "192.122.190.130"
 
-	phantomAddr, err := phantomSelector.Select(seed, newGen, phantomSelectionMinGeneration, false)
+	phantomAddr, err := phantomSelector.Select(seed, newGen, core.PhantomSelectionMinGeneration, false)
 	require.Nil(t, err)
 	assert.Equal(t, expectedAddr, phantomAddr.String())
 
@@ -126,9 +125,9 @@ func TestPhantomsSeededSelectionV6Varint(t *testing.T) {
 	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
 
 	var newConf = &SubnetConfig{
-		WeightedSubnets: []ConjurePhantomSubnet{
-			{Weight: 9, Subnets: []string{"192.122.190.0/24", "2001:48a8:687f:1::/64"}, RandomizeDstPort: true},
-			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: true},
+		WeightedSubnets: []*pb.PhantomSubnets{
+			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "2001:48a8:687f:1::/64"}, RandomizeDstPort: proto.Bool(true)},
+			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: proto.Bool(true)},
 		},
 	}
 
@@ -142,67 +141,6 @@ func TestPhantomsSeededSelectionV6Varint(t *testing.T) {
 	assert.Equal(t, expectedAddr, phantomAddr.String())
 }
 
-func TestPhantomsV6OnlyFilter(t *testing.T) {
-	testNets := &ConjurePhantomSubnet{1, []string{"192.122.190.0/24", "2001:48a8:687f:1::/64", "2001:48a8:687f:1::/64"}, true}
-	testNetsParsed, err := parseSubnets(testNets)
-	require.Nil(t, err)
-	require.Equal(t, 3, len(testNetsParsed))
-
-	testNetsParsed, err = V6Only(testNetsParsed)
-	require.Nil(t, err)
-	require.Equal(t, 2, len(testNetsParsed))
-
-}
-
-// TestPhantomsSeededSelectionV4Min ensures that minimal subnets work because
-// they re useful to test limitations (i.e. multiple clients sharing a phantom
-// address)
-func TestPhantomsSeededSelectionV4Min(t *testing.T) {
-	subnets, err := parseSubnets(&ConjurePhantomSubnet{1, []string{"192.122.190.0/32", "2001:48a8:687f:1::/128"}, true})
-	require.Nil(t, err)
-
-	seed, err := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
-	require.Nil(t, err)
-
-	phantomAddr, err := selectPhantomImplVarint(seed, subnets)
-	require.Nil(t, err)
-
-	possibleAddrs := []string{"192.122.190.0", "2001:48a8:687f:1::"}
-	require.Contains(t, possibleAddrs, phantomAddr.String())
-}
-
-// TestPhantomSeededSelectionFuzz ensures that all phantom subnet sizes are
-// viable including small (/31, /32, etc.) subnets which were previously
-// experiencing a divide by 0.
-func TestPhantomSeededSelectionFuzz(t *testing.T) {
-	_, defaultV6, err := net.ParseCIDR("2001:48a8:687f:1::/64")
-	require.Nil(t, err)
-
-	var randSeed int64 = 1234
-	r := rand.New(rand.NewSource(randSeed))
-
-	// Add generation with only one v4 subnet that has a varying mask len
-	for i := 0; i <= 32; i++ {
-		s := "255.255.255.255/" + fmt.Sprint(i)
-		_, variableSubnet, err := net.ParseCIDR(s)
-		require.Nil(t, err)
-
-		subnets := []*phantomNet{{defaultV6, true}, {variableSubnet, false}}
-
-		var seed = make([]byte, 32)
-		for j := 0; j < 10000; j++ {
-			n, err := r.Read(seed)
-			require.Nil(t, err)
-			require.Equal(t, n, 32)
-
-			// phantomAddr, err := phantomSelector.Select(seed, newGen, false)
-			phantomAddr, err := selectPhantomImplVarint(seed, subnets)
-			require.Nil(t, err, "i=%d, j=%d, seed='%s'", i, j, hex.EncodeToString(seed))
-			require.NotNil(t, phantomAddr)
-		}
-	}
-}
-
 // This tests Client V0
 func TestPhantomsSeededSelectionLegacy(t *testing.T) {
 	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
@@ -210,9 +148,9 @@ func TestPhantomsSeededSelectionLegacy(t *testing.T) {
 	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
 
 	var newConf = &SubnetConfig{
-		WeightedSubnets: []ConjurePhantomSubnet{
-			{Weight: 9, Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
-			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
+		WeightedSubnets: []*pb.PhantomSubnets{
+			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
+			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
 		},
 	}
 
@@ -234,9 +172,9 @@ func TestPhantomsSeededSelectionVarint(t *testing.T) {
 	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
 
 	var newConf = &SubnetConfig{
-		WeightedSubnets: []ConjurePhantomSubnet{
-			{Weight: 9, Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
-			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
+		WeightedSubnets: []*pb.PhantomSubnets{
+			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
+			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
 		},
 	}
 
@@ -257,9 +195,9 @@ func TestPhantomsSeededSelectionHkdf(t *testing.T) {
 	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
 
 	var newConf = &SubnetConfig{
-		WeightedSubnets: []ConjurePhantomSubnet{
-			{Weight: 9, Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
-			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
+		WeightedSubnets: []*pb.PhantomSubnets{
+			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
+			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
 		},
 	}
 
@@ -279,9 +217,9 @@ func TestPhantomsV6Hkdf(t *testing.T) {
 	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
 
 	var newConf = &SubnetConfig{
-		WeightedSubnets: []ConjurePhantomSubnet{
-			{Weight: 9, Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
-			{Weight: 1, Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
+		WeightedSubnets: []*pb.PhantomSubnets{
+			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
+			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
 		},
 	}
 
@@ -294,12 +232,6 @@ func TestPhantomsV6Hkdf(t *testing.T) {
 	phantomAddr, err := phantomSelector.Select(seed, newGen, 2, true)
 	require.Nil(t, err)
 	assert.Equal(t, expectedAddr, phantomAddr.String())
-}
-
-func ExpandSeed(seed, salt []byte, i int) []byte {
-	bi := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bi, uint64(i))
-	return hkdf.Extract(sha256.New, seed, append(salt, bi...))
 }
 
 // TestDuplicates demonstrates that selectPhantomImplVarint results in
@@ -322,9 +254,9 @@ func TestDuplicates(t *testing.T) {
 	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
 
 	var newConf = &SubnetConfig{
-		WeightedSubnets: []ConjurePhantomSubnet{
-			{Weight: 1, Subnets: []string{"2001:48a8:687f:1::/64"}},
-			{Weight: 9, Subnets: []string{"2002::/64"}},
+		WeightedSubnets: []*pb.PhantomSubnets{
+			{Weight: proto.Uint32(1), Subnets: []string{"2001:48a8:687f:1::/64"}},
+			{Weight: proto.Uint32(9), Subnets: []string{"2002::/64"}},
 		},
 	}
 

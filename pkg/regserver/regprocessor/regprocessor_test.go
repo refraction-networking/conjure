@@ -16,8 +16,8 @@ import (
 	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/metrics"
+	"github.com/refraction-networking/conjure/pkg/phantoms"
 	"github.com/refraction-networking/conjure/pkg/regserver/overrides"
-	"github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/transports"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
@@ -305,11 +305,11 @@ type fakeIPSelector struct {
 	v6Addr net.IP
 }
 
-func (f fakeIPSelector) Select(seed []byte, generation uint, clientLibVer uint, v6Support bool) (*lib.PhantomIP, error) {
+func (f fakeIPSelector) Select(seed []byte, generation uint, clientLibVer uint, v6Support bool) (*phantoms.PhantomIP, error) {
 	if v6Support {
-		return &lib.PhantomIP{IP: &f.v6Addr, SupportsPortRand: true}, nil
+		return phantoms.IP(f.v6Addr, true), nil
 	}
-	return &lib.PhantomIP{IP: &f.v4Addr, SupportsPortRand: true}, nil
+	return phantoms.IP(f.v4Addr, true), nil
 }
 
 func TestRegisterBidirectional(t *testing.T) {
@@ -423,9 +423,9 @@ func TestRegProcessBdReq(t *testing.T) {
 
 type mockIPSelector struct{}
 
-func (*mockIPSelector) Select([]byte, uint, uint, bool) (*lib.PhantomIP, error) {
+func (*mockIPSelector) Select([]byte, uint, uint, bool) (*phantoms.PhantomIP, error) {
 	ip := net.ParseIP("8.8.8.8")
-	return &lib.PhantomIP{IP: &ip, SupportsPortRand: true}, nil
+	return phantoms.IP(ip, true), nil
 }
 
 func TestRegProcessBdReqOverride(t *testing.T) {
