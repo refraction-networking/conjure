@@ -141,55 +141,62 @@ func TestPhantomsV6Hkdf(t *testing.T) {
 	assert.True(t, phantomAddr.To16() != nil)
 }
 
+var testSetOfWeightedSubnetLists = map[string][]*pb.PhantomSubnets{
+	"plain case": {
+		{Weight: proto.Uint32(9), Subnets: []string{"10.0.0.0/8", "2001:48a8:687f:1::/64"}},
+		{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "2001:1::/64"}},
+	},
+	"one set missing ipv6": {
+		{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
+		{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
+	},
+
+	"set with fewer v6 addreses than v4": {
+		{Weight: proto.Uint32(1), Subnets: []string{"10.0.0.0/8", "2001:48a8:687f:1::/120"}},
+	},
+}
+
 func TestPhantomsCompareClientAndStation(t *testing.T) {
 	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
 	phantomSelector, err := NewPhantomIPSelector()
 	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
-
-	var newConf = &SubnetConfig{
-		WeightedSubnets: []*pb.PhantomSubnets{
-			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}, RandomizeDstPort: proto.Bool(true)},
-			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: proto.Bool(true)},
-		},
-	}
-
-	var psl = &pb.PhantomSubnetsList{
-		WeightedSubnets: newConf.WeightedSubnets,
-	}
-
-	newGen := phantomSelector.AddGeneration(-1, newConf)
-
 	seed := make([]byte, 32)
 
-	for i := 0; i < 10_000; i++ {
-		_, err := rand.Read(seed)
-		require.Nil(t, err)
+	for _, testCase := range testSetOfWeightedSubnetLists {
+		var psl = &pb.PhantomSubnetsList{WeightedSubnets: testCase}
+		var newConf = &SubnetConfig{WeightedSubnets: testCase}
+		newGen := phantomSelector.AddGeneration(-1, newConf)
 
-		clientAddr, clientErr := SelectPhantom(seed, psl, V4Only, true)
-		stationAddr, stationErr := phantomSelector.Select(seed, newGen, uint(core.CurrentClientLibraryVersion()), false)
-		if stationErr != nil && clientErr != nil {
-			require.Equal(t, clientErr.Error(), stationErr.Error())
-		} else {
-			require.Nil(t, stationErr)
-			require.Nil(t, clientErr)
-			require.NotNil(t, clientAddr)
-			require.NotNil(t, stationAddr)
-			if stationAddr != nil && clientAddr != nil {
-				require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+		for i := 0; i < 10_000; i++ {
+			_, err := rand.Read(seed)
+			require.Nil(t, err)
+
+			clientAddr, clientErr := SelectPhantom(seed, psl, V4Only, true)
+			stationAddr, stationErr := phantomSelector.Select(seed, newGen, uint(core.CurrentClientLibraryVersion()), false)
+			if stationErr != nil && clientErr != nil {
+				require.Equal(t, clientErr.Error(), stationErr.Error())
+			} else {
+				require.Nil(t, stationErr)
+				require.Nil(t, clientErr)
+				require.NotNil(t, clientAddr)
+				require.NotNil(t, stationAddr)
+				if stationAddr != nil && clientAddr != nil {
+					require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+				}
 			}
-		}
 
-		clientAddr, clientErr = SelectPhantom(seed, psl, V6Only, true)
-		stationAddr, stationErr = phantomSelector.Select(seed, newGen, uint(core.CurrentClientLibraryVersion()), true)
-		if stationErr != nil && clientErr != nil {
-			require.Equal(t, clientErr.Error(), stationErr.Error())
-		} else {
-			require.Nil(t, stationErr)
-			require.Nil(t, clientErr)
-			require.NotNil(t, clientAddr)
-			require.NotNil(t, stationAddr)
-			if stationAddr != nil && clientAddr != nil {
-				require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+			clientAddr, clientErr = SelectPhantom(seed, psl, V6Only, true)
+			stationAddr, stationErr = phantomSelector.Select(seed, newGen, uint(core.CurrentClientLibraryVersion()), true)
+			if stationErr != nil && clientErr != nil {
+				require.Equal(t, clientErr.Error(), stationErr.Error())
+			} else {
+				require.Nil(t, stationErr)
+				require.Nil(t, clientErr)
+				require.NotNil(t, clientAddr)
+				require.NotNil(t, stationAddr)
+				if stationAddr != nil && clientAddr != nil {
+					require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+				}
 			}
 		}
 	}
@@ -200,67 +207,59 @@ func TestPhantomsCompareClientAndStationCount(t *testing.T) {
 	phantomSelector, err := NewPhantomIPSelector()
 	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
 
-	var newConf = &SubnetConfig{
-		WeightedSubnets: []*pb.PhantomSubnets{
-			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}, RandomizeDstPort: proto.Bool(true)},
-			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: proto.Bool(true)},
-		},
-	}
-
-	var psl = &pb.PhantomSubnetsList{
-		WeightedSubnets: newConf.WeightedSubnets,
-	}
-
-	newGen := phantomSelector.AddGeneration(-1, newConf)
-
 	seed := make([]byte, 32)
 	iterations := 10_000
-	v4 := 0
-	v6 := 0
-	v4ClientErrs := 0
-	v4StationErrs := 0
-	v6ClientErrs := 0
-	v6StationErrs := 0
-	for i := 0; i < iterations; i++ {
-		_, err := rand.Read(seed)
-		require.Nil(t, err)
+	for _, testCase := range testSetOfWeightedSubnetLists {
+		var psl = &pb.PhantomSubnetsList{WeightedSubnets: testCase}
+		var newConf = &SubnetConfig{WeightedSubnets: testCase}
+		newGen := phantomSelector.AddGeneration(-1, newConf)
+		v4 := 0
+		v6 := 0
+		v4ClientErrs := 0
+		v4StationErrs := 0
+		v6ClientErrs := 0
+		v6StationErrs := 0
+		for i := 0; i < iterations; i++ {
+			_, err := rand.Read(seed)
+			require.Nil(t, err)
 
-		clientAddr, clientErr := SelectPhantom(seed, psl, V4Only, true)
-		stationAddr, stationErr := phantomSelector.Select(seed, newGen, uint(core.CurrentClientLibraryVersion()), false)
-		if stationErr != nil {
-			v4StationErrs++
-		}
-		if clientErr != nil {
-			v4ClientErrs++
-		}
-		if stationErr != nil && clientErr != nil && stationErr.Error() == clientErr.Error() {
-			v4++
-		}
+			clientAddr, clientErr := SelectPhantom(seed, psl, V4Only, true)
+			stationAddr, stationErr := phantomSelector.Select(seed, newGen, uint(core.CurrentClientLibraryVersion()), false)
+			if stationErr != nil {
+				v4StationErrs++
+			}
+			if clientErr != nil {
+				v4ClientErrs++
+			}
+			if stationErr != nil && clientErr != nil && stationErr.Error() == clientErr.Error() {
+				v4++
+			}
 
-		if stationAddr != nil && clientAddr != nil && stationAddr.String() == clientAddr.String() {
-			v4++
-		}
+			if stationAddr != nil && clientAddr != nil && stationAddr.String() == clientAddr.String() {
+				v4++
+			}
 
-		clientAddr, clientErr = SelectPhantom(seed, psl, V6Only, true)
-		stationAddr, stationErr = phantomSelector.Select(seed, newGen, uint(core.CurrentClientLibraryVersion()), true)
-		if stationErr != nil {
-			v6StationErrs++
-		}
-		if clientErr != nil {
-			v6ClientErrs++
-		}
+			clientAddr, clientErr = SelectPhantom(seed, psl, V6Only, true)
+			stationAddr, stationErr = phantomSelector.Select(seed, newGen, uint(core.CurrentClientLibraryVersion()), true)
+			if stationErr != nil {
+				v6StationErrs++
+			}
+			if clientErr != nil {
+				v6ClientErrs++
+			}
 
-		if stationErr != nil && clientErr != nil && stationErr.Error() == clientErr.Error() {
-			v6++
-		}
+			if stationErr != nil && clientErr != nil && stationErr.Error() == clientErr.Error() {
+				v6++
+			}
 
-		if stationAddr != nil && clientAddr != nil && stationAddr.String() == clientAddr.String() {
-			v6++
+			if stationAddr != nil && clientAddr != nil && stationAddr.String() == clientAddr.String() {
+				v6++
+			}
 		}
+		t.Log("V4: ", v4, "V6: ", v6, "V4ClientErrs: ", v4ClientErrs, "V4StationErrs: ", v4StationErrs, "V6ClientErrs: ", v6ClientErrs, "V6StationErrs: ", v6StationErrs)
+		require.Equal(t, iterations, v4)
+		require.Equal(t, iterations, v6)
 	}
-	t.Log("V4: ", v4, "V6: ", v6, "V4ClientErrs: ", v4ClientErrs, "V4StationErrs: ", v4StationErrs, "V6ClientErrs: ", v6ClientErrs, "V6StationErrs: ", v6StationErrs)
-	require.Equal(t, iterations, v4)
-	require.Equal(t, iterations, v6)
 }
 
 // TestDuplicates demonstrates that selectPhantomImplVarint results in

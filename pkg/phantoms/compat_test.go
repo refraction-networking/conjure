@@ -66,45 +66,37 @@ func TestPhantomsCompatV1(t *testing.T) {
 	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
 	phantomSelector, err := NewPhantomIPSelector()
 	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
-
-	var newConf = &SubnetConfig{
-		WeightedSubnets: []*pb.PhantomSubnets{
-			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}, RandomizeDstPort: proto.Bool(true)},
-			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: proto.Bool(true)},
-		},
-	}
-
-	var psl = &pb.PhantomSubnetsList{
-		WeightedSubnets: newConf.WeightedSubnets,
-	}
-
-	newGen := phantomSelector.AddGeneration(-1, newConf)
-
 	seed := make([]byte, 32)
 
-	for i := 0; i < 10_000; i++ {
-		_, err := rand.Read(seed)
-		require.Nil(t, err)
-		clientAddr, clientErr := v1.SelectPhantom(seed, psl, v1.V4Only, true)
-		stationAddr, stationErr := phantomSelector.Select(seed, newGen, core.PhantomSelectionMinGeneration, false)
-		if stationErr != nil {
-			require.Equal(t, stationErr, clientErr)
-		} else {
-			require.Nil(t, clientErr)
-			require.Nil(t, stationErr)
-			require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
-		}
+	for _, testSet := range testSetOfWeightedSubnetLists {
+		var psl = &pb.PhantomSubnetsList{WeightedSubnets: testSet}
+		var newConf = &SubnetConfig{WeightedSubnets: testSet}
+		newGen := phantomSelector.AddGeneration(-1, newConf)
 
-		// Check IPv6 Match
-		require.Nil(t, err)
-		clientAddr, clientErr = v1.SelectPhantom(seed, psl, v1.V6Only, true)
-		stationAddr, stationErr = phantomSelector.Select(seed, newGen, core.PhantomSelectionMinGeneration, true)
-		if stationErr != nil {
-			require.Equal(t, stationErr, clientErr)
-		} else {
-			require.Nil(t, clientErr)
-			require.Nil(t, stationErr)
-			require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+		for i := 0; i < 10_000; i++ {
+			_, err := rand.Read(seed)
+			require.Nil(t, err)
+			clientAddr, clientErr := v1.SelectPhantom(seed, psl, v1.V4Only, true)
+			stationAddr, stationErr := phantomSelector.Select(seed, newGen, core.PhantomSelectionMinGeneration, false)
+			if stationErr != nil {
+				require.Equal(t, stationErr, clientErr)
+			} else {
+				require.Nil(t, clientErr)
+				require.Nil(t, stationErr)
+				require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+			}
+
+			// Check IPv6 Match
+			require.Nil(t, err)
+			clientAddr, clientErr = v1.SelectPhantom(seed, psl, v1.V6Only, true)
+			stationAddr, stationErr = phantomSelector.Select(seed, newGen, core.PhantomSelectionMinGeneration, true)
+			if stationErr != nil {
+				require.Equal(t, stationErr, clientErr)
+			} else {
+				require.Nil(t, clientErr)
+				require.Nil(t, stationErr)
+				require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+			}
 		}
 	}
 }
@@ -161,60 +153,52 @@ func TestPhantomsCompatV0(t *testing.T) {
 	phantomSelector, err := NewPhantomIPSelector()
 	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
 
-	var newConf = &SubnetConfig{
-		WeightedSubnets: []*pb.PhantomSubnets{
-			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}, RandomizeDstPort: proto.Bool(true)},
-			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: proto.Bool(true)},
-		},
-	}
-
-	var psl = &pb.PhantomSubnetsList{
-		WeightedSubnets: newConf.WeightedSubnets,
-	}
-
-	newGen := phantomSelector.AddGeneration(-1, newConf)
-
 	seed := make([]byte, 32)
+	for _, testSet := range testSetOfWeightedSubnetLists {
+		var psl = &pb.PhantomSubnetsList{WeightedSubnets: testSet}
+		var newConf = &SubnetConfig{WeightedSubnets: testSet}
+		newGen := phantomSelector.AddGeneration(-1, newConf)
 
-	for i := 0; i < 10_000; i++ {
-		_, err := rand.Read(seed)
-		require.Nil(t, err)
-		clientAddr, clientErr := v0.SelectPhantom(seed, psl, v0.V4Only, true)
-		stationAddr, stationErr := phantomSelector.Select(seed, newGen, 0, false)
-		func() {
-			if errors.Is(clientErr, v0.ErrSubnetParseBug) {
-				return // it is possible the errors don't match properly whe the client hits this bug
-			} else if stationErr != nil && clientErr != nil {
-				require.Equal(t, clientErr.Error(), stationErr.Error())
-			} else {
-				require.Nil(t, stationErr)
-				require.Nil(t, clientErr)
-				require.NotNil(t, clientAddr)
-				require.NotNil(t, stationAddr)
-				if stationAddr != nil && clientAddr != nil {
-					require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+		for i := 0; i < 10_000; i++ {
+			_, err := rand.Read(seed)
+			require.Nil(t, err)
+			clientAddr, clientErr := v0.SelectPhantom(seed, psl, v0.V4Only, true)
+			stationAddr, stationErr := phantomSelector.Select(seed, newGen, 0, false)
+			func() {
+				if errors.Is(clientErr, v0.ErrSubnetParseBug) {
+					return // it is possible the errors don't match properly whe the client hits this bug
+				} else if stationErr != nil && clientErr != nil {
+					require.Equal(t, clientErr.Error(), stationErr.Error())
+				} else {
+					require.Nil(t, stationErr)
+					require.Nil(t, clientErr)
+					require.NotNil(t, clientAddr)
+					require.NotNil(t, stationAddr)
+					if stationAddr != nil && clientAddr != nil {
+						require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+					}
 				}
-			}
-		}()
+			}()
 
-		// Check IPv6 Match
-		require.Nil(t, err)
-		clientAddr, clientErr = v0.SelectPhantom(seed, psl, v0.V6Only, true)
-		stationAddr, stationErr = phantomSelector.Select(seed, newGen, 0, true)
-		func() {
-			if errors.Is(clientErr, v0.ErrSubnetParseBug) {
-				return // it is possible the errors don't match properly whe the client hits this bug
-			} else if stationErr != nil && clientErr != nil {
-				require.Equal(t, clientErr.Error(), stationErr.Error())
-			} else {
-				require.Nil(t, stationErr)
-				require.Nil(t, clientErr)
-				require.NotNil(t, clientAddr)
-				require.NotNil(t, stationAddr)
-				if stationAddr != nil && clientAddr != nil {
-					require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+			// Check IPv6 Match
+			require.Nil(t, err)
+			clientAddr, clientErr = v0.SelectPhantom(seed, psl, v0.V6Only, true)
+			stationAddr, stationErr = phantomSelector.Select(seed, newGen, 0, true)
+			func() {
+				if errors.Is(clientErr, v0.ErrSubnetParseBug) {
+					return // it is possible the errors don't match properly whe the client hits this bug
+				} else if stationErr != nil && clientErr != nil {
+					require.Equal(t, clientErr.Error(), stationErr.Error())
+				} else {
+					require.Nil(t, stationErr)
+					require.Nil(t, clientErr)
+					require.NotNil(t, clientAddr)
+					require.NotNil(t, stationAddr)
+					if stationAddr != nil && clientAddr != nil {
+						require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+					}
 				}
-			}
-		}()
+			}()
+		}
 	}
 }

@@ -65,9 +65,7 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) []string 
 
 		// Use unweighted config for subnets, concat all into one array and return.
 		for _, cjSubnet := range weightedSubnets {
-			for _, subnet := range cjSubnet.Subnets {
-				out = append(out, subnet)
-			}
+			out = append(out, cjSubnet.Subnets...)
 		}
 	}
 
