@@ -380,12 +380,6 @@ func (p *RegProcessor) processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr [
 	// in the C2SWrapper set it here as the source.
 	if c2sPayload.GetRegistrationSource() == pb.RegistrationSource_Unspecified {
 		source := regMethod
-
-		// Do not distinguish between API and bidirectional API
-		if source == pb.RegistrationSource_BidirectionalAPI {
-			source = pb.RegistrationSource_API
-		}
-
 		payload.RegistrationSource = &source
 	} else {
 		source := c2sPayload.GetRegistrationSource()
