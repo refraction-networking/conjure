@@ -33,18 +33,23 @@ type Transport interface {
 	ParseParams(data *anypb.Any) (any, error)
 
 	// SetParams allows the caller to set parameters associated with the transport, returning an
-	// error if the provided generic message is not compatible. the variadic bool parameter is used
-	// to indicate whether the client should sanity check the params or just apply them. This is
-	// useful in cases where the registrar may provide options to the client that it is able to
-	// handle, but are outside of the clients sanity checks. (see prefix transport for an example)
-	SetParams(any, ...bool) error
+	// error if the provided generic message is not compatible.
+	SetParams(any) error
+
+	// SetSessionParams allows the session to apply updated params that are only used within an
+	// individual dial, returning an error if the provided generic message is not compatible. the
+	// variadic bool parameter is used to indicate whether the client should sanity check the params
+	// or just apply them. This is useful in cases where the registrar may provide options to the
+	// client that it is able to handle, but are outside of the clients sanity checks. (see prefix
+	// transport for an example)
+	SetSessionParams(incoming *anypb.Any, unchecked ...bool) error
 
 	// Prepare lets the transport use the dialer to prepare. This is called before GetParams to let the
 	// transport prepare stuff such as nat traversal.
 	Prepare(ctx context.Context, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error
 
 	// GetDstPort returns the destination port that the client should open the phantom connection with.
-	GetDstPort(seed []byte) (uint16, error)
+	GetDstPort(seed []byte, randomizeDstPorSupported bool) (uint16, error)
 
 	// PrepareKeys provides an opportunity for the transport to integrate the station public key
 	// as well as bytes from the deterministic random generator associated with the registration

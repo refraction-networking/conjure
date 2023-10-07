@@ -2,6 +2,7 @@ package obfs4
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -288,6 +289,8 @@ func TestTryParamsToDstPort(t *testing.T) {
 	for _, testCase := range cases {
 		ct := ClientTransport{Parameters: &pb.GenericTransportParams{RandomizeDstPort: &testCase.r}}
 		var transport Transport
+		err := ct.Prepare(context.Background(), nil)
+		require.Nil(t, err)
 
 		params, err := ct.GetParams()
 		require.Nil(t, err)

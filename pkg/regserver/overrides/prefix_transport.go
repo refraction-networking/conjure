@@ -21,6 +21,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/transports"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
 	pb "github.com/refraction-networking/conjure/proto"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -200,9 +201,16 @@ func (po *PrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader) err
 		reg.RegistrationResponse = &pb.RegistrationResponse{}
 	}
 
-	if fields.port > 0 {
-		p := uint32(fields.port)
-		reg.RegistrationResponse.DstPort = &p
+	if reg.GetRegistrationResponse().GetPhantomsSupportPortRand() {
+		if !params.GetRandomizeDstPort() || reg.GetRegistrationResponse().GetDstPort() == 0 {
+			if fields.port > 0 {
+				reg.RegistrationResponse.DstPort = proto.Uint32(uint32(fields.port))
+			}
+		}
+	} else {
+		if reg.GetRegistrationResponse().GetDstPort() != 443 {
+			reg.RegistrationResponse.DstPort = proto.Uint32(443)
+		}
 	}
 
 	anypbParams, err := anypb.New(params)
@@ -262,9 +270,16 @@ func (rpo *RandPrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reader
 	}
 
 	port := newPrefix.DstPort(reg.GetSharedSecret())
-	if port > 0 {
-		p := uint32(port)
-		reg.RegistrationResponse.DstPort = &p
+	if reg.GetRegistrationResponse().GetPhantomsSupportPortRand() {
+		if !params.GetRandomizeDstPort() || reg.GetRegistrationResponse().GetDstPort() == 0 {
+			if port > 0 {
+				reg.RegistrationResponse.DstPort = proto.Uint32(uint32(port))
+			}
+		}
+	} else {
+		if reg.GetRegistrationResponse().GetDstPort() != 443 {
+			reg.RegistrationResponse.DstPort = proto.Uint32(443)
+		}
 	}
 
 	anypbParams, err := anypb.New(params)
@@ -318,9 +333,16 @@ func (fpo *FixedPrefixOverride) Override(reg *pb.C2SWrapper, randReader io.Reade
 	}
 
 	port := fpo.p.DstPort(reg.GetSharedSecret())
-	if port > 0 {
-		p := uint32(port)
-		reg.RegistrationResponse.DstPort = &p
+	if reg.GetRegistrationResponse().GetPhantomsSupportPortRand() {
+		if !params.GetRandomizeDstPort() || reg.GetRegistrationResponse().GetDstPort() == 0 {
+			if port > 0 {
+				reg.RegistrationResponse.DstPort = proto.Uint32(uint32(port))
+			}
+		}
+	} else {
+		if reg.GetRegistrationResponse().GetDstPort() != 443 {
+			reg.RegistrationResponse.DstPort = proto.Uint32(443)
+		}
 	}
 
 	anypbParams, err := anypb.New(params)

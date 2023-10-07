@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"errors"
 	"flag"
@@ -116,6 +117,9 @@ func testTransportsEndToEnd(t *testing.T, builder stationBuilder, clientTranspor
 
 		err = clientTransport.SetParams(params)
 		require.Nil(t, err)
+		err = clientTransport.Prepare(context.Background(), nil)
+		require.Nil(t, err)
+
 		protoParams, err := clientTransport.GetParams()
 		require.Nil(t, err)
 		t.Logf("running %s w/ %s", clientTransport.Name(), testParams.String())
