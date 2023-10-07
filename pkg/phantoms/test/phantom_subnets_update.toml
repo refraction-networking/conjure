@@ -1,0 +1,32 @@
+
+
+[Networks]
+	[Networks.1]
+        Generation = 1
+        [[Networks.1.WeightedSubnets]]
+            Weight = 9
+            Subnets = ["192.122.190.0/24", "2001:48a8:687f:1::/64"]
+
+    [Networks.2]
+        Generation = 2
+        [[Networks.2.WeightedSubnets]]
+            Weight = 1
+            Subnets = ["192.122.190.0/28", "2001:48a8:687f:1::/96"]
+
+    [Networks.957]
+        Generation = 957
+        [[Networks.957.WeightedSubnets]]
+            Weight = 9
+            Subnets = ["192.122.190.0/24", "2001:48a8:687f:1::/64"]
+        [[Networks.957.WeightedSubnets]]
+            Weight = 1
+            Subnets = ["141.219.0.0/16", "35.8.0.0/16"]
+
+    [Networks.1000]
+        Generation = 1000
+        [[Networks.1000.WeightedSubnets]]
+            Weight = 9
+            Subnets = ["192.168.10.0/24", "2001:1::/64"]
+        [[Networks.1000.WeightedSubnets]]
+            Weight = 1
+            Subnets = ["10.0.0.0/16"]

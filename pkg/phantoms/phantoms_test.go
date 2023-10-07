@@ -24,7 +24,7 @@ func TestIPSelectionBasic(t *testing.T) {
 	_, net1, err := net.ParseCIDR(netStr)
 	require.Nil(t, err)
 
-	addr, err := SelectAddrFromSubnetOffset(&phantomNet{IPNet: net1}, offset)
+	addr, err := selectAddrFromSubnetOffset(&phantomNet{IPNet: net1}, offset)
 	require.Nil(t, err)
 	//require.Equal(t, "2001:48a8:687f:1:5fa4:c34c:434e:ddd", addr.String())
 	require.Equal(t, "2001:48a8:687f:1:7ead:beef:cafe:d00d", addr.String())
@@ -38,14 +38,14 @@ func TestOffsetTooLarge(t *testing.T) {
 	require.Nil(t, err)
 
 	// Offset too big
-	addr, err := SelectAddrFromSubnetOffset(&phantomNet{IPNet: net1}, offset)
+	addr, err := selectAddrFromSubnetOffset(&phantomNet{IPNet: net1}, offset)
 	if err == nil {
 		t.Fatalf("Error: expected error, got address %v", addr)
 	}
 
 	// Offset that is just fine
 	offset = big.NewInt(255)
-	addr, err = SelectAddrFromSubnetOffset(&phantomNet{IPNet: net1}, offset)
+	addr, err = selectAddrFromSubnetOffset(&phantomNet{IPNet: net1}, offset)
 	require.Nil(t, err)
 	require.Equal(t, "10.1.2.255", addr.String())
 }

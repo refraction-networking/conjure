@@ -17,6 +17,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/metrics"
+	"github.com/refraction-networking/conjure/pkg/phantoms"
 	"github.com/refraction-networking/conjure/pkg/regserver/overrides"
 	"github.com/refraction-networking/conjure/pkg/station/lib"
 	pb "github.com/refraction-networking/conjure/proto"
@@ -57,7 +58,7 @@ type zmqSender interface {
 }
 
 type ipSelector interface {
-	Select([]byte, uint, uint, bool) (*lib.PhantomIP, error)
+	Select([]byte, uint, uint, bool) (*phantoms.PhantomIP, error)
 }
 
 // RegProcessor provides an interface to publish registrations and helper functions to process registration requests
@@ -83,7 +84,7 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		return nil, fmt.Errorf("incorrect private key size %d, expected %d", len(privkey), ed25519.PrivateKeySize)
 	}
 
-	phantomSelector, err := lib.GetPhantomSubnetSelector()
+	phantomSelector, err := phantoms.GetPhantomSubnetSelector()
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +160,7 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 		return nil, ErrZmqSocket
 	}
 
-	phantomSelector, err := lib.GetPhantomSubnetSelector()
+	phantomSelector, err := phantoms.GetPhantomSubnetSelector()
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +294,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 
 		addr4 := binary.BigEndian.Uint32(phantom4.To4())
 		regResp.Ipv4Addr = &addr4
-		phantomSubnetSupportsRandPort = phantom4.SupportsPortRand
+		phantomSubnetSupportsRandPort = phantom4.SupportRandomPort()
 	}
 
 	if c2s.GetV6Support() {
@@ -309,8 +310,8 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 			return nil, err
 		}
 
-		regResp.Ipv6Addr = *phantom6.IP
-		phantomSubnetSupportsRandPort = phantomSubnetSupportsRandPort && phantom6.SupportsPortRand
+		regResp.Ipv6Addr = *phantom6.IP()
+		phantomSubnetSupportsRandPort = phantomSubnetSupportsRandPort && phantom6.SupportRandomPort()
 	}
 
 	transportType := c2s.GetTransport()
@@ -376,12 +377,6 @@ func (p *RegProcessor) processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr [
 	// in the C2SWrapper set it here as the source.
 	if c2sPayload.GetRegistrationSource() == pb.RegistrationSource_Unspecified {
 		source := regMethod
-
-		// Do not distinguish between API and bidirectional API
-		if source == pb.RegistrationSource_BidirectionalAPI {
-			source = pb.RegistrationSource_API
-		}
-
 		payload.RegistrationSource = &source
 	} else {
 		source := c2sPayload.GetRegistrationSource()
@@ -420,7 +415,7 @@ func (p *RegProcessor) processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr [
 // subnets when the registrar receives a SIGHUP signal for example. If it fails it reports and error
 // and keeps the existing set of phantom subnets.
 func (p *RegProcessor) ReloadSubnets() error {
-	phantomSelector, err := lib.GetPhantomSubnetSelector()
+	phantomSelector, err := phantoms.GetPhantomSubnetSelector()
 	if err != nil {
 		return err
 	}

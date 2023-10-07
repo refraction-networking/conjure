@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/refraction-networking/conjure/pkg/core"
+	"github.com/refraction-networking/conjure/pkg/phantoms"
 	"github.com/refraction-networking/conjure/pkg/station/geoip"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 	"github.com/refraction-networking/conjure/pkg/station/log"
@@ -40,7 +41,7 @@ type RegistrationManager struct {
 
 	registeredDecoys *RegisteredDecoys
 	Logger           *log.Logger
-	PhantomSelector  *PhantomIPSelector
+	PhantomSelector  *phantoms.PhantomIPSelector
 	LivenessTester   liveness.Tester
 	GeoIP            geoip.Database
 
@@ -65,7 +66,7 @@ func NewRegistrationManager(conf *RegConfig) *RegistrationManager {
 		logger.Fatal(err)
 	}
 
-	p, err := NewPhantomIPSelector()
+	p, err := phantoms.NewPhantomIPSelector()
 	if err != nil {
 		logger.Errorf("failed to create the PhantomIPSelector object: %v", err)
 		return nil
@@ -99,7 +100,7 @@ func (regManager *RegistrationManager) OnReload(conf *RegConfig) {
 
 	// try to re-initialize the phantom selector, if error occurs log err and
 	// do not update the existing PhantomSelector
-	p, err := NewPhantomIPSelector()
+	p, err := phantoms.NewPhantomIPSelector()
 	if err != nil {
 		regManager.Logger.Errorf("failed to reload phantom subnets: %v", err)
 	} else {
