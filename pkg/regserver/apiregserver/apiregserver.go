@@ -221,6 +221,10 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 		switch err {
 		case regprocessor.ErrNoC2SBody:
 			http.Error(w, "no C2S body", http.StatusBadRequest)
+		case phantoms.ErrLegacyMissingAddrs:
+			fallthrough
+		case phantoms.ErrLegacyV0SelectionBug:
+			fallthrough
 		case phantoms.ErrLegacyAddrSelectBug:
 			http.Error(w, "bad seed", http.StatusBadRequest)
 		default:
