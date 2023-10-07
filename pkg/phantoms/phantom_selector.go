@@ -16,7 +16,10 @@ import (
 var (
 	// ErrLegacyAddrSelectBug indicates that we have hit a corner case in a legacy address selection
 	// algorithm that causes phantom address selection to fail.
-	ErrLegacyAddrSelectBug = errors.New("no valid addresses specified")
+	ErrLegacyAddrSelectBug  = errors.New("no valid addresses specified")
+	ErrLegacyMissingAddrs   = errors.New("No valid addresses specified")
+	ErrLegacyV0SelectionBug = errors.New("let's rewrite the phantom address selector")
+
 	// ErrMissingAddrs indicates that no subnets were provided with addresses to select from. This
 	// is only valid for phantomHkdfMinVersion and newer.
 	ErrMissingAddrs = errors.New("no valid addresses specified to select")
@@ -52,7 +55,7 @@ func getSubnetsHkdf(sc genericSubnetConfig, seed []byte, weighted bool) ([]*phan
 			choices = append(choices, cjSubnet)
 		}
 
-		// Sort choices assending
+		// Sort choices ascending
 		sort.Slice(choices, func(i, j int) bool {
 			return choices[i].GetWeight() < choices[j].GetWeight()
 		})
@@ -122,7 +125,7 @@ func selectPhantomImplHkdf(seed []byte, subnets []*phantomNet) (*PhantomIP, erro
 
 	// If the total number of addresses is 0 something has gone wrong
 	if addressTotal.Cmp(big.NewInt(0)) <= 0 {
-		return nil, fmt.Errorf("no valid addresses specified")
+		return nil, ErrMissingAddrs
 	}
 
 	// Pick a value using the seed in the range of between 0 and the total

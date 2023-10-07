@@ -13,6 +13,9 @@ import (
 	pb "github.com/refraction-networking/conjure/proto"
 )
 
+var ErrorV0SelectionBug = errors.New("let's rewrite the phantom address selector")
+var ErrSubnetParseBug = errors.New("no subnets provided")
+
 // getSubnets - return EITHER all subnet strings as one composite array if we are
 //
 //	selecting unweighted, or return the array associated with the (seed) selected
@@ -107,7 +110,7 @@ func parseSubnets(phantomSubnets []string) ([]*net.IPNet, error) {
 	var subnets []*net.IPNet = []*net.IPNet{}
 
 	if len(phantomSubnets) == 0 {
-		return nil, fmt.Errorf("parseSubnets - no subnets provided")
+		return nil, fmt.Errorf("parseSubnets - %w", ErrSubnetParseBug)
 	}
 
 	for _, strNet := range phantomSubnets {
@@ -224,7 +227,7 @@ func selectIPAddr(seed []byte, subnets []*net.IPNet) (*net.IP, error) {
 		}
 	}
 	if result == nil {
-		return nil, errors.New("let's rewrite the phantom address selector")
+		return nil, ErrorV0SelectionBug
 	}
 	return &result, nil
 }
@@ -234,7 +237,7 @@ func SelectPhantom(seed []byte, subnetsList *pb.PhantomSubnetsList, transform Su
 
 	s, err := parseSubnets(getSubnets(subnetsList, seed, weighted))
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse subnets: %v", err)
+		return nil, fmt.Errorf("Failed to parse subnets: %w", err)
 	}
 
 	if transform != nil {

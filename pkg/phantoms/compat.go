@@ -165,7 +165,7 @@ func selectPhantomImplV0(seed []byte, subnets []*phantomNet) (*PhantomIP, error)
 	}
 
 	if addressTotal.Cmp(big.NewInt(0)) <= 0 {
-		return nil, ErrLegacyAddrSelectBug
+		return nil, ErrLegacyMissingAddrs
 	}
 
 	id := &big.Int{}
@@ -185,7 +185,7 @@ func selectPhantomImplV0(seed []byte, subnets []*phantomNet) (*PhantomIP, error)
 		}
 	}
 	if result == nil {
-		return nil, ErrLegacyAddrSelectBug
+		return nil, ErrLegacyV0SelectionBug
 	}
 	return result, nil
 }

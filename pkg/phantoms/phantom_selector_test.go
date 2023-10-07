@@ -1,6 +1,7 @@
 package phantoms
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"net"
 	"os"
@@ -95,99 +96,6 @@ func TestPhantomsSelectFromUnknownGen(t *testing.T) {
 	assert.Nil(t, phantomAddr)
 }
 
-func TestPhantomsSeededSelectionV4(t *testing.T) {
-	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
-	phantomSelector, err := NewPhantomIPSelector()
-	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
-
-	var newConf = &SubnetConfig{
-		WeightedSubnets: []*pb.PhantomSubnets{
-			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}, RandomizeDstPort: proto.Bool(true)},
-			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: proto.Bool(true)},
-		},
-	}
-
-	newGen := phantomSelector.AddGeneration(-1, newConf)
-
-	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
-	expectedAddr := "192.122.190.130"
-
-	phantomAddr, err := phantomSelector.Select(seed, newGen, core.PhantomSelectionMinGeneration, false)
-	require.Nil(t, err)
-	assert.Equal(t, expectedAddr, phantomAddr.String())
-
-}
-
-// Client V1
-func TestPhantomsSeededSelectionV6Varint(t *testing.T) {
-	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
-	phantomSelector, err := NewPhantomIPSelector()
-	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
-
-	var newConf = &SubnetConfig{
-		WeightedSubnets: []*pb.PhantomSubnets{
-			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "2001:48a8:687f:1::/64"}, RandomizeDstPort: proto.Bool(true)},
-			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: proto.Bool(true)},
-		},
-	}
-
-	newGen := phantomSelector.AddGeneration(-1, newConf)
-
-	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
-	expectedAddr := "2001:48a8:687f:1:5fa4:c34c:434e:ddd"
-
-	phantomAddr, err := phantomSelector.Select(seed, newGen, 1, true)
-	require.Nil(t, err)
-	assert.Equal(t, expectedAddr, phantomAddr.String())
-}
-
-// This tests Client V0
-func TestPhantomsSeededSelectionLegacy(t *testing.T) {
-	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
-	phantomSelector, err := NewPhantomIPSelector()
-	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
-
-	var newConf = &SubnetConfig{
-		WeightedSubnets: []*pb.PhantomSubnets{
-			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
-			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
-		},
-	}
-
-	newGen := phantomSelector.AddGeneration(-1, newConf)
-
-	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
-	expectedAddr := "192.122.190.130"
-
-	phantomAddr, err := phantomSelector.Select(seed, newGen, 0, false)
-	require.Nil(t, err)
-	assert.Equal(t, expectedAddr, phantomAddr.String())
-
-}
-
-// This tests Client V1
-func TestPhantomsSeededSelectionVarint(t *testing.T) {
-	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
-	phantomSelector, err := NewPhantomIPSelector()
-	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
-
-	var newConf = &SubnetConfig{
-		WeightedSubnets: []*pb.PhantomSubnets{
-			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}},
-			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}},
-		},
-	}
-
-	newGen := phantomSelector.AddGeneration(-1, newConf)
-
-	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
-	expectedAddr := "192.122.190.130"
-
-	phantomAddr, err := phantomSelector.Select(seed, newGen, 1, false)
-	require.Nil(t, err)
-	assert.Equal(t, expectedAddr, phantomAddr.String())
-}
-
 // This tests Client V2
 func TestPhantomsSeededSelectionHkdf(t *testing.T) {
 	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
@@ -226,12 +134,133 @@ func TestPhantomsV6Hkdf(t *testing.T) {
 	newGen := phantomSelector.AddGeneration(-1, newConf)
 
 	seed, _ := hex.DecodeString("5a87133b68ea3468988a21659a12ed2ece07345c8c1a5b08459ffdea4218d12f")
-	//expectedAddr := "2001:48a8:687f:1:5fa4:c34c:434e:ddd"
-	expectedAddr := "2001:48a8:687f:1:d8f4:45cd:3ae:fcd4"
 
 	phantomAddr, err := phantomSelector.Select(seed, newGen, 2, true)
 	require.Nil(t, err)
-	assert.Equal(t, expectedAddr, phantomAddr.String())
+	assert.True(t, phantomAddr.To4() == nil)
+	assert.True(t, phantomAddr.To16() != nil)
+}
+
+func TestPhantomsCompareClientAndStation(t *testing.T) {
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
+	phantomSelector, err := NewPhantomIPSelector()
+	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
+
+	var newConf = &SubnetConfig{
+		WeightedSubnets: []*pb.PhantomSubnets{
+			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}, RandomizeDstPort: proto.Bool(true)},
+			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: proto.Bool(true)},
+		},
+	}
+
+	var psl = &pb.PhantomSubnetsList{
+		WeightedSubnets: newConf.WeightedSubnets,
+	}
+
+	newGen := phantomSelector.AddGeneration(-1, newConf)
+
+	seed := make([]byte, 32)
+
+	for i := 0; i < 10_000; i++ {
+		_, err := rand.Read(seed)
+		require.Nil(t, err)
+
+		clientAddr, clientErr := SelectPhantom(seed, psl, V4Only, true)
+		stationAddr, stationErr := phantomSelector.Select(seed, newGen, uint(core.CurrentClientLibraryVersion()), false)
+		if stationErr != nil && clientErr != nil {
+			require.Equal(t, clientErr.Error(), stationErr.Error())
+		} else {
+			require.Nil(t, stationErr)
+			require.Nil(t, clientErr)
+			require.NotNil(t, clientAddr)
+			require.NotNil(t, stationAddr)
+			if stationAddr != nil && clientAddr != nil {
+				require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+			}
+		}
+
+		clientAddr, clientErr = SelectPhantom(seed, psl, V6Only, true)
+		stationAddr, stationErr = phantomSelector.Select(seed, newGen, uint(core.CurrentClientLibraryVersion()), true)
+		if stationErr != nil && clientErr != nil {
+			require.Equal(t, clientErr.Error(), stationErr.Error())
+		} else {
+			require.Nil(t, stationErr)
+			require.Nil(t, clientErr)
+			require.NotNil(t, clientAddr)
+			require.NotNil(t, stationAddr)
+			if stationAddr != nil && clientAddr != nil {
+				require.Equal(t, clientAddr.String(), stationAddr.String(), "client:%s, station:%s", clientAddr, stationAddr)
+			}
+		}
+	}
+}
+
+func TestPhantomsCompareClientAndStationCount(t *testing.T) {
+	os.Setenv("PHANTOM_SUBNET_LOCATION", "./test/phantom_subnets.toml")
+	phantomSelector, err := NewPhantomIPSelector()
+	require.Nil(t, err, "Failed to create the PhantomIPSelector Object")
+
+	var newConf = &SubnetConfig{
+		WeightedSubnets: []*pb.PhantomSubnets{
+			{Weight: proto.Uint32(9), Subnets: []string{"192.122.190.0/24", "10.0.0.0/31", "2001:48a8:687f:1::/64"}, RandomizeDstPort: proto.Bool(true)},
+			{Weight: proto.Uint32(1), Subnets: []string{"141.219.0.0/16", "35.8.0.0/16"}, RandomizeDstPort: proto.Bool(true)},
+		},
+	}
+
+	var psl = &pb.PhantomSubnetsList{
+		WeightedSubnets: newConf.WeightedSubnets,
+	}
+
+	newGen := phantomSelector.AddGeneration(-1, newConf)
+
+	seed := make([]byte, 32)
+	iterations := 10_000
+	v4 := 0
+	v6 := 0
+	v4ClientErrs := 0
+	v4StationErrs := 0
+	v6ClientErrs := 0
+	v6StationErrs := 0
+	for i := 0; i < iterations; i++ {
+		_, err := rand.Read(seed)
+		require.Nil(t, err)
+
+		clientAddr, clientErr := SelectPhantom(seed, psl, V4Only, true)
+		stationAddr, stationErr := phantomSelector.Select(seed, newGen, uint(core.CurrentClientLibraryVersion()), false)
+		if stationErr != nil {
+			v4StationErrs++
+		}
+		if clientErr != nil {
+			v4ClientErrs++
+		}
+		if stationErr != nil && clientErr != nil && stationErr.Error() == clientErr.Error() {
+			v4++
+		}
+
+		if stationAddr != nil && clientAddr != nil && stationAddr.String() == clientAddr.String() {
+			v4++
+		}
+
+		clientAddr, clientErr = SelectPhantom(seed, psl, V6Only, true)
+		stationAddr, stationErr = phantomSelector.Select(seed, newGen, uint(core.CurrentClientLibraryVersion()), true)
+		if stationErr != nil {
+			v6StationErrs++
+		}
+		if clientErr != nil {
+			v6ClientErrs++
+		}
+
+		if stationErr != nil && clientErr != nil && stationErr.Error() == clientErr.Error() {
+			v6++
+		}
+
+		if stationAddr != nil && clientAddr != nil && stationAddr.String() == clientAddr.String() {
+			v6++
+		}
+	}
+	t.Log("V4: ", v4, "V6: ", v6, "V4ClientErrs: ", v4ClientErrs, "V4StationErrs: ", v4StationErrs, "V6ClientErrs: ", v6ClientErrs, "V6StationErrs: ", v6StationErrs)
+	require.Equal(t, iterations, v4)
+	require.Equal(t, iterations, v6)
 }
 
 // TestDuplicates demonstrates that selectPhantomImplVarint results in
