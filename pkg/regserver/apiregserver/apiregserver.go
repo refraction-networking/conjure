@@ -12,8 +12,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/refraction-networking/conjure/pkg/metrics"
+	"github.com/refraction-networking/conjure/pkg/phantoms"
 	"github.com/refraction-networking/conjure/pkg/regserver/regprocessor"
-	"github.com/refraction-networking/conjure/pkg/station/lib"
 	pb "github.com/refraction-networking/conjure/proto"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
@@ -221,7 +221,7 @@ func (s *APIRegServer) registerBidirectional(w http.ResponseWriter, r *http.Requ
 		switch err {
 		case regprocessor.ErrNoC2SBody:
 			http.Error(w, "no C2S body", http.StatusBadRequest)
-		case lib.ErrLegacyAddrSelectBug:
+		case phantoms.ErrLegacyAddrSelectBug:
 			http.Error(w, "bad seed", http.StatusBadRequest)
 		default:
 			reqLogger.Errorf("failed to create registration response: %v", err)

@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/refraction-networking/conjure/pkg/core"
+	"github.com/refraction-networking/conjure/pkg/phantoms"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 	"github.com/refraction-networking/conjure/pkg/station/log"
 	pb "github.com/refraction-networking/conjure/proto"
@@ -100,7 +101,7 @@ func (rm *RegistrationManager) startIngestThread(ctx context.Context, regChan <-
 			newRegs, err := rm.parseRegMessage(msg.([]byte))
 			if err != nil {
 
-				if !errors.Is(err, ErrLegacyAddrSelectBug) {
+				if !errors.Is(err, phantoms.ErrLegacyAddrSelectBug) {
 					logger.Errorf("Encountered err when creating Reg: %v\n", err)
 				}
 				continue
@@ -306,7 +307,7 @@ func (rm *RegistrationManager) parseRegMessage(msg []byte) ([]*DecoyRegistration
 		reg, err := rm.NewRegistrationC2SWrapper(parsed, false)
 		if err != nil {
 
-			if !errors.Is(err, ErrLegacyAddrSelectBug) {
+			if !errors.Is(err, phantoms.ErrLegacyAddrSelectBug) {
 				logger.Errorf("Failed to create registration from v4 C2S: %v", err)
 			}
 			return nil, err
@@ -360,7 +361,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		return nil, fmt.Errorf("error handling transport params: %s", err)
 	}
 
-	phantomPort, err := rm.getPhantomDstPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer, phantomAddr.SupportsPortRand)
+	phantomPort, err := rm.getPhantomDstPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer, phantomAddr.SupportRandomPort())
 	if err != nil {
 		return nil, fmt.Errorf("error selecting phantom dst port: %s", err)
 	}
@@ -379,7 +380,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		transportParams:  transportParams,
 		Flags:            c2s.Flags,
 
-		PhantomIp:    *phantomAddr.IP,
+		PhantomIp:    *phantomAddr.IP(),
 		PhantomPort:  phantomPort,
 		PhantomProto: phantomProto,
 
