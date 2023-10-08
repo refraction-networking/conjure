@@ -116,8 +116,8 @@ func (t *ClientTransport) SetParams(p any) error {
 }
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
-func (t *ClientTransport) GetDstPort(seed []byte, phantomSubnetSupportsRandPort bool) (uint16, error) {
-	if t.sessionParams == nil || !t.sessionParams.GetRandomizeDstPort() || !phantomSubnetSupportsRandPort {
+func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
+	if t.sessionParams == nil || !t.sessionParams.GetRandomizeDstPort() {
 		return 443, nil
 	}
 

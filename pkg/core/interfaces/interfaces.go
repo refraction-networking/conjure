@@ -49,7 +49,7 @@ type Transport interface {
 	Prepare(ctx context.Context, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error
 
 	// GetDstPort returns the destination port that the client should open the phantom connection with.
-	GetDstPort(seed []byte, randomizeDstPorSupported bool) (uint16, error)
+	GetDstPort(seed []byte) (uint16, error)
 
 	// PrepareKeys provides an opportunity for the transport to integrate the station public key
 	// as well as bytes from the deterministic random generator associated with the registration

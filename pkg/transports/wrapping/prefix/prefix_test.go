@@ -248,7 +248,7 @@ func TestPrefixGetDstPortClient(t *testing.T) {
 	ct := &ClientTransport{Prefix: DefaultPrefixes[0], parameters: nil}
 	err := ct.Prepare(context.Background(), nil)
 	require.Nil(t, err)
-	port, err := ct.GetDstPort(seed, true)
+	port, err := ct.GetDstPort(seed)
 	require.Nil(t, err)
 	require.Equal(t, uint16(443), port)
 
@@ -258,7 +258,7 @@ func TestPrefixGetDstPortClient(t *testing.T) {
 		require.Nil(t, err)
 
 		// check client get destination.
-		clientPort, err := ct.GetDstPort(seed, true)
+		clientPort, err := ct.GetDstPort(seed)
 		if testCase.e != nil {
 			require.ErrorIs(t, err, testCase.e, testCase.d)
 		} else {

@@ -324,7 +324,7 @@ func (t *ClientTransport) SetParams(p any) error {
 }
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
-func (t *ClientTransport) GetDstPort(seed []byte, randomizeDstPorSupported bool) (uint16, error) {
+func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 
 	if t == nil {
 		return 0, ErrBadParams
@@ -345,7 +345,7 @@ func (t *ClientTransport) GetDstPort(seed []byte, randomizeDstPorSupported bool)
 		t.sessionParams = &pb.PrefixTransportParams{PrefixId: &p}
 	}
 
-	if t.sessionParams.GetRandomizeDstPort() && randomizeDstPorSupported {
+	if t.sessionParams.GetRandomizeDstPort() {
 		return transports.PortSelectorRange(portRangeMin, portRangeMax, seed)
 	}
 
