@@ -45,11 +45,12 @@ type TestParams interface {
 
 type stationBuilder = func([32]byte) lib.WrappingTransport
 
-func TestTransportsEndToEnd(t *testing.T) {
-	if *debug {
-		log.SetLevel(log.DebugLevel)
-	}
-	testCases := []struct {
+func getTestCases(t *testing.T) []struct {
+	stationTransportBuilder     stationBuilder
+	clientTransport             interfaces.WrappingTransport
+	clientParamPermuteGenerator func() []TestParams
+} {
+	return []struct {
 		stationTransportBuilder     stationBuilder
 		clientTransport             interfaces.WrappingTransport
 		clientParamPermuteGenerator func() []TestParams
@@ -78,6 +79,14 @@ func TestTransportsEndToEnd(t *testing.T) {
 			genericParamPermutations,
 		},
 	}
+}
+
+func TestTransportsEndToEnd(t *testing.T) {
+	if *debug {
+		log.SetLevel(log.DebugLevel)
+	}
+
+	var testCases = getTestCases(t)
 	for _, testCase := range testCases {
 		t.Run(testCase.clientTransport.Name(), func(t *testing.T) {
 			testTransportsEndToEnd(t, testCase.stationTransportBuilder, testCase.clientTransport, testCase.clientParamPermuteGenerator)
@@ -101,11 +110,8 @@ func testTransportsEndToEnd(t *testing.T, builder stationBuilder, clientTranspor
 	transport := builder(curve25519Private)
 
 	// Ensure that we test all given parameter permutations as well as nil params
-	// paramSet := append([]any{nil}, clientParamPermuteGenerator())
 	paramSet := append([]TestParams{nil}, clientParamPermuteGenerator()...)
 
-	// for _, flushPolicy := range []int32{DefaultFlush, NoAddedFlush, FlushAfterPrefix} {
-	// 	for idx := range defaultPrefixes {
 	for _, testParams := range paramSet {
 
 		if testParams == nil {

@@ -96,11 +96,13 @@ func (*ClientTransport) ID() pb.TransportType {
 // Prepare lets the transport use the dialer to prepare. This is called before GetParams to let the
 // transport prepare stuff such as nat traversal.
 func (t *ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)) error {
-	// make a fresh copy of the parameters so that we don't modify the original during an active session.
-	t.sessionParams = proto.Clone(t.parameters).(*pb.PrefixTransportParams)
-
-	if t.sessionParams == nil {
-		t.sessionParams = &pb.PrefixTransportParams{}
+	t.debug("prepare-b")
+	defer t.debug("prepare-e")
+	if t.parameters == nil {
+		t.sessionParams = proto.Clone(defaultParams()).(*pb.PrefixTransportParams)
+	} else {
+		// make a fresh copy of the parameters so that we don't modify the original during an active session.
+		t.sessionParams = proto.Clone(t.parameters).(*pb.PrefixTransportParams)
 	}
 
 	// If the user set random Prefix ID in the immutable params then we need to pick a random prefix
@@ -176,6 +178,8 @@ func defaultParams() *pb.PrefixTransportParams {
 // client that it is able to handle, but are outside of the clients sanity checks. (see prefix
 // transport for an example)
 func (t *ClientTransport) SetSessionParams(incoming *anypb.Any, unchecked ...bool) error {
+	t.debug("setsessionparams-b")
+	defer t.debug("setsessionparams-e")
 	if incoming == nil {
 		return nil
 	}
@@ -185,18 +189,15 @@ func (t *ClientTransport) SetSessionParams(incoming *anypb.Any, unchecked ...boo
 		return err
 	}
 
-	if t.sessionParams == nil {
-		t.sessionParams = proto.Clone(defaultParams()).(*pb.PrefixTransportParams)
-	}
-
 	var prefixParams *pb.PrefixTransportParams
 	switch px := p.(type) {
 	case *pb.GenericTransportParams:
-		// If the parameters are nil, set them to the default otherwise leave them alone so that
-		// this can be used to override the RandomizeDstPort parameter for phantoms that do not
-		// support it. HOWEVER, THAT WILL PERSIST if the Params are re-used.
 		if t.sessionParams == nil {
-			t.sessionParams = defaultParams()
+			if t.parameters == nil {
+				t.sessionParams = proto.Clone(defaultParams()).(*pb.PrefixTransportParams)
+			} else {
+				t.sessionParams = proto.Clone(t.parameters).(*pb.PrefixTransportParams)
+			}
 		}
 		t.sessionParams.RandomizeDstPort = proto.Bool(p.(*pb.GenericTransportParams).GetRandomizeDstPort())
 		return nil
@@ -225,7 +226,7 @@ func (t *ClientTransport) SetSessionParams(incoming *anypb.Any, unchecked ...boo
 
 	if prefix, ok := DefaultPrefixes[PrefixID(prefixParams.GetPrefixId())]; ok {
 		t.Prefix = prefix
-		t.sessionParams = prefixParams
+		t.sessionParams = proto.Clone(prefixParams).(*pb.PrefixTransportParams)
 
 		// clear the prefix if it was set. this is used only when we don't have a known prefix
 		t.sessionParams.Prefix = []byte{}
@@ -244,24 +245,24 @@ func (t *ClientTransport) SetSessionParams(incoming *anypb.Any, unchecked ...boo
 			if t.parameters != nil {
 				t.sessionParams = proto.Clone(t.parameters).(*pb.PrefixTransportParams)
 			} else {
-				t.parameters = &pb.PrefixTransportParams{}
+				t.parameters = proto.Clone(defaultParams()).(*pb.PrefixTransportParams)
 			}
 		}
 
-		id := int32(t.Prefix.ID())
-		t.sessionParams.PrefixId = &id
-		t.sessionParams.RandomizeDstPort = prefixParams.RandomizeDstPort
+		t.sessionParams.PrefixId = proto.Int32(int32(t.Prefix.ID()))
+		t.sessionParams.RandomizeDstPort = proto.Bool(prefixParams.GetRandomizeDstPort())
 
 		return nil
 	}
 
 	return ErrUnknownPrefix
-
 }
 
 // SetParams allows the caller to set parameters associated with the transport, returning an
 // error if the provided generic message is not compatible or the parameters are otherwise invalid
 func (t *ClientTransport) SetParams(p any) error {
+	t.debug("setparams-b")
+	defer t.debug("setparams-e")
 	if genericParams, ok := p.(*pb.GenericTransportParams); ok {
 		// If the parameters are nil, set them to the default otherwise leave them alone so that
 		// this can be used to override the RandomizeDstPort parameter for phantoms that do not
@@ -300,7 +301,6 @@ func (t *ClientTransport) SetParams(p any) error {
 	}
 
 	// Parameters set by user SetParams must either be random or known Prefix ID.
-
 	if prefix, ok := DefaultPrefixes[PrefixID(prefixParams.GetPrefixId())]; ok {
 		t.Prefix = prefix
 		t.parameters = prefixParams
@@ -317,6 +317,7 @@ func (t *ClientTransport) SetParams(p any) error {
 
 		t.Prefix = newPrefix
 		t.parameters = prefixParams
+		// t.parameters.PrefixId = proto.Int32(int32(Rand))
 		return nil
 	}
 
@@ -325,6 +326,8 @@ func (t *ClientTransport) SetParams(p any) error {
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
 func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
+	t.debug("getdstport-b")
+	defer t.debug("getdstport-e")
 
 	if t == nil {
 		return 0, ErrBadParams
@@ -485,4 +488,10 @@ func pickRandomPrefix(r io.Reader) (Prefix, error) {
 	}
 
 	return DefaultPrefixes[PrefixID(i.Int64())], nil
+}
+
+func (t *ClientTransport) debug(s string) {
+	if false {
+		fmt.Printf("%s - %+v\n\t%+v\n\t%+v\n", s, t.Prefix, t.parameters, t.sessionParams)
+	}
 }
