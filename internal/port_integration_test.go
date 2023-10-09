@@ -106,6 +106,7 @@ func testTransportPortSelection(t *testing.T, builder stationBuilder, clientTran
 			for _, v6Reg := range []bool{false, true} {
 				phantom, err := manager.PhantomSelector.Select(
 					clientKeys.ConjureSeed, uint(gen), libver, v6Reg)
+				require.Nil(t, err)
 
 				reg, err := manager.NewRegistration(c2s, &keys, v6Reg, &regType)
 				require.Nil(t, err, "failed to create new Registration")
