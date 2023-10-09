@@ -5,12 +5,14 @@
         Generation = 1
         [[Networks.1.WeightedSubnets]]
             Weight = 9
+            RandomizeDstPort = false
             Subnets = ["192.122.190.0/24", "2001:48a8:687f:1::/64"] 
 
     [Networks.2]
         Generation = 2
         [[Networks.2.WeightedSubnets]]
             Weight = 1
+            RandomizeDstPort = true
             Subnets = ["192.122.190.0/28", "2001:48a8:687f:1::/96"] 
 
     [Networks.957]
