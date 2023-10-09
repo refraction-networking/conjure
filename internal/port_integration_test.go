@@ -69,6 +69,7 @@ func testTransportPortSelection(t *testing.T, builder stationBuilder, clientTran
 		// ensure that if the registration w/ transport config is re-used then the selected port is
 		// still consistent between the client and server.
 		for i := 0; i < 10; i++ {
+			gen := uint32(i%2 + 1) // the subnet set n gen1 doesn't support phantom randomization, the set in gen2 does
 
 			err = clientTransport.Prepare(context.Background(), nil)
 			require.Nil(t, err)
@@ -77,13 +78,12 @@ func testTransportPortSelection(t *testing.T, builder stationBuilder, clientTran
 			require.Nil(t, err)
 			log.Debugf("running %s w/ %s", clientTransport.Name(), testParams.String())
 
-			manager := testutils.SetupRegistrationManager(testutils.Transport{Index: pb.TransportType_Prefix, Transport: transport})
+			manager := testutils.SetupRegistrationManager(testutils.Transport{Index: transportType, Transport: transport})
 			require.NotNil(t, manager)
 
 			v := uint32(libver)
 			covert := "1.2.3.4:56789"
 			regType := pb.RegistrationSource_API
-			gen := uint32(1)
 			c2s := &pb.ClientToStation{
 				ClientLibVersion:    &v,
 				Transport:           &transportType,
@@ -103,18 +103,31 @@ func testTransportPortSelection(t *testing.T, builder stationBuilder, clientTran
 				log.Fatalln("failed to generate shared keys:", err)
 			}
 
-			reg, err := manager.NewRegistration(c2s, &keys, false, &regType)
-			require.Nil(t, err, "failed to create new Registration")
+			for _, v6Reg := range []bool{false, true} {
+				phantom, err := manager.PhantomSelector.Select(
+					clientKeys.ConjureSeed, uint(gen), libver, v6Reg)
 
-			reg.Transport = transportType
+				reg, err := manager.NewRegistration(c2s, &keys, v6Reg, &regType)
+				require.Nil(t, err, "failed to create new Registration")
 
-			// Get the port that the client will connect to
-			clientPort, err := clientTransport.GetDstPort(clientKeys.ConjureSeed)
-			require.Nil(t, err, "failed to get client port")
+				reg.Transport = transportType
 
-			serverPort := reg.PhantomPort
-			require.Equal(t, clientPort, serverPort, "c:%d != s:%d - %s %s", clientPort, serverPort, transport.Name(), testParams.String())
-			t.Logf("ports: c:%d, s:%d", clientPort, serverPort)
+				// Get the port that the client will connect to
+				clientPort, err := clientTransport.GetDstPort(clientKeys.ConjureSeed)
+				require.Nil(t, err, "failed to get client port")
+
+				serverPort := reg.PhantomPort
+
+				if phantom.SupportRandomPort() {
+					// If the phantom supports random ports, then the client and server should pick
+					// the same randomized destination port
+					require.Equal(t, clientPort, serverPort, "c:%d != s:%d - %s %s", clientPort, serverPort, transport.Name(), testParams.String())
+				} else {
+					// If the phantom does not support random ports, then the server should pick 443
+					// the client applies this policy at a higher level so we don't check it here.
+					require.Equal(t, uint16(443), serverPort, "443 != s:%d - %s %s", serverPort, transport.Name(), testParams.String())
+				}
+			}
 		}
 	}
 }

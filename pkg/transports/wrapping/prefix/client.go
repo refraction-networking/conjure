@@ -499,7 +499,7 @@ func pickRandomPrefix(r io.Reader) (Prefix, error) {
 }
 
 func (t *ClientTransport) debug(s string) {
-	if true {
+	if false {
 		fmt.Printf("%s - %+v\n\t%+v\n\t%+v\n", s, t.Prefix, t.parameters, t.sessionParams)
 	}
 }

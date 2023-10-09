@@ -57,15 +57,6 @@ func getTestCases(t *testing.T) []struct {
 	}{
 		{
 			func(privKey [32]byte) lib.WrappingTransport {
-				tr, err := prefix.Default(privKey)
-				require.Nil(t, err)
-				return tr
-			},
-			&prefix.ClientTransport{},
-			prefixClientParamPermutations,
-		},
-		{
-			func(privKey [32]byte) lib.WrappingTransport {
 				return &obfs4.Transport{}
 			},
 			&obfs4.ClientTransport{},
@@ -77,6 +68,15 @@ func getTestCases(t *testing.T) []struct {
 			},
 			&min.ClientTransport{},
 			genericParamPermutations,
+		},
+		{
+			func(privKey [32]byte) lib.WrappingTransport {
+				tr, err := prefix.Default(privKey)
+				require.Nil(t, err)
+				return tr
+			},
+			&prefix.ClientTransport{},
+			prefixClientParamPermutations,
 		},
 	}
 }
