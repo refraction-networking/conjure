@@ -186,8 +186,8 @@ var _cases = []struct {
 	se error  // server_error (on getDstPort)
 	ge error  // client GetParams error
 }{
-	// Nil Prefix w/ and w/out randomization
-	{"1", nil, nil, 0, 0, ErrBadParams, ErrBadParams, ErrBadParams},
+	// Nil Prefix w/ and w/out randomization - test applied defaults
+	{"1", nil, nil, 443, 443, nil, nil, ErrBadParams},
 	{"2", nil, &ptp{RandomizeDstPort: &f}, 0, 443, ErrBadParams, nil, ErrBadParams},   // When using the getter for PrefixTransportParams PrefixID defaults to 0
 	{"2", nil, &ptp{RandomizeDstPort: &t}, 0, 58047, ErrBadParams, nil, ErrBadParams}, // When using the getter for PrefixTransportParams PrefixID defaults to 0
 
@@ -250,7 +250,7 @@ func TestPrefixGetDstPortClient(t *testing.T) {
 	require.Nil(t, err)
 	port, err := ct.GetDstPort(seed)
 	require.Nil(t, err)
-	require.Equal(t, uint16(443), port)
+	require.Equal(t, uint16(443), port, "c:%d != e:%d - %+v", port, 443, ct.parameters)
 
 	for _, testCase := range _cases {
 		ct := &ClientTransport{Prefix: testCase.x, parameters: testCase.r}
@@ -260,11 +260,11 @@ func TestPrefixGetDstPortClient(t *testing.T) {
 		// check client get destination.
 		clientPort, err := ct.GetDstPort(seed)
 		if testCase.e != nil {
-			require.ErrorIs(t, err, testCase.e, testCase.d)
+			require.ErrorIs(t, err, testCase.e, "%s c:%d != e:%d - %+v", testCase.d, clientPort, testCase.p, ct.parameters)
 		} else {
 			require.Nil(t, err, testCase.d)
 		}
-		require.Equal(t, testCase.p, clientPort, testCase.d)
+		require.Equal(t, testCase.p, clientPort, "%s c:%d != e:%d - %+v", testCase.d, clientPort, testCase.p, ct.parameters)
 	}
 }
 
@@ -272,6 +272,8 @@ func TestPrefixGetParamsClient(t *testing.T) {
 
 	// Check nil clientParams
 	ct := &ClientTransport{Prefix: DefaultPrefixes[0], parameters: nil}
+	err := ct.Prepare(context.Background(), nil)
+	require.Nil(t, err)
 	pp, err := ct.GetParams()
 	require.Nil(t, err)
 	require.NotNil(t, pp)

@@ -99,11 +99,14 @@ func (t *ClientTransport) Prepare(ctx context.Context, dialer func(ctx context.C
 	t.debug("prepare-b")
 	defer t.debug("prepare-e")
 	if t.parameters == nil {
-		t.sessionParams = proto.Clone(defaultParams()).(*pb.PrefixTransportParams)
-	} else {
-		// make a fresh copy of the parameters so that we don't modify the original during an active session.
-		t.sessionParams = proto.Clone(t.parameters).(*pb.PrefixTransportParams)
+		t.parameters = proto.Clone(defaultParams()).(*pb.PrefixTransportParams)
+		if t.Prefix != nil {
+			t.parameters.PrefixId = proto.Int32(int32(t.Prefix.ID()))
+		} else {
+			t.Prefix = DefaultPrefixes[PrefixID(t.parameters.GetPrefixId())]
+		}
 	}
+	t.sessionParams = proto.Clone(t.parameters).(*pb.PrefixTransportParams)
 
 	// If the user set random Prefix ID in the immutable params then we need to pick a random prefix
 	// for the sessions.
@@ -158,14 +161,14 @@ func DefaultParams() *ClientParams {
 	return &ClientParams{
 		RandomizeDstPort: false,
 		FlushPolicy:      DefaultFlush,
-		PrefixID:         int32(Rand),
+		PrefixID:         int32(Min),
 	}
 }
 
 // defaultParams returns the internal default parameters for the transport
 func defaultParams() *pb.PrefixTransportParams {
 	return &pb.PrefixTransportParams{
-		PrefixId:          proto.Int32(int32(Rand)),
+		PrefixId:          proto.Int32(int32(Min)),
 		RandomizeDstPort:  proto.Bool(false),
 		CustomFlushPolicy: proto.Int32(DefaultFlush),
 	}
@@ -292,6 +295,11 @@ func (t *ClientTransport) SetParams(p any) error {
 		}
 	} else if p == nil {
 		prefixParams = defaultParams()
+		if t.Prefix != nil {
+			prefixParams.PrefixId = proto.Int32(int32(t.Prefix.ID()))
+		} else {
+			t.Prefix = DefaultPrefixes[PrefixID(t.parameters.GetPrefixId())]
+		}
 	} else {
 		return fmt.Errorf("%w, incorrect param type", ErrBadParams)
 	}
@@ -491,7 +499,7 @@ func pickRandomPrefix(r io.Reader) (Prefix, error) {
 }
 
 func (t *ClientTransport) debug(s string) {
-	if false {
+	if true {
 		fmt.Printf("%s - %+v\n\t%+v\n\t%+v\n", s, t.Prefix, t.parameters, t.sessionParams)
 	}
 }
