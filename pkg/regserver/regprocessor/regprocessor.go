@@ -268,10 +268,6 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		return nil, ErrNoC2SBody
 	}
 
-	if c2s.GetTransport() == pb.TransportType_DTLS {
-		fmt.Printf("hi")
-	}
-
 	clientLibVer := uint(c2s.GetClientLibVersion())
 
 	// Generate seed and phantom address
@@ -297,6 +293,10 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		}
 
 		addr4 := binary.BigEndian.Uint32(phantom4.To4())
+		if c2s.GetTransport() == pb.TransportType_DTLS {
+			ip4 := phantom4.To4().String()
+			_ = ip4
+		}
 		regResp.Ipv4Addr = &addr4
 		phantomSubnetSupportsRandPort = phantom4.SupportRandomPort()
 	}
