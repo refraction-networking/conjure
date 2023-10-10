@@ -269,7 +269,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	}
 
 	if c2s.GetTransport() == pb.TransportType_DTLS {
-		_ = "test"
+		regResp.Ipv4Addr = nil
 	}
 
 	clientLibVer := uint(c2s.GetClientLibVersion())
