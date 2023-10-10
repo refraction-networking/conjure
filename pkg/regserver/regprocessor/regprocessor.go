@@ -268,6 +268,10 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		return nil, ErrNoC2SBody
 	}
 
+	if c2s.GetTransport() == pb.TransportType_DTLS {
+		_ = "test"
+	}
+
 	clientLibVer := uint(c2s.GetClientLibVersion())
 
 	// Generate seed and phantom address
