@@ -278,6 +278,8 @@ func (regManager *RegistrationManager) Cleanup() {
 
 // DecoyRegistration is a struct for tracking individual sessions that are expecting or tracking connections.
 type DecoyRegistration struct {
+	originalC2S *pb.ClientToStation
+
 	PhantomIp    net.IP
 	PhantomPort  uint16
 	PhantomProto pb.IPProto
@@ -409,44 +411,28 @@ func (reg *DecoyRegistration) IDString() string {
 	return string(secret[:regIDLen])
 }
 
-// GenerateClientToStation creates a clientToStation struct. This is used in registration sharing
-// between stations where the station notifies other stations of a registration.
-func (reg *DecoyRegistration) GenerateClientToStation() *pb.ClientToStation {
-	v4 := false
-	if reg.PhantomIp.To4() != nil {
-		v4 = true
-	}
-	v6 := !v4
-
-	//[reference] Generate ClientToStation protobuf
-	// transition := pb.C2S_Transition_C2S_SESSION_INIT
-	initProto := &pb.ClientToStation{
-		CovertAddress:       &reg.Covert,
-		DecoyListGeneration: &reg.DecoyListVersion,
-		V6Support:           &v6,
-		V4Support:           &v4,
-		Transport:           &reg.Transport,
-	}
-
-	for (proto.Size(initProto)+AES_GCM_TAG_SIZE)%3 != 0 {
-		initProto.Padding = append(initProto.Padding, byte(0))
-	}
-
-	return initProto
-}
-
 // GenerateC2SWrapper creates a C2SWrapper struct. This is used in registration sharing between
 // stations where the station notifies other stations of a registration.
 func (reg *DecoyRegistration) GenerateC2SWrapper() *pb.C2SWrapper {
-	boolHolder := true
-	c2s := reg.GenerateClientToStation()
+
+	if reg.originalC2S == nil {
+		return nil
+	}
+
+	// This prevents double sharing of the registration over the API when the original C2S creates
+	// two registrations, one for IPv4 and one for IPv6.
+	if reg.PhantomIp.To4() == nil && reg.originalC2S.GetV4Support() {
+		return nil
+	}
+
+	c2s := proto.Clone(reg.originalC2S).(*pb.ClientToStation)
 
 	if c2s.GetFlags() == nil {
 		c2s.Flags = &pb.RegistrationFlags{
-			Prescanned: &boolHolder,
+			Prescanned: proto.Bool(true),
 		}
 	} else {
-		c2s.Flags.Prescanned = &boolHolder
+		c2s.Flags.Prescanned = proto.Bool(true)
 	}
 
 	source := pb.RegistrationSource_DetectorPrescan
