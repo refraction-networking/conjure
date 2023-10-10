@@ -295,7 +295,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		addr4 := binary.BigEndian.Uint32(phantom4.To4())
 		if c2s.GetTransport() == pb.TransportType_DTLS {
 			ip4 := phantom4.To4().String()
-			_ = ip4
+			fmt.Println(ip4)
 		}
 		regResp.Ipv4Addr = &addr4
 		phantomSubnetSupportsRandPort = phantom4.SupportRandomPort()
