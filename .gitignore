@@ -9,3 +9,4 @@ cmd/registration-server/regserver
 target
 bin/
 Cargo.lock
+__pycache__/
