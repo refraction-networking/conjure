@@ -164,7 +164,6 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 		logger.Errorln("error tracking registration: ", err)
 		Stat().AddErrReg()
 		rm.AddErrReg()
-
 	}
 
 	// If registration is trying to connect to a covert address that
@@ -238,6 +237,9 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 
 func tryShareRegistrationOverAPI(reg *DecoyRegistration, apiEndpoint string, logger *log.Logger) {
 	c2a := reg.GenerateC2SWrapper()
+	if c2a == nil {
+		return
+	}
 
 	payload, err := proto.Marshal(c2a)
 	if err != nil {
@@ -294,10 +296,11 @@ func (rm *RegistrationManager) parseRegMessage(msg []byte) ([]*DecoyRegistration
 		parsed.DecoyAddress = make([]byte, 16)
 	}
 
-	// If client IP logging is disabled DO NOT parse source IP.
-	var sourceAddr, phantomAddr net.IP
+	// If client IP logging is disabled DO NOT parse source IP. The decoy address is only used when
+	// he client registered using the decoy registrar - indicating the IP of the decoy site used.
+	var sourceAddr, decoyAddress net.IP
 	sourceAddr = net.IP(parsed.GetRegistrationAddress())
-	phantomAddr = net.IP(parsed.GetDecoyAddress())
+	decoyAddress = net.IP(parsed.GetDecoyAddress())
 
 	// Register one or both of v4 and v6 based on support specified by the client
 	var newRegs []*DecoyRegistration
@@ -329,7 +332,7 @@ func (rm *RegistrationManager) parseRegMessage(msg []byte) ([]*DecoyRegistration
 
 	// log decoy connection and id string if debug logging is enabled.
 	if len(newRegs) > 0 {
-		logger.Debugf("received registration: '%v' -> '%v' %v %s\n", sourceAddr, phantomAddr, newRegs[0].IDString(), parsed.GetRegistrationSource())
+		logger.Debugf("received registration: '%v' -> '%v' %v %s\n", sourceAddr, decoyAddress, newRegs[0].IDString(), parsed.GetRegistrationSource())
 	}
 	return newRegs, nil
 }
@@ -372,6 +375,8 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 	}
 
 	reg := DecoyRegistration{
+		originalC2S: proto.Clone(c2s).(*pb.ClientToStation),
+
 		DecoyListVersion: c2s.GetDecoyListGeneration(),
 		Keys:             conjureKeys,
 		Covert:           c2s.GetCovertAddress(),

@@ -1,0 +1,9 @@
+Script to subscribe to the redis Station-to-Detector channel for registered phantoms
+
+sudo apt install python3 pip
+pip3 install redis
+pip3 install protobuf
+
+
+./run.sh
+
