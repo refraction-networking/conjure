@@ -68,9 +68,9 @@ done
 
 # # Double output channel if N_QUEUE_SETS is set in config (used for two stations or TD + CJ)
 if [[ N_QUEUE_SETS = 1 ]]; then
-	echo "Setting up with params: -i $ifcarg -c ${CJ_CLUSTER_ID} -n ${CJ_CORECOUNT} -m ${ZBALANCE_HASH_MODE} -g ${CJ_COREBASE} -d"
-	zbalance_ipc -i $ifcarg -c ${CJ_CLUSTER_ID} -n ${CJ_CORECOUNT} -m ${ZBALANCE_HASH_MODE} -g ${CJ_COREBASE} -d
+	echo "Setting up with params: -i $ifcarg -c ${CJ_CLUSTER_ID} -n ${CJ_CORECOUNT} -m ${ZBALANCE_HASH_MODE} -g ${CJ_COREBASE} -z"
+	zbalance_ipc -i $ifcarg -c ${CJ_CLUSTER_ID} -n ${CJ_CORECOUNT} -m ${ZBALANCE_HASH_MODE} -g ${CJ_COREBASE} -z
 else
-	echo "Setting up with params: -i $ifcarg -c ${CJ_CLUSTER_ID} -n ${CJ_CORECOUNT},${CJ_CORECOUNT} -m ${ZBALANCE_HASH_MODE} -g ${CJ_COREBASE} -d"
-	zbalance_ipc -i $ifcarg -c ${CJ_CLUSTER_ID} -n ${CJ_CORECOUNT},${CJ_CORECOUNT} -m ${ZBALANCE_HASH_MODE} -g ${CJ_COREBASE} -d
+	echo "Setting up with params: -i $ifcarg -c ${CJ_CLUSTER_ID} -n ${CJ_CORECOUNT},${CJ_CORECOUNT} -m ${ZBALANCE_HASH_MODE} -g ${CJ_COREBASE} -z"
+	zbalance_ipc -i $ifcarg -c ${CJ_CLUSTER_ID} -n ${CJ_CORECOUNT},${CJ_CORECOUNT} -m ${ZBALANCE_HASH_MODE} -g ${CJ_COREBASE} -z
 fi
