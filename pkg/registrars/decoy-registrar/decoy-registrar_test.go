@@ -122,7 +122,7 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 	reg := NewDecoyRegistrar()
 	reg.Width = 1
 	reg.insecureSkipVerify = true
-	pubkey := td.Assets().GetConjurePubkey()
+	pubkey := assets.Assets().GetConjurePubkey()
 
 	keys, err := core.GenerateClientSharedKeys(*pubkey)
 	require.Nil(t, err)
@@ -213,7 +213,7 @@ func TestDecoyRegSendRegistration(t *testing.T) {
 	require.Equal(t, pb.TransportType_Min, stationC2S.GetTransport())
 	require.Equal(t, pb.TransportType_Min, stationC2S.GetTransport())
 	require.Equal(t, "1.1.1.1:443", stationC2S.GetCovertAddress())
-	require.Equal(t, td.Assets().GetGeneration(), stationC2S.GetDecoyListGeneration())
+	require.Equal(t, assets.Assets().GetGeneration(), stationC2S.GetDecoyListGeneration())
 }
 
 type catchReg struct {
