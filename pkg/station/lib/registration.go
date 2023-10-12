@@ -227,6 +227,13 @@ func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 	}
 }
 
+// RegistrationExists checks if the registration is already tracked by the manager, this is
+// independent of the validity tag, this just checks to see if the registration exists.
+func (regManager *RegistrationManager) RegistrationExists(reg *DecoyRegistration) bool {
+	trackedReg := regManager.registeredDecoys.RegistrationExists(reg)
+	return trackedReg != nil
+}
+
 // GetRegistrations returns registrations associated with a specific phantom address.
 func (regManager *RegistrationManager) GetRegistrations(phantomAddr net.IP) map[string]transports.Registration {
 	regs := regManager.registeredDecoys.getRegistrations(phantomAddr)
@@ -671,6 +678,14 @@ func (r *RegisteredDecoys) getRegistrations(darkDecoyAddr net.IP) map[string]*De
 	}
 
 	return regs
+}
+
+// RegistrationExists - For use outside of this struct only (so there are no data races.)
+func (r *RegisteredDecoys) RegistrationExists(d *DecoyRegistration) *DecoyRegistration {
+	r.m.RLock()
+	defer r.m.RUnlock()
+
+	return r.registrationExists(d)
 }
 
 // TotalRegistrations return the total number of current registrations
