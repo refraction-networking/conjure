@@ -56,11 +56,11 @@ func TestRegistrationLookup(t *testing.T) {
 	}
 	t.Log(newReg)
 
-	if rm.RegistrationExists(newReg) {
+	if rm.registeredDecoys.registrationExists(newReg) != nil {
 		t.Fatalf("Registration exists, but shouldn't")
 	}
 	rm.AddRegistration(newReg)
-	if !rm.RegistrationExists(newReg) {
+	if rm.registeredDecoys.registrationExists(newReg) == nil {
 		t.Fatalf("Registration should exist, but doesn't")
 	}
 }

@@ -138,14 +138,21 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 		return
 	}
 
-	if rm.RegistrationExists(reg) {
+	// check existence and track if not exists in one mutex protected step to prevent toctou
+	// allowing more than one registration to complete the ingest pipeline for the same connection.
+	exists, err := rm.TrackRegIfNotExists(reg)
+	if err != nil {
+		logger.Errorln("error tracking registration: ", err)
+		Stat().AddErrReg()
+		rm.AddErrReg()
+		return
+	} else if exists {
 		// log phantom IP, shared secret, ipv6 support
 		logger.Debugf("Duplicate registration: %v %s\n", reg.IDString(), reg.RegistrationSource)
 		Stat().AddDupReg()
 		rm.AddDupReg()
 
-		// Track the received registration, if it is already tracked
-		// it will just update the record
+		// Track the received registration, if it is already tracked it will just update the record
 		err := rm.TrackRegistration(reg)
 		if err != nil {
 			logger.Errorln("error tracking registration: ", err)
@@ -153,17 +160,9 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 			rm.AddErrReg()
 		}
 		return
-	}
-
-	// log phantom IP, shared secret, ipv6 support
-	logger.Debugf("New registration: %s %v\n", reg.IDString(), reg.String())
-
-	// Track the received registration
-	err := rm.TrackRegistration(reg)
-	if err != nil {
-		logger.Errorln("error tracking registration: ", err)
-		Stat().AddErrReg()
-		rm.AddErrReg()
+	} else {
+		// log phantom IP, shared secret, ipv6 support
+		logger.Debugf("New registration: %s %v\n", reg.IDString(), reg.String())
 	}
 
 	// If registration is trying to connect to a covert address that
