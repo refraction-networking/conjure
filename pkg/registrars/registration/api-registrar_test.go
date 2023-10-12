@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/refraction-networking/conjure/pkg/client/assets"
 	transports "github.com/refraction-networking/conjure/pkg/transports/client"
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/refraction-networking/gotapdance/tapdance"
@@ -24,7 +25,7 @@ func TestAPIRegistrar(t *testing.T) {
 	transport, err := transports.New("min")
 	require.Nil(t, err)
 
-	_, err = tapdance.AssetsSetDir("./tests/assets")
+	_, err = assets.AssetsSetDir("./tests/assets")
 	require.Nil(t, err)
 	session := tapdance.MakeConjureSession("1.2.3.4:1234", transport)
 
