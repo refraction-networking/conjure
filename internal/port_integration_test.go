@@ -19,12 +19,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-func TestBase(T *testing.T) {
-	T.Run("TestBase", func(T *testing.T) {
-		require.Equal(T, 1, 1)
-	})
-}
-
 func TestTransportPortSelection(t *testing.T) {
 	if *debug {
 		log.SetLevel(log.DebugLevel)

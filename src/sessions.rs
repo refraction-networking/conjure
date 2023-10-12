@@ -44,6 +44,7 @@ use std::fmt;
 use std::net::IpAddr;
 use std::sync::{Arc, RwLock};
 use std::thread;
+use std::time;
 
 use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
 use redis;
@@ -369,29 +370,46 @@ fn ingest_from_pubsub(map: Arc<RwLock<HashMap<String, u128>>>) {
         .subscribe("dark_decoy_map")
         .expect("Can't subscribe to Redis");
 
+    let mut log_fail = true;
+    let log_fail_fn = |m: &str, b: &mut bool| {
+        if *b {
+            debug!("{}", m);
+            *b = false;
+        } else {
+            // busy wait if we continue to fail, but sleep to allow other things to make progress
+            // if we continue to err.
+            thread::sleep(time::Duration::from_millis(10));
+        }
+    };
+
     loop {
         let msg = match pubsub.get_message() {
             Ok(m) => m,
             Err(e) => {
-                debug!("Error reading message from redis: {}", e);
+                let m = format!("Error reading message from redis: {}", e);
+                log_fail_fn(&m, &mut log_fail);
                 continue;
             }
         };
         let payload: Vec<u8> = match msg.get_payload() {
             Ok(m) => m,
             Err(e) => {
-                debug!("Error reading payload: {}", e);
+                let m = format!("Error reading payload: {}", e);
+                log_fail_fn(&m, &mut log_fail);
                 continue;
             }
         };
         let station_to_det: StationToDetector = match Message::parse_from_bytes(&payload) {
             Ok(s2d) => s2d,
             Err(e) => {
-                debug!("failed to parse StationToDetector message {}", e);
+                let m = format!("failed to parse StationToDetector message {}", e);
+                log_fail_fn(&m, &mut log_fail);
                 continue;
             }
         };
 
+        // We have succeeded again, we can log the next failure.
+        log_fail = true;
         pubsub_handle_s2d(&map, &station_to_det)
     }
 }
