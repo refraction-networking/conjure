@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/refraction-networking/conjure/pkg/client/assets"
 	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/station/log"
 	pb "github.com/refraction-networking/conjure/proto"
@@ -220,7 +221,7 @@ func generateClientToStation(cjSession *td.ConjureSession) (*pb.ClientToStation,
 
 	//[reference] Generate ClientToStation protobuf
 	// transition := pb.C2S_Transition_C2S_SESSION_INIT
-	currentGen := td.Assets().GetGeneration()
+	currentGen := assets.Assets().GetGeneration()
 	currentLibVer := core.CurrentClientLibraryVersion()
 
 	if cjSession.Transport == nil {
