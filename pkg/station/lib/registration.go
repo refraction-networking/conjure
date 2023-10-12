@@ -200,6 +200,14 @@ func (regManager *RegistrationManager) ValidateRegistration(reg *DecoyRegistrati
 	return true, nil
 }
 
+// TrackRegIfNotExists tracks a registration if it is not already tracked and returns a bool
+// indicating whether the registration was already tracked. These are combined to prevent a
+// Time-of-Check-Time-of-Use bug that allows more than one message to be sent to the detector per
+// registration.
+func (regManager *RegistrationManager) TrackRegIfNotExists(reg *DecoyRegistration) (bool, error) {
+	return regManager.registeredDecoys.TrackIfNotExists(reg)
+}
+
 // TrackRegistration adds the registration to the map WITHOUT marking it valid.
 func (regManager *RegistrationManager) TrackRegistration(d *DecoyRegistration) error {
 	err := regManager.registeredDecoys.Track(d)
@@ -217,13 +225,6 @@ func (regManager *RegistrationManager) AddRegistration(d *DecoyRegistration) {
 	if err != nil {
 		regManager.Logger.Errorf("Error registering decoy: %s", err)
 	}
-}
-
-// RegistrationExists checks if the registration is already tracked by the manager, this is
-// independent of the validity tag, this just checks to see if the registration exists.
-func (regManager *RegistrationManager) RegistrationExists(reg *DecoyRegistration) bool {
-	trackedReg := regManager.registeredDecoys.RegistrationExists(reg)
-	return trackedReg != nil
 }
 
 // GetRegistrations returns registrations associated with a specific phantom address.
@@ -544,6 +545,28 @@ func (r *RegisteredDecoys) Track(d *DecoyRegistration) error {
 	return r.track(d)
 }
 
+// TrackIfNotExists tracks a registration if it is not already tracked and returns a bool
+// indicating whether the registration was already tracked. These are combined to prevent a
+// Time-of-Check-Time-of-Use bug that allows more than one message to be sent to the detector per
+// registration.
+//
+// For use outside of this struct (so there are no data races.)
+func (r *RegisteredDecoys) TrackIfNotExists(d *DecoyRegistration) (bool, error) {
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	if reg := r.registrationExists(d); reg != nil {
+		return true, nil
+	}
+
+	err := r.track(d)
+	if err != nil {
+		return false, err
+	}
+
+	return false, nil
+}
+
 // For use inside of this struct (so no deadlocks on struct mutex)
 func (r *RegisteredDecoys) track(d *DecoyRegistration) error {
 
@@ -677,14 +700,6 @@ func (r *RegisteredDecoys) countRegistrations(darkDecoyAddr net.IP) int {
 		return 0
 	}
 	return len(regs)
-}
-
-// RegistrationExists - For use outside of this struct only (so there are no data races.)
-func (r *RegisteredDecoys) RegistrationExists(d *DecoyRegistration) *DecoyRegistration {
-	r.m.RLock()
-	defer r.m.RUnlock()
-
-	return r.registrationExists(d)
 }
 
 // For use inside of this struct (so no deadlocks on struct mutex)
