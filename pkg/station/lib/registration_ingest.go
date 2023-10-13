@@ -17,6 +17,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/phantoms"
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 )
 
@@ -138,21 +139,14 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 		return
 	}
 
-	// check existence and track if not exists in one mutex protected step to prevent toctou
-	// allowing more than one registration to complete the ingest pipeline for the same connection.
-	exists, err := rm.TrackRegIfNotExists(reg)
-	if err != nil {
-		logger.Errorln("error tracking registration: ", err)
-		Stat().AddErrReg()
-		rm.AddErrReg()
-		return
-	} else if exists {
+	if rm.RegistrationExists(reg) {
 		// log phantom IP, shared secret, ipv6 support
 		logger.Debugf("Duplicate registration: %v %s\n", reg.IDString(), reg.RegistrationSource)
 		Stat().AddDupReg()
 		rm.AddDupReg()
 
-		// Track the received registration, if it is already tracked it will just update the record
+		// Track the received registration, if it is already tracked
+		// it will just update the record
 		err := rm.TrackRegistration(reg)
 		if err != nil {
 			logger.Errorln("error tracking registration: ", err)
@@ -160,9 +154,17 @@ func (rm *RegistrationManager) ingestRegistration(reg *DecoyRegistration) {
 			rm.AddErrReg()
 		}
 		return
-	} else {
-		// log phantom IP, shared secret, ipv6 support
-		logger.Debugf("New registration: %s %v\n", reg.IDString(), reg.String())
+	}
+
+	// log phantom IP, shared secret, ipv6 support
+	logger.Debugf("New registration: %s %v\n", reg.IDString(), reg.String())
+
+	// Track the received registration
+	err := rm.TrackRegistration(reg)
+	if err != nil {
+		logger.Errorln("error tracking registration: ", err)
+		Stat().AddErrReg()
+		rm.AddErrReg()
 	}
 
 	// If registration is trying to connect to a covert address that
@@ -346,7 +348,7 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 		conjureKeys.ConjureSeed, gen, clientLibVer, includeV6)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed phantom select: gen %d libv %d v6 %t err: %v",
+		return nil, fmt.Errorf("failed phantom select: gen %d libv %d v6 %t err: %w",
 			gen,
 			clientLibVer,
 			includeV6,
@@ -355,22 +357,22 @@ func (rm *RegistrationManager) NewRegistration(c2s *pb.ClientToStation, conjureK
 
 	var transport, ok = rm.registeredDecoys.transports[c2s.GetTransport()]
 	if !ok {
-		return nil, fmt.Errorf("unknown transport")
+		return nil, transports.ErrUnknownTransport
 	}
 
 	transportParams, err := rm.getTransportParams(c2s.GetTransport(), c2s.GetTransportParams(), clientLibVer)
 	if err != nil {
-		return nil, fmt.Errorf("error handling transport params: %s", err)
+		return nil, fmt.Errorf("error handling transport params: %w", err)
 	}
 
 	phantomPort, err := rm.getPhantomDstPort(c2s.GetTransport(), transportParams, conjureKeys.ConjureSeed, clientLibVer, phantomAddr.SupportRandomPort())
 	if err != nil {
-		return nil, fmt.Errorf("error selecting phantom dst port: %s", err)
+		return nil, fmt.Errorf("error selecting phantom dst port: %w", err)
 	}
 
 	phantomProto, err := rm.getTransportProto(c2s.GetTransport(), transportParams, clientLibVer)
 	if err != nil {
-		return nil, fmt.Errorf("error determining phantom connection proto: %s", err)
+		return nil, fmt.Errorf("error determining phantom connection proto: %w", err)
 	}
 
 	reg := DecoyRegistration{
@@ -408,7 +410,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	// Generate keys from shared secret using HKDF
 	conjureKeys, err := core.GenSharedKeys(uint(c2s.GetClientLibVersion()), c2sw.GetSharedSecret(), c2s.GetTransport())
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate keys: %v", err)
+		return nil, fmt.Errorf("failed to generate keys: %w", err)
 	}
 
 	regSrc := c2sw.GetRegistrationSource()
@@ -432,7 +434,7 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 
 	reg, err := rm.NewRegistration(c2s, &conjureKeys, includeV6, &regSrc)
 	if err != nil || reg == nil {
-		return nil, fmt.Errorf("failed to build registration: %s", err)
+		return nil, fmt.Errorf("failed to build registration: %w", err)
 	}
 
 	clientAddr := net.IP(c2sw.GetRegistrationAddress())
