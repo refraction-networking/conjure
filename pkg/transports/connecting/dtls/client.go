@@ -196,7 +196,7 @@ func (*ClientTransport) DisableRegDelay() bool {
 
 // GetDstPort returns the destination port that the client should open the phantom connection to
 func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
-	if t.Parameters == nil || !t.Parameters.GetRandomizeDstPort() {
+	if t.sessionParams == nil || !t.sessionParams.GetRandomizeDstPort() {
 		return defaultPort, nil
 	}
 
