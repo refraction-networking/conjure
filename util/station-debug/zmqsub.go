@@ -102,8 +102,7 @@ func main() {
 		}
 
 		// If client IP logging is disabled DO NOT parse source IP.
-		var sourceAddr net.IP
-		sourceAddr = net.IP(parsed.GetRegistrationAddress())
+		var sourceAddr = net.IP(parsed.GetRegistrationAddress())
 
 		if parsed.GetRegistrationPayload().GetV4Support() && sourceAddr.To4() != nil {
 			reg, err := regManager.NewRegistrationC2SWrapper(parsed, false)
@@ -114,7 +113,9 @@ func main() {
 					errors.Is(err, transports.ErrUnknownTransport) {
 					continue
 				}
-				logger.Printf("unexpected err creating registration: %v, %v", err, reg)
+
+				// print to stderr
+				println("unexpected err creating registration: %v, %v", err, reg)
 				continue
 			}
 			handleReg(logger, sourceAddr, reg)
@@ -129,7 +130,9 @@ func main() {
 					errors.Is(err, transports.ErrUnknownTransport) {
 					continue
 				}
-				logger.Printf("unexpected err creating registration: %v, %v", err, reg)
+
+				// print to stderr
+				println("unexpected err creating registration: %v, %v", err, reg)
 				continue
 			}
 			handleReg(logger, sourceAddr, reg)

@@ -10,3 +10,4 @@ target
 bin/
 Cargo.lock
 __pycache__/
+zmqsub
