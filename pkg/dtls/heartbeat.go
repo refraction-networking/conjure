@@ -2,12 +2,14 @@ package dtls
 
 import (
 	"bytes"
+	"errors"
 	"net"
 	"sync/atomic"
 	"time"
 )
 
 var maxMessageSize = 65535
+var ErrInsufficientBuffer = errors.New("buffer too small to hold the received data")
 
 type hbConn struct {
 	conn    net.Conn
@@ -80,9 +82,17 @@ func (c *hbConn) Write(b []byte) (n int, err error) {
 
 func (c *hbConn) Read(b []byte) (n int, err error) {
 	readBytes := <-c.recvCh
-	copy(b, readBytes.b)
+	if readBytes.err != nil {
+		return 0, err
+	}
 
-	return len(readBytes.b), readBytes.err
+	if len(b) < len(readBytes.b) {
+		return 0, ErrInsufficientBuffer
+	}
+
+	n = copy(b, readBytes.b)
+
+	return n, nil
 }
 
 func (c *hbConn) LocalAddr() net.Addr {

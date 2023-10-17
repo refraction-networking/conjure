@@ -151,3 +151,29 @@ func TestHeartbeatTimeout(t *testing.T) {
 	require.NotNil(t, err)
 
 }
+
+func TestHeartbeatInsufficientBuf(t *testing.T) {
+	server, client := net.Pipe()
+
+	s, err := heartbeatServer(server, conf)
+	require.Nil(t, err)
+
+	err = heartbeatClient(client, conf)
+	require.Nil(t, err)
+
+	toSend := []byte("testtt")
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		buffer := make([]byte, 1)
+		_, err := s.Read(buffer)
+		require.ErrorIs(t, err, ErrInsufficientBuffer)
+	}()
+
+	_, err = client.Write(toSend)
+	require.Nil(t, err)
+
+	wg.Wait()
+}
