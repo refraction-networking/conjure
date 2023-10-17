@@ -80,17 +80,17 @@ func (c *hbConn) Write(b []byte) (n int, err error) {
 	return c.conn.Write(b)
 }
 
-func (c *hbConn) Read(b []byte) (n int, err error) {
+func (c *hbConn) Read(b []byte) (int, error) {
 	readBytes := <-c.recvCh
 	if readBytes.err != nil {
-		return 0, err
+		return 0, readBytes.err
 	}
 
 	if len(b) < len(readBytes.b) {
 		return 0, ErrInsufficientBuffer
 	}
 
-	n = copy(b, readBytes.b)
+	n := copy(b, readBytes.b)
 
 	return n, nil
 }
