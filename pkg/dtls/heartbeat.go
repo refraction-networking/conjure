@@ -10,7 +10,7 @@ import (
 var ErrInsufficientBuffer = errors.New("buffer too small to hold the received data")
 
 type hbConn struct {
-	msgStream
+	stream msgStream
 
 	recvCh  chan errBytes
 	waiting uint32
@@ -28,7 +28,7 @@ type errBytes struct {
 func heartbeatServer(stream msgStream, config *heartbeatConfig, maxMessageSize int) (*hbConn, error) {
 	conf := validate(config)
 
-	c := &hbConn{msgStream: stream,
+	c := &hbConn{stream: stream,
 		recvCh:  make(chan errBytes),
 		timeout: conf.Interval,
 		hb:      conf.Heartbeat,
@@ -46,7 +46,7 @@ func heartbeatServer(stream msgStream, config *heartbeatConfig, maxMessageSize i
 func (c *hbConn) hbLoop() {
 	for {
 		if atomic.LoadUint32(&c.waiting) == 0 {
-			c.Close()
+			c.stream.Close()
 			return
 		}
 
@@ -59,7 +59,7 @@ func (c *hbConn) hbLoop() {
 func (c *hbConn) recvLoop() {
 	for {
 
-		n, err := c.Read(c.buffer)
+		n, err := c.stream.Read(c.buffer)
 
 		if bytes.Equal(c.hb, c.buffer[:n]) {
 			atomic.AddUint32(&c.waiting, 1)
@@ -69,6 +69,14 @@ func (c *hbConn) recvLoop() {
 		c.recvCh <- errBytes{c.buffer[:n], err}
 	}
 
+}
+
+func (c *hbConn) Close() error {
+	return c.stream.Close()
+}
+
+func (c *hbConn) Write(b []byte) (n int, err error) {
+	return c.stream.Write(b)
 }
 
 func (c *hbConn) Read(b []byte) (int, error) {
@@ -84,6 +92,22 @@ func (c *hbConn) Read(b []byte) (int, error) {
 	n := copy(b, readBytes.b)
 
 	return n, nil
+}
+
+func (c *hbConn) BufferedAmount() uint64 {
+	return c.stream.BufferedAmount()
+}
+
+func (c *hbConn) SetReadDeadline(deadline time.Time) error {
+	return c.stream.SetReadDeadline(deadline)
+}
+
+func (c *hbConn) SetBufferedAmountLowThreshold(th uint64) {
+	c.stream.SetBufferedAmountLowThreshold(th)
+}
+
+func (c *hbConn) OnBufferedAmountLow(f func()) {
+	c.stream.OnBufferedAmountLow(f)
 }
 
 // heartbeatClient sends heartbeats over conn with config
