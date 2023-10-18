@@ -12,12 +12,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var maxMsgSize = 65535
 var conf = &heartbeatConfig{Interval: 1 * time.Second, Heartbeat: []byte("hihihihihihihihihi")}
 
-func TestHeartbeatReadWrite(t *testing.T) {
-	server, client := net.Pipe()
+type mockStream struct {
+	net.Conn
+}
 
-	s, err := heartbeatServer(server, conf)
+func (*mockStream) BufferedAmount() uint64                  { return 0 }
+func (*mockStream) SetBufferedAmountLowThreshold(th uint64) {}
+func (*mockStream) OnBufferedAmountLow(f func())            {}
+
+func mockStreams() (msgStream, msgStream) {
+	server, client := net.Pipe()
+	return &mockStream{server}, &mockStream{client}
+}
+
+func TestHeartbeatReadWrite(t *testing.T) {
+	server, client := mockStreams()
+
+	s, err := heartbeatServer(server, conf, maxMsgSize)
 	require.Nil(t, err)
 
 	err = heartbeatClient(client, conf)
@@ -87,7 +101,7 @@ func TestHeartbeatReadWrite(t *testing.T) {
 }
 
 func TestHeartbeatSend(t *testing.T) {
-	server, client := net.Pipe()
+	server, client := mockStreams()
 
 	readCh := make(chan []byte)
 
@@ -128,7 +142,7 @@ func TestHeartbeatSend(t *testing.T) {
 }
 
 func TestHeartbeatTimeout(t *testing.T) {
-	server, client := net.Pipe()
+	server, client := mockStreams()
 	go func() {
 		for {
 			buffer := make([]byte, 4096)
@@ -139,7 +153,7 @@ func TestHeartbeatTimeout(t *testing.T) {
 		}
 	}()
 
-	s, err := heartbeatServer(server, conf)
+	s, err := heartbeatServer(server, conf, maxMsgSize)
 	require.Nil(t, err)
 
 	_, err = s.Write([]byte("123"))
@@ -153,9 +167,9 @@ func TestHeartbeatTimeout(t *testing.T) {
 }
 
 func TestHeartbeatInsufficientBuf(t *testing.T) {
-	server, client := net.Pipe()
+	server, client := mockStreams()
 
-	s, err := heartbeatServer(server, conf)
+	s, err := heartbeatServer(server, conf, maxMsgSize)
 	require.Nil(t, err)
 
 	err = heartbeatClient(client, conf)

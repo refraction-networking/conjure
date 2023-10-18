@@ -3,20 +3,20 @@ package dtls
 import (
 	"bytes"
 	"errors"
-	"net"
 	"sync/atomic"
 	"time"
 )
 
-var maxMessageSize = 65535
 var ErrInsufficientBuffer = errors.New("buffer too small to hold the received data")
 
 type hbConn struct {
-	conn    net.Conn
+	msgStream
+
 	recvCh  chan errBytes
 	waiting uint32
 	hb      []byte
 	timeout time.Duration
+	buffer  []byte
 }
 
 type errBytes struct {
@@ -25,13 +25,14 @@ type errBytes struct {
 }
 
 // heartbeatServer listens for heartbeat over conn with config
-func heartbeatServer(conn net.Conn, config *heartbeatConfig) (net.Conn, error) {
+func heartbeatServer(stream msgStream, config *heartbeatConfig, maxMessageSize int) (*hbConn, error) {
 	conf := validate(config)
 
-	c := &hbConn{conn: conn,
+	c := &hbConn{msgStream: stream,
 		recvCh:  make(chan errBytes),
 		timeout: conf.Interval,
 		hb:      conf.Heartbeat,
+		buffer:  make([]byte, maxMessageSize),
 	}
 
 	atomic.StoreUint32(&c.waiting, 2)
@@ -45,7 +46,7 @@ func heartbeatServer(conn net.Conn, config *heartbeatConfig) (net.Conn, error) {
 func (c *hbConn) hbLoop() {
 	for {
 		if atomic.LoadUint32(&c.waiting) == 0 {
-			c.conn.Close()
+			// c.Close()
 			return
 		}
 
@@ -57,27 +58,17 @@ func (c *hbConn) hbLoop() {
 
 func (c *hbConn) recvLoop() {
 	for {
-		// create a buffer to hold your data
-		buffer := make([]byte, maxMessageSize)
 
-		n, err := c.conn.Read(buffer)
+		n, err := c.Read(c.buffer)
 
-		if bytes.Equal(c.hb, buffer[:n]) {
+		if bytes.Equal(c.hb, c.buffer[:n]) {
 			atomic.AddUint32(&c.waiting, 1)
 			continue
 		}
 
-		c.recvCh <- errBytes{buffer[:n], err}
+		c.recvCh <- errBytes{c.buffer[:n], err}
 	}
 
-}
-
-func (c *hbConn) Close() error {
-	return c.conn.Close()
-}
-
-func (c *hbConn) Write(b []byte) (n int, err error) {
-	return c.conn.Write(b)
 }
 
 func (c *hbConn) Read(b []byte) (int, error) {
@@ -95,28 +86,8 @@ func (c *hbConn) Read(b []byte) (int, error) {
 	return n, nil
 }
 
-func (c *hbConn) LocalAddr() net.Addr {
-	return c.conn.LocalAddr()
-}
-
-func (c *hbConn) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
-}
-
-func (c *hbConn) SetDeadline(t time.Time) error {
-	return c.conn.SetDeadline(t)
-}
-
-func (c *hbConn) SetReadDeadline(t time.Time) error {
-	return c.conn.SetReadDeadline(t)
-}
-
-func (c *hbConn) SetWriteDeadline(t time.Time) error {
-	return c.conn.SetWriteDeadline(t)
-}
-
 // heartbeatClient sends heartbeats over conn with config
-func heartbeatClient(conn net.Conn, config *heartbeatConfig) error {
+func heartbeatClient(conn msgStream, config *heartbeatConfig) error {
 	conf := validate(config)
 	go func() {
 		for {
