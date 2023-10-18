@@ -46,7 +46,7 @@ func heartbeatServer(stream msgStream, config *heartbeatConfig, maxMessageSize i
 func (c *hbConn) hbLoop() {
 	for {
 		if atomic.LoadUint32(&c.waiting) == 0 {
-			// c.Close()
+			c.Close()
 			return
 		}
 
