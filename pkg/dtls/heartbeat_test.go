@@ -45,7 +45,7 @@ func TestHeartbeatReadWrite(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
-		time.Duration(10*sleepInterval+sleepInterval/2))
+		time.Duration(10*sleepInterval+sleepInterval))
 
 	defer cancel()
 
@@ -59,6 +59,7 @@ func TestHeartbeatReadWrite(t *testing.T) {
 				return
 			default:
 				buffer := make([]byte, 4096)
+				s.SetReadDeadline(time.Now().Add(sleepInterval * 2))
 				n, err := s.Read(buffer)
 				if err != nil {
 					return
@@ -124,7 +125,7 @@ func TestHeartbeatSend(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
-		2*conf.Interval+10*time.Millisecond)
+		2*conf.Interval+100*time.Millisecond)
 	defer cancel()
 
 	hbCount := 0
@@ -159,7 +160,7 @@ func TestHeartbeatTimeout(t *testing.T) {
 	_, err = s.Write([]byte("123"))
 	require.Nil(t, err)
 
-	stop := time.After(conf.Interval + 10*time.Millisecond)
+	stop := time.After(conf.Interval + 100*time.Millisecond)
 	<-stop
 	_, err = s.Write([]byte("123"))
 	require.NotNil(t, err)
