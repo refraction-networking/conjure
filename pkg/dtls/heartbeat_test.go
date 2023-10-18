@@ -16,16 +16,100 @@ var maxMsgSize = 65535
 var conf = &heartbeatConfig{Interval: 1 * time.Second, Heartbeat: []byte("hihihihihihihihihi")}
 
 type mockStream struct {
-	net.Conn
+	rddl    time.Time
+	wddl    time.Time
+	sendCh  chan<- []byte
+	recvCh  <-chan []byte
+	closeCh chan struct{}
+	closed  bool
 }
 
 func (*mockStream) BufferedAmount() uint64                  { return 0 }
 func (*mockStream) SetBufferedAmountLowThreshold(th uint64) {}
 func (*mockStream) OnBufferedAmountLow(f func())            {}
 
-func mockStreams() (msgStream, msgStream) {
-	server, client := net.Pipe()
-	return &mockStream{server}, &mockStream{client}
+func (s *mockStream) Read(b []byte) (int, error) {
+	if s.closed {
+		return 0, net.ErrClosed
+	}
+
+	if s.rddl.IsZero() {
+		select {
+		case buf := <-s.recvCh:
+			return copy(b, buf), nil
+		case <-s.closeCh:
+			return 0, net.ErrClosed
+		}
+	}
+
+	select {
+	case buf := <-s.recvCh:
+		return copy(b, buf), nil
+	case <-time.After(time.Until(s.rddl)):
+		return 0, net.ErrClosed
+	case <-s.closeCh:
+		return 0, net.ErrClosed
+	}
+}
+func (s *mockStream) Write(b []byte) (int, error) {
+
+	if s.closed {
+		return 0, net.ErrClosed
+	}
+
+	if s.wddl.IsZero() {
+		select {
+		case s.sendCh <- b:
+			return len(b), nil
+		case <-s.closeCh:
+			return 0, net.ErrClosed
+		}
+	}
+
+	select {
+	case s.sendCh <- b:
+		return len(b), nil
+	case <-time.After(time.Until(s.wddl)):
+		return 0, net.ErrClosed
+	case <-s.closeCh:
+		return 0, net.ErrClosed
+	}
+}
+
+func (s *mockStream) SetReadDeadline(t time.Time) error {
+	s.rddl = t
+	return nil
+}
+func (s *mockStream) SetWriteDeadline(t time.Time) error {
+	s.wddl = t
+	return nil
+}
+
+func (s *mockStream) Close() error {
+	if s.closed {
+		return errors.New("mockStream already closed")
+	}
+
+	s.closed = true
+
+	close(s.closeCh)
+
+	return nil
+}
+
+func mockStreams() (*mockStream, *mockStream) {
+	s2c := make(chan []byte)
+	c2s := make(chan []byte)
+	return &mockStream{
+			sendCh:  s2c,
+			recvCh:  c2s,
+			closeCh: make(chan struct{}),
+		},
+		&mockStream{
+			sendCh:  c2s,
+			recvCh:  s2c,
+			closeCh: make(chan struct{}),
+		}
 }
 
 func TestHeartbeatReadWrite(t *testing.T) {
@@ -40,22 +124,23 @@ func TestHeartbeatReadWrite(t *testing.T) {
 	sent := uint32(0)
 	recvd := uint32(0)
 	toSend := []byte("testtt")
-	sleepInterval := 100 * time.Millisecond
+	sleepInterval := 400 * time.Millisecond
 	var wg sync.WaitGroup
 
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
-		time.Duration(10*sleepInterval+sleepInterval))
+		time.Duration(10*sleepInterval+sleepInterval/2))
 
 	defer cancel()
 
 	wg.Add(1)
 	go func(ctx1 context.Context) {
 		defer wg.Done()
+		defer client.Close()
+		defer server.Close()
 		for {
 			select {
 			case <-ctx1.Done():
-				server.Close()
 				return
 			default:
 				buffer := make([]byte, 4096)
@@ -83,7 +168,9 @@ func TestHeartbeatReadWrite(t *testing.T) {
 				client.Close()
 				return
 			default:
-				_, err := client.Write(toSend)
+				err := server.SetWriteDeadline(time.Now().Add(sleepInterval * 2))
+				require.Nil(t, err)
+				_, err = client.Write(toSend)
 				if err != nil {
 					if !errors.Is(err, net.ErrClosed) {
 						t.Log("encountered error writing", err)
