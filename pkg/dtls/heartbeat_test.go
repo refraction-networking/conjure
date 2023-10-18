@@ -144,7 +144,8 @@ func TestHeartbeatReadWrite(t *testing.T) {
 				return
 			default:
 				buffer := make([]byte, 4096)
-				s.SetReadDeadline(time.Now().Add(sleepInterval * 2))
+				err := s.SetReadDeadline(time.Now().Add(sleepInterval * 2))
+				require.Nil(t, err)
 				n, err := s.Read(buffer)
 				if err != nil {
 					return
