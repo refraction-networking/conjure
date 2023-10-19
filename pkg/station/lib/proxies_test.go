@@ -288,7 +288,7 @@ func TestHalfpipeLargeWrite(t *testing.T) {
 
 	go func() {
 		b := make([]byte, 1024)
-		io.CopyBuffer(io.Discard, covertCovert, b)
+		_, _ = io.CopyBuffer(io.Discard, covertCovert, b)
 	}()
 
 	go halfPipe(clientStation, stationCovert, &wg, logger, "Up "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
