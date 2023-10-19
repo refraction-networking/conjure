@@ -154,8 +154,19 @@ func halfPipe(src net.Conn, dst net.Conn,
 	buf := make([]byte, 32*1024)
 	for {
 		nr, er := src.Read(buf)
+		if er != nil {
+			if e := generalizeErr(er); e != nil {
+				if isUpload {
+					stats.ClientConnErr = e.Error()
+				} else {
+					stats.CovertConnErr = e.Error()
+				}
+			}
+			break
+		}
 		if nr > 0 {
-			nw, ew := dst.Write(buf[0:nr])
+			toWrite := int(math.Min(float64(len(buf)), float64(nr)))
+			nw, ew := dst.Write(buf[:toWrite])
 
 			// Update stats:
 			stats.addBytes(int64(nw), isUpload)
@@ -180,16 +191,6 @@ func halfPipe(src net.Conn, dst net.Conn,
 				break
 			}
 
-		}
-		if er != nil {
-			if e := generalizeErr(er); e != nil {
-				if isUpload {
-					stats.ClientConnErr = e.Error()
-				} else {
-					stats.CovertConnErr = e.Error()
-				}
-			}
-			break
 		}
 
 		// refresh stall timeout - set both because it only happens on write so if connection is

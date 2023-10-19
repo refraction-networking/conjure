@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	mrand "math/rand"
 	"net"
 	"os"
 	"sync"
@@ -262,6 +263,41 @@ func TestHalfpipeDeadlineActual(t *testing.T) {
 
 	// covertStation will Timeout and send an EOF to covertCovert
 	require.ErrorIs(t, io.EOF, serverErr)
+
+	clientClient.Close()
+	covertCovert.Close()
+	wg.Wait()
+}
+
+// Test large writes and what happens when short write error is hit
+func TestHalfpipeLargeWrite(t *testing.T) {
+
+	inbuf := make([]byte, 32805)
+
+	n, err := mrand.Read(inbuf)
+	require.Nil(t, err)
+	require.Equal(t, len(inbuf), n)
+
+	clientClient, clientStation := net.Pipe()
+	stationCovert, covertCovert := net.Pipe()
+
+	logger := log.New(os.Stdout, "", 0)
+	logger.SetLevel(log.TraceLevel)
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	go func() {
+		b := make([]byte, 1024)
+		io.CopyBuffer(io.Discard, covertCovert, b)
+	}()
+
+	go halfPipe(clientStation, stationCovert, &wg, logger, "Up "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
+	go halfPipe(stationCovert, clientStation, &wg, logger, "Down "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
+
+	nw, err := clientClient.Write(inbuf)
+	require.Nil(t, err)
+
+	require.Equal(t, len(inbuf), nw)
 
 	clientClient.Close()
 	covertCovert.Close()
