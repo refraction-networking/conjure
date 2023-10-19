@@ -120,15 +120,16 @@ func (m *mockConn) SetWriteDeadline(t time.Time) error {
 }
 
 func TestHalfpipeDeadlineEcho(t *testing.T) {
-	if os.Getenv("HALFPIPE") == "" {
-		t.Skip("Skipping slow tests involving halfpipe timeouts")
-	}
+	// if os.Getenv("HALFPIPE") == "" {
+	// 	t.Skip("Skipping slow tests involving halfpipe timeouts")
+	// }
 
 	clientClient, clientStation := net.Pipe()
 	stationCovert, covertCovert := net.Pipe()
 
 	logger := log.New(os.Stdout, "", 0)
 	logger.SetLevel(log.TraceLevel)
+	// log.SetLevel(log.TraceLevel)
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 
@@ -271,7 +272,6 @@ func TestHalfpipeDeadlineActual(t *testing.T) {
 func TestHalfpipeLargeWrite(t *testing.T) {
 
 	inbuf := make([]byte, 32805)
-	outbuf := make([]byte, 32800)
 
 	n, err := mrand.Read(inbuf)
 	require.Nil(t, err)
@@ -285,14 +285,53 @@ func TestHalfpipeLargeWrite(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 
+	go func() { io.Copy(io.Discard, covertCovert) }()
+
 	go halfPipe(clientStation, stationCovert, &wg, logger, "Up "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
 	go halfPipe(stationCovert, clientStation, &wg, logger, "Down "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
 
 	nw, err := clientClient.Write(inbuf)
 	require.Nil(t, err)
 
-	nr, err := covertCovert.Read(outbuf)
+	require.Equal(t, len(inbuf), nw)
+
+	clientClient.Close()
+	covertCovert.Close()
+	wg.Wait()
+}
+
+// Test basic wrapped halfpipe functionality
+func TestProxyWrappersBasic(t *testing.T) {
+
+	inbuf := make([]byte, 32805)
+	outbuf := make([]byte, 32800)
+
+	n, err := mrand.Read(inbuf)
+	require.Nil(t, err)
+	require.Equal(t, len(inbuf), n)
+
+	clientClient, clientStation := net.Pipe()
+	stationCovert, covertCovert := net.Pipe()
+	defer clientClient.Close()
+	defer covertCovert.Close()
+
+	// log.SetLevel(log.TraceLevel)
+	s := &tunnelStats{proxyStats: getProxyStats()}
+
+	// wrap clientStation with a write wrapper - up is relatively arbitrary here
+	wrappedClientStation := newRater(clientStation, s, nil, up)
+
+	go func() { io.Copy(stationCovert, wrappedClientStation) }()
+	go func() { io.Copy(clientStation, stationCovert) }()
+	go func() { io.Copy(covertCovert, covertCovert) }()
+
+	n, err = clientClient.Write([]byte("ABCDEF"))
 	require.Nil(t, err)
 
-	require.Equal(t, nw, nr)
+	n1, err := clientClient.Read(outbuf)
+	require.Nil(t, err)
+	require.Equal(t, n, n1)
+
+	require.Equal(t, n, int(s.BytesUp))
+
 }

@@ -3,7 +3,6 @@ package lib
 import (
 	"errors"
 	"io"
-	"sync"
 )
 
 type direction int
@@ -24,25 +23,24 @@ type rateWrapper struct {
 	r           io.Reader
 	tunnelStats *tunnelStats
 	sharedStats *Stats
-	m           *sync.Mutex
 	d           direction
 	nonZeroHook func()
+	desc        string
 }
 
 func newRater(r io.Reader, ts *tunnelStats, s *Stats, dir direction) *rateWrapper {
-	var m sync.Mutex
 	rd := &rateWrapper{
 		r:           r,
 		tunnelStats: ts,
 		sharedStats: s,
-		m:           &m,
 	}
 	return rd
 }
 
 func (r *rateWrapper) Read(c []byte) (n int, err error) {
-	r.m.Lock()
-	defer r.m.Unlock()
+	if r == nil || r.r == nil {
+		return 0, errNotExist
+	}
 
 	n, err = r.r.Read(c)
 
@@ -62,7 +60,7 @@ func (r *rateWrapper) Read(c []byte) (n int, err error) {
 		}
 	}
 
-	if r != nil {
+	if r.nonZeroHook != nil {
 		r.nonZeroHook()
 	}
 
@@ -76,30 +74,26 @@ type errWrapper struct {
 	w io.Writer
 
 	tunnelStats *tunnelStats
-	m           *sync.Mutex
 	d           direction
+	desc        string
 }
 
-func newWriteErrWrapper(r io.Reader, ts *tunnelStats, dir direction) *errWrapper {
-	var m sync.Mutex
+func newReadErrWrapper(r io.Reader, ts *tunnelStats, dir direction) *errWrapper {
 	return &errWrapper{
 		r:           r,
 		tunnelStats: ts,
-		m:           &m,
 	}
 }
 
-func newReadErrWrapper(w io.Writer, ts *tunnelStats, dir direction) *errWrapper {
-	var m sync.Mutex
+func newWriteErrWrapper(w io.Writer, ts *tunnelStats, dir direction) *errWrapper {
 	return &errWrapper{
 		w:           w,
 		tunnelStats: ts,
-		m:           &m,
 	}
 }
 
 func (r *errWrapper) Read(c []byte) (n int, err error) {
-	if r.r == nil {
+	if r == nil || r.r == nil {
 		return 0, errNotExist
 	}
 
@@ -119,7 +113,7 @@ func (r *errWrapper) Read(c []byte) (n int, err error) {
 }
 
 func (r *errWrapper) Write(c []byte) (n int, err error) {
-	if r.w == nil {
+	if r == nil || r.w == nil {
 		return 0, errNotExist
 	}
 
