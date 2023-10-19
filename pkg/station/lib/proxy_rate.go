@@ -3,6 +3,8 @@ package lib
 import (
 	"errors"
 	"io"
+
+	"github.com/refraction-networking/conjure/pkg/station/log"
 )
 
 type direction int
@@ -43,6 +45,7 @@ func (r *rateWrapper) Read(c []byte) (n int, err error) {
 	}
 
 	n, err = r.r.Read(c)
+	log.Tracef("%s - Read %d bytes, %s", r.desc, n, err)
 
 	if n == 0 {
 		return
@@ -101,6 +104,7 @@ func (r *errWrapper) Read(c []byte) (n int, err error) {
 
 	if err != nil {
 		if e := generalizeErr(err); e != nil {
+			log.Tracef("%s - Read error: %s = %s", r.desc, err, e)
 			if r.d == up {
 				r.tunnelStats.ClientConnErr = e.Error()
 			} else {
@@ -121,6 +125,7 @@ func (r *errWrapper) Write(c []byte) (n int, err error) {
 
 	if err != nil {
 		if e := generalizeErr(err); e != nil {
+			log.Tracef("%s - Write error: %s = %s", r.desc, err, e)
 			if r.d == up {
 				r.tunnelStats.CovertConnErr = e.Error()
 

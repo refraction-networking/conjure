@@ -285,7 +285,9 @@ func TestHalfpipeLargeWrite(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 
-	go func() { io.Copy(io.Discard, covertCovert) }()
+	go func() {
+		_, _ = io.Copy(io.Discard, covertCovert)
+	}()
 
 	go halfPipe(clientStation, stationCovert, &wg, logger, "Up "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
 	go halfPipe(stationCovert, clientStation, &wg, logger, "Down "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
@@ -321,9 +323,15 @@ func TestProxyWrappersBasic(t *testing.T) {
 	// wrap clientStation with a write wrapper - up is relatively arbitrary here
 	wrappedClientStation := newRater(clientStation, s, nil, up)
 
-	go func() { io.Copy(stationCovert, wrappedClientStation) }()
-	go func() { io.Copy(clientStation, stationCovert) }()
-	go func() { io.Copy(covertCovert, covertCovert) }()
+	go func() {
+		_, _ = io.Copy(stationCovert, wrappedClientStation)
+	}()
+	go func() {
+		_, _ = io.Copy(clientStation, stationCovert)
+	}()
+	go func() {
+		_, _ = io.Copy(covertCovert, covertCovert)
+	}()
 
 	n, err = clientClient.Write([]byte("ABCDEF"))
 	require.Nil(t, err)
