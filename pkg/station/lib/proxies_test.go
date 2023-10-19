@@ -120,9 +120,9 @@ func (m *mockConn) SetWriteDeadline(t time.Time) error {
 }
 
 func TestHalfpipeDeadlineEcho(t *testing.T) {
-	// if os.Getenv("HALFPIPE") == "" {
-	// 	t.Skip("Skipping slow tests involving halfpipe timeouts")
-	// }
+	if os.Getenv("HALFPIPE") == "" {
+		t.Skip("Skipping slow tests involving halfpipe timeouts")
+	}
 
 	clientClient, clientStation := net.Pipe()
 	stationCovert, covertCovert := net.Pipe()
