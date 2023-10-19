@@ -12,11 +12,11 @@ var ErrInsufficientBuffer = errors.New("buffer too small to hold the received da
 type hbConn struct {
 	stream msgStream
 
-	recvCh  chan errBytes
-	waiting uint32
-	hb      []byte
-	timeout time.Duration
-	buffer  []byte
+	recvCh         chan errBytes
+	waiting        uint32
+	hb             []byte
+	timeout        time.Duration
+	maxMessageSize int
 }
 
 type errBytes struct {
@@ -29,10 +29,10 @@ func heartbeatServer(stream msgStream, config *heartbeatConfig, maxMessageSize i
 	conf := validate(config)
 
 	c := &hbConn{stream: stream,
-		recvCh:  make(chan errBytes),
-		timeout: conf.Interval,
-		hb:      conf.Heartbeat,
-		buffer:  make([]byte, maxMessageSize),
+		recvCh:         make(chan errBytes),
+		timeout:        conf.Interval,
+		hb:             conf.Heartbeat,
+		maxMessageSize: maxMessageSize,
 	}
 
 	atomic.StoreUint32(&c.waiting, 2)
@@ -58,15 +58,16 @@ func (c *hbConn) hbLoop() {
 
 func (c *hbConn) recvLoop() {
 	for {
+		buffer := make([]byte, c.maxMessageSize)
 
-		n, err := c.stream.Read(c.buffer)
+		n, err := c.stream.Read(buffer)
 
-		if bytes.Equal(c.hb, c.buffer[:n]) {
+		if bytes.Equal(c.hb, buffer[:n]) {
 			atomic.AddUint32(&c.waiting, 1)
 			continue
 		}
 
-		c.recvCh <- errBytes{c.buffer[:n], err}
+		c.recvCh <- errBytes{buffer[:n], err}
 	}
 
 }
