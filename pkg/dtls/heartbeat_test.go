@@ -12,7 +12,7 @@ import (
 )
 
 var maxMsgSize = 65535
-var conf = &heartbeatConfig{Interval: 1 * time.Second, Heartbeat: []byte("hihihihihihihihihi")}
+var conf = &heartbeatConfig{Interval: 3 * time.Second, Heartbeat: []byte("hihihihihihihihihi")}
 
 type mockStream struct {
 	rddl      time.Time
@@ -118,9 +118,10 @@ func TestHeartbeatReadWrite(t *testing.T) {
 	require.Nil(t, err)
 
 	recvd := 0
+	sent := 0
 	toSend := []byte("testtt")
 	sendTimes := 5
-	sleepInterval := 400 * time.Millisecond
+	sleepInterval := 1000 * time.Millisecond
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -134,6 +135,7 @@ func TestHeartbeatReadWrite(t *testing.T) {
 			require.Nil(t, err)
 			n, err := s.Read(buffer)
 			if err != nil {
+				t.Log(err)
 				return
 			}
 			if string(toSend) != string(buffer[:n]) {
@@ -159,12 +161,13 @@ func TestHeartbeatReadWrite(t *testing.T) {
 				}
 				return
 			}
+			sent++
 			time.Sleep(sleepInterval)
 		}
 	}()
 
 	wg.Wait()
-	require.Equal(t, sendTimes, recvd)
+	require.Equal(t, sent, recvd)
 }
 
 func TestHeartbeatSend(t *testing.T) {

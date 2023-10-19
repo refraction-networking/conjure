@@ -29,7 +29,7 @@ func heartbeatServer(stream msgStream, config *heartbeatConfig, maxMessageSize i
 	conf := validate(config)
 
 	c := &hbConn{stream: stream,
-		recvCh:         make(chan errBytes),
+		recvCh:         make(chan errBytes, maxMessageSize),
 		timeout:        conf.Interval,
 		hb:             conf.Heartbeat,
 		maxMessageSize: maxMessageSize,
