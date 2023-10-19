@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	mrand "math/rand"
 	"net"
 	"os"
 	"sync"
@@ -20,8 +21,6 @@ import (
 
 	"github.com/refraction-networking/conjure/pkg/station/log"
 )
-
-var errNotExist = errors.New("not implemented")
 
 // under construction - not finalized or definitive
 // TODO: flesh out this test, or disable it. The go routines have a race condition that can result
@@ -266,4 +265,34 @@ func TestHalfpipeDeadlineActual(t *testing.T) {
 	clientClient.Close()
 	covertCovert.Close()
 	wg.Wait()
+}
+
+// Test large writes and what happens when short write error is hit
+func TestHalfpipeLargeWrite(t *testing.T) {
+
+	inbuf := make([]byte, 32805)
+	outbuf := make([]byte, 32800)
+
+	n, err := mrand.Read(inbuf)
+	require.Nil(t, err)
+	require.Equal(t, len(inbuf), n)
+
+	clientClient, clientStation := net.Pipe()
+	stationCovert, covertCovert := net.Pipe()
+
+	logger := log.New(os.Stdout, "", 0)
+	logger.SetLevel(log.TraceLevel)
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	go halfPipe(clientStation, stationCovert, &wg, logger, "Up "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
+	go halfPipe(stationCovert, clientStation, &wg, logger, "Down "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
+
+	nw, err := clientClient.Write(inbuf)
+	require.Nil(t, err)
+
+	nr, err := covertCovert.Read(outbuf)
+	require.Nil(t, err)
+
+	require.Equal(t, nw, nr)
 }

@@ -130,68 +130,11 @@ func halfPipe(src net.Conn, dst net.Conn,
 		return
 	}
 
-	// using io.CopyBuffer doesn't let us see
-	// bytes / second (until very end of connect, then only avg)
-	// But io.CopyBuffer is very performant:
-	// actually doesn't use a buffer at all, just splices sockets
-	// together at the kernel level.
-	//
-	// We could try to use io.CopyN in a loop or something that
-	// gives us occasional bytes. CopyN would not splice, though
-	// (uses a LimitedReader that only calls Read)
-	//buf := bufferPool.Get().([]byte)
-	//written, err := io.CopyBuffer(dst, src, buf)
-
-	// On closer examination, it seems this code below seems about
-	// as performant. It's not using splice, but for CO comcast / curveball:
-	//				io.CopyBuffer	Read/Write
-	// curveball CPU	~2%				~2%
-	// DL 40MB time		~11.5s			~11.6s
-	// So while io.CopyBuffer is faster, it's not significantly faster
-
-	// If we run into perf problems, we can revert
-
-	buf := make([]byte, 32*1024)
-	for {
-		nr, er := src.Read(buf)
-		if nr > 0 {
-			nw, ew := dst.Write(buf[0:nr])
-
-			// Update stats:
-			stats.addBytes(int64(nw), isUpload)
-			if isUpload {
-				Stat().AddBytesUp(int64(nw))
-			} else {
-				Stat().AddBytesDown(int64(nw))
-			}
-
-			if ew == nil && nw != nr {
-				ew = io.ErrShortWrite
-			}
-
-			if ew != nil {
-				if e := generalizeErr(ew); e != nil {
-					if isUpload {
-						stats.CovertConnErr = e.Error()
-					} else {
-						stats.ClientConnErr = e.Error()
-					}
-				}
-				break
-			}
-
-		}
-		if er != nil {
-			if e := generalizeErr(er); e != nil {
-				if isUpload {
-					stats.ClientConnErr = e.Error()
-				} else {
-					stats.CovertConnErr = e.Error()
-				}
-			}
-			break
-		}
-
+	// Wrap the src reader in a rater shim that updates stats each time write is called.
+	// Set the nonZeroHook to refresh the deadline each time a non-zero byte read happens.
+	wappedErrReader := newReadErrWrapper(src, stats, isUploadDir(isUpload))
+	wrappedReader := newRater(wappedErrReader, stats, Stat(), isUploadDir(isUpload))
+	wrappedReader.nonZeroHook = func() {
 		// refresh stall timeout - set both because it only happens on write so if connection is
 		// sending traffic unidirectionally we prevent the receiving side from timing out.
 		err := src.SetDeadline(time.Now().Add(proxyStallTimeout))
@@ -205,6 +148,18 @@ func halfPipe(src net.Conn, dst net.Conn,
 			return
 		}
 	}
+
+	wrappedWriter := newWriteErrWrapper(dst, stats, isUploadDir(isUpload))
+
+	// By wrapping the src reader in a rater, we can update the stats with bytes
+	// read each time read is called and ensure that the stall timeout is refreshed.
+	// This is, in theory, the best of both worlds. We get the performance of splice,
+	// the monitoring of rate, and we don't have to manage the buffer ourselves.
+	buf := make([]byte, 32*1024)
+
+	// Discard error since we will discover it ourselves using the errWrappers or the
+	// deferred closeConn functions.
+	_, _ = io.CopyBuffer(wrappedWriter, wrappedReader, buf)
 }
 
 // Proxy take a registration and a net.Conn and forwards client traffic to the
