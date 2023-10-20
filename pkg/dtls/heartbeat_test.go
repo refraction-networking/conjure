@@ -109,12 +109,12 @@ func mockStreams() (*mockStream, *mockStream) {
 	return &mockStream{
 			sendCh:  s2c,
 			recvCh:  c2s,
-			closeCh: make(chan struct{}),
+			closeCh: make(chan struct{}, maxMsgSize),
 		},
 		&mockStream{
 			sendCh:  c2s,
 			recvCh:  s2c,
-			closeCh: make(chan struct{}),
+			closeCh: make(chan struct{}, maxMsgSize),
 		}
 }
 
