@@ -9,6 +9,8 @@ import (
 
 var ErrInsufficientBuffer = errors.New("buffer too small to hold the received data")
 
+const recvChBufSize = 64
+
 type hbConn struct {
 	stream msgStream
 
@@ -29,7 +31,7 @@ func heartbeatServer(stream msgStream, config *heartbeatConfig, maxMessageSize i
 	conf := validate(config)
 
 	c := &hbConn{stream: stream,
-		recvCh:         make(chan errBytes, maxMessageSize),
+		recvCh:         make(chan errBytes, recvChBufSize),
 		timeout:        conf.Interval,
 		hb:             conf.Heartbeat,
 		maxMessageSize: maxMessageSize,
