@@ -156,7 +156,7 @@ func halfPipe(src net.Conn, dst net.Conn,
 		nr, er := src.Read(buf)
 		if er != nil {
 			if nr > len(buf) {
-				log.Errorf("unexpected read len error - up:%t (%dB): %s", isUpload, nr, err)
+				log.Errorf("unexpected read len error - up:%t (%dB): %s", isUpload, nr, er)
 			}
 			if e := generalizeErr(er); e != nil {
 				if isUpload {

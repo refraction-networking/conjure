@@ -22,8 +22,6 @@ import (
 	"github.com/refraction-networking/conjure/pkg/station/log"
 )
 
-var errNotExist = errors.New("not implemented")
-
 // under construction - not finalized or definitive
 // TODO: flesh out this test, or disable it. The go routines have a race condition that can result
 // in the test being useless.
@@ -80,14 +78,14 @@ type mockConn struct {
 
 func (m *mockConn) Read(b []byte) (n int, err error) {
 	if m.read == nil {
-		return 0, errNotExist
+		return 0, nil
 	}
 	return m.read(b)
 }
 
 func (m *mockConn) Write(b []byte) (n int, err error) {
 	if m.write == nil {
-		return 0, errNotExist
+		return 0, nil
 	}
 	return m.write(b)
 }
@@ -95,7 +93,7 @@ func (m *mockConn) Write(b []byte) (n int, err error) {
 // Close closes the connection.
 func (m *mockConn) Close() error {
 	if m.close == nil {
-		return errNotExist
+		return nil
 	}
 	return m.close()
 }
@@ -301,5 +299,46 @@ func TestHalfpipeLargeWrite(t *testing.T) {
 
 	clientClient.Close()
 	covertCovert.Close()
+	wg.Wait()
+}
+
+func TestHalfpipeUnreliableReader(t *testing.T) {
+
+	inbuf := make([]byte, 32805)
+
+	n, err := mrand.Read(inbuf)
+	require.Nil(t, err)
+	require.Equal(t, len(inbuf), n)
+
+	r := 0
+
+	clientConn := &mockConn{
+		read: func(b []byte) (n int, err error) {
+			// It cant possibly send all of the data in one write so the read will return a bad
+			// length here.
+			copy(b, inbuf)
+			// swap this to 0 to see the case where the read len is incorrect, but no error occurs
+			if r != 0 {
+				return len(inbuf), nil
+			} else {
+				return len(inbuf), errors.New("bad length")
+			}
+		},
+		write: func(b []byte) (n int, err error) {
+			return len(b), nil
+		},
+		close: func() error {
+			return nil
+		},
+	}
+	stationConn := &mockConn{}
+
+	logger := log.New(os.Stdout, "", 0)
+	logger.SetLevel(log.TraceLevel)
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
+
+	go halfPipe(clientConn, stationConn, wg, logger, "Up "+"XXXXXX", &tunnelStats{proxyStats: getProxyStats()})
+
 	wg.Wait()
 }
