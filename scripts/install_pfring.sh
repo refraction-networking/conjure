@@ -33,7 +33,7 @@ else
 	make install
 	mkdir -p /local/include/linux/
 	cp linux/pf_ring.h /usr/local/include/linux/
-	cd ..
-	make
+	cd ../userland
+	make all
 	make install
 fi
