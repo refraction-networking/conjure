@@ -1,18 +1,21 @@
 package main
 
 import (
+	"errors"
 	"flag"
-	//"fmt"
-	zmq "github.com/pebbe/zmq4"
 	golog "log"
 	"net"
 	"os"
 	"strconv"
 
+	zmq "github.com/pebbe/zmq4"
+
 	// "github.com/refraction-networking/conjure/pkg/dtls/dnat"
 	// "github.com/refraction-networking/conjure/pkg/transports/connecting/dtls"
-	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/phantoms"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
+	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/transports"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
@@ -27,9 +30,11 @@ var enabledTransports = map[pb.TransportType]cj.Transport{
 	pb.TransportType_Prefix: prefix.Transport{},
 }
 
-func handleReg(logger *log.Logger, source net.IP, reg *cj.DecoyRegistration) {
+var i int = 0
 
-	logger.Printf("%v %v:%v %+v\n", source, reg.PhantomProto, net.JoinHostPort(reg.PhantomIp.String(), strconv.FormatUint(uint64(reg.PhantomPort), 10)), reg)
+func handleReg(logger *log.Logger, source net.IP, reg *cj.DecoyRegistration) {
+	i += 1
+	logger.Printf("%d %v %v:%v %+v\n", i, source, reg.PhantomProto, net.JoinHostPort(reg.PhantomIp.String(), strconv.FormatUint(uint64(reg.PhantomPort), 10)), reg)
 }
 
 func main() {
@@ -73,7 +78,6 @@ func main() {
 		}
 	}
 
-
 	for {
 		msg, err := sub.RecvBytes(0)
 		if err != nil {
@@ -98,26 +102,40 @@ func main() {
 		}
 
 		// If client IP logging is disabled DO NOT parse source IP.
-		var sourceAddr net.IP
-		sourceAddr = net.IP(parsed.GetRegistrationAddress())
+		var sourceAddr = net.IP(parsed.GetRegistrationAddress())
 
 		if parsed.GetRegistrationPayload().GetV4Support() && sourceAddr.To4() != nil {
 			reg, err := regManager.NewRegistrationC2SWrapper(parsed, false)
 			if err != nil {
-				logger.Printf("Failed to create registration: %v", err)
-				return
+				if errors.Is(err, phantoms.ErrLegacyMissingAddrs) ||
+					errors.Is(err, phantoms.ErrLegacyAddrSelectBug) ||
+					errors.Is(err, phantoms.ErrLegacyV0SelectionBug) ||
+					errors.Is(err, transports.ErrUnknownTransport) {
+					continue
+				}
+
+				// print to stderr
+				println("unexpected err creating registration: %v, %v", err, reg)
+				continue
 			}
 			handleReg(logger, sourceAddr, reg)
 		}
 
+		if parsed.GetRegistrationPayload().GetV6Support() {
+			reg, err := regManager.NewRegistrationC2SWrapper(parsed, true)
+			if err != nil {
+				if errors.Is(err, phantoms.ErrLegacyMissingAddrs) ||
+					errors.Is(err, phantoms.ErrLegacyAddrSelectBug) ||
+					errors.Is(err, phantoms.ErrLegacyV0SelectionBug) ||
+					errors.Is(err, transports.ErrUnknownTransport) {
+					continue
+				}
 
-	        if parsed.GetRegistrationPayload().GetV6Support() {
-		    reg, err := regManager.NewRegistrationC2SWrapper(parsed, true)
-		    if err != nil {
-		        logger.Printf("Failed to create registration: %v", err)
-			return
-		    }
-		    handleReg(logger, sourceAddr, reg)
+				// print to stderr
+				println("unexpected err creating registration: %v, %v", err, reg)
+				continue
+			}
+			handleReg(logger, sourceAddr, reg)
 		}
 
 	}

@@ -7,3 +7,6 @@ pip3 install protobuf
 
 ./run.sh
 
+
+DTLS transport is not added yet, so there will be NO registrations for sessions using a DTLS
+transport seen printed. I am not sure if it will print an error or not.
