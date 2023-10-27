@@ -14,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/curve25519"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/refraction-networking/conjure/internal/conjurepath"
 	tests "github.com/refraction-networking/conjure/internal/testutils"
@@ -497,4 +499,76 @@ func TestPrefixEndToEnd(t *testing.T) {
 			require.True(t, bytes.Equal(message, cbuf), "%s\n%s", string(message), string(cbuf))
 		}
 	}
+}
+
+func TestPrefixClientSetSessionParams(t *testing.T) {
+
+	ct := &ClientTransport{Prefix: DefaultPrefixes[0], parameters: nil}
+	err := ct.Prepare(context.Background(), nil)
+	require.Nil(t, err)
+	pp := defaultParams()
+	pp.PrefixId = proto.Int32(int32(OpenSSH2))
+	pp.CustomFlushPolicy = proto.Int32(int32(NoAddedFlush))
+	require.False(t, pp.GetRandomizeDstPort())
+
+	app, err := anypb.New(pp)
+	require.Nil(t, err)
+	err = ct.SetSessionParams(app)
+	require.Nil(t, err)
+	// Set session params should overwrite the prefix and port randomization parameters
+	// since the fliush policy was unset (DefaultFlush), the session flush policy should be set to
+	// the flush policy indicated by the prefix.
+	require.Equal(t, OpenSSH2, PrefixID(ct.sessionParams.GetPrefixId()))
+	require.False(t, ct.sessionParams.GetRandomizeDstPort())
+	require.Equal(t, NoAddedFlush, ct.sessionParams.GetCustomFlushPolicy())
+
+	// the dialer client parameters should remain unchanged
+	require.Equal(t, DefaultPrefixes[0].ID(), PrefixID(ct.parameters.GetPrefixId()))
+
+	// =================================== //
+
+	ct = &ClientTransport{Prefix: DefaultPrefixes[0], parameters: &pb.PrefixTransportParams{CustomFlushPolicy: proto.Int32(int32(FlushAfterPrefix))}}
+	err = ct.Prepare(context.Background(), nil)
+	require.Nil(t, err)
+	pp = defaultParams()
+	pp.PrefixId = proto.Int32(int32(OpenSSH2))
+	require.False(t, pp.GetRandomizeDstPort())
+
+	app, err = anypb.New(pp)
+	require.Nil(t, err)
+	err = ct.SetSessionParams(app)
+	require.Nil(t, err)
+	// Set session params should overwrite the prefix and port randomization parameters
+	// since the flush policy was SET (FlushAfterPrefix), the session flush policy should be set to
+	// the flush policy indicated by the client params.
+	require.Equal(t, OpenSSH2, PrefixID(ct.sessionParams.GetPrefixId()))
+	require.False(t, ct.sessionParams.GetRandomizeDstPort())
+	require.Equal(t, FlushAfterPrefix, ct.sessionParams.GetCustomFlushPolicy())
+
+	// the dialer client parameters should remain unchanged
+	require.Equal(t, DefaultPrefixes[0].ID(), PrefixID(ct.parameters.GetPrefixId()))
+
+	// =================================== //
+
+	ct = &ClientTransport{Prefix: DefaultPrefixes[0], parameters: &pb.PrefixTransportParams{CustomFlushPolicy: proto.Int32(int32(FlushAfterPrefix))}}
+	err = ct.Prepare(context.Background(), nil)
+	require.Nil(t, err)
+	pp = defaultParams()
+	pp.PrefixId = proto.Int32(int32(OpenSSH2))
+	require.False(t, pp.GetRandomizeDstPort())
+
+	app, err = anypb.New(pp)
+	require.Nil(t, err)
+	err = ct.SetSessionParams(app, true)
+	require.Nil(t, err)
+	// Set session params should overwrite the prefix and port randomization parameters
+	// since the flush policy was SET (FlushAfterPrefix), the session flush policy should be set to
+	// the flush policy indicated by the client params even though we are setting with the
+	// unchecked flag enabled.
+	require.Equal(t, OpenSSH2, PrefixID(ct.sessionParams.GetPrefixId()))
+	require.False(t, ct.sessionParams.GetRandomizeDstPort())
+	require.Equal(t, FlushAfterPrefix, ct.sessionParams.GetCustomFlushPolicy())
+
+	// the dialer client parameters should remain unchanged
+	require.Equal(t, DefaultPrefixes[0].ID(), PrefixID(ct.parameters.GetPrefixId()))
 }
