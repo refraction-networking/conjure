@@ -16,6 +16,7 @@ import (
 	"math/big"
 	"time"
 
+	"filippo.io/keygen"
 	"github.com/pion/dtls/v2/pkg/protocol/handshake"
 	"golang.org/x/crypto/hkdf"
 )
@@ -36,7 +37,7 @@ func clientHelloRandomFromSeed(seed []byte) ([handshake.RandomBytesLength]byte, 
 func getPrivkey(seed []byte) (*ecdsa.PrivateKey, error) {
 	randSource := hkdf.New(sha256.New, seed, nil, nil)
 
-	privkey, err := ecdsa.GenerateKey(elliptic.P256(), &Not1Reader{r: randSource})
+	privkey, err := keygen.ECDSALegacy(elliptic.P256(), randSource)
 	if err != nil {
 		return &ecdsa.PrivateKey{}, err
 	}

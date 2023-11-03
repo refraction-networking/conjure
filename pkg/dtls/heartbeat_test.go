@@ -131,7 +131,7 @@ func TestHeartbeatReadWrite(t *testing.T) {
 	sent := 0
 	toSend := []byte("testtt")
 	sendTimes := 3
-	sleepInterval := conf.Interval / 2
+	sleepInterval := conf.Interval/2 + 100*time.Millisecond
 	var wg sync.WaitGroup
 
 	ctx, cancel := context.WithTimeout(context.Background(), sleepInterval*5+sleepInterval/2)
