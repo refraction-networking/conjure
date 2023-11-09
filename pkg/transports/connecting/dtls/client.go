@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -214,18 +215,52 @@ func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 		ctxtimeout, cancel := context.WithTimeout(ctx, *timeout)
 		defer cancel()
 
-		conn, errListen := t.listen(ctxtimeout, dialer, address)
-		if errListen != nil {
-			// fallback to dial
-			conn, errDial := t.dial(ctx, dialer, address)
-			if errDial != nil {
-				return nil, fmt.Errorf("error listening: %v, error dialing: %v", errListen, errDial)
+		connCh := make(chan net.Conn, 2)
+		errCh := make(chan error, 2)
+
+		go func() {
+			conn, errListen := t.listen(ctxtimeout, dialer, address)
+			if errListen != nil {
+				errCh <- errListen
 			}
 
-			return conn, nil
+			connCh <- conn
+		}()
+
+		go func() {
+			conn, errDial := t.dial(ctx, dialer, address)
+			if errDial != nil {
+				errCh <- errDial
+			}
+
+			connCh <- conn
+		}()
+
+		var errs []error
+		for i := 0; i < 2; i++ {
+			select {
+			case conn := <-connCh:
+				if conn != nil {
+					return conn, nil // success, so return the connection
+				}
+			case err := <-errCh:
+				if err != nil { // store the error
+					errs = append(errs, err)
+				}
+			}
 		}
 
-		return conn, nil
+		// combine errors into a single error
+		var combinedErr error
+		if len(errs) > 0 {
+			errStrings := make([]string, len(errs))
+			for i, err := range errs {
+				errStrings[i] = err.Error()
+			}
+			combinedErr = fmt.Errorf(strings.Join(errStrings, "; "))
+		}
+
+		return nil, combinedErr
 	}
 
 	return dtlsDialer, nil
