@@ -45,7 +45,6 @@ type ClientTransport struct {
 	psk                 []byte
 	stunServer          string
 	disableIRWorkaround bool
-	listenTimeout       *time.Duration
 }
 
 type ClientConfig struct {
@@ -133,7 +132,6 @@ func (t *ClientTransport) SetParams(p any) error {
 	case *ClientConfig:
 		t.stunServer = params.STUNServer
 		t.disableIRWorkaround = params.DisableIRWorkaround
-		t.listenTimeout = params.ListenTimeout
 	}
 
 	return nil
@@ -206,20 +204,11 @@ func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 
 func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 	dtlsDialer := func(ctx context.Context, network, localAddr, address string) (net.Conn, error) {
-		// Create a context that will automatically cancel after 5 seconds or when the existing context is cancelled, whichever comes first.
-		timeout := t.listenTimeout
-		if timeout == nil {
-			time := defaultListenTime
-			timeout = &time
-		}
-		ctxtimeout, cancel := context.WithTimeout(ctx, *timeout)
-		defer cancel()
-
 		connCh := make(chan net.Conn, 2)
 		errCh := make(chan error, 2)
 
 		go func() {
-			conn, errListen := t.listen(ctxtimeout, dialer, address)
+			conn, errListen := t.listen(ctx, dialer, address)
 			if errListen != nil {
 				errCh <- errListen
 			}
