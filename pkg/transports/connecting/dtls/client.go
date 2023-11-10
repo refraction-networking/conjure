@@ -229,7 +229,10 @@ func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 		if first.err == nil {
 			// Interrupt the other dial
 			cancel()
-			<-results
+			second := <-results
+			if second.conn != nil {
+				_ = second.conn.Close()
+			}
 			return first.conn, nil
 		}
 
