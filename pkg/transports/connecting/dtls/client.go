@@ -204,52 +204,41 @@ func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 
 func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 	dtlsDialer := func(ctx context.Context, network, localAddr, address string) (net.Conn, error) {
-		connCh := make(chan net.Conn, 2)
-		errCh := make(chan error, 2)
+
+		dialCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		type result struct {
+			conn net.Conn
+			err  error
+		}
+
+		results := make(chan result, 2)
 
 		go func() {
-			conn, errListen := t.listen(ctx, dialer, address)
-			if errListen != nil {
-				errCh <- errListen
-			}
-
-			connCh <- conn
+			conn, err := t.listen(dialCtx, dialer, address)
+			results <- result{conn, err}
 		}()
 
 		go func() {
-			conn, errDial := t.dial(ctx, dialer, address)
-			if errDial != nil {
-				errCh <- errDial
-			}
-
-			connCh <- conn
+			conn, err := t.dial(dialCtx, dialer, address)
+			results <- result{conn, err}
 		}()
 
-		var errs []error
-		for i := 0; i < 2; i++ {
-			select {
-			case conn := <-connCh:
-				if conn != nil {
-					return conn, nil // success, so return the connection
-				}
-			case err := <-errCh:
-				if err != nil { // store the error
-					errs = append(errs, err)
-				}
-			}
+		first := <-results
+		if first.err == nil {
+			// Interrupt the other dial
+			cancel()
+			<-results
+			return first.conn, nil
 		}
 
-		// combine errors into a single error
-		var combinedErr error
-		if len(errs) > 0 {
-			errStrings := make([]string, len(errs))
-			for i, err := range errs {
-				errStrings[i] = err.Error()
-			}
-			combinedErr = fmt.Errorf(strings.Join(errStrings, "; "))
+		second := <-results
+		if second.err == nil {
+			return second.conn, nil
 		}
 
-		return nil, combinedErr
+		return nil, fmt.Errorf(strings.Join([]string{first.err.Error(), second.err.Error()}, "; "))
 	}
 
 	return dtlsDialer, nil
