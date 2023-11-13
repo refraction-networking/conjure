@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 
 	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
@@ -72,8 +71,8 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 		return nil, fmt.Errorf("transport params is not *pb.DTLSTransportParams")
 	}
 
-	connCh := make(chan net.Conn, 2)
-	errCh := make(chan error, 2)
+	// connCh := make(chan net.Conn, 2)
+	// errCh := make(chan error, 2)
 
 	// go func() {
 
@@ -117,43 +116,52 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 	// 	connCh <- dtlsConn
 	// }()
 
-	go func() {
-		conn, err := t.dtlsListener.AcceptWithContext(ctx, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept, Unordered: params.GetUnordered()})
-		if err != nil {
-			errCh <- fmt.Errorf("error accepting dtls connection from secret: %v", err)
-			return
-		}
-		logip := net.ParseIP(reg.GetRegistrationAddress())
-		t.logListenSuccess(&logip)
+	// go func() {
+	// 	conn, err := t.dtlsListener.AcceptWithContext(ctx, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept, Unordered: params.GetUnordered()})
+	// 	if err != nil {
+	// 		errCh <- fmt.Errorf("error accepting dtls connection from secret: %v", err)
+	// 		return
+	// 	}
+	// 	logip := net.ParseIP(reg.GetRegistrationAddress())
+	// 	t.logListenSuccess(&logip)
 
-		connCh <- conn
-	}()
+	// 	connCh <- conn
+	// }()
 
-	var errs []error
-	for i := 0; i < 2; i++ {
-		select {
-		case conn := <-connCh:
-			if conn != nil {
-				return conn, nil // success, so return the connection
-			}
-		case err := <-errCh:
-			if err != nil { // store the error
-				errs = append(errs, err)
-			}
-		}
+	// var errs []error
+	// for i := 0; i < 2; i++ {
+	// 	select {
+	// 	case conn := <-connCh:
+	// 		if conn != nil {
+	// 			return conn, nil // success, so return the connection
+	// 		}
+	// 	case err := <-errCh:
+	// 		if err != nil { // store the error
+	// 			errs = append(errs, err)
+	// 		}
+	// 	}
+	// }
+
+	// // combine errors into a single error
+	// var combinedErr error
+	// if len(errs) > 0 {
+	// 	errStrings := make([]string, len(errs))
+	// 	for i, err := range errs {
+	// 		errStrings[i] = err.Error()
+	// 	}
+	// 	combinedErr = fmt.Errorf(strings.Join(errStrings, "; "))
+	// }
+
+	// return nil, combinedErr // if we reached here, both attempts failed
+
+	conn, err := t.dtlsListener.AcceptWithContext(ctx, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept, Unordered: params.GetUnordered()})
+	if err != nil {
+		return nil, fmt.Errorf("error accepting dtls connection from secret: %v", err)
 	}
+	logip := net.ParseIP(reg.GetRegistrationAddress())
+	t.logListenSuccess(&logip)
 
-	// combine errors into a single error
-	var combinedErr error
-	if len(errs) > 0 {
-		errStrings := make([]string, len(errs))
-		for i, err := range errs {
-			errStrings[i] = err.Error()
-		}
-		combinedErr = fmt.Errorf(strings.Join(errStrings, "; "))
-	}
-
-	return nil, combinedErr // if we reached here, both attempts failed
+	return conn, nil
 }
 
 func (Transport) GetDstPort(libVersion uint, seed []byte, params any) (uint16, error) {
