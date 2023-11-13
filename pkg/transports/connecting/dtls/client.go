@@ -227,21 +227,21 @@ func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 		first := <-results
 		if first.err == nil {
 			// Interrupt the other dial
-			cancel()
-			second := <-results
-			if second.conn != nil {
-				_ = second.conn.Close()
-			}
-			return first.conn, nil
+			// cancel()
+			// second := <-results
+			// if second.conn != nil {
+			// 	_ = second.conn.Close()
+			// }
+			// return first.conn, nil
 		}
 
-		second := <-results
-		if second.err == nil {
-			return second.conn, nil
-		}
+		// second := <-results
+		// if second.err == nil {
+		// 	return second.conn, nil
+		// }
 
 		// TODO: once our minimum golang version is >= 1.20 change this to "%w; %w"
-		return nil, fmt.Errorf("%w; %s", first.err, second.err)
+		return nil, fmt.Errorf("%w", first.err)
 	}
 
 	return dtlsDialer, nil
