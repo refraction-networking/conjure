@@ -204,36 +204,35 @@ func (t *ClientTransport) GetDstPort(seed []byte) (uint16, error) {
 func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 	dtlsDialer := func(ctx context.Context, network, localAddr, address string) (net.Conn, error) {
 
-		dialCtx, cancel := context.WithCancel(ctx)
-		defer cancel()
+		// dialCtx, cancel := context.WithCancel(ctx)
+		// defer cancel()
 
-		type result struct {
-			conn net.Conn
-			err  error
-		}
+		// type result struct {
+		// 	conn net.Conn
+		// 	err  error
+		// }
 
-		results := make(chan result, 2)
+		// results := make(chan result, 2)
 
 		// go func() {
 		// 	conn, err := t.listen(dialCtx, dialer, address)
 		// 	results <- result{conn, err}
 		// }()
 
-		go func() {
-			conn, err := t.dial(dialCtx, dialer, address)
-			results <- result{conn, err}
-		}()
+		// go func() {
+		return t.dial(ctx, dialer, address)
+		// }()
 
-		first := <-results
-		if first.err == nil {
-			// Interrupt the other dial
-			// cancel()
-			// second := <-results
-			// if second.conn != nil {
-			// 	_ = second.conn.Close()
-			// }
-			// return first.conn, nil
-		}
+		// first := <-results
+		// if first.err == nil {
+		// Interrupt the other dial
+		// cancel()
+		// second := <-results
+		// if second.conn != nil {
+		// 	_ = second.conn.Close()
+		// }
+		// return first.conn, nil
+		// }
 
 		// second := <-results
 		// if second.err == nil {
@@ -241,7 +240,7 @@ func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 		// }
 
 		// TODO: once our minimum golang version is >= 1.20 change this to "%w; %w"
-		return nil, fmt.Errorf("%w", first.err)
+		// return nil, fmt.Errorf("%w", first.err)
 	}
 
 	return dtlsDialer, nil
