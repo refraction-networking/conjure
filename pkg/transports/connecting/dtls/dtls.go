@@ -6,7 +6,6 @@ import (
 	"net"
 	"strings"
 
-	"github.com/libp2p/go-reuseport"
 	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/core/interfaces"
 	"github.com/refraction-networking/conjure/pkg/dtls"
@@ -76,47 +75,47 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 	connCh := make(chan net.Conn, 2)
 	errCh := make(chan error, 2)
 
-	go func() {
+	// go func() {
 
-		is4 := reg.PhantomIP().To4() != nil
+	// 	is4 := reg.PhantomIP().To4() != nil
 
-		clientAddr := &net.UDPAddr{}
+	// 	clientAddr := &net.UDPAddr{}
 
-		if is4 {
-			clientAddr = &net.UDPAddr{IP: params.SrcAddr4.GetIP(), Port: int(params.SrcAddr4.GetPort())}
-		} else {
-			clientAddr = &net.UDPAddr{IP: params.SrcAddr6.GetIP(), Port: int(params.SrcAddr6.GetPort())}
-		}
+	// 	if is4 {
+	// 		clientAddr = &net.UDPAddr{IP: params.SrcAddr4.GetIP(), Port: int(params.SrcAddr4.GetPort())}
+	// 	} else {
+	// 		clientAddr = &net.UDPAddr{IP: params.SrcAddr6.GetIP(), Port: int(params.SrcAddr6.GetPort())}
+	// 	}
 
-		err := t.DNAT.AddEntry(&clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
-		if err != nil {
-			errCh <- fmt.Errorf("error adding DNAT entry: %v", err)
-			return
-		}
+	// 	err := t.DNAT.AddEntry(&clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
+	// 	if err != nil {
+	// 		errCh <- fmt.Errorf("error adding DNAT entry: %v", err)
+	// 		return
+	// 	}
 
-		// reuseport checks for local address and distinguishes between v4 and v6
-		laddr := &net.UDPAddr{}
-		if is4 {
-			laddr = &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: listenPort}
-		} else {
-			laddr = &net.UDPAddr{IP: net.ParseIP("[::]"), Port: listenPort}
-		}
+	// 	// reuseport checks for local address and distinguishes between v4 and v6
+	// 	laddr := &net.UDPAddr{}
+	// 	if is4 {
+	// 		laddr = &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: listenPort}
+	// 	} else {
+	// 		laddr = &net.UDPAddr{IP: net.ParseIP("[::]"), Port: listenPort}
+	// 	}
 
-		udpConn, err := reuseport.Dial("udp", laddr.String(), clientAddr.String())
-		if err != nil {
-			errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
-			return
-		}
+	// 	udpConn, err := reuseport.Dial("udp", laddr.String(), clientAddr.String())
+	// 	if err != nil {
+	// 		errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
+	// 		return
+	// 	}
 
-		dtlsConn, err := dtls.ClientWithContext(ctx, udpConn, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept, Unordered: params.GetUnordered()})
-		if err != nil {
-			errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
-			return
-		}
-		t.logDialSuccess(&clientAddr.IP)
+	// 	dtlsConn, err := dtls.ClientWithContext(ctx, udpConn, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept, Unordered: params.GetUnordered()})
+	// 	if err != nil {
+	// 		errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
+	// 		return
+	// 	}
+	// 	t.logDialSuccess(&clientAddr.IP)
 
-		connCh <- dtlsConn
-	}()
+	// 	connCh <- dtlsConn
+	// }()
 
 	go func() {
 		conn, err := t.dtlsListener.AcceptWithContext(ctx, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept, Unordered: params.GetUnordered()})
