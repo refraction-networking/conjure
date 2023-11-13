@@ -214,10 +214,10 @@ func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 
 		results := make(chan result, 2)
 
-		go func() {
-			conn, err := t.listen(dialCtx, dialer, address)
-			results <- result{conn, err}
-		}()
+		// go func() {
+		// 	conn, err := t.listen(dialCtx, dialer, address)
+		// 	results <- result{conn, err}
+		// }()
 
 		go func() {
 			conn, err := t.dial(dialCtx, dialer, address)
