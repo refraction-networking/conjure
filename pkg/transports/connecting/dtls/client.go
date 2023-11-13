@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -241,7 +240,7 @@ func (t *ClientTransport) WrapDial(dialer dialFunc) (dialFunc, error) {
 			return second.conn, nil
 		}
 
-		return nil, fmt.Errorf(strings.Join([]string{first.err.Error(), second.err.Error()}, "; "))
+		return nil, fmt.Errorf("%w; %w", first.err, second.err)
 	}
 
 	return dtlsDialer, nil
