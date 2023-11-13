@@ -3,6 +3,7 @@ module github.com/refraction-networking/conjure
 go 1.18
 
 require (
+	filippo.io/keygen v0.0.0-20230306160926-5201437acf8e
 	github.com/BurntSushi/toml v1.3.2
 	github.com/flynn/noise v1.0.0
 	github.com/go-redis/redis/v8 v8.11.5
@@ -26,16 +27,15 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib v1.5.0
-	golang.org/x/crypto v0.14.0
-	golang.org/x/net v0.17.0
-	golang.org/x/sys v0.13.0
-	google.golang.org/grpc v1.58.0
+	golang.org/x/crypto v0.15.0
+	golang.org/x/net v0.18.0
+	golang.org/x/sys v0.14.0
+	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.31.0
 )
 
 require (
 	filippo.io/bigmod v0.0.1 // indirect
-	filippo.io/keygen v0.0.0-20230306160926-5201437acf8e // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -48,7 +48,7 @@ require (
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sergeyfrolov/bsbuffer v0.0.0-20180903213811-94e85abb8507 // indirect
-	golang.org/x/text v0.13.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
