@@ -17,7 +17,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/station/log"
 )
 
-const proxyStallTimeout = 30 * time.Second
+const proxyStallTimeout = 2 * time.Minute
 const resetIfNotClosedAfter = 10 // seconds
 
 var (
