@@ -18,6 +18,7 @@ import (
 )
 
 const proxyStallTimeout = 2 * time.Minute
+const proxyInitTimeout = 30 * time.Second
 const resetIfNotClosedAfter = 10 // seconds
 
 var (
@@ -119,12 +120,12 @@ func halfPipe(src net.Conn, dst net.Conn,
 	}()
 
 	// Set deadlines in case either side disappears.
-	err := src.SetDeadline(time.Now().Add(proxyStallTimeout))
+	err := src.SetDeadline(time.Now().Add(proxyInitTimeout))
 	if err != nil {
 		logger.Errorln("error setting deadline for src conn: ", tag)
 		return
 	}
-	err = dst.SetDeadline(time.Now().Add(proxyStallTimeout))
+	err = dst.SetDeadline(time.Now().Add(proxyInitTimeout))
 	if err != nil {
 		logger.Errorln("error setting deadline for dst conn: ", tag)
 		return
