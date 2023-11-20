@@ -125,6 +125,15 @@ fn is_tls_app_pkt(tcp_pkt: &TcpPacket) -> bool {
     payload.len() > 5 && payload[0] == TLS_TYPE_APPLICATION_DATA
 }
 
+fn check_dtls_cid(payload: &[u8]) -> bool {
+    if payload.len() < 3 {
+        return false;
+    }
+
+    // 0x19 for DTLS application data with CID, 0xfefd for DTLS version 1.2
+    payload[0] == 0x19 && payload[1] == 0xfe && payload[2] == 0xfd
+}
+
 impl PerCoreGlobal {
     // // frame_len is supposed to be the length of the whole Ethernet frame. We're
     // // only passing it here for plumbing reasons, and just for stat reporting.
@@ -155,6 +164,11 @@ impl PerCoreGlobal {
 
         let flow = Flow::new_udp(ip_pkt, &udp_pkt);
         if self.check_for_tagged_flow(&flow, ip_pkt).is_some() {
+            return;
+        }
+
+        if check_dtls_cid(udp_pkt.payload()) {
+            self.forward_pkt(ip_pkt);
             return;
         }
 
