@@ -55,6 +55,9 @@ pub struct PerCoreGlobal {
     //events_buf: Events,
     pub tun: TunTap,
 
+    // tun for forwarding dtls with CID seperately
+    pub dtls_cid_tun: TunTap,
+
     pub stats: PerCoreStats,
 
     // ZMQ socket for sending information to the dark decoy application
@@ -110,6 +113,9 @@ impl PerCoreGlobal {
         let tun = TunTap::new(IFF_TUN, &format!("tun{the_lcore}")).unwrap();
         tun.set_up().unwrap();
 
+        let dtls_cid_tun = TunTap::new(IFF_TUN, &format!("tundtlscid{the_lcore}")).unwrap();
+        dtls_cid_tun.set_up().unwrap();
+
         // Setup ZMQ
         let zmq_ctx = zmq::Context::new();
         let zmq_sock = zmq_ctx.socket(zmq::PUB).unwrap();
@@ -151,6 +157,7 @@ impl PerCoreGlobal {
             // sessions: HashMap::new(),
             flow_tracker: FlowTracker::new(),
             tun,
+            dtls_cid_tun,
             stats: PerCoreStats::new(),
             zmq_sock,
             filter_list: value.detector_filter_list,

@@ -4,6 +4,7 @@ use std::panic;
 use std::slice;
 use std::str;
 use std::u8;
+use tuntap::TunTap;
 
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
 use pnet::packet::ip::IpNextHeaderProtocols;
@@ -134,6 +135,31 @@ fn check_dtls_cid(payload: &[u8]) -> bool {
     payload[0] == 0x19 && payload[1] == 0xfe && payload[2] == 0xfd
 }
 
+fn forward_pkt(tun: &mut TunTap, ip_pkt: &IpPacket) {
+    let data = match ip_pkt {
+        IpPacket::V4(p) => p.packet(),
+        IpPacket::V6(p) => p.packet(),
+    };
+
+    let mut tun_pkt = Vec::with_capacity(data.len() + 4);
+    // These mystery bytes are a link-layer header; the kernel "receives"
+    // tun packets as if they were really physically "received". Since they
+    // weren't physically received, they do not have an Ethernet header. It
+    // looks like the tun setup has its own type of header, rather than just
+    // making up a fake Ethernet header.
+    let raw_hdr = match ip_pkt {
+        IpPacket::V4(_p) => [0x00, 0x01, 0x08, 0x00],
+        IpPacket::V6(_p) => [0x00, 0x01, 0x86, 0xdd],
+    };
+    tun_pkt.extend_from_slice(&raw_hdr);
+    tun_pkt.extend_from_slice(data);
+
+    tun.send(tun_pkt).unwrap_or_else(|e| {
+        warn!("failed to send packet into tun: {}", e);
+        0
+    });
+}
+
 impl PerCoreGlobal {
     // // frame_len is supposed to be the length of the whole Ethernet frame. We're
     // // only passing it here for plumbing reasons, and just for stat reporting.
@@ -168,7 +194,7 @@ impl PerCoreGlobal {
         }
 
         if check_dtls_cid(udp_pkt.payload()) {
-            self.forward_pkt(ip_pkt);
+            forward_pkt(&mut self.dtls_cid_tun, ip_pkt);
             return;
         }
 
@@ -191,7 +217,7 @@ impl PerCoreGlobal {
                     // Update expire time if necessary
                     self.flow_tracker.update_phantom_flow(&cj_flow);
                     // Forward packet...
-                    self.forward_pkt(ip_pkt);
+                    forward_pkt(&mut self.tun, ip_pkt);
                     // TODO: if it was RST or FIN, close things
                     return Some(());
                 }
@@ -231,7 +257,7 @@ impl PerCoreGlobal {
                     // Update expire time if necessary
                     self.flow_tracker.update_phantom_flow(&cj_flow);
                     // Forward packet...
-                    self.forward_pkt(ip_pkt);
+                    forward_pkt(&mut self.tun, ip_pkt);
                     // TODO: if it was RST or FIN, close things
                     return;
                 }
@@ -266,31 +292,6 @@ impl PerCoreGlobal {
         } else {
             self.check_connect_test_str(&flow, &tcp_pkt);
         }
-    }
-
-    fn forward_pkt(&mut self, ip_pkt: &IpPacket) {
-        let data = match ip_pkt {
-            IpPacket::V4(p) => p.packet(),
-            IpPacket::V6(p) => p.packet(),
-        };
-
-        let mut tun_pkt = Vec::with_capacity(data.len() + 4);
-        // These mystery bytes are a link-layer header; the kernel "receives"
-        // tun packets as if they were really physically "received". Since they
-        // weren't physically received, they do not have an Ethernet header. It
-        // looks like the tun setup has its own type of header, rather than just
-        // making up a fake Ethernet header.
-        let raw_hdr = match ip_pkt {
-            IpPacket::V4(_p) => [0x00, 0x01, 0x08, 0x00],
-            IpPacket::V6(_p) => [0x00, 0x01, 0x86, 0xdd],
-        };
-        tun_pkt.extend_from_slice(&raw_hdr);
-        tun_pkt.extend_from_slice(data);
-
-        self.tun.send(tun_pkt).unwrap_or_else(|e| {
-            warn!("failed to send packet into tun: {}", e);
-            0
-        });
     }
 
     fn check_dark_decoy_tag(&mut self, flow: &Flow, tcp_pkt: &TcpPacket) -> bool {
