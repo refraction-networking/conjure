@@ -60,35 +60,36 @@ build_or_rebuild_iptables() {
 }
 
 tun_setup_fn () {
-    if [[ $# -lt 2 ]]; then
+    if [[ $# -lt 3 ]]; then
         exit_msg "script broken, tun_setup requires tun id and ip table name"
     fi
 
     local N=$1
     local table=$2
-    ip tuntap del mode tun tun${N}
-    do_or_die "ip tuntap add mode tun tun${N}"
-    do_or_die "sysctl -w net.ipv4.conf.tun${N}.rp_filter=0"
+    local port=$3
+    ip tuntap del mode tun ${N}
+    do_or_die "ip tuntap add mode tun ${N}"
+    do_or_die "sysctl -w net.ipv4.conf.${N}.rp_filter=0"
 
-    local rule_condition="iif tun${N} lookup ${table}"
+    local rule_condition="iif ${N} lookup ${table}"
     # Check if the rule exists
     local output=$(ip rule show | grep "$rule_condition")
     if ! [[ -n "$output" ]]; then
         # if not, add it
-        do_or_die "ip rule add iif tun${N} lookup ${table}"
+        do_or_die "ip rule add iif ${N} lookup ${table}"
     fi
 
     # not sure if we need to do rule below for every tun
     # `RTNETLink answers: File exists` means the route is already there; harmless, but can we avoid it?
-    ip route add local 0.0.0.0/0 dev tun${N} table ${table}
+    ip route add local 0.0.0.0/0 dev ${N} table ${table}
 
 
-    do_or_die "iptables -t nat -I CJ_PREROUTING 1 -p tcp -i tun${N} -j DNAT --to ${IP4_ADDR}:41245"
-    do_or_die "iptables -t nat -I CJ_PREROUTING 1 -p udp -i tun${N} -j DNAT --to ${IP4_ADDR}:41245"
-    do_or_die "ip6tables -t nat -I CJ_PREROUTING 1 -p tcp -i tun${N} -j DNAT --to ${IP6_ADDR}:41245"
-    do_or_die "ip6tables -t nat -I CJ_PREROUTING 1 -p udp -i tun${N} -j DNAT --to ${IP6_ADDR}:41245"
-    do_or_die "iptables -I CJ_INPUT 1 -i tun${N} -j ACCEPT"
-    do_or_die "ip6tables -I CJ_INPUT 1 -i tun${N} -j ACCEPT"
+    do_or_die "iptables -t nat -I CJ_PREROUTING 1 -p tcp -i ${N} -j DNAT --to ${IP4_ADDR}:${port}"
+    do_or_die "iptables -t nat -I CJ_PREROUTING 1 -p udp -i ${N} -j DNAT --to ${IP4_ADDR}:${port}"
+    do_or_die "ip6tables -t nat -I CJ_PREROUTING 1 -p tcp -i ${N} -j DNAT --to ${IP6_ADDR}:${port}"
+    do_or_die "ip6tables -t nat -I CJ_PREROUTING 1 -p udp -i ${N} -j DNAT --to ${IP6_ADDR}:${port}"
+    do_or_die "iptables -I CJ_INPUT 1 -i ${N} -j ACCEPT"
+    do_or_die "ip6tables -I CJ_INPUT 1 -i ${N} -j ACCEPT"
 }
 
 
@@ -132,10 +133,14 @@ build_or_rebuild_iptables filter CJ_INPUT INPUT
 # The tunnel numbers do not match the core index per the OS,
 # but instead match the count of cores being used by conjure.
 echo "Setting up devices tun{${OFFSET}..$((OFFSET + CORE_COUNT -1 ))}, adding rules for them, and turning off RP filters."
-for CORE in `seq $OFFSET $((OFFSET + CORE_COUNT -1 +1 ))` # +1 for connecting UDP transport DNAT injection
+for CORE in `seq $OFFSET $((OFFSET + CORE_COUNT -1 ))`
 do
-    tun_setup_fn ${CORE} ${rule_table_name}
+    tun_setup_fn tun${CORE} ${rule_table_name} 41245
+    tun_setup_fn tundtlscid${CORE} ${rule_table_name} 41246
 done
+
+# for DTLS tun interface to setup DNAT table for DTLS client-to-station connetions
+tun_setup_fun tun$((OFFSET + CORE_COUNT -1 +1 )) ${rule_table_name} 41245
 
 echo "Setting up hugepages"
 if [ ! -d "/mnt/hugepages" ]; then
