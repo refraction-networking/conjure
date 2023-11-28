@@ -437,3 +437,9 @@ message DnsResponse {
     optional bool clientconf_outdated = 2;
     optional RegistrationResponse bidirectional_response = 3;
 }
+
+message OneShotData {
+    optional bytes id = 1;
+    optional string covert = 2;
+    optional bytes early_data = 3;
+}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -18,6 +19,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
+	zerorttdtls "github.com/refraction-networking/conjure/pkg/transports/zerortt/dtls"
 	pb "github.com/refraction-networking/conjure/proto"
 )
 
@@ -160,6 +162,12 @@ func main() {
 	wg.Add(1)
 	go regManager.HandleRegUpdates(ctx, regChan, wg)
 	go connManager.acceptConnections(ctx, regManager, logger)
+
+	if err := zerorttdtls.Listen(func(covert string, clientConn net.Conn) {
+		fmt.Printf("got connection: %v -> %v, covert: %v\n", clientConn.LocalAddr(), clientConn.RemoteAddr(), covert)
+	}, privkey); err != nil {
+		logger.Fatalf("error listening one-shot dtls: %v", err)
+	}
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
