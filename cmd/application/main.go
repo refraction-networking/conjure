@@ -12,10 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/refraction-networking/conjure/pkg/dtls/dnat"
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/station/log"
-	"github.com/refraction-networking/conjure/pkg/transports/connecting/dtls"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
@@ -63,33 +61,6 @@ func main() {
 	conf.RegConfig.ConnectingStats = connManager
 
 	regManager := cj.NewRegistrationManager(conf.RegConfig)
-
-	logIPDTLS := func(logger func(asn uint, cc, tp string)) func(*net.IP) {
-		return func(ip *net.IP) {
-			cc, err := regManager.GeoIP.CC(*ip)
-			if err != nil {
-				return
-			}
-
-			var asn uint = 0
-			if cc != "unk" {
-				asn, err = regManager.GeoIP.ASN(*ip)
-				if err != nil {
-					return
-				}
-			}
-
-			logger(asn, cc, "dtls")
-		}
-	}
-
-	dtlsbuilder := dnat.NewDNAT
-	dtlsTransport, err := dtls.NewTransport(logIPDTLS(connManager.AddAuthFailConnecting), logIPDTLS(connManager.AddOtherFailConnecting), logIPDTLS(connManager.AddCreatedToDialSuccessfulConnecting), logIPDTLS(connManager.AddCreatedToListenSuccessfulConnecting), dtlsbuilder)
-
-	if err != nil {
-		log.Fatalf("failed to setup dtls: %v", err)
-	}
-	enabledTransports[pb.TransportType_DTLS] = dtlsTransport
 
 	sharedLogger = regManager.Logger
 	logger := sharedLogger
