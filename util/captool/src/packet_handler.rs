@@ -176,20 +176,16 @@ impl PacketHandler {
             return AnonymizeTypes::None;
         }
 
+	for excepted_subnet in &self.excepted_subnets {
+	    if excepted_subnet.contains(&src)  ||  excepted_subnet.contains(&dst) {
+		return AnonymizeTypes::None;
+	    }
+	}
+        
         for target_subnet in &self.target_subnets {
             if target_subnet.contains(&src) {
-		for excepted_subnet in &self.excepted_subnets {
-		    if excepted_subnet.contains(&src) {
-			return AnonymizeTypes::None;
-		    }
-		}
                 return AnonymizeTypes::Download;
             } else if target_subnet.contains(&dst) {
-		for excepted_subnet in &self.excepted_subnets {
-                    if excepted_subnet.contains(&dst) {
-                        return AnonymizeTypes::None;
-                    }
-                }
                 return AnonymizeTypes::Upload;
             }
         }
