@@ -244,7 +244,11 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 		tunStats.TransportOpts = paramStrs
 	}
 
-	covertConn, err := net.Dial("tcp", reg.Covert)
+	ProxyWithTunStats(clientConn, logger, reg.Covert, reg.IDString(), tunStats, reg.Flags.GetProxyHeader())
+}
+
+func ProxyWithTunStats(clientConn net.Conn, logger *log.Logger, id, covert string, tunStats *tunnelStats, writeProxyHeader bool) {
+	covertConn, err := net.Dial("tcp", covert)
 	if e := generalizeErr(err); e != nil {
 		tunStats.CovertDialErr = e.Error()
 	}
@@ -259,7 +263,7 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 
 	defer covertConn.Close()
 
-	if reg.Flags.GetProxyHeader() {
+	if writeProxyHeader {
 		err = writePROXYHeader(covertConn, clientConn.RemoteAddr().String())
 		if err != nil {
 			logger.Errorf("failed to send PROXY header: %s", err)
@@ -272,8 +276,8 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 
 	getProxyStats().addSession()
 
-	go halfPipe(clientConn, covertConn, &wg, logger, "Up "+reg.IDString(), tunStats)
-	go halfPipe(covertConn, clientConn, &wg, logger, "Down "+reg.IDString(), tunStats)
+	go halfPipe(clientConn, covertConn, &wg, logger, "Up "+id, tunStats)
+	go halfPipe(covertConn, clientConn, &wg, logger, "Down "+id, tunStats)
 	wg.Wait()
 	getProxyStats().removeSession()
 
