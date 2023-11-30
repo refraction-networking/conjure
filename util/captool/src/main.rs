@@ -71,6 +71,10 @@ struct Args {
     #[arg(short, long)]
     t: String,
 
+    /// Excluded Subnet -- subnet to exclude from capturing
+    #[arg(long)]
+    except: Option<String>,
+
     /// Limits the total number of packets collected to N.
     #[arg(long)]
     lp: Option<u64>,
@@ -211,16 +215,25 @@ fn main() -> Result<(), Box<dyn Error>> {
     let limit_state = limits.into_limiter(key_list, Arc::clone(&flag));
 
     let limiter = if unlimited { None } else { Some(limit_state) };
-    let target_subnets = parse_targets(args.t);
+    let target_subnets = parse_subnets(args.t);
     if target_subnets.is_empty() {
         error!("no valid target subnets provided{HELP}");
         Err("no valid target subnets provided")?;
+    }
+
+    let mut excepted_subnets = vec![];
+    match args.except{
+	Some(subnets) => {
+    	    excepted_subnets = parse_subnets(subnets);
+	}
+	None => {}
     }
 
     let handler = Arc::new(Mutex::new(PacketHandler::create(
         &args.asn_db,
         &args.cc_db,
         target_subnets,
+        excepted_subnets,
         limiter,
         cc_list,
         asn_list,
@@ -520,7 +533,7 @@ fn read_packets<T, W>(
     debug!("thread {id} shutting down")
 }
 
-fn parse_targets(input: String) -> Vec<IpNet> {
+fn parse_subnets(input: String) -> Vec<IpNet> {
     // vec!["192.122.190.0/24".parse()?]
     if input.is_empty() {
         return vec![];
@@ -530,7 +543,7 @@ fn parse_targets(input: String) -> Vec<IpNet> {
     for s in input.split(',') {
         if let Ok(subnet) = s.trim().parse() {
             out.push(subnet);
-            debug!("adding target: {subnet}");
+            debug!("adding subnet: {subnet}");
         } else {
             warn!("failed to parse subnet: \"{s}\" continuing");
         }
