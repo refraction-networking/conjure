@@ -139,8 +139,6 @@ fn check_dtls_cid(payload: &[u8]) -> bool {
         Ok(f) => f,
     };
 
-    
-
     // 0x19 for DTLS application data with CID, 0xfefd for DTLS version 1.2
     payload[0] == 0x19 && payload[1] == 0xfe && payload[2] == 0xfd
 }
