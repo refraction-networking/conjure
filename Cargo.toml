@@ -3,11 +3,11 @@ name = "rust_dark_decoy"
 version = "0.0.1"
 authors = ["Eric Wustrow <ewust@colorado.edu>"]
 include = ["src/*"]
-links="tapdance"
-build="build.rs"
+links = "tapdance"
+build = "build.rs"
 
 [build-dependencies]
-cc="^1.0.3"
+cc = "^1.0.3"
 
 
 [lib]
@@ -16,10 +16,14 @@ crate-type = ["rlib", "staticlib"]
 
 [dependencies]
 toml = "0.7"
-serde = {version="1.0", features=["derive"]}
+serde = { version = "1.0", features = ["derive"] }
 libc = "0.2"
-aes-gcm = { version="^0.10.3", features=["aes"]}
-time = {version="0.3.28", features=["macros", "formatting", "local-offset"]}
+aes-gcm = { version = "^0.10.3", features = ["aes"] }
+time = { version = "0.3.28", features = [
+    "macros",
+    "formatting",
+    "local-offset",
+] }
 pnet = "0.33"
 arrayref = "0.3"
 log = "0.4"
@@ -34,3 +38,4 @@ hex = "0.4"
 digest = "0.10"
 zmq = "0.9"
 redis = "0.23"
+webrtc-dtls = "0.8.0"

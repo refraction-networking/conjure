@@ -1,10 +1,12 @@
 use libc::size_t;
+use std::io::Cursor;
 use std::os::raw::c_void;
 use std::panic;
 use std::slice;
 use std::str;
 use std::u8;
 use tuntap::TunTap;
+use webrtc_dtls::record_layer::RecordLayer;
 
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
 use pnet::packet::ip::IpNextHeaderProtocols;
@@ -130,6 +132,14 @@ fn check_dtls_cid(payload: &[u8]) -> bool {
     if payload.len() < 3 {
         return false;
     }
+
+    let mut reader = Cursor::new(payload);
+    let record = match RecordLayer::unmarshal(&mut reader) {
+        Err(e) => return false,
+        Ok(f) => f,
+    };
+
+    
 
     // 0x19 for DTLS application data with CID, 0xfefd for DTLS version 1.2
     payload[0] == 0x19 && payload[1] == 0xfe && payload[2] == 0xfd
