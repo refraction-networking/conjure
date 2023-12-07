@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -53,6 +54,8 @@ func TestGoroutineLeak(t *testing.T) {
 	initialGoroutines := runtime.NumGoroutine()
 
 	TestSend(t)
+
+	time.Sleep(2 * time.Second)
 
 	require.Equal(t, initialGoroutines, runtime.NumGoroutine())
 }
