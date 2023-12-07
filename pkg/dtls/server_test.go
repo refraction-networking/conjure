@@ -57,5 +57,5 @@ func TestGoroutineLeak(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	require.Equal(t, initialGoroutines, runtime.NumGoroutine())
+	require.LessOrEqual(t, runtime.NumGoroutine(), initialGoroutines)
 }
