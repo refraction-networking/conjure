@@ -71,6 +71,7 @@ func (c *hbConn) recvLoop() {
 
 		if err != nil {
 			c.recvCh <- errBytes{nil, err}
+			return
 		}
 
 		c.recvCh <- errBytes{buffer[:n], err}
