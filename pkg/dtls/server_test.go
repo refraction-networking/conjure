@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -14,8 +13,6 @@ import (
 var sharedSecret = []byte("hihihihihihihihihihihihihihihihi")
 
 func TestSend(t *testing.T) {
-
-	initialGoroutines := runtime.NumGoroutine()
 
 	size := 65535
 	toSend := make([]byte, size)
@@ -43,15 +40,19 @@ func TestSend(t *testing.T) {
 
 	c, err := Client(client, &Config{PSK: sharedSecret, SCTP: ClientOpen})
 	require.Nil(t, err)
+	defer c.Close()
 
 	n, err := c.Write(toSend)
 	require.Nil(t, err)
 	require.Equal(t, len(toSend), n)
 
-	c.Close()
-
 	wg.Wait()
+}
 
-	time.Sleep(time.Second)
+func TestGoroutineLeak(t *testing.T) {
+	initialGoroutines := runtime.NumGoroutine()
+
+	TestSend(t)
+
 	require.Equal(t, initialGoroutines, runtime.NumGoroutine())
 }
