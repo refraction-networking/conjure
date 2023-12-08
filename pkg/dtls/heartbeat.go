@@ -63,6 +63,7 @@ func (c *hbConn) hbLoop() {
 		timer := time.NewTimer(c.timeout)
 		select {
 		case <-c.closed:
+			timer.Stop()
 			return
 		case <-timer.C:
 			continue
@@ -166,6 +167,7 @@ func (c *hbClient) sendLoop() {
 		timer := time.NewTimer(c.conf.Interval / 2)
 		select {
 		case <-c.closed:
+			timer.Stop()
 			return
 		case <-timer.C:
 			continue
