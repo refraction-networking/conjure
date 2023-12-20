@@ -1798,8 +1798,7 @@ dependencies = [
 [[package]]
 name = "webrtc-dtls"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32b140b953f986e97828aa33ec6318186b05d862bee689efbc57af04a243e832"
+source = "git+https://github.com/mingyech/webrtc?rev=3eb64ca994e5f12efd2da1573ecc61fbb04e7f49#3eb64ca994e5f12efd2da1573ecc61fbb04e7f49"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -1817,7 +1816,7 @@ dependencies = [
  "rand",
  "rand_core",
  "rcgen",
- "ring 0.16.20",
+ "ring 0.17.6",
  "rustls",
  "sec1",
  "serde",
@@ -1834,13 +1833,11 @@ dependencies = [
 [[package]]
 name = "webrtc-util"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1adc96bee68417e1f4d19dd7698124a7f859db55ae2fd3eedbbb7e732f614735"
+source = "git+https://github.com/mingyech/webrtc?rev=3eb64ca994e5f12efd2da1573ecc61fbb04e7f49#3eb64ca994e5f12efd2da1573ecc61fbb04e7f49"
 dependencies = [
  "async-trait",
  "bitflags 1.3.2",
  "bytes",
- "cc",
  "ipnet",
  "lazy_static",
  "libc",

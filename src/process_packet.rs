@@ -6,7 +6,11 @@ use std::slice;
 use std::str;
 use std::u8;
 use tuntap::TunTap;
-use webrtc_dtls::record_layer::RecordLayer;
+use webrtc_dtls::cipher_suite::cipher_suite_aes_128_gcm_sha256::CipherSuiteAes128GcmSha256;
+use webrtc_dtls::cipher_suite::CipherSuite;
+use webrtc_dtls::content::ContentType;
+use webrtc_dtls::handshake::handshake_random;
+use webrtc_dtls::record_layer::record_layer_header;
 
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
 use pnet::packet::ip::IpNextHeaderProtocols;
@@ -17,6 +21,8 @@ use pnet::packet::udp::UdpPacket;
 use pnet::packet::Packet;
 // use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
+use webrtc_dtls::record_layer::record_layer_header::RecordLayerHeader;
+
 //use elligator;
 use flow_tracker::{Flow, FlowNoSrcPort};
 // use dd_selector::DDIpSelector;
@@ -26,6 +32,8 @@ use signalling::{C2SWrapper, RegistrationSource};
 use util::IpPacket;
 use PerCoreGlobal;
 
+use crate::c_api;
+
 const TLS_TYPE_APPLICATION_DATA: u8 = 0x17;
 const SPECIAL_PACKET_PAYLOAD: &str = "'This must be Thursday,' said Arthur to himself, sinking low over his beer. 'I never could get the hang of Thursdays.'";
 // Domain which this DNS encoding is representing: "xCKe9ECO5lNwXgd5Q25w0C2qUR7whltkA8BbyNokGIp5rzzm0hc7yqbR.FAP3S9w7oLrvvei7IphdwZEKUvF5iZeSdtDFEDc6cIDiv11aTNkOp08k.mRISHvoeSWSgMOjkbR2un5XKpJEZIK31Bc2obUGRIoY2tpxm6RUV5nOU.SuifuqZ"
@@ -34,6 +42,9 @@ const SPECIAL_UDP_PAYLOAD: &[u8] = b"\x38xCKe9ECO5lNwXgd5Q25w0C2qUR7whltkA8BbyNo
 //const SQUID_PROXY_PORT: u16 = 1234;
 
 //const STREAM_TIMEOUT_NS: u64 = 120*1000*1000*1000; // 120 seconds
+
+const CID_SIZE: usize = 8;
+const PRIV_KEY_SIZE: usize = 32;
 
 fn get_ip_packet<'p>(eth_pkt: &'p EthernetPacket) -> Option<IpPacket<'p>> {
     let payload = eth_pkt.payload();
@@ -128,21 +139,6 @@ fn is_tls_app_pkt(tcp_pkt: &TcpPacket) -> bool {
     payload.len() > 5 && payload[0] == TLS_TYPE_APPLICATION_DATA
 }
 
-fn check_dtls_cid(payload: &[u8]) -> bool {
-    if payload.len() < 3 {
-        return false;
-    }
-
-    let mut reader = Cursor::new(payload);
-    let record = match RecordLayer::unmarshal(&mut reader) {
-        Err(e) => return false,
-        Ok(f) => f,
-    };
-
-    // 0x19 for DTLS application data with CID, 0xfefd for DTLS version 1.2
-    payload[0] == 0x19 && payload[1] == 0xfe && payload[2] == 0xfd
-}
-
 fn forward_pkt(tun: &mut TunTap, ip_pkt: &IpPacket) {
     let data = match ip_pkt {
         IpPacket::V4(p) => p.packet(),
@@ -201,7 +197,9 @@ impl PerCoreGlobal {
             return;
         }
 
-        if check_dtls_cid(udp_pkt.payload()) {
+        if self.check_dtls_cid(udp_pkt.payload()) {
+            self.flow_tracker
+                .new_phantom_session(&FlowNoSrcPort::from_flow(&flow));
             forward_pkt(&mut self.dtls_cid_tun, ip_pkt);
             return;
         }
@@ -210,6 +208,54 @@ impl PerCoreGlobal {
             let flow = Flow::new_udp(ip_pkt, &udp_pkt);
             self.check_udp_test_str(&flow, &udp_pkt);
         }
+    }
+
+    fn check_dtls_cid(&mut self, payload: &[u8]) -> bool {
+        if payload.len() < 3 {
+            return false;
+        }
+
+        let mut reader = Cursor::new(payload);
+        let record = match RecordLayerHeader::unmarshal_cid(CID_SIZE, &mut reader) {
+            Ok(record) => record,
+            Err(_) => return false,
+        };
+
+        if record.content_type != ContentType::ConnectionID {
+            return false;
+        }
+
+        let start = record_layer_header::RECORD_LAYER_HEADER_SIZE + CID_SIZE;
+        if payload.len() < (start + PRIV_KEY_SIZE) {
+            // pkt too small to contain key
+            return false;
+        }
+
+        let mut representative = payload[start..start + PRIV_KEY_SIZE].to_vec();
+        representative[31] &= 0x3f;
+
+        let mut shared_secret = [0u8; 32];
+        c_api::c_get_shared_secret_from_tag(
+            &self.priv_key,
+            &mut representative,
+            &mut shared_secret,
+        );
+
+        let content = payload[start + PRIV_KEY_SIZE..].to_vec();
+        let mut cipher = CipherSuiteAes128GcmSha256::new(false);
+        if cipher
+            .init(
+                &shared_secret,
+                &[0u8; handshake_random::HANDSHAKE_RANDOM_LENGTH],
+                &[0u8; handshake_random::HANDSHAKE_RANDOM_LENGTH],
+                false,
+            )
+            .is_err()
+        {
+            return false;
+        }
+
+        return cipher.decrypt(&content).is_ok();
     }
 
     fn check_for_tagged_flow(&mut self, flow: &Flow, ip_pkt: &IpPacket) -> Option<()> {

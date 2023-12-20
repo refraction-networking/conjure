@@ -14,6 +14,7 @@ extern crate serde;
 extern crate time;
 extern crate toml;
 extern crate tuntap; // https://github.com/ewust/tuntap.rs
+extern crate webrtc_dtls;
 extern crate zmq;
 
 use std::mem::transmute;

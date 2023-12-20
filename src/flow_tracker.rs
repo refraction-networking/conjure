@@ -9,6 +9,8 @@ use pnet::packet::udp::UdpPacket;
 use sessions::{SessionTracker, Taggable};
 use util::{precise_time_ns, IpPacket};
 
+use crate::sessions::SessionDetails;
+
 // All members are stored in host-order, even src_ip and dst_ip.
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 pub struct Flow {
@@ -282,6 +284,22 @@ impl FlowTracker {
 
     pub fn is_phantom_session(&self, flow: &FlowNoSrcPort) -> bool {
         self.phantom_flows.is_tracked_session(flow)
+    }
+
+    pub fn new_phantom_session(&mut self, flow: &FlowNoSrcPort) {
+        self.phantom_flows.add_session(
+            match SessionDetails::new(
+                &flow.src_ip.to_string(),
+                &flow.dst_ip.to_string(),
+                30,
+                0,
+                flow.dst_port,
+                flow.proto,
+            ) {
+                Ok(det) => det,
+                Err(_) => return,
+            },
+        );
     }
 
     pub fn is_tracked_flow(&self, flow: &Flow) -> bool {
