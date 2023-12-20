@@ -38,4 +38,4 @@ hex = "0.4"
 digest = "0.10"
 zmq = "0.9"
 redis = "0.23"
-webrtc-dtls = { git = "https://github.com/mingyech/webrtc", rev = "3eb64ca994e5f12efd2da1573ecc61fbb04e7f49" }
+webrtc-dtls = { git = "https://github.com/mingyech/webrtc", rev = "c20e95bfcd0e07b32352d8011a77b915a9f98135" }
