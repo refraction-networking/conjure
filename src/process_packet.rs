@@ -212,12 +212,12 @@ impl PerCoreGlobal {
 
     fn check_dtls_cid(&mut self, payload: &[u8]) -> bool {
         if payload.len() < 3 {
-            report!("payload.len() < 3",);
+            // report!("payload.len() < 3",);
             return false;
         }
 
         if !(payload[0] == 0x19 && payload[1] == 0xfe && payload[2] == 0xfd) {
-            report!("not type dtls cid",);
+            // report!("not type dtls cid",);
             return false;
         }
 
