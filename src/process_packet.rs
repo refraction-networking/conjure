@@ -231,7 +231,10 @@ impl PerCoreGlobal {
         };
 
         if record.content_type != ContentType::ConnectionID {
-            report!("record.content_type != ContentType::ConnectionID ");
+            report!(
+                "record.content_type != ContentType::ConnectionID {:#?}",
+                record
+            );
             return false;
         }
 
