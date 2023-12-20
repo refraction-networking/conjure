@@ -212,22 +212,33 @@ impl PerCoreGlobal {
 
     fn check_dtls_cid(&mut self, payload: &[u8]) -> bool {
         if payload.len() < 3 {
+            report!("payload.len() < 3",);
+            return false;
+        }
+
+        if !(payload[0] == 0x19 && payload[1] == 0xfe && payload[2] == 0xfd) {
+            report!("not type dtls cid",);
             return false;
         }
 
         let mut reader = Cursor::new(payload);
         let record = match RecordLayerHeader::unmarshal_cid(CID_SIZE, &mut reader) {
             Ok(record) => record,
-            Err(_) => return false,
+            Err(_) => {
+                report!("failed to unmarshal",);
+                return false;
+            }
         };
 
         if record.content_type != ContentType::ConnectionID {
+            report!("record.content_type != ContentType::ConnectionID ");
             return false;
         }
 
         let start = record_layer_header::RECORD_LAYER_HEADER_SIZE + CID_SIZE;
         if payload.len() < (start + PRIV_KEY_SIZE) {
             // pkt too small to contain key
+            report!("payload.len() < (start + PRIV_KEY_SIZE)");
             return false;
         }
 
@@ -252,6 +263,7 @@ impl PerCoreGlobal {
             )
             .is_err()
         {
+            report!("cipher init failed");
             return false;
         }
 
