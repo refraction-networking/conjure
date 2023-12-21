@@ -164,6 +164,65 @@ fn forward_pkt(tun: &mut TunTap, ip_pkt: &IpPacket) {
     });
 }
 
+fn check_dtls_cid(payload: &[u8], privkey: &[u8]) -> bool {
+    if payload.len() < 3 {
+        // report!("payload.len() < 3",);
+        return false;
+    }
+
+    if !(payload[0] == 0x19 && payload[1] == 0xfe && payload[2] == 0xfd) {
+        // report!("not type dtls cid",);
+        return false;
+    }
+
+    let mut reader = Cursor::new(payload);
+    let record = match RecordLayerHeader::unmarshal_cid(CID_SIZE, &mut reader) {
+        Ok(record) => record,
+        Err(_) => {
+            report!("failed to unmarshal",);
+            return false;
+        }
+    };
+
+    if record.content_type != ContentType::ConnectionID {
+        report!(
+            "record.content_type != ContentType::ConnectionID {:#?}",
+            record
+        );
+        return false;
+    }
+
+    let start = record_layer_header::RECORD_LAYER_HEADER_SIZE + CID_SIZE;
+    if payload.len() < (start + PRIV_KEY_SIZE) {
+        // pkt too small to contain key
+        report!("payload.len() < (start + PRIV_KEY_SIZE)");
+        return false;
+    }
+
+    let mut representative = payload[start..start + PRIV_KEY_SIZE].to_vec();
+    representative[31] &= 0x3f;
+
+    let mut shared_secret = [0u8; 32];
+    c_api::c_get_shared_secret_from_tag(privkey, &mut representative, &mut shared_secret);
+
+    let content = payload[start + PRIV_KEY_SIZE..].to_vec();
+    let mut cipher = CipherSuiteAes128GcmSha256::new(false);
+    if cipher
+        .init(
+            &shared_secret,
+            &[0u8; handshake_random::HANDSHAKE_RANDOM_LENGTH],
+            &[0u8; handshake_random::HANDSHAKE_RANDOM_LENGTH],
+            false,
+        )
+        .is_err()
+    {
+        report!("cipher init failed");
+        return false;
+    }
+
+    return cipher.decrypt(&content).is_ok();
+}
+
 impl PerCoreGlobal {
     // // frame_len is supposed to be the length of the whole Ethernet frame. We're
     // // only passing it here for plumbing reasons, and just for stat reporting.
@@ -197,7 +256,7 @@ impl PerCoreGlobal {
             return;
         }
 
-        if self.check_dtls_cid(udp_pkt.payload()) {
+        if check_dtls_cid(udp_pkt.payload(), &self.priv_key) {
             self.flow_tracker
                 .new_phantom_session(&FlowNoSrcPort::from_flow(&flow));
             forward_pkt(&mut self.dtls_cid_tun, ip_pkt);
@@ -208,69 +267,6 @@ impl PerCoreGlobal {
             let flow = Flow::new_udp(ip_pkt, &udp_pkt);
             self.check_udp_test_str(&flow, &udp_pkt);
         }
-    }
-
-    fn check_dtls_cid(&mut self, payload: &[u8]) -> bool {
-        if payload.len() < 3 {
-            // report!("payload.len() < 3",);
-            return false;
-        }
-
-        if !(payload[0] == 0x19 && payload[1] == 0xfe && payload[2] == 0xfd) {
-            // report!("not type dtls cid",);
-            return false;
-        }
-
-        let mut reader = Cursor::new(payload);
-        let record = match RecordLayerHeader::unmarshal_cid(CID_SIZE, &mut reader) {
-            Ok(record) => record,
-            Err(_) => {
-                report!("failed to unmarshal",);
-                return false;
-            }
-        };
-
-        if record.content_type != ContentType::ConnectionID {
-            report!(
-                "record.content_type != ContentType::ConnectionID {:#?}",
-                record
-            );
-            return false;
-        }
-
-        let start = record_layer_header::RECORD_LAYER_HEADER_SIZE + CID_SIZE;
-        if payload.len() < (start + PRIV_KEY_SIZE) {
-            // pkt too small to contain key
-            report!("payload.len() < (start + PRIV_KEY_SIZE)");
-            return false;
-        }
-
-        let mut representative = payload[start..start + PRIV_KEY_SIZE].to_vec();
-        representative[31] &= 0x3f;
-
-        let mut shared_secret = [0u8; 32];
-        c_api::c_get_shared_secret_from_tag(
-            &self.priv_key,
-            &mut representative,
-            &mut shared_secret,
-        );
-
-        let content = payload[start + PRIV_KEY_SIZE..].to_vec();
-        let mut cipher = CipherSuiteAes128GcmSha256::new(false);
-        if cipher
-            .init(
-                &shared_secret,
-                &[0u8; handshake_random::HANDSHAKE_RANDOM_LENGTH],
-                &[0u8; handshake_random::HANDSHAKE_RANDOM_LENGTH],
-                false,
-            )
-            .is_err()
-        {
-            report!("cipher init failed");
-            return false;
-        }
-
-        return cipher.decrypt(&content).is_ok();
     }
 
     fn check_for_tagged_flow(&mut self, flow: &Flow, ip_pkt: &IpPacket) -> Option<()> {
@@ -462,6 +458,8 @@ mod tests {
     use toml;
     use StationConfig;
 
+    use crate::process_packet::check_dtls_cid;
+
     #[test]
     fn test_filter_station_traffic() {
         let mut conf_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -479,5 +477,24 @@ mod tests {
         for net in nets.iter() {
             println!("{net}");
         }
+    }
+
+    #[test]
+    fn test_filter_dtls() {
+        let privkey =
+            hex::decode("203963feed62ddda89b98857940f09866ae840f42e8c90160e411a0029b87e60")
+                .expect("failed to decode privkey");
+
+        //DTLSv1.2 Record Layer: Connection ID
+        // Special Type: Connection ID (25)
+        // Version: DTLS 1.2 (0xfefd)
+        // Epoch: 1
+        // Sequence Number: 225
+        // Connection ID: f9fe8492ec0f8c66
+        // Length: 121
+        // Encrypted Record Content: 995ad2b0d98ff1ec52af54ac60135ab60340f19218c6139a1629cfc4917a0b8ca9b8da26…
+        let udp_payload = hex::decode("19fefd00010000000000e1f9fe8492ec0f8c660079995ad2b0d98ff1ec52af54ac60135ab60340f19218c6139a1629cfc4917a0b8ca9b8da26e8a0473d9e55b10775020770e0a82847c4765cb345958edab4dc5be9684a446ad46da9719ef46cf99e5bbb25c598ae243beb4a1fc32d471916483952e7084ca275f2cd3cd845e4ef038d76b02d71336463644ae4d1").expect("failed to decode udp payload");
+
+        assert!(check_dtls_cid(&udp_payload, &privkey))
     }
 }
