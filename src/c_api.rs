@@ -82,6 +82,11 @@ extern "C" {
         stego_payload_len: size_t,
         shared_secret_out: *mut u8,
     ) -> size_t;
+
+    fn decode(output: *mut u8, input: *const u8) -> i64;
+
+    fn curve25519_donna(mypublic: *mut u8, secret: *const u8, basepoint: *const u8) -> i64;
+
 }
 
 pub fn c_get_payload_from_tag(
@@ -127,6 +132,32 @@ pub fn c_get_shared_secret_from_tag(
             stego_payload.len(),
             shared_secret_out.as_mut_ptr(),
         )
+    }
+}
+
+pub fn c_get_shared_secret_from_representative(
+    shared_secret: &mut [u8],
+    representative: &[u8],
+    privkey: &[u8],
+) -> bool {
+    assert_eq!(
+        shared_secret.len(),
+        32,
+        "Need to provide a 32-byte buffer space for shared_secret_out"
+    );
+
+    let mut pubkey = [0u8; 32];
+
+    unsafe {
+        if decode(pubkey.as_mut_ptr(), representative.as_ptr()) != 1 {
+            return false;
+        }
+
+        return curve25519_donna(
+            shared_secret.as_mut_ptr(),
+            privkey.as_ptr(),
+            pubkey.as_ptr(),
+        ) == 0;
     }
 }
 

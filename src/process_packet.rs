@@ -1,4 +1,5 @@
 use libc::size_t;
+use std::io::BufWriter;
 use std::io::Cursor;
 use std::os::raw::c_void;
 use std::panic;
@@ -176,7 +177,7 @@ fn check_dtls_cid(payload: &[u8], privkey: &[u8]) -> bool {
     }
 
     let mut reader = Cursor::new(payload);
-    let record = match RecordLayerHeader::unmarshal_cid(CID_SIZE, &mut reader) {
+    let mut h = match RecordLayerHeader::unmarshal_cid(CID_SIZE, &mut reader) {
         Ok(record) => record,
         Err(_) => {
             report!("failed to unmarshal",);
@@ -184,11 +185,8 @@ fn check_dtls_cid(payload: &[u8], privkey: &[u8]) -> bool {
         }
     };
 
-    if record.content_type != ContentType::ConnectionID {
-        report!(
-            "record.content_type != ContentType::ConnectionID {:#?}",
-            record
-        );
+    if h.content_type != ContentType::ConnectionID {
+        report!("record.content_type != ContentType::ConnectionID {:#?}", h);
         return false;
     }
 
@@ -203,13 +201,24 @@ fn check_dtls_cid(payload: &[u8], privkey: &[u8]) -> bool {
     representative[31] &= 0x3f;
 
     let mut shared_secret = [0u8; 32];
-    c_api::c_get_shared_secret_from_tag(privkey, &mut representative, &mut shared_secret);
+    c_api::c_get_shared_secret_from_representative(
+        &mut shared_secret,
+        &mut representative,
+        &privkey,
+    );
 
-    let content = payload[start + PRIV_KEY_SIZE..].to_vec();
+    let mut content = payload[start + PRIV_KEY_SIZE..].to_vec();
     let mut cipher = CipherSuiteAes128GcmSha256::new(false);
+
+    let rand = hkdf::Hkdf::<sha2::Sha256>::new(None, &shared_secret);
+    let mut master_secret = [0u8; 48];
+    if rand.expand(&[], &mut master_secret).is_err() {
+        return false;
+    }
+
     if cipher
         .init(
-            &shared_secret,
+            &master_secret,
             &[0u8; handshake_random::HANDSHAKE_RANDOM_LENGTH],
             &[0u8; handshake_random::HANDSHAKE_RANDOM_LENGTH],
             false,
@@ -219,6 +228,17 @@ fn check_dtls_cid(payload: &[u8], privkey: &[u8]) -> bool {
         report!("cipher init failed");
         return false;
     }
+
+    h.content_len = content.len() as u16;
+    let mut payload_no_key = vec![];
+    {
+        let mut writer = BufWriter::<&mut Vec<u8>>::new(payload_no_key.as_mut());
+        if h.marshal(&mut writer).is_err() {
+            return false;
+        }
+    }
+
+    payload_no_key.append(&mut content);
 
     return cipher.decrypt(&content).is_ok();
 }
@@ -493,7 +513,7 @@ mod tests {
         // Connection ID: f9fe8492ec0f8c66
         // Length: 121
         // Encrypted Record Content: 995ad2b0d98ff1ec52af54ac60135ab60340f19218c6139a1629cfc4917a0b8ca9b8da26…
-        let udp_payload = hex::decode("19fefd00010000000000e1f9fe8492ec0f8c660079995ad2b0d98ff1ec52af54ac60135ab60340f19218c6139a1629cfc4917a0b8ca9b8da26e8a0473d9e55b10775020770e0a82847c4765cb345958edab4dc5be9684a446ad46da9719ef46cf99e5bbb25c598ae243beb4a1fc32d471916483952e7084ca275f2cd3cd845e4ef038d76b02d71336463644ae4d1").expect("failed to decode udp payload");
+        let udp_payload = hex::decode("19fefd000100000000007e89672aa48beec9220079b5977cd87c009bcb987bad8660902c473ec6596f1f250043cfc956c748138e7d17cdfeb1b24f7420c0db7634d99b015229cd0fc35d540c8772e1716c31726038ba2c8ebb1a01fdb0f07d4db3db4871608362c45687d1104ad4b1d3de96435fbec39d9e01749656b9043024a27f8a965cf7a245220fe34c7196").expect("failed to decode udp payload");
 
         assert!(check_dtls_cid(&udp_payload, &privkey))
     }
