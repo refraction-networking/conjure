@@ -240,7 +240,7 @@ fn check_dtls_cid(payload: &[u8], privkey: &[u8]) -> bool {
 
     payload_no_key.append(&mut content);
 
-    return cipher.decrypt(&content).is_ok();
+    return cipher.decrypt_cid(CID_SIZE, &payload_no_key).is_ok();
 }
 
 impl PerCoreGlobal {

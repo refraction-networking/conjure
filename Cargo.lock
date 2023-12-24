@@ -1798,7 +1798,7 @@ dependencies = [
 [[package]]
 name = "webrtc-dtls"
 version = "0.8.0"
-source = "git+https://github.com/mingyech/webrtc?rev=fedf88078f73782058c750883f35032399a825e2#fedf88078f73782058c750883f35032399a825e2"
+source = "git+https://github.com/mingyech/webrtc?rev=38d0409fb697c4b5cbb35b021aefb2874b1cd3d3#38d0409fb697c4b5cbb35b021aefb2874b1cd3d3"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -1834,7 +1834,7 @@ dependencies = [
 [[package]]
 name = "webrtc-util"
 version = "0.8.0"
-source = "git+https://github.com/mingyech/webrtc?rev=fedf88078f73782058c750883f35032399a825e2#fedf88078f73782058c750883f35032399a825e2"
+source = "git+https://github.com/mingyech/webrtc?rev=38d0409fb697c4b5cbb35b021aefb2874b1cd3d3#38d0409fb697c4b5cbb35b021aefb2874b1cd3d3"
 dependencies = [
  "async-trait",
  "bitflags 1.3.2",
