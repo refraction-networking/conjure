@@ -277,6 +277,7 @@ impl PerCoreGlobal {
         }
 
         if check_dtls_cid(udp_pkt.payload(), &self.priv_key) {
+            report!("new oscur0 session detected");
             self.flow_tracker
                 .new_phantom_session(&FlowNoSrcPort::from_flow(&flow));
             forward_pkt(&mut self.dtls_cid_tun, ip_pkt);
