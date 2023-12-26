@@ -286,20 +286,13 @@ impl FlowTracker {
         self.phantom_flows.is_tracked_session(flow)
     }
 
-    pub fn new_phantom_session(&mut self, flow: &FlowNoSrcPort) {
-        self.phantom_flows.add_session(
-            match SessionDetails::new(
-                &flow.src_ip.to_string(),
-                &flow.dst_ip.to_string(),
-                TIMEOUT_TRACKED_NS,
-                0,
-                flow.dst_port,
-                flow.proto,
-            ) {
-                Ok(det) => det,
-                Err(_) => return,
-            },
-        );
+    pub fn insert_or_update_key(&mut self, key: &String) {
+        self.phantom_flows
+            .insert_or_update_key(key, TIMEOUT_TRACKED_NS);
+    }
+
+    pub fn session_key_exists(&self, key: &String) -> bool {
+        return self.phantom_flows.key_exists(key);
     }
 
     pub fn is_tracked_flow(&self, flow: &Flow) -> bool {

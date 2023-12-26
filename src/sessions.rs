@@ -252,10 +252,6 @@ impl SessionTracker {
         }
     }
 
-    pub fn add_session(&mut self, det: SessionDetails) {
-        self.insert_session(det)
-    }
-
     pub fn spawn_update_thread(&self) {
         let write_map = Arc::clone(&self.tracked_sessions);
         thread::spawn(move || ingest_from_pubsub(write_map));
@@ -263,6 +259,10 @@ impl SessionTracker {
 
     pub fn is_tracked_session<T: Taggable>(&self, flow: &T) -> bool {
         let key = flow.tag();
+        self.session_exists(&key)
+    }
+
+    pub fn key_exists(&self, key: &String) -> bool {
         self.session_exists(&key)
     }
 
@@ -319,11 +319,14 @@ impl SessionTracker {
         };
     }
 
-    fn insert_session(&mut self, session: SessionDetails) {
+    pub fn insert_session(&mut self, session: SessionDetails) {
+        self.insert_or_update_key(&session.tag(), session.timeout);
+    }
+
+    pub fn insert_or_update_key(&mut self, key: &String, timeout: u128) {
         // is this already in the map?
-        let key = session.tag();
         if self.session_exists(&key) {
-            self.try_update_session_timeout(&key, session.timeout);
+            self.try_update_session_timeout(&key, timeout);
             return;
         }
 
@@ -331,10 +334,10 @@ impl SessionTracker {
         let mut mmap = self.tracked_sessions.write().expect("RwLock broken");
 
         // Set timeout
-        let expire_time = precise_time_ns() + session.timeout;
+        let expire_time = precise_time_ns() + timeout;
 
         // Insert
-        *mmap.entry(key).or_insert(expire_time) = expire_time;
+        *mmap.entry(key.to_string()).or_insert(expire_time) = expire_time;
 
         // Get rid of writable reference to map.
         drop(mmap);

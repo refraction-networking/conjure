@@ -284,14 +284,14 @@ impl PerCoreGlobal {
 
         if !self
             .flow_tracker
-            .is_phantom_session(&FlowNoSrcPort::from_flow(&flow))
+            .session_key_exists(&FlowNoSrcPort::from_flow(&flow).to_string())
             && !check_dtls_cid(udp_pkt.payload(), &self.priv_key)
         {
             return;
         }
 
         self.flow_tracker
-            .new_phantom_session(&FlowNoSrcPort::from_flow(&flow));
+            .insert_or_update_key(&FlowNoSrcPort::from_flow(&flow).to_string());
         forward_pkt(&mut self.dtls_cid_tun, ip_pkt);
     }
 
