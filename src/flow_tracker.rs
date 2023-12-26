@@ -291,7 +291,7 @@ impl FlowTracker {
             match SessionDetails::new(
                 &flow.src_ip.to_string(),
                 &flow.dst_ip.to_string(),
-                30,
+                TIMEOUT_TRACKED_NS,
                 0,
                 flow.dst_port,
                 flow.proto,

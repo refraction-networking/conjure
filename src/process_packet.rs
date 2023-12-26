@@ -276,18 +276,23 @@ impl PerCoreGlobal {
             return;
         }
 
-        if check_dtls_cid(udp_pkt.payload(), &self.priv_key) {
-            report!("new oscur0 session detected");
-            self.flow_tracker
-                .new_phantom_session(&FlowNoSrcPort::from_flow(&flow));
-            forward_pkt(&mut self.dtls_cid_tun, ip_pkt);
-            return;
-        }
-
         if udp_pkt.get_destination() == 53 {
             let flow = Flow::new_udp(ip_pkt, &udp_pkt);
             self.check_udp_test_str(&flow, &udp_pkt);
+            return;
         }
+
+        if !self
+            .flow_tracker
+            .is_phantom_session(&FlowNoSrcPort::from_flow(&flow))
+            && !check_dtls_cid(udp_pkt.payload(), &self.priv_key)
+        {
+            return;
+        }
+
+        self.flow_tracker
+            .new_phantom_session(&FlowNoSrcPort::from_flow(&flow));
+        forward_pkt(&mut self.dtls_cid_tun, ip_pkt);
     }
 
     fn check_for_tagged_flow(&mut self, flow: &Flow, ip_pkt: &IpPacket) -> Option<()> {
