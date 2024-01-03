@@ -14,10 +14,10 @@ import (
 
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/station/oscur0"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
-	zerorttdtls "github.com/refraction-networking/conjure/pkg/transports/zerortt/dtls"
 	pb "github.com/refraction-networking/conjure/proto"
 )
 
@@ -134,7 +134,7 @@ func main() {
 	go regManager.HandleRegUpdates(ctx, regChan, wg)
 	go connManager.acceptConnections(ctx, regManager, logger)
 
-	if err := zerorttdtls.Listen(func(covert string, clientConn net.Conn) {
+	if err := oscur0.Listen(func(covert string, clientConn net.Conn) {
 		fmt.Printf("got connection: %v -> %v, covert: %v\n", clientConn.LocalAddr(), clientConn.RemoteAddr(), covert)
 		cj.ProxyWithTunStats(clientConn, logger, "", covert, nil, false)
 	}, privkey); err != nil {

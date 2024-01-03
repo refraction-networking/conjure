@@ -1,4 +1,4 @@
-package dtls
+package oscur0
 
 import (
 	"encoding/hex"
@@ -10,9 +10,7 @@ import (
 	dtlsnet "github.com/pion/dtls/v2/pkg/net"
 	"github.com/pion/dtls/v2/pkg/protocol"
 	"github.com/pion/dtls/v2/pkg/protocol/recordlayer"
-	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/station/lib"
-	"github.com/refraction-networking/conjure/pkg/transports"
 	pb "github.com/refraction-networking/conjure/proto"
 	"github.com/refraction-networking/ed25519/extra25519"
 	"github.com/xtaci/kcp-go"
@@ -25,24 +23,6 @@ const (
 	listenPort = 41246
 	receiveMTU = 8192
 )
-
-type Transport struct {
-}
-
-// Name returns name of the transport
-func (Transport) Name() string {
-	return "dtls-cid"
-}
-
-// LogPrefix returns log prefix of the transport
-func (Transport) LogPrefix() string {
-	return "DTLS-CID"
-}
-
-// GetIdentifier returns an identifier unique a registration
-func (Transport) GetIdentifier(reg transports.Registration) string {
-	return string(core.ConjureHMAC(reg.SharedSecret(), "dtlsCidTrasportHMACString"))
-}
 
 // NewTransport creates a new dtls transport
 func Listen(proxyFunc func(covert string, clientConn net.Conn), privKey [lib.PrivateKeyLength]byte) error {
