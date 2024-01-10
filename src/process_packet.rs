@@ -180,20 +180,17 @@ fn check_dtls_cid(payload: &[u8], privkey: &[u8]) -> bool {
     let mut h = match RecordLayerHeader::unmarshal_cid(CID_SIZE, &mut reader) {
         Ok(record) => record,
         Err(_) => {
-            report!("failed to unmarshal",);
             return false;
         }
     };
 
     if h.content_type != ContentType::ConnectionID {
-        report!("record.content_type != ContentType::ConnectionID {:#?}", h);
         return false;
     }
 
     let start = record_layer_header::RECORD_LAYER_HEADER_SIZE + CID_SIZE;
     if payload.len() < (start + PRIV_KEY_SIZE) {
         // pkt too small to contain key
-        report!("payload.len() < (start + PRIV_KEY_SIZE)");
         return false;
     }
 
@@ -225,7 +222,6 @@ fn check_dtls_cid(payload: &[u8], privkey: &[u8]) -> bool {
         )
         .is_err()
     {
-        report!("cipher init failed");
         return false;
     }
 
