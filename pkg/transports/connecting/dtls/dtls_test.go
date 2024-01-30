@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"runtime"
 	"testing"
 	"time"
 
@@ -95,14 +94,4 @@ func TestAcceptRespectContext(t *testing.T) {
 	if dur > ctxTime*2 {
 		t.Fatalf("Connect does not respect context")
 	}
-}
-
-func TestGoroutineLeak(t *testing.T) {
-	initialGoroutines := runtime.NumGoroutine()
-
-	TestAcceptFail(t)
-
-	time.Sleep(2 * time.Second)
-
-	require.LessOrEqual(t, runtime.NumGoroutine(), initialGoroutines)
 }

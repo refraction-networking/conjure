@@ -145,6 +145,8 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 			if err != nil { // store the error
 				errs = append(errs, err)
 			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 	}
 
