@@ -17,9 +17,13 @@ import (
 
 const listenPort = 41245
 
+type dtlsListener interface {
+	AcceptWithContext(context.Context, *dtls.Config) (net.Conn, error)
+}
+
 type Transport struct {
 	DNAT             interfaces.DNAT
-	dtlsListener     *dtls.Listener
+	dtlsListener     dtlsListener
 	logDialSuccess   func(*net.IP)
 	logListenSuccess func(*net.IP)
 }
