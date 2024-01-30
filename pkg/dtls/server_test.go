@@ -1,7 +1,9 @@
 package dtls
 
 import (
+	"context"
 	"crypto/rand"
+	"fmt"
 	"net"
 	"runtime"
 	"sync"
@@ -48,6 +50,34 @@ func TestSend(t *testing.T) {
 	require.Equal(t, len(toSend), n)
 
 	wg.Wait()
+}
+
+type mockConn struct {
+	net.Conn
+	waitTime time.Duration
+}
+
+func (c *mockConn) Write([]byte) (int, error) {
+	time.Sleep(c.waitTime)
+	return 0, fmt.Errorf("failed")
+}
+
+func TestClientRespectContext(t *testing.T) {
+	_, client := net.Pipe()
+
+	ctxTime := 3 * time.Second
+	ctx, _ := context.WithTimeout(context.Background(), ctxTime)
+
+	before := time.Now()
+	_, err := ClientWithContext(ctx, client, &Config{PSK: sharedSecret, SCTP: ClientOpen})
+
+	dur := time.Since(before)
+	require.NotNil(t, err)
+
+	if dur > ctxTime*2 {
+		t.Fatalf("Connect does not respect context")
+	}
+
 }
 
 func TestGoroutineLeak(t *testing.T) {
