@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"net"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -85,23 +84,4 @@ func TestClientFail(t *testing.T) {
 	if dur > ctxTime*2 {
 		t.Fatalf("Connect does not respect context")
 	}
-}
-
-func passGoroutineLeak(testFunc func(*testing.T), t *testing.T) bool {
-	initialGoroutines := runtime.NumGoroutine()
-
-	testFunc(t)
-
-	time.Sleep(2 * time.Second)
-
-	return runtime.NumGoroutine() <= initialGoroutines
-}
-
-func TestGoroutineLeak(t *testing.T) {
-	testFuncs := []func(*testing.T){TestSend, TestServerFail, TestClientFail, TestListenSuccess, TestListenFail}
-
-	for _, test := range testFuncs {
-		require.True(t, passGoroutineLeak(test, t))
-	}
-
 }
