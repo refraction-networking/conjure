@@ -1,8 +1,9 @@
 package dtls
 
 import (
+	"context"
 	"crypto/rand"
-	"fmt"
+	"errors"
 	"net"
 	"runtime"
 	"sync"
@@ -51,22 +52,56 @@ func TestSend(t *testing.T) {
 	wg.Wait()
 }
 
-type mockConn struct {
-	net.Conn
-	waitTime time.Duration
+func TestServerFail(t *testing.T) {
+
+	ctxTime := 3 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTime)
+	defer cancel()
+
+	server, _ := net.Pipe()
+
+	before := time.Now()
+	_, err := ServerWithContext(ctx, server, &Config{PSK: sharedSecret, SCTP: ServerAccept})
+
+	require.True(t, errors.Is(err, context.DeadlineExceeded))
+	dur := time.Since(before)
+	if dur > ctxTime*2 {
+		t.Fatalf("Connect does not respect context")
+	}
 }
 
-func (c *mockConn) Write([]byte) (int, error) {
-	time.Sleep(c.waitTime)
-	return 0, fmt.Errorf("failed")
+func TestClientFail(t *testing.T) {
+
+	ctxTime := 3 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTime)
+	defer cancel()
+
+	_, client := net.Pipe()
+	before := time.Now()
+	_, err := ClientWithContext(ctx, client, &Config{PSK: sharedSecret, SCTP: ClientOpen})
+
+	require.True(t, errors.Is(err, context.DeadlineExceeded))
+	dur := time.Since(before)
+	if dur > ctxTime*2 {
+		t.Fatalf("Connect does not respect context")
+	}
 }
 
-func TestGoroutineLeak(t *testing.T) {
+func passGoroutineLeak(testFunc func(*testing.T), t *testing.T) bool {
 	initialGoroutines := runtime.NumGoroutine()
 
-	TestSend(t)
+	testFunc(t)
 
 	time.Sleep(2 * time.Second)
 
-	require.LessOrEqual(t, runtime.NumGoroutine(), initialGoroutines)
+	return runtime.NumGoroutine() <= initialGoroutines
+}
+
+func TestGoroutineLeak(t *testing.T) {
+	testFuncs := []func(*testing.T){TestSend, TestServerFail, TestClientFail}
+
+	for _, test := range testFuncs {
+		require.True(t, passGoroutineLeak(test, t))
+	}
+
 }
