@@ -4,5 +4,6 @@ use (
 	.
 	./cmd/application
 	./cmd/registration-server
+	./cmd/registration-tracker
 	./util/station-debug
 )

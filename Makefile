@@ -10,9 +10,9 @@ CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_R
 PROTO_RS_PATH=src/signalling.rs
 EXE_DIR=./bin
 
-all: rust libtd conjure app registration-server ${PROTO_RS_PATH}
+all: rust libtd conjure app registration-server registration-tracker ${PROTO_RS_PATH}
 
-sim: rust libtd conjure-sim app registration-server ${PROTO_RS_PATH}
+sim: rust libtd conjure-sim app registration-server registration-tracker ${PROTO_RS_PATH}
 
 rust: ./src/*.rs
 	cargo build --${DEBUG_OR_RELEASE}
@@ -39,6 +39,10 @@ conjure-sim: detect.c loadkey.c rust_util.c rust libtapdance
 registration-server:
 	[ -d $(EXE_DIR) ] || mkdir -p $(EXE_DIR)
 	go build -o ${EXE_DIR}/registration-server ./cmd/registration-server
+
+registration-tracker:
+	[ -d $(EXE_DIR) ] || mkdir -p $(EXE_DIR)
+	go build -o ${EXE_DIR}/registration-tracker ./cmd/registration-tracker
 
 PARAMS := det app reg zbalance sim
 target := unk
