@@ -98,7 +98,7 @@ func passGoroutineLeak(testFunc func(*testing.T), t *testing.T) bool {
 }
 
 func TestGoroutineLeak(t *testing.T) {
-	testFuncs := []func(*testing.T){TestSend, TestServerFail, TestClientFail}
+	testFuncs := []func(*testing.T){TestSend, TestServerFail, TestClientFail, TestListenSuccess, TestListenFail}
 
 	for _, test := range testFuncs {
 		require.True(t, passGoroutineLeak(test, t))
