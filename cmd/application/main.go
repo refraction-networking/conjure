@@ -34,7 +34,7 @@ var enabledTransports = map[pb.TransportType]cj.Transport{
 
 func main() {
 	go func() {
-		http.ListenAndServe("localhost:46406", nil)
+		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 	var err error
 	var zmqAddress string
