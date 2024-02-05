@@ -3,8 +3,6 @@ package dtls
 import (
 	"bytes"
 	"errors"
-	"io"
-	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -84,13 +82,8 @@ func (c *hbConn) recvLoop() {
 		}
 
 		if err != nil {
-			c.recvCh <- errBytes{nil, err}
-			switch {
-			case errors.Is(err, net.ErrClosed):
-			case errors.Is(err, io.EOF):
-				c.Close()
-				return
-			}
+			c.Close()
+			return
 		}
 
 		c.recvCh <- errBytes{buffer[:n], err}
