@@ -71,8 +71,8 @@ func (l *Listener) acceptLoop() {
 				connState := newDTLSConn.ConnectionState()
 				connID := connState.RemoteRandomBytes()
 
-				l.connMapMutex.RLock()
-				defer l.connMapMutex.RUnlock()
+				l.connMapMutex.Lock()
+				defer l.connMapMutex.Unlock()
 
 				acceptCh, ok := l.connMap[connID]
 
@@ -121,9 +121,9 @@ func NewListener(inner net.Listener, config *Config) (*Listener, error) {
 type Listener struct {
 	parent          net.Listener
 	connMap         map[[handshake.RandomBytesLength]byte](chan net.Conn)
-	connMapMutex    sync.RWMutex
+	connMapMutex    sync.Mutex
 	connToCert      map[[handshake.RandomBytesLength]byte]*certPair
-	connToCertMutex sync.RWMutex
+	connToCertMutex sync.Mutex
 	defaultCert     *tls.Certificate
 	logAuthFail     func(*net.IP)
 	logOther        func(*net.IP)
@@ -252,8 +252,8 @@ func (l *Listener) getCertificateFromClientHello(clientHello *dtls.ClientHelloIn
 		return l.defaultCert, nil
 	}
 
-	l.connToCertMutex.RLock()
-	defer l.connToCertMutex.RUnlock()
+	l.connToCertMutex.Lock()
+	defer l.connToCertMutex.Unlock()
 
 	certs, ok := l.connToCert[clientHello.RandomBytes]
 
