@@ -3,6 +3,7 @@ package dtls
 import (
 	"bytes"
 	"errors"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -101,18 +102,22 @@ func (c *hbConn) Write(b []byte) (n int, err error) {
 }
 
 func (c *hbConn) Read(b []byte) (int, error) {
-	readBytes := <-c.recvCh
-	if readBytes.err != nil {
-		return 0, readBytes.err
+	select {
+	case <-c.closed:
+		return 0, net.ErrClosed
+	case readBytes := <-c.recvCh:
+		if readBytes.err != nil {
+			return 0, readBytes.err
+		}
+
+		if len(b) < len(readBytes.b) {
+			return 0, ErrInsufficientBuffer
+		}
+
+		n := copy(b, readBytes.b)
+
+		return n, nil
 	}
-
-	if len(b) < len(readBytes.b) {
-		return 0, ErrInsufficientBuffer
-	}
-
-	n := copy(b, readBytes.b)
-
-	return n, nil
 }
 
 func (c *hbConn) BufferedAmount() uint64 {
