@@ -71,16 +71,18 @@ func (l *Listener) acceptLoop() {
 				connState := newDTLSConn.ConnectionState()
 				connID := connState.RemoteRandomBytes()
 
-				l.connMapMutex.Lock()
-				defer l.connMapMutex.Unlock()
+				acceptCh, err := l.chFromID(connID)
 
-				acceptCh, ok := l.connMap[connID]
-
-				if !ok {
+				if err != nil {
 					return
 				}
 
-				acceptCh <- newDTLSConn
+				select {
+				case acceptCh <- newDTLSConn:
+					return
+				case <-ctx.Done():
+					return
+				}
 			}()
 		}
 	}
@@ -236,6 +238,20 @@ func (l *Listener) registerChannel(connID [handshake.RandomBytesLength]byte) (<-
 	l.connMap[connID] = connChan
 
 	return connChan, nil
+}
+
+func (l *Listener) chFromID(id [handshake.RandomBytesLength]byte) (chan<- net.Conn, error) {
+
+	l.connMapMutex.Lock()
+	defer l.connMapMutex.Unlock()
+
+	acceptCh, ok := l.connMap[id]
+
+	if !ok {
+		return nil, fmt.Errorf("id not registered")
+	}
+
+	return acceptCh, nil
 }
 
 func (l *Listener) removeChannel(connID [handshake.RandomBytesLength]byte) {
