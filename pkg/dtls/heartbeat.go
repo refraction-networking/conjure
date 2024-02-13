@@ -3,7 +3,6 @@ package dtls
 import (
 	"bytes"
 	"errors"
-	"io"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -76,6 +75,12 @@ func (c *hbConn) recvLoop() {
 	for {
 		buffer := make([]byte, c.maxMessageSize)
 
+		err := c.stream.SetReadDeadline(time.Now().Add(c.timeout))
+		if err != nil {
+			c.Close()
+			return
+		}
+
 		n, err := c.stream.Read(buffer)
 
 		if bytes.Equal(c.hb, buffer[:n]) {
@@ -84,16 +89,19 @@ func (c *hbConn) recvLoop() {
 		}
 
 		if err != nil {
-			c.recvCh <- errBytes{nil, err}
-			switch {
-			case errors.Is(err, net.ErrClosed):
-			case errors.Is(err, io.EOF):
-				c.Close()
-				return
-			}
+			c.Close()
+			return
 		}
 
-		c.recvCh <- errBytes{buffer[:n], err}
+		timer := time.NewTimer(c.timeout)
+		select {
+		case c.recvCh <- errBytes{buffer[:n], err}:
+			timer.Stop()
+			continue
+		case <-timer.C:
+			c.Close()
+			return
+		}
 	}
 
 }
@@ -108,18 +116,22 @@ func (c *hbConn) Write(b []byte) (n int, err error) {
 }
 
 func (c *hbConn) Read(b []byte) (int, error) {
-	readBytes := <-c.recvCh
-	if readBytes.err != nil {
-		return 0, readBytes.err
+	select {
+	case <-c.closed:
+		return 0, net.ErrClosed
+	case readBytes := <-c.recvCh:
+		if readBytes.err != nil {
+			return 0, readBytes.err
+		}
+
+		if len(b) < len(readBytes.b) {
+			return 0, ErrInsufficientBuffer
+		}
+
+		n := copy(b, readBytes.b)
+
+		return n, nil
 	}
-
-	if len(b) < len(readBytes.b) {
-		return 0, ErrInsufficientBuffer
-	}
-
-	n := copy(b, readBytes.b)
-
-	return n, nil
 }
 
 func (c *hbConn) BufferedAmount() uint64 {
