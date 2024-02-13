@@ -4,8 +4,6 @@ import (
 	"context"
 	"flag"
 	"net"
-	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -33,9 +31,6 @@ var enabledTransports = map[pb.TransportType]cj.Transport{
 }
 
 func main() {
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
 	var err error
 	var zmqAddress string
 	flag.StringVar(&zmqAddress, "zmq-address", "ipc://@zmq-proxy", "Address of ZMQ proxy")
