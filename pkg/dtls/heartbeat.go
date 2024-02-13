@@ -75,7 +75,12 @@ func (c *hbConn) recvLoop() {
 	for {
 		buffer := make([]byte, c.maxMessageSize)
 
-		c.stream.SetReadDeadline(time.Now().Add(c.timeout))
+		err := c.stream.SetReadDeadline(time.Now().Add(c.timeout))
+		if err != nil {
+			c.Close()
+			return
+		}
+
 		n, err := c.stream.Read(buffer)
 
 		if bytes.Equal(c.hb, buffer[:n]) {
