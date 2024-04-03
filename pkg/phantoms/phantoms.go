@@ -97,7 +97,7 @@ func parseSubnet(phantomSubnet string) (*net.IPNet, error) {
 // bound between the global min and max of that set. This ensures that
 // addresses are chosen based on the number of addresses in the subnet.
 func selectIPAddr(seed []byte, subnets []*phantomNet) (*PhantomIP, error) {
-	return selectPhantomImplHkdf(seed, subnets)
+	return SelectPhantomImplHkdf(seed, subnets)
 }
 
 // SelectPhantom - select one phantom IP address based on shared secret
