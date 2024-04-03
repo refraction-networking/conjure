@@ -158,14 +158,14 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, clientLibVer ui
 	// handle legacy clientLibVersions for selecting phantoms.
 	if clientLibVer < core.PhantomSelectionMinGeneration {
 		// Version 0
-		ip, err := selectPhantomImplV0(seed, genSubnets)
+		ip, err := SelectPhantomImplV0(seed, genSubnets)
 		if err != nil {
 			return nil, err
 		}
 		return ip, nil
 	} else if clientLibVer < core.PhantomHkdfMinVersion {
 		// Version 1
-		ip, err := selectPhantomImplVarint(seed, genSubnets)
+		ip, err := SelectPhantomImplVarint(seed, genSubnets)
 		if err != nil {
 			return nil, err
 		}
@@ -173,7 +173,7 @@ func (p *PhantomIPSelector) Select(seed []byte, generation uint, clientLibVer ui
 	}
 
 	// Version 2+
-	ip, err := selectPhantomImplHkdf(seed, genSubnets)
+	ip, err := SelectPhantomImplHkdf(seed, genSubnets)
 	if err != nil {
 		return nil, err
 	}

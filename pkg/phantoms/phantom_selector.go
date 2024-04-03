@@ -92,7 +92,7 @@ func getSubnetsHkdf(sc genericSubnetConfig, seed []byte, weighted bool) ([]*phan
 	return out, nil
 }
 
-func selectPhantomImplHkdf(seed []byte, subnets []*phantomNet) (*PhantomIP, error) {
+func SelectPhantomImplHkdf(seed []byte, subnets []*phantomNet) (*PhantomIP, error) {
 	type idNet struct {
 		min, max big.Int
 		net      *phantomNet

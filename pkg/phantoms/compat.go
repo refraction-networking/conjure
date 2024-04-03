@@ -57,12 +57,12 @@ func (sc *SubnetConfig) getSubnetsVarint(seed []byte, weighted bool) ([]*phantom
 	return out, nil
 }
 
-// selectPhantomImplVarint - select an ip address from the list of subnets
+// SelectPhantomImplVarint - select an ip address from the list of subnets
 // associated with the specified generation by constructing a set of start and
 // end values for the high and low values in each allocation. The random number
 // is then bound between the global min and max of that set. This ensures that
 // addresses are chosen based on the number of addresses in the subnet.
-func selectPhantomImplVarint(seed []byte, subnets []*phantomNet) (*PhantomIP, error) {
+func SelectPhantomImplVarint(seed []byte, subnets []*phantomNet) (*PhantomIP, error) {
 	type idNet struct {
 		min, max big.Int
 		net      *phantomNet
@@ -129,9 +129,9 @@ func selectPhantomImplVarint(seed []byte, subnets []*phantomNet) (*PhantomIP, er
 	return result, nil
 }
 
-// selectPhantomImplV0 implements support for the legacy (buggy) client phantom
+// SelectPhantomImplV0 implements support for the legacy (buggy) client phantom
 // address selection algorithm.
-func selectPhantomImplV0(seed []byte, subnets []*phantomNet) (*PhantomIP, error) {
+func SelectPhantomImplV0(seed []byte, subnets []*phantomNet) (*PhantomIP, error) {
 
 	addressTotal := big.NewInt(0)
 
