@@ -193,7 +193,9 @@ func (regManager *RegistrationManager) ValidateRegistration(reg *DecoyRegistrati
 		return false, errIncompleteReg
 	} else if _, ok := regManager.registeredDecoys.transports[reg.Transport]; !ok {
 		return false, errTransportNotEnabled
-	} else if *reg.RegistrationSource != pb.RegistrationSource_Detector && regManager.IsBlocklistedPhantom(reg.PhantomIp) {
+	} else if regManager.IsBlocklistedPhantom(reg.PhantomIp) {
+		return false, errBlocklistedPhantom
+	} else if *reg.RegistrationSource != pb.RegistrationSource_Detector && regManager.IsLocalBlocklistedPhantom(reg.PhantomIp) {
 		return false, errBlocklistedPhantom
 	}
 

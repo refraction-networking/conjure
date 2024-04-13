@@ -43,6 +43,11 @@ type RegConfig struct {
 	covertBlocklistDomains []*regexp.Regexp
 
 	// Local list of disallowed subnets patterns for phantom addresses.
+	// Note: this blocklist still allows/liveness-tests forwards phantoms if they came from the detector (decoy registrar)
+	LocalPhantomBlocklist []string `toml:"local_phantom_blocklist"`
+	localPhantomBlocklist []*net.IPNet
+
+	// This blocklist blocks phantoms, regardless where we hear about them from
 	PhantomBlocklist []string `toml:"phantom_blocklist"`
 	phantomBlocklist []*net.IPNet
 
@@ -66,6 +71,14 @@ func (c *RegConfig) ParseBlocklists() {
 		blockedDom := regexp.MustCompile(r)
 		if blockedDom != nil {
 			c.covertBlocklistDomains = append(c.covertBlocklistDomains, blockedDom)
+		}
+	}
+
+	c.localPhantomBlocklist = []*net.IPNet{}
+	for _, subnet := range c.LocalPhantomBlocklist {
+		_, ipNet, err := net.ParseCIDR(subnet)
+		if err == nil {
+			c.localPhantomBlocklist = append(c.localPhantomBlocklist, ipNet)
 		}
 	}
 
@@ -195,6 +208,18 @@ func (c *RegConfig) isBlocklistedCovertDomain(provided string) bool {
 		}
 	}
 
+	return false
+}
+
+// Local blocked phantoms are those we ignore registrations
+// for, UNLESS they come from the detector (decoy registrations)
+func (c *RegConfig) IsLocalBlocklistedPhantom(addr net.IP) bool {
+	for _, net := range c.localPhantomBlocklist {
+		if net.Contains(addr) {
+			// blocked by IP address
+			return true
+		}
+	}
 	return false
 }
 
