@@ -51,8 +51,14 @@ func ServerWithContext(ctx context.Context, conn net.Conn, config *Config) (net.
 		return nil, err
 	}
 
+	ddl, ok := ctx.Deadline()
+	if ok {
+		conn.SetDeadline(ddl)
+	}
+
 	wrappedConn, err := wrapSCTP(dtlsConn, config)
 	if err != nil {
+		dtlsConn.Close()
 		return nil, err
 	}
 

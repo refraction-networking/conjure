@@ -36,6 +36,8 @@ func main() {
 	flag.StringVar(&zmqAddress, "zmq-address", "ipc://@zmq-proxy", "Address of ZMQ proxy")
 	flag.Parse()
 
+	startPProf()
+
 	// Init stats
 	cj.Stat()
 
