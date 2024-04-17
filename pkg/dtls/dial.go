@@ -71,7 +71,7 @@ func ClientWithContext(ctx context.Context, conn net.Conn, config *Config) (net.
 	dtlsConn, err := dtls.ClientWithContext(ctx, conn, dtlsConf)
 
 	if err != nil {
-		return nil, fmt.Errorf("error creating dtls connection: %v", err)
+		return nil, fmt.Errorf("error creating dtls connection: %w", err)
 	}
 
 	wrappedConn, err := wrapSCTP(dtlsConn, config)
