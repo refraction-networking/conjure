@@ -11,8 +11,6 @@ import (
 	"github.com/refraction-networking/conjure/pkg/station/lib"
 )
 
-const test_privkey = "b80614693daec8a6fcc19af40f8537514582994fe034376f86e7cb8e46a746"
-
 const (
 	cidSize    = 8
 	listenPort = 41246

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"net"
@@ -20,6 +21,8 @@ import (
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
 	pb "github.com/refraction-networking/conjure/proto"
 )
+
+const test_privkey = "b80614693daec8a6fcc19af40f8537514582994fe034376f86e7cb8e46a746"
 
 var sharedLogger *log.Logger
 var logClientIP = false
@@ -134,10 +137,15 @@ func main() {
 	go regManager.HandleRegUpdates(ctx, regChan, wg)
 	go connManager.acceptConnections(ctx, regManager, logger)
 
+	testPrivkeyBytes, err := hex.DecodeString(test_privkey)
+	if err != nil {
+		logger.Fatalf("failed decoding test privkey: %v", err)
+	}
+
 	if err := oscur0.ListenAndProxy(func(covert string, clientConn net.Conn) {
 		fmt.Printf("got connection: %v -> %v, covert: %v\n", clientConn.LocalAddr(), clientConn.RemoteAddr(), covert)
 		cj.ProxyWithTunStats(clientConn, logger, "", covert, nil, false)
-	}, privkey); err != nil {
+	}, [32]byte(testPrivkeyBytes)); err != nil {
 		logger.Fatalf("error listening one-shot dtls: %v", err)
 	}
 
