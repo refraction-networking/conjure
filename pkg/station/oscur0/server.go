@@ -19,23 +19,23 @@ import (
 
 const privkeylen int = lib.PrivateKeyLength
 
-func Server(pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
-	return ServerWithContext(context.Background(), pconn, raddr, config)
-}
+// func Server(pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
+// 	return ServerWithContext(context.Background(), pconn, raddr, config)
+// }
 
-func ServerWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
+func ServerWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, *pb.OneShotData, error) {
 
 	state := &dtls.State{}
 
 	packet := make([]byte, receiveMTU)
 	n, _, err := pconn.ReadFrom(packet)
 	if err != nil {
-		return nil, fmt.Errorf("error reading from pconn: %v", err)
+		return nil, nil, fmt.Errorf("error reading from pconn: %v", err)
 	}
 
 	pkts, err := recordlayer.ContentAwareUnpackDatagram(packet[:n], cidSize)
 	if err != nil {
-		return nil, fmt.Errorf("error unpacking initial datagram: %v", err)
+		return nil, nil, fmt.Errorf("error unpacking initial datagram: %v", err)
 	}
 
 	h := &recordlayer.Header{
@@ -44,21 +44,21 @@ func ServerWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 
 	pkt := pkts[0]
 	if err := h.Unmarshal(pkt); err != nil {
-		return nil, fmt.Errorf("error unmarshaling initial datagram: %v", err)
+		return nil, nil, fmt.Errorf("error unmarshaling initial datagram: %v", err)
 	}
 
 	if h.ContentType != protocol.ContentTypeConnectionID {
-		return nil, fmt.Errorf("initial datagram is not type cid: %v", err)
+		return nil, nil, fmt.Errorf("initial datagram is not type cid: %v", err)
 	}
 
 	start := recordlayer.FixedHeaderSize + cidSize
 	representative := &[32]byte{}
 	if len(pkt) < (start + lib.PrivateKeyLength) {
-		return nil, fmt.Errorf("initial packet too small to contain a key: lengh = %v, minimum = %v", len(pkt), (start + lib.PrivateKeyLength))
+		return nil, nil, fmt.Errorf("initial packet too small to contain a key: lengh = %v, minimum = %v", len(pkt), (start + lib.PrivateKeyLength))
 	}
 	n = copy(representative[:], pkt[start:start+lib.PrivateKeyLength])
 	if n != len(representative) {
-		return nil, fmt.Errorf("copied %v, expected %v", n, len(representative))
+		return nil, nil, fmt.Errorf("copied %v, expected %v", n, len(representative))
 	}
 
 	// https://github.com/refraction-networking/conjure/blob/46fea9be3592c26b8841d53438264af5b740a544/pkg/core/keys.go#L59-L67
@@ -69,7 +69,7 @@ func ServerWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 
 	newSharedSecret, err := curve25519.X25519(config.privKey[:], pubkey[:])
 	if err != nil {
-		return nil, fmt.Errorf("error finding shared secret: %v", err)
+		return nil, nil, fmt.Errorf("error finding shared secret: %v", err)
 	}
 
 	newData := pkt[start+lib.PrivateKeyLength:]
@@ -78,7 +78,7 @@ func ServerWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 
 	newHeader, err := h.Marshal()
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling header: %v", err)
+		return nil, nil, fmt.Errorf("error marshaling header: %v", err)
 	}
 
 	combined := make([]byte, 0, len(newHeader)+len(newData))
@@ -99,25 +99,25 @@ func ServerWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 	}
 	state, err = DTLSServerState(newSharedSecret)
 	if err != nil {
-		return nil, fmt.Errorf("error generating dtls state from shared secret: %v")
+		return nil, nil, fmt.Errorf("error generating dtls state from shared secret: %v")
 	}
 
 	conn, err := dtls.Resume(state, pconn, raddr, &dtls.Config{
 		ConnectionIDGenerator: dtls.RandomCIDGenerator(cidSize),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error resuming dtls connection: %v", err)
+		return nil, nil, fmt.Errorf("error resuming dtls connection: %v", err)
 	}
 
 	first := make([]byte, receiveMTU)
 	n, err = conn.Read(first)
 	if err != nil {
-		return nil, fmt.Errorf("error reading from dtls conn: %v", err)
+		return nil, nil, fmt.Errorf("error reading from dtls conn: %v", err)
 	}
 
 	info := &pb.OneShotData{}
 	if err := proto.Unmarshal(first[:n], info); err != nil {
-		return nil, fmt.Errorf("error unmarshaling one shot data: %v", err)
+		return nil, nil, fmt.Errorf("error unmarshaling one shot data: %v", err)
 	}
 
 	econn := &edit1conn{
@@ -127,13 +127,13 @@ func ServerWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 
 	kcpListener, err := kcp.ServeConn(nil, 0, 0, dtlsnet.PacketConnFromConn(econn))
 	if err != nil {
-		return nil, fmt.Errorf("error serving kcp conn: %v", err)
+		return nil, nil, fmt.Errorf("error serving kcp conn: %v", err)
 	}
 
 	kcpConn, err := kcpListener.Accept()
 	if err != nil {
-		return nil, fmt.Errorf("error accepting kcp conn: %v", err)
+		return nil, nil, fmt.Errorf("error accepting kcp conn: %v", err)
 	}
 
-	return kcpConn, nil
+	return kcpConn, info, nil
 }

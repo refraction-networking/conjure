@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"strconv"
@@ -12,6 +14,7 @@ import (
 
 	cj "github.com/refraction-networking/conjure/pkg/station/lib"
 	"github.com/refraction-networking/conjure/pkg/station/log"
+	"github.com/refraction-networking/conjure/pkg/station/oscur0"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/min"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/obfs4"
 	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
@@ -131,12 +134,12 @@ func main() {
 	go regManager.HandleRegUpdates(ctx, regChan, wg)
 	go connManager.acceptConnections(ctx, regManager, logger)
 
-	// if err := oscur0.ListenAndProxy(func(covert string, clientConn net.Conn) {
-	// 	fmt.Printf("got connection: %v -> %v, covert: %v\n", clientConn.LocalAddr(), clientConn.RemoteAddr(), covert)
-	// 	cj.ProxyWithTunStats(clientConn, logger, "", covert, nil, false)
-	// }, privkey); err != nil {
-	// 	logger.Fatalf("error listening one-shot dtls: %v", err)
-	// }
+	if err := oscur0.ListenAndProxy(func(covert string, clientConn net.Conn) {
+		fmt.Printf("got connection: %v -> %v, covert: %v\n", clientConn.LocalAddr(), clientConn.RemoteAddr(), covert)
+		cj.ProxyWithTunStats(clientConn, logger, "", covert, nil, false)
+	}, privkey); err != nil {
+		logger.Fatalf("error listening one-shot dtls: %v", err)
+	}
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)

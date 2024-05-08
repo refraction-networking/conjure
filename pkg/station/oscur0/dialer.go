@@ -103,13 +103,13 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 	return kcp.NewConn("", nil, 0, 0, dtlsnet.PacketConnFromConn(conn))
 }
 
-func Client(pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
-	return ClientWithContext(context.Background(), pconn, raddr, config)
-}
+// func Client(pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
+// 	return ClientWithContext(context.Background(), pconn, raddr, config)
+// }
 
-func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
+// func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
 
-}
+// }
 
 func resolveAddr(network, addrStr string) (net.Addr, error) {
 	if addrStr == "" {
