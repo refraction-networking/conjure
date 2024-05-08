@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/pion/dtls/v2"
 	"github.com/pion/dtls/v2/pkg/protocol/handshake"
@@ -33,6 +34,30 @@ func Client(conn net.Conn, config *Config) (net.Conn, error) {
 
 // DialWithContext creates a DTLS connection to the given network address using the given shared secret
 func ClientWithContext(ctx context.Context, conn net.Conn, config *Config) (net.Conn, error) {
+
+	dtlsConn, err := dtlsCtx(ctx, conn, config)
+	if err != nil {
+		return nil, fmt.Errorf("error creating dtls connection: %w", err)
+	}
+
+	ddl, ok := ctx.Deadline()
+	if ok {
+		conn.SetDeadline(ddl)
+	}
+
+	wrappedConn, err := wrapSCTP(dtlsConn, config)
+	if err != nil {
+		dtlsConn.Close()
+		return nil, err
+	}
+
+	conn.SetDeadline(time.Time{})
+	wrappedConn.SetDeadline(time.Time{})
+
+	return wrappedConn, nil
+}
+
+func dtlsCtx(ctx context.Context, conn net.Conn, config *Config) (net.Conn, error) {
 	clientCert, serverCert, err := certsFromSeed(config.PSK)
 
 	if err != nil {
@@ -68,16 +93,6 @@ func ClientWithContext(ctx context.Context, conn net.Conn, config *Config) (net.
 		VerifyPeerCertificate: verifyServerCertificate,
 	}
 
-	dtlsConn, err := dtls.ClientWithContext(ctx, conn, dtlsConf)
+	return dtls.ClientWithContext(ctx, conn, dtlsConf)
 
-	if err != nil {
-		return nil, fmt.Errorf("error creating dtls connection: %w", err)
-	}
-
-	wrappedConn, err := wrapSCTP(dtlsConn, config)
-	if err != nil {
-		return nil, err
-	}
-
-	return wrappedConn, nil
 }
