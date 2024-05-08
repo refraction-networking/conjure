@@ -2,6 +2,7 @@ package oscur0
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -37,6 +38,7 @@ func ListenAndProxy(proxyFunc func(covert string, clientConn net.Conn), privKey 
 			// Wait for a connection.
 			pconn, addr, err := listener.Accept()
 			if err != nil {
+				fmt.Printf("error accepting connection: %v", err)
 				continue
 			}
 
@@ -44,6 +46,7 @@ func ListenAndProxy(proxyFunc func(covert string, clientConn net.Conn), privKey 
 
 			kcpConn, info, err := ServerWithContext(ctxtimout, pconn, addr, Config{privKey: privKey})
 			if err != nil {
+				fmt.Printf("error accepting Server: %v", err)
 				continue
 			}
 
