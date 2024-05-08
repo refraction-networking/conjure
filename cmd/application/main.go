@@ -22,7 +22,7 @@ import (
 	pb "github.com/refraction-networking/conjure/proto"
 )
 
-const test_privkey = "b80614693daec8a6fcc19af40f8537514582994fe034376f86e7cb8e46a746"
+const test_privkey = "b80614693daec8a6fcc19af40f8537514582994fe034376f86e7cb8e46a74678"
 
 var sharedLogger *log.Logger
 var logClientIP = false
