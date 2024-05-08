@@ -3,7 +3,6 @@ package oscur0
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -24,61 +23,60 @@ const cj_pubkey = "a1cb97be697c5ed5aefd78ffa4db7e68101024603511e40a89951bc158807
 type dialFunc = func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)
 
 type Dialer struct {
-	inner   dialFunc
-	pubkey  [32]byte
-	phantom *net.UDPAddr
+	inner  dialFunc
+	pubkey [32]byte
 }
 
 type Config struct {
 	innerDialer dialFunc
 	privKey     [privkeylen]byte
+	pubKey      [privkeylen]byte
+	phantom     string
 }
 
-func NewDialer(conf *Config) (*Dialer, error) {
-	inner := conf.innerDialer
+// func NewDialer(conf *Config) (*Dialer, error) {
+// 	inner := conf.innerDialer
 
-	if inner == nil {
-		inner = func(ctx context.Context, network, laddr, raddr string) (net.Conn, error) {
-			defaultDialer := net.Dialer{}
-			localAddr, err := resolveAddr(network, laddr)
-			if err != nil {
-				return nil, fmt.Errorf("error resolving laddr: %v", err)
-			}
+// 	if inner == nil {
+// 		inner = func(ctx context.Context, network, laddr, raddr string) (net.Conn, error) {
+// 			defaultDialer := net.Dialer{}
+// 			localAddr, err := resolveAddr(network, laddr)
+// 			if err != nil {
+// 				return nil, fmt.Errorf("error resolving laddr: %v", err)
+// 			}
 
-			defaultDialer.LocalAddr = localAddr
-			return defaultDialer.DialContext(ctx, network, raddr)
-		}
-	}
+// 			defaultDialer.LocalAddr = localAddr
+// 			return defaultDialer.DialContext(ctx, network, raddr)
+// 		}
+// 	}
 
-	pubkeyBytes, err := hex.DecodeString(cj_pubkey)
-	if err != nil {
-		return nil, fmt.Errorf("error decoding pubkey: %v", err)
-	}
+// 	return &Dialer{inner: inner, pubkey: pubkey32Bytes}, nil
+// }
 
-	if len(pubkeyBytes) != 32 {
-		return nil, fmt.Errorf("pubkey length = %v, expected 32", len(pubkeyBytes))
-	}
+// func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 
-	pubkey32Bytes := [32]byte{}
-	copy(pubkey32Bytes[:], pubkeyBytes)
+// 	pconn, err := net.ListenUDP("udp", nil)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("error listening udp pconn: %v", err)
+// 	}
 
-	return &Dialer{inner: inner, pubkey: pubkey32Bytes}, nil
-}
+// 	return ServerWithContext(ctx, pconn)
 
-func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+// }
 
-	pConn, err := net.ListenUDP("udp", nil)
-	if err != nil {
-		return nil, fmt.Errorf("error listening udp pconn: %v", err)
-	}
+// func Client(pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
+// 	return ClientWithContext(context.Background(), pconn, raddr, config)
+// }
 
-	keys, err := core.GenerateClientSharedKeys(d.pubkey)
+func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
+
+	keys, err := core.GenerateClientSharedKeys(config.pubKey)
 	if err != nil {
 		return nil, fmt.Errorf("error generating client keys: %v", err)
 	}
 
 	w1pconn := &write1pconn{
-		PacketConn: pConn,
+		PacketConn: pconn,
 		onceBytes:  keys.Representative,
 	}
 
@@ -87,7 +85,7 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 		return nil, fmt.Errorf("error generateing dtls state: %v", err)
 	}
 
-	dtlsConn, err := dtls.Resume(state, w1pconn, d.phantom, &dtls.Config{
+	dtlsConn, err := dtls.Resume(state, w1pconn, raddr, &dtls.Config{
 		ExtendedMasterSecret: dtls.RequireExtendedMasterSecret,
 		KeyLogWriter:         log.Default().Writer(),
 	})
@@ -97,19 +95,11 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 
 	conn := &write1conn{
 		Conn:   dtlsConn,
-		covert: address,
+		covert: config.phantom,
 	}
 
 	return kcp.NewConn("", nil, 0, 0, dtlsnet.PacketConnFromConn(conn))
 }
-
-// func Client(pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
-// 	return ClientWithContext(context.Background(), pconn, raddr, config)
-// }
-
-// func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
-
-// }
 
 func resolveAddr(network, addrStr string) (net.Addr, error) {
 	if addrStr == "" {
