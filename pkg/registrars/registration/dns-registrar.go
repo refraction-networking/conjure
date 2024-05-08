@@ -2,13 +2,11 @@ package registration
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
 	"time"
 
-	"github.com/pion/stun"
 	"github.com/refraction-networking/conjure/pkg/registrars/dns-registrar/requester"
 	"github.com/refraction-networking/conjure/pkg/registrars/lib"
 	pb "github.com/refraction-networking/conjure/proto"
@@ -199,35 +197,35 @@ func (r *DNSRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.
 
 func getPublicIp(server string) ([]byte, error) {
 
-	c, err := stun.Dial("udp4", server)
-	if err != nil {
-		return nil, errors.New("Failed to connect to STUN server: " + err.Error())
-	}
+	// c, err := stun.Dial("udp4", server)
+	// if err != nil {
+	// 	return nil, errors.New("Failed to connect to STUN server: " + err.Error())
+	// }
 
-	message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
+	// message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
 
-	ip := net.IP{}
+	// ip := net.IP{}
 
-	err = c.Do(message, func(res stun.Event) {
-		if res.Error != nil {
-			err = res.Error
-			return
-		}
+	// err = c.Do(message, func(res stun.Event) {
+	// 	if res.Error != nil {
+	// 		err = res.Error
+	// 		return
+	// 	}
 
-		var xorAddr stun.XORMappedAddress
-		err = xorAddr.GetFrom(res.Message)
-		if err != nil {
-			return
-		}
+	// 	var xorAddr stun.XORMappedAddress
+	// 	err = xorAddr.GetFrom(res.Message)
+	// 	if err != nil {
+	// 		return
+	// 	}
 
-		ip = xorAddr.IP
-	})
+	// 	ip = xorAddr.IP
+	// })
 
-	if err != nil {
-		err = errors.New("Failed to get IP address from STUN: " + err.Error())
-	}
+	// if err != nil {
+	// 	err = errors.New("Failed to get IP address from STUN: " + err.Error())
+	// }
 
-	return ip.To4(), nil
+	return net.IP{1, 1, 1, 1}, nil
 }
 
 // PrepareRegKeys prepares key materials specific to the registrar
