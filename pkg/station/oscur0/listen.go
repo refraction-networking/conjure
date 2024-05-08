@@ -55,8 +55,6 @@ func ListenAndProxy(proxyFunc func(covert string, clientConn net.Conn), privKey 
 	return nil
 }
 
-func Listen()
-
 type Listener struct {
 	inner  dtlsnet.PacketListener
 	config Config
