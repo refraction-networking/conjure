@@ -32,6 +32,7 @@ type Config struct {
 	privKey     [privkeylen]byte
 	pubKey      [privkeylen]byte
 	phantom     string
+	keys        *core.SharedKeys
 }
 
 // func NewDialer(conf *Config) (*Dialer, error) {
@@ -70,17 +71,17 @@ type Config struct {
 
 func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
 
-	keys, err := core.GenerateClientSharedKeys(config.pubKey)
-	if err != nil {
-		return nil, fmt.Errorf("error generating client keys: %v", err)
-	}
+	// keys, err := core.GenerateClientSharedKeys(config.pubKey)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("error generating client keys: %v", err)
+	// }
 
 	w1pconn := &write1pconn{
 		PacketConn: pconn,
-		onceBytes:  keys.Representative,
+		onceBytes:  config.keys.Representative,
 	}
 
-	state, err := DTLSClientState(keys.SharedSecret)
+	state, err := DTLSClientState(config.keys.SharedSecret)
 	if err != nil {
 		return nil, fmt.Errorf("error generateing dtls state: %v", err)
 	}
