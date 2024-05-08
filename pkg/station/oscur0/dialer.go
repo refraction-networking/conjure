@@ -31,8 +31,8 @@ type Config struct {
 	innerDialer dialFunc
 	privKey     [privkeylen]byte
 	pubKey      [privkeylen]byte
-	phantom     string
-	keys        *core.SharedKeys
+	Phantom     string
+	Keys        *core.SharedKeys
 }
 
 // func NewDialer(conf *Config) (*Dialer, error) {
@@ -78,10 +78,10 @@ func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 
 	w1pconn := &write1pconn{
 		PacketConn: pconn,
-		onceBytes:  config.keys.Representative,
+		onceBytes:  config.Keys.Representative,
 	}
 
-	state, err := DTLSClientState(config.keys.SharedSecret)
+	state, err := DTLSClientState(config.Keys.SharedSecret)
 	if err != nil {
 		return nil, fmt.Errorf("error generateing dtls state: %v", err)
 	}
@@ -96,7 +96,7 @@ func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 
 	conn := &write1conn{
 		Conn:   dtlsConn,
-		covert: config.phantom,
+		covert: config.Phantom,
 	}
 
 	return kcp.NewConn("", nil, 0, 0, dtlsnet.PacketConnFromConn(conn))
