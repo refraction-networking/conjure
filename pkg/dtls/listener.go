@@ -195,15 +195,25 @@ func (l *Listener) AcceptWithContext(ctx context.Context, config *Config) (net.C
 
 	ddl, ok := ctx.Deadline()
 	if ok {
-		conn.SetDeadline(ddl)
+		err := conn.SetDeadline(ddl)
+		if err != nil {
+			return nil, fmt.Errorf("error setting deadline: %v", err)
+		}
 	}
 	wrappedConn, err := wrapSCTP(conn, config)
 	if err != nil {
 		conn.Close()
 		return nil, err
 	}
-	conn.SetDeadline(time.Time{})
-	wrappedConn.SetDeadline(time.Time{})
+	err = conn.SetDeadline(time.Time{})
+	if err != nil {
+		return nil, fmt.Errorf("error setting deadline: %v", err)
+	}
+
+	err = wrappedConn.SetDeadline(time.Time{})
+	if err != nil {
+		return nil, fmt.Errorf("error setting deadline: %v", err)
+	}
 	return wrappedConn, nil
 }
 
