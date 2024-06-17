@@ -45,7 +45,7 @@ pub fn init(log_level: Level, core_id: i32) {
     unsafe {
         LOGGER.lcore_id = core_id;
         LOGGER.log_level = log_level;
-        log::set_logger(&LOGGER).unwrap_or_else(|e| {
+        log::set_logger(&*std::ptr::addr_of_mut!(LOGGER)).unwrap_or_else(|e| {
             error!("failed to init logging: {}", e);
         });
     }

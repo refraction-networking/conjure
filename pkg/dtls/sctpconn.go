@@ -86,11 +86,9 @@ func (s *SCTPConn) Close() error {
 
 	s.closeOnce.Do(func() { close(s.closed) })
 
-	err := s.stream.Close()
-	if err != nil {
-		return err
-	}
-	return s.conn.Close()
+	s.stream.Close()
+	s.conn.Close()
+	return nil
 }
 
 func (s *SCTPConn) Write(b []byte) (int, error) {

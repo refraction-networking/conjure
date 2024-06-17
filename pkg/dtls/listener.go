@@ -149,21 +149,34 @@ func (l *Listener) Addr() net.Addr {
 
 func (l *Listener) verifyConnection(state *dtls.State) error {
 
-	certs, ok := l.connToCert[state.RemoteRandomBytes()]
-	if !ok {
-		return fmt.Errorf("no matching certificate found with client hello random")
+	certs, err := l.getCert(state.RemoteRandomBytes())
+	if err != nil {
+		return err
 	}
 
 	if len(state.PeerCertificates) != 1 {
 		return fmt.Errorf("expected 1 peer certificate, got %v", len(state.PeerCertificates))
 	}
 
-	err := verifyCert(state.PeerCertificates[0], certs.clientCert.Certificate[0])
+	err = verifyCert(state.PeerCertificates[0], certs.clientCert.Certificate[0])
 	if err != nil {
 		return fmt.Errorf("error verifying peer certificate: %v", err)
 	}
 
 	return nil
+}
+
+func (l *Listener) getCert(id [handshake.RandomBytesLength]byte) (*certPair, error) {
+	l.connToCertMutex.Lock()
+	defer l.connToCertMutex.Unlock()
+
+	certs, ok := l.connToCert[id]
+	if !ok {
+		return nil, fmt.Errorf("no matching certificate found with client hello random")
+	}
+
+	return certs, nil
+
 }
 
 // Accept accepts a connection with shared secret
@@ -174,6 +187,37 @@ func (l *Listener) Accept(config *Config) (net.Conn, error) {
 
 // AcceptWithContext accepts a connection with shared secret, with a context
 func (l *Listener) AcceptWithContext(ctx context.Context, config *Config) (net.Conn, error) {
+
+	conn, err := l.acceptDTLSConn(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+
+	ddl, ok := ctx.Deadline()
+	if ok {
+		err := conn.SetDeadline(ddl)
+		if err != nil {
+			return nil, fmt.Errorf("error setting deadline: %v", err)
+		}
+	}
+	wrappedConn, err := wrapSCTP(conn, config)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	err = conn.SetDeadline(time.Time{})
+	if err != nil {
+		return nil, fmt.Errorf("error setting deadline: %v", err)
+	}
+
+	err = wrappedConn.SetDeadline(time.Time{})
+	if err != nil {
+		return nil, fmt.Errorf("error setting deadline: %v", err)
+	}
+	return wrappedConn, nil
+}
+
+func (l *Listener) acceptDTLSConn(ctx context.Context, config *Config) (net.Conn, error) {
 	clientCert, serverCert, err := certsFromSeed(config.PSK)
 	if err != nil {
 		return &dtls.Conn{}, fmt.Errorf("error generating certificatess from seed: %v", err)
@@ -198,11 +242,7 @@ func (l *Listener) AcceptWithContext(ctx context.Context, config *Config) (net.C
 
 	select {
 	case conn := <-connCh:
-		wrappedConn, err := wrapSCTP(conn, config)
-		if err != nil {
-			return nil, err
-		}
-		return wrappedConn, nil
+		return conn, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
