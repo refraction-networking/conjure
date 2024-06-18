@@ -7,7 +7,7 @@ toolchain go1.22.1
 require github.com/refraction-networking/conjure v0.7.10
 
 require (
-	filippo.io/bigmod v0.0.3 // indirect
+	filippo.io/bigmod v0.0.1 // indirect
 	filippo.io/keygen v0.0.0-20230306160926-5201437acf8e // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

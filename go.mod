@@ -37,7 +37,7 @@ require (
 )
 
 require (
-	filippo.io/bigmod v0.0.3 // indirect
+	filippo.io/bigmod v0.0.1 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.3.9 // indirect
