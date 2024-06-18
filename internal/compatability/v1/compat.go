@@ -27,6 +27,9 @@ func getSubnets(sc *pb.PhantomSubnetsList, seed []byte, weighted bool) []string 
 			// fmt.Println("failed to seed random for weighted rand")
 			return nil
 		}
+
+		// We have a backwards compatability reason for using math rand in this way.
+		//nolint:staticcheck
 		rand.Seed(seedInt)
 
 		weightedSubnets := sc.GetWeightedSubnets()
@@ -144,8 +147,13 @@ func SelectAddrFromSubnet(seed []byte, net1 *net.IPNet) (net.IP, error) {
 		return nil, fmt.Errorf("failed to create seed ")
 	}
 
+	// We have a backwards compatability reason for using math rand in this way.
+	//nolint:staticcheck
 	rand.Seed(seedInt)
 	randBytes := make([]byte, addrLen/8)
+
+	// We have a backwards compatability reason for using math rand in this way.
+	//nolint:staticcheck
 	_, err := rand.Read(randBytes)
 	if err != nil {
 		return nil, err

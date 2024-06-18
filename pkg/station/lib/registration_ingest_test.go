@@ -29,7 +29,7 @@ func TestIngestPortHandling(t *testing.T) {
 	regSource := pb.RegistrationSource_Detector
 
 	c2sw := &pb.C2SWrapper{
-		RegistrationPayload: &c2s,
+		RegistrationPayload: c2s,
 		RegistrationSource:  &regSource,
 		RegistrationAddress: net.ParseIP("1.1.1.1"),
 	}
