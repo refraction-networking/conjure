@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -yq sudo apt-utils software-properties-com
 # install pf_ring deps
 
 COPY scripts/install_pfring.sh /
-ARG pfring_ver="latest"
+#ARG pfring_ver="latest"
+ARG pfring_ver="7.8.0-stable"
 RUN /usr/bin/sudo pfring_ver="${pfring_ver}" /install_pfring.sh
 
 # ------------------------------------------------------------------------------
@@ -61,6 +62,8 @@ COPY go.* /opt/conjure/
 COPY cmd/ /opt/conjure/cmd
 COPY pkg/ /opt/conjure/pkg
 COPY proto/ /opt/conjure/proto
+# util is not actually used, but it is in the go.work, and leaving it out results in an error.
+COPY util/ /opt/conjure/util
 
 RUN PATH="$HOME/.go/bin/:/usr/local/go/bin:$PATH" make app
 RUN PATH="$HOME/.go/bin/:/usr/local/go/bin:$PATH" make registration-server
