@@ -11,11 +11,14 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/pion/dtls/v2"
 	"github.com/pion/dtls/v2/pkg/protocol/handshake"
 	"github.com/pion/transport/v2/udp"
 )
+
+const defaultAcceptTimeout = 5 * time.Second
 
 // Listen creates a listener and starts listening
 func Listen(network string, laddr *net.UDPAddr, config *Config) (*Listener, error) {
@@ -39,40 +42,49 @@ func (l *Listener) acceptLoop() {
 	}
 
 	for {
-		c, err := l.parent.Accept()
-		if err != nil {
-			continue
-		}
-
-		go func() {
-			newDTLSConn, err := dtls.Server(c, config)
+		select {
+		case <-l.closed:
+			return
+		default:
+			c, err := l.parent.Accept()
 			if err != nil {
-				switch addr := c.RemoteAddr().(type) {
-				case *net.UDPAddr:
-					l.logIP(err, &addr.IP)
-				case *net.TCPAddr:
-					l.logIP(err, &addr.IP)
-				case *net.IPAddr:
-					l.logIP(err, &addr.IP)
+				continue
+			}
+
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), defaultAcceptTimeout)
+				defer cancel()
+				newDTLSConn, err := dtls.ServerWithContext(ctx, c, config)
+				if err != nil {
+					switch addr := c.RemoteAddr().(type) {
+					case *net.UDPAddr:
+						l.logIP(err, &addr.IP)
+					case *net.TCPAddr:
+						l.logIP(err, &addr.IP)
+					case *net.IPAddr:
+						l.logIP(err, &addr.IP)
+					}
+
+					return
 				}
 
-				return
-			}
+				connState := newDTLSConn.ConnectionState()
+				connID := connState.RemoteRandomBytes()
 
-			connState := newDTLSConn.ConnectionState()
-			connID := connState.RemoteRandomBytes()
+				acceptCh, err := l.chFromID(connID)
 
-			l.connMapMutex.RLock()
-			defer l.connMapMutex.RUnlock()
+				if err != nil {
+					return
+				}
 
-			acceptCh, ok := l.connMap[connID]
-
-			if !ok {
-				return
-			}
-
-			acceptCh <- newDTLSConn
-		}()
+				select {
+				case acceptCh <- newDTLSConn:
+					return
+				case <-ctx.Done():
+					return
+				}
+			}()
+		}
 	}
 }
 
@@ -97,6 +109,7 @@ func NewListener(inner net.Listener, config *Config) (*Listener, error) {
 		connMap:     map[[handshake.RandomBytesLength]byte](chan net.Conn){},
 		connToCert:  map[[handshake.RandomBytesLength]byte]*certPair{},
 		defaultCert: defaultCert,
+		closed:      make(chan struct{}),
 		logAuthFail: config.LogAuthFail,
 		logOther:    config.LogOther,
 	}
@@ -110,18 +123,22 @@ func NewListener(inner net.Listener, config *Config) (*Listener, error) {
 type Listener struct {
 	parent          net.Listener
 	connMap         map[[handshake.RandomBytesLength]byte](chan net.Conn)
-	connMapMutex    sync.RWMutex
+	connMapMutex    sync.Mutex
 	connToCert      map[[handshake.RandomBytesLength]byte]*certPair
-	connToCertMutex sync.RWMutex
+	connToCertMutex sync.Mutex
 	defaultCert     *tls.Certificate
 	logAuthFail     func(*net.IP)
 	logOther        func(*net.IP)
+
+	closeOnce sync.Once
+	closed    chan struct{}
 }
 
 // Close closes the listener.
 // Any blocked Accept operations will be unblocked and return errors.
 // Already Accepted connections are not closed.
 func (l *Listener) Close() error {
+	l.closeOnce.Do(func() { close(l.closed) })
 	return l.parent.Close()
 }
 
@@ -132,21 +149,34 @@ func (l *Listener) Addr() net.Addr {
 
 func (l *Listener) verifyConnection(state *dtls.State) error {
 
-	certs, ok := l.connToCert[state.RemoteRandomBytes()]
-	if !ok {
-		return fmt.Errorf("no matching certificate found with client hello random")
+	certs, err := l.getCert(state.RemoteRandomBytes())
+	if err != nil {
+		return err
 	}
 
 	if len(state.PeerCertificates) != 1 {
 		return fmt.Errorf("expected 1 peer certificate, got %v", len(state.PeerCertificates))
 	}
 
-	err := verifyCert(state.PeerCertificates[0], certs.clientCert.Certificate[0])
+	err = verifyCert(state.PeerCertificates[0], certs.clientCert.Certificate[0])
 	if err != nil {
 		return fmt.Errorf("error verifying peer certificate: %v", err)
 	}
 
 	return nil
+}
+
+func (l *Listener) getCert(id [handshake.RandomBytesLength]byte) (*certPair, error) {
+	l.connToCertMutex.Lock()
+	defer l.connToCertMutex.Unlock()
+
+	certs, ok := l.connToCert[id]
+	if !ok {
+		return nil, fmt.Errorf("no matching certificate found with client hello random")
+	}
+
+	return certs, nil
+
 }
 
 // Accept accepts a connection with shared secret
@@ -157,6 +187,37 @@ func (l *Listener) Accept(config *Config) (net.Conn, error) {
 
 // AcceptWithContext accepts a connection with shared secret, with a context
 func (l *Listener) AcceptWithContext(ctx context.Context, config *Config) (net.Conn, error) {
+
+	conn, err := l.acceptDTLSConn(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+
+	ddl, ok := ctx.Deadline()
+	if ok {
+		err := conn.SetDeadline(ddl)
+		if err != nil {
+			return nil, fmt.Errorf("error setting deadline: %v", err)
+		}
+	}
+	wrappedConn, err := wrapSCTP(conn, config)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	err = conn.SetDeadline(time.Time{})
+	if err != nil {
+		return nil, fmt.Errorf("error setting deadline: %v", err)
+	}
+
+	err = wrappedConn.SetDeadline(time.Time{})
+	if err != nil {
+		return nil, fmt.Errorf("error setting deadline: %v", err)
+	}
+	return wrappedConn, nil
+}
+
+func (l *Listener) acceptDTLSConn(ctx context.Context, config *Config) (net.Conn, error) {
 	clientCert, serverCert, err := certsFromSeed(config.PSK)
 	if err != nil {
 		return &dtls.Conn{}, fmt.Errorf("error generating certificatess from seed: %v", err)
@@ -181,11 +242,7 @@ func (l *Listener) AcceptWithContext(ctx context.Context, config *Config) (net.C
 
 	select {
 	case conn := <-connCh:
-		wrappedConn, err := wrapSCTP(conn, config)
-		if err != nil {
-			return nil, err
-		}
-		return wrappedConn, nil
+		return conn, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
@@ -223,6 +280,20 @@ func (l *Listener) registerChannel(connID [handshake.RandomBytesLength]byte) (<-
 	return connChan, nil
 }
 
+func (l *Listener) chFromID(id [handshake.RandomBytesLength]byte) (chan<- net.Conn, error) {
+
+	l.connMapMutex.Lock()
+	defer l.connMapMutex.Unlock()
+
+	acceptCh, ok := l.connMap[id]
+
+	if !ok {
+		return nil, fmt.Errorf("id not registered")
+	}
+
+	return acceptCh, nil
+}
+
 func (l *Listener) removeChannel(connID [handshake.RandomBytesLength]byte) {
 	l.connMapMutex.Lock()
 	defer l.connMapMutex.Unlock()
@@ -237,8 +308,8 @@ func (l *Listener) getCertificateFromClientHello(clientHello *dtls.ClientHelloIn
 		return l.defaultCert, nil
 	}
 
-	l.connToCertMutex.RLock()
-	defer l.connToCertMutex.RUnlock()
+	l.connToCertMutex.Lock()
+	defer l.connToCertMutex.Unlock()
 
 	certs, ok := l.connToCert[clientHello.RandomBytes]
 

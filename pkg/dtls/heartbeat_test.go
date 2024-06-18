@@ -124,7 +124,7 @@ func TestHeartbeatReadWrite(t *testing.T) {
 	s, err := heartbeatServer(server, conf, maxMsgSize)
 	require.Nil(t, err)
 
-	err = heartbeatClient(client, conf)
+	c, err := heartbeatClient(client, conf)
 	require.Nil(t, err)
 
 	recvd := 0
@@ -140,7 +140,7 @@ func TestHeartbeatReadWrite(t *testing.T) {
 	wg.Add(1)
 	go func(ctx1 context.Context) {
 		defer wg.Done()
-		defer client.Close()
+		defer c.Close()
 		defer server.Close()
 		for i := 0; i < sendTimes; i++ {
 			select {
@@ -174,12 +174,12 @@ func TestHeartbeatReadWrite(t *testing.T) {
 		for i := 0; i < sendTimes; i++ {
 			select {
 			case <-ctx2.Done():
-				client.Close()
+				c.Close()
 				return
 			default:
 				err := server.SetWriteDeadline(time.Now().Add(sleepInterval * 2))
 				require.Nil(t, err)
-				_, err = client.Write(toSend)
+				_, err = c.Write(toSend)
 				if err != nil {
 					if !errors.Is(err, net.ErrClosed) {
 						t.Log("encountered error writing", err)
@@ -214,7 +214,7 @@ func TestHeartbeatSend(t *testing.T) {
 		}
 	}()
 
-	err := heartbeatClient(client, conf)
+	_, err := heartbeatClient(client, conf)
 	require.Nil(t, err)
 
 	duration := 2
@@ -268,7 +268,7 @@ func TestHeartbeatInsufficientBuf(t *testing.T) {
 	s, err := heartbeatServer(server, conf, maxMsgSize)
 	require.Nil(t, err)
 
-	err = heartbeatClient(client, conf)
+	c, err := heartbeatClient(client, conf)
 	require.Nil(t, err)
 
 	toSend := []byte("testtt")
@@ -282,7 +282,7 @@ func TestHeartbeatInsufficientBuf(t *testing.T) {
 		require.ErrorIs(t, err, ErrInsufficientBuffer)
 	}()
 
-	_, err = client.Write(toSend)
+	_, err = c.Write(toSend)
 	require.Nil(t, err)
 
 	wg.Wait()

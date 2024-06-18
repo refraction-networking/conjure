@@ -540,6 +540,8 @@ func handleConnectingTpReg(regManager *RegistrationManager, reg *DecoyRegistrati
 					return
 				}
 
+				defer conn.Close()
+
 				// regManager.connectingStats.AddCreatedToSuccessfulConnecting(asn, cc, transport.Name())
 
 				Stat().AddConn()

@@ -86,11 +86,9 @@ func (s *SCTPConn) Close() error {
 
 	s.closeOnce.Do(func() { close(s.closed) })
 
-	err := s.stream.Close()
-	if err != nil {
-		return err
-	}
-	return s.conn.Close()
+	s.stream.Close()
+	s.conn.Close()
+	return nil
 }
 
 func (s *SCTPConn) Write(b []byte) (int, error) {
@@ -218,12 +216,12 @@ func openSCTP(conn net.Conn, unordered bool) (net.Conn, error) {
 
 	sctpStream.SetReliabilityParams(unordered, sctp.ReliabilityTypeReliable, 0)
 
-	err = heartbeatClient(sctpStream, &heartbeatConfig{Interval: 10 * time.Second})
+	hbClient, err := heartbeatClient(sctpStream, &heartbeatConfig{Interval: 10 * time.Second})
 	if err != nil {
 		return nil, fmt.Errorf("error opening heartbeat client: %v", err)
 	}
 
-	sctpConn := newSCTPConn(sctpStream, conn, uint64(sctpClient.MaxMessageSize()))
+	sctpConn := newSCTPConn(hbClient, conn, uint64(sctpClient.MaxMessageSize()))
 
 	return sctpConn, nil
 }

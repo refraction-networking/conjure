@@ -17,9 +17,13 @@ import (
 
 const listenPort = 41245
 
+type dtlsListener interface {
+	AcceptWithContext(context.Context, *dtls.Config) (net.Conn, error)
+}
+
 type Transport struct {
 	DNAT             interfaces.DNAT
-	dtlsListener     *dtls.Listener
+	dtlsListener     dtlsListener
 	logDialSuccess   func(*net.IP)
 	logListenSuccess func(*net.IP)
 }
@@ -73,8 +77,11 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 		return nil, fmt.Errorf("transport params is not *pb.DTLSTransportParams")
 	}
 
-	connCh := make(chan net.Conn, 2)
-	errCh := make(chan error, 2)
+	connCh := make(chan net.Conn)
+	errCh := make(chan error)
+
+	ctxCancel, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	go func() {
 
@@ -90,7 +97,10 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 
 		err := t.DNAT.AddEntry(&clientAddr.IP, uint16(clientAddr.Port), reg.PhantomIP(), reg.GetDstPort())
 		if err != nil {
-			errCh <- fmt.Errorf("error adding DNAT entry: %v", err)
+			select {
+			case errCh <- fmt.Errorf("error adding DNAT entry: %v", err):
+			case <-ctxCancel.Done():
+			}
 			return
 		}
 
@@ -104,30 +114,47 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 
 		udpConn, err := reuseport.Dial("udp", laddr.String(), clientAddr.String())
 		if err != nil {
-			errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
+			select {
+			case errCh <- fmt.Errorf("error connecting to dtls client: %v", err):
+			case <-ctxCancel.Done():
+			}
 			return
 		}
 
-		dtlsConn, err := dtls.ClientWithContext(ctx, udpConn, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept, Unordered: params.GetUnordered()})
+		dtlsConn, err := dtls.ClientWithContext(ctxCancel, udpConn, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept, Unordered: params.GetUnordered()})
 		if err != nil {
-			errCh <- fmt.Errorf("error connecting to dtls client: %v", err)
+			select {
+			case errCh <- fmt.Errorf("error connecting to dtls client: %v", err):
+			case <-ctxCancel.Done():
+			}
 			return
 		}
-		t.logDialSuccess(&clientAddr.IP)
 
-		connCh <- dtlsConn
+		select {
+		case connCh <- dtlsConn:
+			t.logDialSuccess(&clientAddr.IP)
+		case <-ctxCancel.Done():
+			dtlsConn.Close()
+		}
 	}()
 
 	go func() {
-		conn, err := t.dtlsListener.AcceptWithContext(ctx, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept, Unordered: params.GetUnordered()})
+		conn, err := t.dtlsListener.AcceptWithContext(ctxCancel, &dtls.Config{PSK: reg.SharedSecret(), SCTP: dtls.ServerAccept, Unordered: params.GetUnordered()})
 		if err != nil {
-			errCh <- fmt.Errorf("error accepting dtls connection from secret: %v", err)
+			select {
+			case errCh <- fmt.Errorf("error accepting dtls connection from secret: %v", err):
+			case <-ctxCancel.Done():
+			}
 			return
 		}
-		logip := net.ParseIP(reg.GetRegistrationAddress())
-		t.logListenSuccess(&logip)
 
-		connCh <- conn
+		select {
+		case connCh <- conn:
+			logip := net.ParseIP(reg.GetRegistrationAddress())
+			t.logListenSuccess(&logip)
+		case <-ctxCancel.Done():
+			conn.Close()
+		}
 	}()
 
 	var errs []error
@@ -141,6 +168,8 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 			if err != nil { // store the error
 				errs = append(errs, err)
 			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 	}
 

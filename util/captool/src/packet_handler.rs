@@ -21,6 +21,9 @@ pub struct PacketHandler {
     // to anonymize.
     pub target_subnets: Vec<IpNet>,
 
+    // excepted_subnets is used to exclude subnets within target_subnets from capturing their traffic
+    pub excepted_subnets: Vec<IpNet>,
+
     // cc_filter allows us to rule out packets we are not interested in capturing before processing them
     pub cc_filter: Vec<String>,
     // asn_filter allows us to rule out packets we are not interested in capturing before processing them
@@ -117,6 +120,7 @@ impl PacketHandler {
         asn_path: &str,
         ccdb_path: &str,
         target_subnets: Vec<IpNet>,
+        excepted_subnets: Vec<IpNet>,
         limiter: Option<LimiterState>,
         cc_filter: Vec<String>,
         asn_filter: Vec<u32>,
@@ -127,6 +131,7 @@ impl PacketHandler {
             asn_reader: maxminddb::Reader::open_readfile(String::from(asn_path))?,
             cc_reader: maxminddb::Reader::open_readfile(String::from(ccdb_path))?,
             target_subnets,
+            excepted_subnets,
             cc_filter,
             asn_filter,
             limiter,
@@ -171,6 +176,12 @@ impl PacketHandler {
             return AnonymizeTypes::None;
         }
 
+	for excepted_subnet in &self.excepted_subnets {
+	    if excepted_subnet.contains(&src)  ||  excepted_subnet.contains(&dst) {
+		return AnonymizeTypes::None;
+	    }
+	}
+        
         for target_subnet in &self.target_subnets {
             if target_subnet.contains(&src) {
                 return AnonymizeTypes::Download;
