@@ -272,6 +272,8 @@ func TestHalfpipeLargeWrite(t *testing.T) {
 
 	inbuf := make([]byte, 32805)
 
+	// We have a backwards compatability reason for using math rand in this way.
+	//nolint:staticcheck
 	n, err := mrand.Read(inbuf)
 	require.Nil(t, err)
 	require.Equal(t, len(inbuf), n)
@@ -306,6 +308,8 @@ func TestHalfpipeUnreliableReader(t *testing.T) {
 
 	inbuf := make([]byte, 32805)
 
+	// We have a backwards compatability reason for using math rand in this way.
+	//nolint:staticcheck
 	n, err := mrand.Read(inbuf)
 	require.Nil(t, err)
 	require.Equal(t, len(inbuf), n)
