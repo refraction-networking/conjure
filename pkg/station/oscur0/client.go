@@ -3,6 +3,7 @@ package oscur0
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -29,7 +30,7 @@ type Dialer struct {
 
 type Config struct {
 	innerDialer dialFunc
-	privKey     [privkeylen]byte
+	PrivKey     [privkeylen]byte
 	pubKey      [privkeylen]byte
 	Phantom     string
 	Keys        *core.SharedKeys
@@ -93,6 +94,9 @@ func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("representative: %v\n", hex.EncodeToString(config.Keys.Representative))
+	fmt.Printf("shared secret : %v\n", hex.EncodeToString(config.Keys.SharedSecret))
 
 	conn := &write1conn{
 		Conn:   dtlsConn,

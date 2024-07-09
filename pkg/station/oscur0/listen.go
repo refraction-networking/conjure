@@ -44,7 +44,7 @@ func ListenAndProxy(proxyFunc func(covert string, clientConn net.Conn), privKey 
 
 			ctxtimout, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
-			kcpConn, info, err := ServerWithContext(ctxtimout, pconn, addr, Config{privKey: privKey})
+			kcpConn, info, err := ServerWithContext(ctxtimout, pconn, addr, Config{PrivKey: privKey})
 			if err != nil {
 				fmt.Printf("error accepting Server: %v", err)
 				continue

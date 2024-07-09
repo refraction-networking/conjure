@@ -2,6 +2,7 @@ package oscur0
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"net"
 
@@ -23,7 +24,20 @@ const privkeylen int = lib.PrivateKeyLength
 // 	return ServerWithContext(context.Background(), pconn, raddr, config)
 // }
 
+func checkZeroPrivkey(arr [privkeylen]byte) error {
+	for _, v := range arr {
+		if v != 0 {
+			return nil
+		}
+	}
+	return fmt.Errorf("empty privkey")
+}
+
 func ServerWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, *pb.OneShotData, error) {
+
+	if err := checkZeroPrivkey(config.PrivKey); err != nil {
+		return nil, nil, err
+	}
 
 	state := &dtls.State{}
 
@@ -67,10 +81,13 @@ func ServerWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 	pubkey := &[32]byte{}
 	extra25519.RepresentativeToPublicKey(pubkey, representative)
 
-	newSharedSecret, err := curve25519.X25519(config.privKey[:], pubkey[:])
+	newSharedSecret, err := curve25519.X25519(config.PrivKey[:], pubkey[:])
 	if err != nil {
 		return nil, nil, fmt.Errorf("error finding shared secret: %v", err)
 	}
+
+	fmt.Printf("representative: %v\n", hex.EncodeToString(representative[:]))
+	fmt.Printf("shared secret : %v\n", hex.EncodeToString(newSharedSecret))
 
 	newData := pkt[start+lib.PrivateKeyLength:]
 
