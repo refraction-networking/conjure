@@ -282,7 +282,7 @@ pub unsafe extern "C" fn rust_detect_init(
     debug!("Initialized rust core {}", global.lcore);
 
     RustGlobalsStruct {
-        global: transmute(Box::new(global)),
+        global: transmute::<std::boxed::Box<PerCoreGlobal>, *mut PerCoreGlobal>(Box::new(global)),
     }
     //fail_map: unsafe { transmute(Box::new(fail_map)) },
     //cli_conf: unsafe { transmute(Box::new(cli_conf)) } }

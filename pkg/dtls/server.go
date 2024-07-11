@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/pion/dtls/v2"
 )
@@ -51,9 +52,28 @@ func ServerWithContext(ctx context.Context, conn net.Conn, config *Config) (net.
 		return nil, err
 	}
 
+	ddl, ok := ctx.Deadline()
+	if ok {
+		err := conn.SetDeadline(ddl)
+		if err != nil {
+			return nil, fmt.Errorf("error setting deadline: %v", err)
+		}
+	}
+
 	wrappedConn, err := wrapSCTP(dtlsConn, config)
 	if err != nil {
+		dtlsConn.Close()
 		return nil, err
+	}
+
+	err = conn.SetDeadline(time.Time{})
+	if err != nil {
+		return nil, fmt.Errorf("error setting deadline: %v", err)
+	}
+
+	err = wrappedConn.SetDeadline(time.Time{})
+	if err != nil {
+		return nil, fmt.Errorf("error setting deadline: %v", err)
 	}
 
 	return wrappedConn, nil

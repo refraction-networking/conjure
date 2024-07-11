@@ -24,6 +24,10 @@ app:
 	[ -d $(EXE_DIR) ] || mkdir -p $(EXE_DIR)
 	go build -o ${EXE_DIR}/application ./cmd/application
 
+app-dbg:
+	[ -d $(EXE_DIR) ] || mkdir -p $(EXE_DIR)
+	go build -tags debug -o ${EXE_DIR}/application ./cmd/application
+
 libtd:
 	cd ./libtapdance/ && make libtapdance.a
 
