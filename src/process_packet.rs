@@ -3,7 +3,6 @@ use std::os::raw::c_void;
 use std::panic;
 use std::slice;
 use std::str;
-use std::u8;
 
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
 use pnet::packet::ip::IpNextHeaderProtocols;

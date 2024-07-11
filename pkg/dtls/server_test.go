@@ -85,3 +85,27 @@ func TestClientFail(t *testing.T) {
 		t.Fatalf("Connect does not respect context")
 	}
 }
+
+func TestFailSCTP(t *testing.T) {
+
+	ctxTime := 3 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTime)
+	defer cancel()
+
+	server, client := net.Pipe()
+
+	before := time.Now()
+
+	go func() {
+		_, _ = dtlsCtx(ctx, client, &Config{PSK: sharedSecret, SCTP: ClientOpen})
+	}()
+
+	_, err := ServerWithContext(ctx, server, &Config{PSK: sharedSecret, SCTP: ServerAccept})
+
+	require.NotNil(t, err)
+	dur := time.Since(before)
+	if dur > ctxTime*2 {
+		t.Fatalf("Connect does not respect context")
+	}
+
+}

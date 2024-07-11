@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func mockReceiveFromDetector() (pb.ClientToStation, core.ConjureSharedKeys) {
+func mockReceiveFromDetector() (*pb.ClientToStation, core.ConjureSharedKeys) {
 	clientToStationBytes, _ := hex.DecodeString("109a04180ba2010e35322e34342e37332e363a343433b00100a2060100")
 	sharedSecret, _ := hex.DecodeString("5414c734ad5dc53e6b56a7bb47ce695a14a3ef076a3d5ace9cbf3b4d12706b73")
 
@@ -36,7 +36,7 @@ func mockReceiveFromDetector() (pb.ClientToStation, core.ConjureSharedKeys) {
 	var testGeneration uint32 = 957
 	clientToStation.DecoyListGeneration = &testGeneration
 
-	return *clientToStation, conjureKeys
+	return clientToStation, conjureKeys
 }
 
 func TestRegistrationLookup(t *testing.T) {
@@ -50,7 +50,7 @@ func TestRegistrationLookup(t *testing.T) {
 
 	regSource := pb.RegistrationSource_Detector
 
-	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support(), &regSource)
+	newReg, err := rm.NewRegistration(c2s, &keys, c2s.GetV6Support(), &regSource)
 	if err != nil {
 		t.Fatalf("Registration failed: %v", err)
 	}
@@ -254,7 +254,7 @@ func TestRegString(t *testing.T) {
 
 	regSource := pb.RegistrationSource_Detector
 
-	newReg, err := rm.NewRegistration(&c2s, &keys, c2s.GetV6Support(), &regSource)
+	newReg, err := rm.NewRegistration(c2s, &keys, c2s.GetV6Support(), &regSource)
 	if err != nil {
 		t.Fatalf("Registration failed: %v", err)
 	}
