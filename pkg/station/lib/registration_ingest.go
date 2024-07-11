@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"encoding/binary"
 	"bytes"
 	"context"
 	"errors"
@@ -418,6 +419,10 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 	// If a C2SWrapper has a registration response at this stage EITHER auth was disabled OR it was
 	// signed by a registration server and has overrides that should be applied
 	var dstPort = -1
+
+	// Used to apply IPv4 overrides from the registration response
+        var ipv4Override net.IP
+
 	if rr := c2sw.GetRegistrationResponse(); rr != nil {
 		if rr.DstPort != nil {
 			dstPort = int(rr.GetDstPort())
@@ -429,13 +434,24 @@ func (rm *RegistrationManager) NewRegistrationC2SWrapper(c2sw *pb.C2SWrapper, in
 			c2s.TransportParams = rr.GetTransportParams()
 		}
 
-		// TODO: future, apply the ip addresses from the Registration response (rr.IPv4Addr, rr.IPv6Addr)
+		// apply the ip addresses from the registration response, if the Ipv4Addr is not empty
+		if rr.Ipv4Addr != nil && *rr.Ipv4Addr != 0 {
+			ipv4Bytes := make([]byte, 4)
+	                binary.BigEndian.PutUint32(ipv4Bytes, *rr.Ipv4Addr)
+		        ipv4Override = net.IP(ipv4Bytes)
+		}
+
 	}
 
 	reg, err := rm.NewRegistration(c2s, &conjureKeys, includeV6, &regSrc)
 	if err != nil || reg == nil {
 		return nil, fmt.Errorf("failed to build registration: %w", err)
 	}
+
+	if ipv4Override != nil {
+		// If the Ipv4Addr from the registration response is not empty, use it to override the IPv4 that the station derived
+		reg.PhantomIp = ipv4Override
+        }
 
 	clientAddr := net.IP(c2sw.GetRegistrationAddress())
 
