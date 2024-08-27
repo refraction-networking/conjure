@@ -19,7 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const cj_pubkey = "a1cb97be697c5ed5aefd78ffa4db7e68101024603511e40a89951bc158807177"
+const cj_pubkey = "0b63baad7f2f4bb5b547c53adc0fbb179852910607935e6f4b5639fd989b1156"
 
 type dialFunc = func(ctx context.Context, network, laddr, raddr string) (net.Conn, error)
 
@@ -35,36 +35,6 @@ type Config struct {
 	Phantom     string
 	Keys        *core.SharedKeys
 }
-
-// func NewDialer(conf *Config) (*Dialer, error) {
-// 	inner := conf.innerDialer
-
-// 	if inner == nil {
-// 		inner = func(ctx context.Context, network, laddr, raddr string) (net.Conn, error) {
-// 			defaultDialer := net.Dialer{}
-// 			localAddr, err := resolveAddr(network, laddr)
-// 			if err != nil {
-// 				return nil, fmt.Errorf("error resolving laddr: %v", err)
-// 			}
-
-// 			defaultDialer.LocalAddr = localAddr
-// 			return defaultDialer.DialContext(ctx, network, raddr)
-// 		}
-// 	}
-
-// 	return &Dialer{inner: inner, pubkey: pubkey32Bytes}, nil
-// }
-
-// func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-
-// 	pconn, err := net.ListenUDP("udp", nil)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("error listening udp pconn: %v", err)
-// 	}
-
-// 	return ServerWithContext(ctx, pconn)
-
-// }
 
 // func Client(pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
 // 	return ClientWithContext(context.Background(), pconn, raddr, config)

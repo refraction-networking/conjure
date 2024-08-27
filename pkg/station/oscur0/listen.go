@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/pion/dtls/v2"
-	dtlsnet "github.com/pion/dtls/v2/pkg/net"
 	"github.com/refraction-networking/conjure/pkg/station/lib"
 )
 
@@ -44,33 +43,19 @@ func ListenAndProxy(proxyFunc func(covert string, clientConn net.Conn), privKey 
 
 			ctxtimout, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
-			kcpConn, info, err := ServerWithContext(ctxtimout, pconn, addr, Config{PrivKey: privKey})
+			kcpConn, err := ServerWithContext(ctxtimout, pconn, addr, Config{PrivKey: privKey})
 			if err != nil {
 				fmt.Printf("error accepting Server: %v", err)
 				continue
 			}
 
-			go proxyFunc(info.GetCovert(), kcpConn)
+			go proxyFunc(kcpConn.Covert(), kcpConn)
 
 		}
 	}()
 
 	return nil
 }
-
-type Listener struct {
-	inner  dtlsnet.PacketListener
-	config Config
-}
-
-// func (l *Listener) Accept() (net.Conn, error) {
-// 	pconn, raddr, err := l.inner.Accept()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return Server(pconn, raddr, l.config)
-// }
 
 type edit1pconn struct {
 	net.PacketConn

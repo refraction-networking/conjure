@@ -3,14 +3,11 @@
 package main
 
 import (
-	"context"
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 
-	"github.com/pion/dtls/v2"
 	"github.com/pion/dtls/v2/examples/util"
 	"github.com/refraction-networking/conjure/pkg/station/oscur0"
 )
@@ -31,12 +28,6 @@ func main() {
 	addr, err := net.ResolveUDPAddr("udp", *listenAddr)
 	util.Check(err)
 
-	// Prepare the configuration of the DTLS connection
-	config := &dtls.Config{
-		ConnectionIDGenerator: dtls.RandomCIDGenerator(cidSize),
-		KeyLogWriter:          log.Default().Writer(),
-	}
-
 	priv, err := hex.DecodeString(station_privkey)
 	util.Check(err)
 	privkey := [32]byte{}
@@ -45,14 +36,8 @@ func main() {
 		panic("wrong privkey size")
 	}
 
-	// Connect to a DTLS server
-	listener, err := dtls.NewResumeListener("udp", addr, config)
+	listener, err := oscur0.Listen(addr, oscur0.Config{PrivKey: privkey})
 	util.Check(err)
-	defer func() {
-		util.Check(listener.Close())
-	}()
-
-	fmt.Println("Listening")
 
 	// Simulate a chat session
 	hub := util.NewHub()
@@ -60,14 +45,9 @@ func main() {
 	go func() {
 		for {
 			// Wait for a connection.
-			var pconn net.PacketConn
-			pconn, addr, err := listener.Accept()
+			conn, err := listener.Accept()
 			util.Check(err)
-			fmt.Printf("got connection: %v", addr)
-
-			conn, info, err := oscur0.ServerWithContext(context.Background(), pconn, addr, oscur0.Config{PrivKey: privkey})
-			util.Check(err)
-			fmt.Printf("%+v\n", info)
+			fmt.Printf("covert: %v\n", conn.Covert())
 
 			// `conn` is of type `net.Conn` but may be casted to `dtls.Conn`
 			// using `dtlsConn := conn.(*dtls.Conn)` in order to to expose
