@@ -30,13 +30,10 @@ func main() {
 
 	priv, err := hex.DecodeString(station_privkey)
 	util.Check(err)
-	privkey := [32]byte{}
-	n := copy(privkey[:], priv)
-	if n != len(priv) {
-		panic("wrong privkey size")
-	}
 
-	listener, err := oscur0.Listen(addr, oscur0.Config{PrivKey: privkey})
+	fmt.Printf("%v\n", priv)
+
+	listener, err := oscur0.Listen(addr, oscur0.Config{PrivKey: priv})
 	util.Check(err)
 
 	// Simulate a chat session

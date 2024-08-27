@@ -30,8 +30,8 @@ type Dialer struct {
 
 type Config struct {
 	innerDialer dialFunc
-	PrivKey     [privkeylen]byte
-	PubKey      [privkeylen]byte
+	PrivKey     []byte
+	PubKey      []byte
 	Phantom     string
 }
 
@@ -39,9 +39,14 @@ type Config struct {
 // 	return ClientWithContext(context.Background(), pconn, raddr, config)
 // }
 
-func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
+func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config) (*Conn, error) {
 
-	keys, err := core.GenerateClientSharedKeys(config.PubKey)
+	pubkey32bytes, err := sliceToArray(config.PubKey)
+	if err != nil {
+		return nil, err
+	}
+
+	keys, err := core.GenerateClientSharedKeys(pubkey32bytes)
 	if err != nil {
 		return nil, fmt.Errorf("error generating client keys: %v", err)
 	}
@@ -72,7 +77,12 @@ func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 		covert: config.Phantom,
 	}
 
-	return kcp.NewConn("", nil, 0, 0, dtlsnet.PacketConnFromConn(conn))
+	kcpConn, err := kcp.NewConn("", nil, 0, 0, dtlsnet.PacketConnFromConn(conn))
+	if err != nil {
+		return nil, err
+	}
+
+	return &Conn{Conn: kcpConn}, nil
 }
 
 func resolveAddr(network, addrStr string) (net.Addr, error) {

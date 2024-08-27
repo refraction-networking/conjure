@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/pion/dtls/v2"
-	"github.com/refraction-networking/conjure/pkg/station/lib"
 )
 
 const (
@@ -18,7 +17,7 @@ const (
 )
 
 // NewTransport creates a new dtls transport
-func ListenAndProxy(proxyFunc func(covert string, clientConn net.Conn), privKey [lib.PrivateKeyLength]byte) error {
+func ListenAndProxy(proxyFunc func(covert string, clientConn net.Conn), privKey []byte) error {
 	addr := &net.UDPAddr{Port: listenPort}
 
 	// Prepare the configuration of the DTLS connection

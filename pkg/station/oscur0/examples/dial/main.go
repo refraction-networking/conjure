@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -26,13 +25,10 @@ func main() {
 
 	pubkeyBytes, err := hex.DecodeString(*pubkey)
 	util.Check(err)
-	pubkey32Bytes := [32]byte{}
-	copy(pubkey32Bytes[:], pubkeyBytes)
 
-	pConn, err := net.ListenUDP("udp", nil)
-	util.Check(err)
+	fmt.Printf("pubkey: %+v\n", pubkeyBytes)
 
-	conn, err := oscur0.ClientWithContext(context.Background(), pConn, addr, oscur0.Config{Phantom: *covert, PubKey: pubkey32Bytes})
+	conn, err := oscur0.Dial(addr, oscur0.Config{Phantom: *covert, PubKey: pubkeyBytes})
 	util.Check(err)
 
 	fmt.Println("Connected; type 'exit' to shutdown gracefully")

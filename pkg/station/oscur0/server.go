@@ -24,7 +24,7 @@ const privkeylen int = lib.PrivateKeyLength
 // 	return ServerWithContext(context.Background(), pconn, raddr, config)
 // }
 
-func checkZeroPrivkey(arr [privkeylen]byte) error {
+func checkZeroPrivkey(arr []byte) error {
 	for _, v := range arr {
 		if v != 0 {
 			return nil
@@ -125,7 +125,7 @@ func ServerWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 	}
 	state, err = DTLSServerState(newSharedSecret)
 	if err != nil {
-		return nil, fmt.Errorf("error generating dtls state from shared secret: %v")
+		return nil, fmt.Errorf("error generating dtls state from shared secret: %v", err)
 	}
 
 	conn, err := dtls.Resume(state, pconn, raddr, &dtls.Config{
