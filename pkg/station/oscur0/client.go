@@ -31,9 +31,8 @@ type Dialer struct {
 type Config struct {
 	innerDialer dialFunc
 	PrivKey     [privkeylen]byte
-	pubKey      [privkeylen]byte
+	PubKey      [privkeylen]byte
 	Phantom     string
-	Keys        *core.SharedKeys
 }
 
 // func Client(pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
@@ -42,17 +41,17 @@ type Config struct {
 
 func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
 
-	// keys, err := core.GenerateClientSharedKeys(config.pubKey)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("error generating client keys: %v", err)
-	// }
+	keys, err := core.GenerateClientSharedKeys(config.PubKey)
+	if err != nil {
+		return nil, fmt.Errorf("error generating client keys: %v", err)
+	}
 
 	w1pconn := &write1pconn{
 		PacketConn: pconn,
-		onceBytes:  config.Keys.Representative,
+		onceBytes:  keys.Representative,
 	}
 
-	state, err := DTLSClientState(config.Keys.SharedSecret)
+	state, err := DTLSClientState(keys.SharedSecret)
 	if err != nil {
 		return nil, fmt.Errorf("error generateing dtls state: %v", err)
 	}
@@ -65,8 +64,8 @@ func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 		return nil, err
 	}
 
-	fmt.Printf("representative: %v\n", hex.EncodeToString(config.Keys.Representative))
-	fmt.Printf("shared secret : %v\n", hex.EncodeToString(config.Keys.SharedSecret))
+	fmt.Printf("representative: %v\n", hex.EncodeToString(keys.Representative))
+	fmt.Printf("shared secret : %v\n", hex.EncodeToString(keys.SharedSecret))
 
 	conn := &write1conn{
 		Conn:   dtlsConn,

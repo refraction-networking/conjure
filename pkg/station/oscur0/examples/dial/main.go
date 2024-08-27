@@ -8,7 +8,6 @@ import (
 	"net"
 
 	"github.com/pion/dtls/v2/examples/util"
-	"github.com/refraction-networking/conjure/pkg/core"
 	"github.com/refraction-networking/conjure/pkg/station/oscur0"
 )
 
@@ -33,10 +32,7 @@ func main() {
 	pConn, err := net.ListenUDP("udp", nil)
 	util.Check(err)
 
-	keys, err := core.GenerateClientSharedKeys(pubkey32Bytes)
-	util.Check(err)
-
-	conn, err := oscur0.ClientWithContext(context.Background(), pConn, addr, oscur0.Config{Phantom: *covert, Keys: keys})
+	conn, err := oscur0.ClientWithContext(context.Background(), pConn, addr, oscur0.Config{Phantom: *covert, PubKey: pubkey32Bytes})
 	util.Check(err)
 
 	fmt.Println("Connected; type 'exit' to shutdown gracefully")
