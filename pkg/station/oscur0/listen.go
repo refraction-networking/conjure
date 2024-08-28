@@ -1,13 +1,9 @@
 package oscur0
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"sync"
-	"time"
-
-	"github.com/pion/dtls/v2"
 )
 
 const (
@@ -20,13 +16,7 @@ const (
 func ListenAndProxy(proxyFunc func(covert string, clientConn net.Conn), privKey []byte) error {
 	addr := &net.UDPAddr{Port: listenPort}
 
-	// Prepare the configuration of the DTLS connection
-	config := &dtls.Config{
-		ConnectionIDGenerator: dtls.RandomCIDGenerator(cidSize),
-	}
-
-	// Connect to a DTLS server
-	listener, err := dtls.NewResumeListener("udp", addr, config)
+	listener, err := Listen(addr, Config{PrivKey: privKey})
 	if err != nil {
 		return err
 	}
@@ -34,21 +24,13 @@ func ListenAndProxy(proxyFunc func(covert string, clientConn net.Conn), privKey 
 	go func() {
 		for {
 			// Wait for a connection.
-			pconn, addr, err := listener.Accept()
+			conn, err := listener.Accept()
 			if err != nil {
 				fmt.Printf("error accepting connection: %v", err)
 				continue
 			}
 
-			ctxtimout, _ := context.WithTimeout(context.Background(), 10*time.Second)
-
-			kcpConn, err := ServerWithContext(ctxtimout, pconn, addr, Config{PrivKey: privKey})
-			if err != nil {
-				fmt.Printf("error accepting Server: %v", err)
-				continue
-			}
-
-			go proxyFunc(kcpConn.Covert(), kcpConn)
+			go proxyFunc(conn.Covert(), conn)
 
 		}
 	}()
