@@ -21,21 +21,17 @@ func ListenAndProxy(proxyFunc func(covert string, clientConn net.Conn), privKey 
 		return err
 	}
 
-	go func() {
-		for {
-			// Wait for a connection.
-			conn, err := listener.Accept()
-			if err != nil {
-				fmt.Printf("error accepting connection: %v", err)
-				continue
-			}
-
-			go proxyFunc(conn.Covert(), conn)
-
+	for {
+		// Wait for a connection.
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Printf("error accepting connection: %v", err)
+			continue
 		}
-	}()
 
-	return nil
+		go proxyFunc(conn.Covert(), conn)
+
+	}
 }
 
 type edit1pconn struct {
