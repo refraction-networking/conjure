@@ -1,7 +1,6 @@
 package oscur0
 
 import (
-	"fmt"
 	"net"
 	"sync"
 )
@@ -11,28 +10,6 @@ const (
 	listenPort = 41246
 	receiveMTU = 8192
 )
-
-// NewTransport creates a new dtls transport
-func ListenAndProxy(proxyFunc func(covert string, clientConn net.Conn), privKey []byte) error {
-	addr := &net.UDPAddr{Port: listenPort}
-
-	listener, err := Listen(addr, Config{PrivKey: privKey})
-	if err != nil {
-		return err
-	}
-
-	for {
-		// Wait for a connection.
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Printf("error accepting connection: %v", err)
-			continue
-		}
-
-		go proxyFunc(conn.Covert(), conn)
-
-	}
-}
 
 type edit1pconn struct {
 	net.PacketConn
