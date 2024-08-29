@@ -63,7 +63,7 @@ func main() {
 	if err := ListenAndProxy(addr,
 		func(covert string, clientConn net.Conn) {
 			fmt.Printf("got connection: %v -> %v, covert: %v\n", clientConn.LocalAddr(), clientConn.RemoteAddr(), covert)
-			cj.ProxyWithTunStats(clientConn, logger, "", covert, nil, false)
+			cj.ProxyNewTunStates(clientConn, logger, "", covert, false)
 		}, oscur0.Config{PrivKey: priv}); err != nil {
 		logger.Fatalf("error listening one-shot dtls: %v", err)
 	}
