@@ -250,18 +250,7 @@ func Proxy(reg *DecoyRegistration, clientConn net.Conn, logger *log.Logger) {
 func ProxyNewTunStates(clientConn net.Conn, logger *log.Logger, id, covert string, writeProxyHeader bool) {
 
 	tunStats := &tunnelStats{
-		proxyStats:     getProxyStats(),
-		PhantomAddr:    "1.2.3.4:1234",
-		PhantomDstPort: 4321,
-
-		TunnelCount: uint(1),
-		ASN:         123,
-		CC:          "123",
-		Transport:   "oscur0",
-		Registrar:   "noreg",
-		V6:          false,
-		LibVer:      uint(1),
-		Gen:         uint(1),
+		proxyStats: getProxyStats(),
 	}
 
 	ProxyWithTunStats(clientConn, logger, id, covert, tunStats, writeProxyHeader)
