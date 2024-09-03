@@ -43,7 +43,7 @@ func TestConn(t *testing.T) {
 
 	}()
 
-	conn, err := Dial(addr, Config{PubKey: pubkey, Phantom: phantom})
+	conn, err := Dial(addr, Config{PubKey: pubkey, Covert: phantom})
 	if err != nil {
 		t.Fatalf("error creating client conn: %v", err)
 	}

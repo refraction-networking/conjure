@@ -32,7 +32,7 @@ type Config struct {
 	innerDialer dialFunc
 	PrivKey     []byte
 	PubKey      []byte
-	Phantom     string
+	Covert      string
 }
 
 // func Client(pconn net.PacketConn, raddr net.Addr, config Config) (net.Conn, error) {
@@ -74,7 +74,7 @@ func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr
 
 	conn := &write1conn{
 		Conn:   dtlsConn,
-		covert: config.Phantom,
+		covert: config.Covert,
 	}
 
 	kcpConn, err := kcp.NewConn("", nil, 0, 0, dtlsnet.PacketConnFromConn(conn))

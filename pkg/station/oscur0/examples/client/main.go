@@ -32,7 +32,7 @@ func main() {
 
 	fmt.Printf("pubkey: %+v\n", pubkeyBytes)
 
-	conn, err := oscur0.Dial(addr, oscur0.Config{Phantom: *covert, PubKey: pubkeyBytes})
+	conn, err := oscur0.Dial(addr, oscur0.Config{Covert: *covert, PubKey: pubkeyBytes})
 	util.Check(err)
 
 	if err := connectOscur0(*covert, *localPort, conn); err != nil {
