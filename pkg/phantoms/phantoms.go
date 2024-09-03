@@ -162,6 +162,7 @@ type ip = net.IP
 type PhantomIP struct {
 	*ip
 	supportRandomPort bool
+	port              uint16
 }
 
 func (p *PhantomIP) SupportRandomPort() bool {
