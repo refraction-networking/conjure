@@ -39,17 +39,7 @@ type Config struct {
 // 	return ClientWithContext(context.Background(), pconn, raddr, config)
 // }
 
-func ClientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config) (*Conn, error) {
-
-	pubkey32bytes, err := sliceToArray(config.PubKey)
-	if err != nil {
-		return nil, err
-	}
-
-	keys, err := core.GenerateClientSharedKeys(pubkey32bytes)
-	if err != nil {
-		return nil, fmt.Errorf("error generating client keys: %v", err)
-	}
+func clientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config, keys *core.SharedKeys) (*Conn, error) {
 
 	w1pconn := &write1pconn{
 		PacketConn: pconn,
