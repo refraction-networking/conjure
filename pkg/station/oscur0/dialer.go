@@ -1,7 +1,6 @@
 package oscur0
 
 import (
-	"context"
 	"fmt"
 	"net"
 
@@ -25,7 +24,7 @@ func dial(raddr *net.UDPAddr, config Config, keys *core.SharedKeys) (*Conn, erro
 		return nil, fmt.Errorf("error creating udp packet conn: %v", err)
 	}
 
-	return clientWithContext(context.Background(), pConn, raddr, config, keys)
+	return client(pConn, raddr, config, keys)
 }
 
 func DialPhantom(config Config) (*Conn, error) {

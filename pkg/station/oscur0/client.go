@@ -39,7 +39,7 @@ type Config struct {
 // 	return ClientWithContext(context.Background(), pconn, raddr, config)
 // }
 
-func clientWithContext(ctx context.Context, pconn net.PacketConn, raddr net.Addr, config Config, keys *core.SharedKeys) (*Conn, error) {
+func client(pconn net.PacketConn, raddr net.Addr, config Config, keys *core.SharedKeys) (*Conn, error) {
 
 	w1pconn := &write1pconn{
 		PacketConn: pconn,
