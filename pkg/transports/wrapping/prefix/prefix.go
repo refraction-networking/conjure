@@ -170,7 +170,7 @@ var defaultPrefixes = map[PrefixID]prefix{
 type Transport struct {
 	SupportedPrefixes map[PrefixID]prefix
 	TagObfuscator     transports.Obfuscator
-	Privkey           [32]byte
+	Privkeys          [][32]byte
 }
 
 // Name returns the human-friendly name of the transport, implementing the
@@ -281,6 +281,15 @@ func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst ne
 	return reg, transports.PrependToConn(c, data), nil
 }
 
+func (t Transport) tryReveal(obfuscatedID []byte) ([]byte, error) {
+	for _, privkey := range t.Privkeys {
+		if hmacID, err := t.TagObfuscator.TryReveal(obfuscatedID, privkey); err == nil && hmacID != nil {
+			return hmacID, nil
+		}
+	}
+	return nil, fmt.Errorf("no matching key")
+}
+
 func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager transports.RegManager) (transports.Registration, error) {
 	if data.Len() == 0 {
 		return nil, transports.ErrTryAgain
@@ -324,8 +333,8 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 		obfuscatedID = data.Bytes()[prefix.Offset : prefix.Offset+minTagLength]
 		// }
 
-		hmacID, err := t.TagObfuscator.TryReveal(obfuscatedID, t.Privkey)
-		if err != nil || hmacID == nil {
+		hmacID, err := t.tryReveal(obfuscatedID)
+		if err != nil {
 			continue
 		}
 
@@ -367,7 +376,7 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 // prefixes. The optional filepath specifies a file from which to read extra prefixes. If provided
 // only the first variadic string will be used to attempt to parse prefixes. There can be no
 // colliding PrefixIDs - within the file first defined takes precedence.
-func New(privkey [32]byte, filepath ...string) (*Transport, error) {
+func New(privkeys [][32]byte, filepath ...string) (*Transport, error) {
 	var prefixes map[PrefixID]prefix = make(map[PrefixID]prefix)
 	var err error
 	if len(filepath) > 0 && filepath[0] != "" {
@@ -377,7 +386,7 @@ func New(privkey [32]byte, filepath ...string) (*Transport, error) {
 		}
 	}
 	return &Transport{
-		Privkey:           privkey,
+		Privkeys:          privkeys,
 		SupportedPrefixes: prefixes,
 		TagObfuscator:     transports.CTRObfuscator{},
 	}, nil
@@ -388,8 +397,8 @@ func New(privkey [32]byte, filepath ...string) (*Transport, error) {
 // If provided only the first variadic string will be used to attempt to parse prefixes. There can
 // be no colliding PrefixIDs - file defined prefixes take precedent over defaults, and within the
 // file first defined takes precedence.
-func Default(privkey [32]byte, filepath ...string) (*Transport, error) {
-	t, err := New(privkey, filepath...)
+func Default(privkeys [][32]byte, filepath ...string) (*Transport, error) {
+	t, err := New(privkeys, filepath...)
 	if err != nil {
 		return nil, err
 	}
