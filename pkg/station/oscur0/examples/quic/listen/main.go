@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"time"
 
 	"github.com/pion/dtls/v2/examples/util"
 	"github.com/quic-go/quic-go"
@@ -51,7 +52,7 @@ func main() {
 		Conn: pconn,
 	}
 
-	listener, err := tp.Listen(generateTLSConfig(), &quic.Config{})
+	listener, err := tp.ListenEarly(generateTLSConfig(), &quic.Config{})
 	util.Check(err)
 
 	// Simulate a chat session
@@ -61,11 +62,16 @@ func main() {
 		for {
 			// Wait for a connection.
 			econn, err := listener.Accept(context.Background())
-			util.Check(err)
+			if err != nil {
+				continue
+			}
 
-			for {
-				stream, err := econn.AcceptStream(context.Background())
-				util.Check(err)
+			for i := 0; i < 2; i++ {
+				ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+				stream, err := econn.AcceptStream(ctx)
+				if err != nil {
+					continue
+				}
 				hub.Register(&streamConn{Stream: stream, Connection: econn})
 
 			}

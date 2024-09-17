@@ -29,7 +29,11 @@ func main() {
 		Conn: pconn,
 	}
 
-	econn, err := tp.Dial(context.Background(), addr, &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"quic-echo-example"}}, &quic.Config{})
+	econn1, err := tp.DialEarly(context.Background(), addr, &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"quic-echo-example"}}, &quic.Config{})
+	util.Check(err)
+	_ = econn1
+
+	econn, err := tp.DialEarly(context.Background(), addr, &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"quic-echo-example"}}, &quic.Config{})
 	util.Check(err)
 
 	stream, err := econn.OpenStream()
