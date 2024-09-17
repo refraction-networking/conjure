@@ -29,13 +29,18 @@ func main() {
 		Conn: pconn,
 	}
 
-	econn, err := tp.DialEarly(context.Background(), addr, &tls.Config{InsecureSkipVerify: true}, &quic.Config{})
+	econn, err := tp.Dial(context.Background(), addr, &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"quic-echo-example"}}, &quic.Config{})
 	util.Check(err)
 
 	stream, err := econn.OpenStream()
 	util.Check(err)
 
+	stream2, err := econn.OpenStream()
+	util.Check(err)
+
 	fmt.Println("Connected; type 'exit' to shutdown gracefully")
+
+	stream2.Write([]byte("testt\n"))
 
 	// Simulate a chat session
 	util.Chat(stream)
