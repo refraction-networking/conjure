@@ -3,8 +3,7 @@ extern crate cc;
 fn main() {
     println!("cargo:rustc-link-lib=tapdance");
     println!("cargo:rustc-link-search=libtapdance");
-    // cc::Build::new()
-    //     .file("libtapdance/tapdance.c")
-    //     .include("src")
-    //     .compile("libtapdance.a");
+    println!("cargo:rustc-link-lib=gmp");
+    println!("cargo:rustc-link-lib=ssl");
+    println!("cargo:rustc-link-lib=crypto");
 }
