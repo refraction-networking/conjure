@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
@@ -17,7 +16,8 @@ import (
 	"time"
 
 	"github.com/pion/dtls/v2/examples/util"
-	"github.com/quic-go/quic-go"
+	quic "github.com/refraction-networking/uquic"
+	tls "github.com/refraction-networking/utls"
 )
 
 const (
@@ -108,6 +108,6 @@ func generateTLSConfig() *tls.Config {
 	}
 	return &tls.Config{
 		Certificates: []tls.Certificate{tlsCert},
-		NextProtos:   []string{"quic-echo-example"},
+		NextProtos:   []string{"h3"},
 	}
 }

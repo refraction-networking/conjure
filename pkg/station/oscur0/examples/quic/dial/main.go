@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"flag"
 	"fmt"
 	"net"
 
 	"github.com/pion/dtls/v2/examples/util"
-	"github.com/quic-go/quic-go"
+	quic "github.com/refraction-networking/uquic"
+	tls "github.com/refraction-networking/utls"
 )
 
 func main() {
@@ -25,15 +25,43 @@ func main() {
 
 	pconn, err := net.ListenUDP("udp", nil)
 	util.Check(err)
-	tp := quic.Transport{
-		Conn: pconn,
+	quicSpec, err := quic.QUICID2Spec(quic.QUICFirefox_116)
+	util.Check(err)
+	for _, ext := range quicSpec.ClientHelloSpec.Extensions {
+		if ks, ok := ext.(*tls.KeyShareExtension); ok {
+			ks.KeyShares = []tls.KeyShare{
+				{
+					Group: tls.X25519Kyber768Draft00,
+					Data:  []byte{},
+				},
+			}
+			break
+		}
 	}
 
-	econn1, err := tp.DialEarly(context.Background(), addr, &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"quic-echo-example"}}, &quic.Config{})
-	util.Check(err)
-	_ = econn1
+	tp := quic.UTransport{
+		Transport: &quic.Transport{
+			Conn: pconn,
+		},
+		QUICSpec: &quicSpec,
+	}
 
-	econn, err := tp.DialEarly(context.Background(), addr, &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"quic-echo-example"}}, &quic.Config{})
+	// tp := &quic.Transport{
+	// 	Conn: pconn,
+	// }
+
+	// econn1, err := tp.DialEarly(context.Background(), addr, &tls.Config{
+	// 	InsecureSkipVerify: true,
+	// 	NextProtos:         []string{"h3"},
+	// }, &quic.Config{})
+	// util.Check(err)
+	// _ = econn1
+
+	econn, err := tp.DialEarly(context.Background(), addr, &tls.Config{
+		InsecureSkipVerify: true,
+		// CurvePreferences:   []tls.CurveID{tls.X25519Kyber768Draft00},
+		NextProtos: []string{"h3"},
+	}, &quic.Config{})
 	util.Check(err)
 
 	stream, err := econn.OpenStream()
