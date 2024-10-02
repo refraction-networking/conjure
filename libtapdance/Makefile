@@ -5,7 +5,7 @@ CFLAGS+=-fPIC -g $(INCLUDE)
 # User and System libraries
 LIBS       = -lgmp -ldl -lpthread
 
-OPENSSL_STATIC_LIB = -Wl,-Bstatic -lssl -Wl,-Bstatic -lcrypto
+OPENSSL_STATIC_LIB = -Bstatic -lssl -Bstatic -lcrypto
 
 ALL_LIBS = $(OPENSSL_STATIC_LIB) -Wl,-Bdynamic $(LIBS)
 
