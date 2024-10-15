@@ -1,6 +1,8 @@
 #ifndef _INCLGUARD_CLONERING_RUST_INTERFACE_H_
 #define _INCLGUARD_CLONERING_RUST_INTERFACE_H_
 
+#define TD_KEYLEN_BYTES (32)
+
 struct RustGlobalsStruct
 {
 	void *global;

@@ -75,7 +75,7 @@ void the_program(uint8_t core_id, unsigned int log_interval,
                  uint8_t (*station_keys)[TD_KEYLEN_BYTES], uint8_t num_keys,
                  char *workers_socket_addr)
 {
-    struct RustGlobalsStruct rust_globals = rust_detect_init(core_id, station_key, workers_socket_addr);
+    struct RustGlobalsStruct rust_globals = rust_detect_init(core_id, station_keys, workers_socket_addr);
 
     // g_rust_failed_map = rust_globals.fail_map;
     // g_rust_cli_conf_proto_ptr = rust_globals.cli_conf;
@@ -345,7 +345,7 @@ pid_t start_tapdance_process(int core_affinity, unsigned int cluster_id,
         signal(SIGINT, sigproc_child);
         signal(SIGTERM, sigproc_child);
         signal(SIGPIPE, ignore_sigpipe);
-        the_program(proc_ind, log_interval, station_key, numkeys, workers_socket_addr);
+        the_program(proc_ind, log_interval, station_keys, numkeys, workers_socket_addr);
     }
     printf("Core %d: PID %d, lcore %d\n", proc_ind, the_pid, core_affinity);
     return the_pid;
@@ -374,6 +374,9 @@ struct cmd_options
 
     // In seconds, interval between logging of bandwidth, tag checks/s, etc.
     unsigned int log_interval;
+
+    // Number of keys
+    uint8_t *numkeys;
 
     // Station keys (supports multiple keys)
     uint8_t (*station_key)[TD_KEYLEN_BYTES]; // Array of station keys
@@ -466,7 +469,7 @@ void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
     if (keyfiles_path != NULL)
     {
         int rc = td_load_station_keys(keyfiles_path, options->station_key,
-                                      options->public_key);
+                                      options->public_key, options->numkeys, 100);
         if (rc != 0)
         {
             fprintf(stderr, "Error: can't load keyfile [%s]: %d\n",
@@ -623,7 +626,7 @@ int main(int argc, char *argv[])
         g_forked_pids[i] =
             start_tapdance_process(core_num,
                                    options.cluster_id, i + pfring_offset, options.log_interval,
-                                   options.station_key, options.zmq_worker_address);
+                                   options.station_key, options.numkeys, options.zmq_worker_address);
         core_num++;
     }
     signal(SIGINT, sigproc_parent);
