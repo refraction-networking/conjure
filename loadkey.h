@@ -16,7 +16,7 @@ extern "C"
     int td_load_station_keys(const char *path,
                              uint8_t stationkeys[][TD_KEYLEN_BYTES],
                              uint8_t pubkeys[][TD_KEYLEN_BYTES],
-                             int *key_count,
+                             uint8_t *key_count,
                              int max_keys);
 
     void td_print_key(const uint8_t key[TD_KEYLEN_BYTES]);

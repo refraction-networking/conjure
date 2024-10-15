@@ -75,7 +75,7 @@ void the_program(uint8_t core_id, unsigned int log_interval,
                  uint8_t (*station_keys)[TD_KEYLEN_BYTES], uint8_t num_keys,
                  char *workers_socket_addr)
 {
-    struct RustGlobalsStruct rust_globals = rust_detect_init(core_id, station_keys, workers_socket_addr);
+    struct RustGlobalsStruct rust_globals = rust_detect_init(core_id, station_keys, numkeys, workers_socket_addr);
 
     // g_rust_failed_map = rust_globals.fail_map;
     // g_rust_cli_conf_proto_ptr = rust_globals.cli_conf;
