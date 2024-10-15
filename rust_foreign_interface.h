@@ -1,14 +1,15 @@
 #ifndef _INCLGUARD_CLONERING_RUST_INTERFACE_H_
 #define _INCLGUARD_CLONERING_RUST_INTERFACE_H_
 
-struct RustGlobalsStruct {
+struct RustGlobalsStruct
+{
 	void *global;
 };
 
 // We specifically name this something different to avoid accidentally linking
 // against the otherwise compatible rust_tapdance
 struct RustGlobalsStruct rust_detect_init(
-	int32_t cur_lcore_id, uint8_t *station_key, char *workers_socket_addr);
+	int32_t cur_lcore_id, uint8_t (*station_keys)[TD_KEYLEN_BYTES], uint8_t numkeys, char *workers_socket_addr);
 uint8_t rust_update_cli_conf(void *conf_ptr);
 uint8_t rust_process_packet(
 	void *rust_global, void *c_raw_ethframe, size_t c_frame_len);

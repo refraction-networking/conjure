@@ -36,7 +36,7 @@ fn extract_stego_bytes(in_buf: &[u8], out_buf: &mut [u8]) {
 type PayloadElements = ([u8; 32], [u8; FSP::LENGTH], ClientToStation);
 
 pub fn extract_payloads_multiple_keys(
-    secret_keys: &[&[u8]],
+    secret_keys: &Vec<[u8; 32]>,
     tls_record: &[u8],
 ) -> Result<PayloadElements, Box<dyn Error>> {
     for key in secret_keys {
@@ -198,6 +198,8 @@ pub fn extract_payloads(
 // Uses a function from an external library; run separately from other tests.
 #[cfg(test)]
 mod tests {
+    use std::convert::TryInto;
+
     use elligator;
 
     #[test]
@@ -216,16 +218,27 @@ mod tests {
         let tls_record = hex::decode(REGTLSPAYLOAD).expect("err decoding tls record");
         let privkey2 = hex::decode(PRIVKEY2).expect("err decoding privkey");
         let tls_record2 = hex::decode(REGTLSPAYLOAD2).expect("err decoding tls record");
+
         assert!(elligator::extract_payloads(&privkey, &tls_record).is_ok());
         assert!(elligator::extract_payloads(&privkey2, &tls_record2).is_ok());
         assert!(elligator::extract_payloads(&privkey, &tls_record2).is_err());
         assert!(elligator::extract_payloads(&privkey2, &tls_record).is_err());
-        assert!(
-            elligator::extract_payloads_multiple_keys(&[&privkey, &privkey2], &tls_record).is_ok()
-        );
-        assert!(
-            elligator::extract_payloads_multiple_keys(&[&privkey, &privkey2], &tls_record2).is_ok()
-        );
+        assert!(elligator::extract_payloads_multiple_keys(
+            &vec![
+                privkey.clone().try_into().expect("not 32 bytes"),
+                privkey2.clone().try_into().expect("not 32 bytes")
+            ],
+            &tls_record
+        )
+        .is_ok());
+        assert!(elligator::extract_payloads_multiple_keys(
+            &vec![
+                privkey.clone().try_into().expect("not 32 bytes"),
+                privkey2.clone().try_into().expect("not 32 bytes")
+            ],
+            &tls_record2
+        )
+        .is_ok());
     }
 
     // #[test]

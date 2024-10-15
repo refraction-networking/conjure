@@ -43,7 +43,7 @@ int td_load_single_station_key(const char *fname, uint8_t stationkey[TD_KEYLEN_B
 }
 
 // Function to load station keys from a file or directory
-int td_load_station_key(const char *path, uint8_t stationkeys[][TD_KEYLEN_BYTES], uint8_t pubkeys[][TD_KEYLEN_BYTES], int *key_count, int max_keys)
+int td_load_station_keys(const char *path, uint8_t stationkeys[][TD_KEYLEN_BYTES], uint8_t pubkeys[][TD_KEYLEN_BYTES], int *key_count, int max_keys)
 {
     struct stat path_stat;
     if (stat(path, &path_stat) != 0)

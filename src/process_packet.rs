@@ -280,7 +280,7 @@ impl PerCoreGlobal {
 
     fn check_dark_decoy_tag(&mut self, flow: &Flow, tcp_pkt: &TcpPacket) -> bool {
         self.stats.elligator_this_period += 1;
-        match elligator::extract_payloads(&self.priv_key, tcp_pkt.payload()) {
+        match elligator::extract_payloads_multiple_keys(&self.priv_keys, tcp_pkt.payload()) {
             Ok(res) => {
                 // res.0 => shared secret
                 // res.1 => Fixed size payload

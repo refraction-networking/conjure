@@ -72,7 +72,8 @@ int g_update_overloaded_decoys_when_convenient = 0;
                              ((int64_t)a.tv_nsec - (int64_t)b.tv_nsec))
 
 void the_program(uint8_t core_id, unsigned int log_interval,
-                 uint8_t *station_key, char *workers_socket_addr)
+                 uint8_t (*station_keys)[TD_KEYLEN_BYTES], uint8_t num_keys,
+                 char *workers_socket_addr)
 {
     struct RustGlobalsStruct rust_globals = rust_detect_init(core_id, station_key, workers_socket_addr);
 
@@ -331,7 +332,8 @@ void startup_pfring_maybezc(unsigned int cluster_id, int proc_ind)
 
 pid_t start_tapdance_process(int core_affinity, unsigned int cluster_id,
                              int proc_ind, unsigned int log_interval,
-                             uint8_t *station_key, char *workers_socket_addr)
+                             uint8_t (*station_keys)[TD_KEYLEN_BYTES], uint8_t numkeys,
+                             char *workers_socket_addr)
 {
     pid_t the_pid = fork();
     if (the_pid == 0)
@@ -343,7 +345,7 @@ pid_t start_tapdance_process(int core_affinity, unsigned int cluster_id,
         signal(SIGINT, sigproc_child);
         signal(SIGTERM, sigproc_child);
         signal(SIGPIPE, ignore_sigpipe);
-        the_program(proc_ind, log_interval, station_key, workers_socket_addr);
+        the_program(proc_ind, log_interval, station_key, numkeys, workers_socket_addr);
     }
     printf("Core %d: PID %d, lcore %d\n", proc_ind, the_pid, core_affinity);
     return the_pid;
@@ -404,7 +406,7 @@ void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
     options->zmq_address = "ipc://@detector";
     options->zmq_worker_address = "ipc://@detector-workers";
 
-    char *keyfile_name = 0;
+    char *keyfiles_path = 0;
 
     options->station_key = station_key;
     options->public_key = public_key;
@@ -434,7 +436,7 @@ void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
             options->log_interval = 1000 * atoi(optarg);
             break;
         case 'K':
-            keyfile_name = optarg;
+            keyfiles_path = optarg;
             break;
         case 's':
             skip_core = atoi(optarg);
@@ -461,14 +463,14 @@ void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
         exit(-1);
     }
 
-    if (keyfile_name != NULL)
+    if (keyfiles_path != NULL)
     {
-        int rc = td_load_station_key(keyfile_name, options->station_key,
-                                     options->public_key);
+        int rc = td_load_station_keys(keyfiles_path, options->station_key,
+                                      options->public_key);
         if (rc != 0)
         {
             fprintf(stderr, "Error: can't load keyfile [%s]: %d\n",
-                    keyfile_name, rc);
+                    keyfiles_path, rc);
             exit(-1);
         }
         else
