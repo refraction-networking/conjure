@@ -478,7 +478,7 @@ void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
         else
         {
             printf("Using public keys: ");
-            for (int i = 0; i < options->num_keys; i++)
+            for (int i = 0; i < options->numkeys; i++)
             {
                 printf("Key %d: ", i + 1);
                 td_print_key(options->public_key[i]);
@@ -630,7 +630,7 @@ int main(int argc, char *argv[])
         g_forked_pids[i] =
             start_tapdance_process(core_num,
                                    options.cluster_id, i + pfring_offset, options.log_interval,
-                                   options.station_key, options->numkeys, options.zmq_worker_address);
+                                   options.station_key, *(options.numkeys), options.zmq_worker_address);
         core_num++;
     }
     signal(SIGINT, sigproc_parent);
