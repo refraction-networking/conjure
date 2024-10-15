@@ -72,7 +72,7 @@ int g_update_overloaded_decoys_when_convenient = 0;
                              ((int64_t)a.tv_nsec - (int64_t)b.tv_nsec))
 
 void the_program(uint8_t core_id, unsigned int log_interval,
-                 uint8_t (*station_keys)[TD_KEYLEN_BYTES], uint8_t num_keys,
+                 uint8_t (*station_keys)[TD_KEYLEN_BYTES], uint8_t numkeys,
                  char *workers_socket_addr)
 {
     struct RustGlobalsStruct rust_globals = rust_detect_init(core_id, station_keys, numkeys, workers_socket_addr);
@@ -389,13 +389,12 @@ struct cmd_options
     char *zmq_worker_address; // address of ZMQ socket to bind for communication between threads
 };
 
-static uint8_t station_key[TD_KEYLEN_BYTES] = {
-    224, 192, 103, 26, 96, 135, 130, 174,
-    250, 208, 30, 113, 46, 128, 127, 111,
-    215, 199, 5, 141, 38, 124, 34, 127,
-    102, 142, 245, 81, 49, 70, 119, 119};
+static uint8_t station_key[][TD_KEYLEN_BYTES] = {{224, 192, 103, 26, 96, 135, 130, 174,
+                                                  250, 208, 30, 113, 46, 128, 127, 111,
+                                                  215, 199, 5, 141, 38, 124, 34, 127,
+                                                  102, 142, 245, 81, 49, 70, 119, 119}};
 
-static uint8_t public_key[TD_KEYLEN_BYTES] = {0};
+static uint8_t public_key[][TD_KEYLEN_BYTES] = {{0}};
 
 void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
 {
@@ -478,8 +477,13 @@ void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
         }
         else
         {
-            printf("Using public key: ");
-            td_print_key(options->public_key);
+            printf("Using public keys: ");
+            for (int i = 0; i < options->num_keys; i++)
+            {
+                printf("Key %d: ", i + 1);
+                td_print_key(options->public_key[i]);
+                printf("\n");
+            }
             printf("\n");
             fflush(stdout);
         }
@@ -626,7 +630,7 @@ int main(int argc, char *argv[])
         g_forked_pids[i] =
             start_tapdance_process(core_num,
                                    options.cluster_id, i + pfring_offset, options.log_interval,
-                                   options.station_key, options.numkeys, options.zmq_worker_address);
+                                   options.station_key, options->numkeys, options.zmq_worker_address);
         core_num++;
     }
     signal(SIGINT, sigproc_parent);
