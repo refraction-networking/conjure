@@ -478,7 +478,7 @@ void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
         else
         {
             printf("Using public keys: ");
-            for (int i = 0; i < options->numkeys; i++)
+            for (int i = 0; i < *(options->numkeys); i++)
             {
                 printf("Key %d: ", i + 1);
                 td_print_key(options->public_key[i]);
