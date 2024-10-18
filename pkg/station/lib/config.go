@@ -53,7 +53,7 @@ func (c *Config) ParseZMQPrivateKey() ([PrivateKeyLength]byte, error) {
 		privkeyPath = os.Getenv("ZMQ_PRIVKEY")
 	}
 	if privkeyPath == "" {
-		return [PrivateKeyLength]byte{}, fmt.Errorf("no path to private key")
+		return [PrivateKeyLength]byte{}, fmt.Errorf("no path to ZMQ private key")
 	}
 
 	return loadPrivateKey(privkeyPath)
@@ -67,7 +67,7 @@ func (c *Config) ParsePrivateKey() ([][PrivateKeyLength]byte, error) {
 		privkeyPath = os.Getenv("CJ_PRIVKEY")
 	}
 	if privkeyPath == "" {
-		return nil, fmt.Errorf("no path to private key")
+		return nil, fmt.Errorf("no path to application private key")
 	}
 
 	fileInfo, err := os.Stat(privkeyPath)
