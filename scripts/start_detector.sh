@@ -13,7 +13,7 @@ source /opt/conjure/sysconfig/conjure.conf
 set +a
 
 
-if [ ! -f $CJ_PRIVKEY ]; then
+if [ ! -e $CJ_PRIVKEY ]; then
     echo "Failed to open \$CJ_PRIVKEY=$CJ_PRIVKEY."
     echo "You may want to set CJ_PRIVKEY in the conjure.conf file before running the script"
     exit 1
