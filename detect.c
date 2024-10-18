@@ -376,7 +376,7 @@ struct cmd_options
     unsigned int log_interval;
 
     // Number of keys
-    uint8_t *numkeys;
+    uint8_t numkeys;
 
     // Station keys (supports multiple keys)
     uint8_t (*station_key)[TD_KEYLEN_BYTES]; // Array of station keys
@@ -468,7 +468,7 @@ void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
     if (keyfiles_path != NULL)
     {
         int rc = td_load_station_keys(keyfiles_path, options->station_key,
-                                      options->public_key, options->numkeys, 100);
+                                      options->public_key, &options->numkeys, 100);
         if (rc != 0)
         {
             fprintf(stderr, "Error: can't load keyfile [%s]: %d\n",
@@ -478,7 +478,7 @@ void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
         else
         {
             printf("Using public keys: ");
-            for (int i = 0; i < *(options->numkeys); i++)
+            for (int i = 0; i < options->numkeys; i++)
             {
                 printf("Key %d: ", i + 1);
                 td_print_key(options->public_key[i]);
@@ -630,7 +630,7 @@ int main(int argc, char *argv[])
         g_forked_pids[i] =
             start_tapdance_process(core_num,
                                    options.cluster_id, i + pfring_offset, options.log_interval,
-                                   options.station_key, *(options.numkeys), options.zmq_worker_address);
+                                   options.station_key, options.numkeys, options.zmq_worker_address);
         core_num++;
     }
     signal(SIGINT, sigproc_parent);
