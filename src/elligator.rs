@@ -41,6 +41,8 @@ pub fn extract_payloads_multiple_keys(
 ) -> Result<PayloadElements, Box<dyn Error>> {
     for key in secret_keys {
         if let Ok(payload_elements) = extract_payloads(key, tls_record) {
+            let hex_key = hex::encode(key);
+            println!("found payload from key: {}", hex_key);
             return Ok(payload_elements);
         }
     }
