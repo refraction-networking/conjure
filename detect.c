@@ -75,6 +75,16 @@ void the_program(uint8_t core_id, unsigned int log_interval,
                  uint8_t (*station_keys)[TD_KEYLEN_BYTES], uint8_t numkeys,
                  char *workers_socket_addr)
 {
+
+    printf("Using private keys: \n");
+    for (uint8_t i = 0; i < numkeys; i++)
+    {
+        printf("Key %d: ", i + 1);
+        td_print_key(station_keys[i]);
+        printf("\n");
+    }
+    printf("\n");
+    fflush(stdout);
     struct RustGlobalsStruct rust_globals = rust_detect_init(core_id, station_keys, numkeys, workers_socket_addr);
 
     // g_rust_failed_map = rust_globals.fail_map;
@@ -478,7 +488,7 @@ void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
         }
         else
         {
-            printf("Using public keys: ");
+            printf("Using public keys: \n");
             for (int i = 0; i < options->numkeys; i++)
             {
                 printf("Key %d: ", i + 1);
