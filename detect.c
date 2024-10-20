@@ -469,6 +469,7 @@ void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
     {
         int rc = td_load_station_keys(keyfiles_path, options->station_key,
                                       options->public_key, &options->numkeys, 100);
+        printf("%d private keys\n", options->numkeys);
         if (rc != 0)
         {
             fprintf(stderr, "Error: can't load keyfile [%s]: %d\n",
