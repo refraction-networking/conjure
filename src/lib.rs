@@ -280,12 +280,6 @@ pub unsafe extern "C" fn rust_detect_init(
         keys.push(key);
     }
 
-    for key in &keys {
-        let hex_key = hex::encode(key);
-        println!("rust parsed keys: ");
-        println!("{}", hex_key);
-    }
-
     let s = format!("/tmp/dark-decoy-reporter-{lcore_id}.fifo");
     c_api::c_open_reporter(s);
     report!("reset");
