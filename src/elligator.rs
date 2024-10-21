@@ -43,6 +43,11 @@ pub fn extract_payloads_multiple_keys(
         if let Ok(payload_elements) = extract_payloads(key, tls_record) {
             let hex_key = hex::encode(key);
             println!("found payload from key: {}", hex_key);
+            println!("all parsed keys: ");
+            for key_i in secret_keys {
+                let hex_key = hex::encode(key_i);
+                println!("{}", hex_key);
+            }
             return Ok(payload_elements);
         }
     }
@@ -225,22 +230,12 @@ mod tests {
         assert!(elligator::extract_payloads(&privkey2, &tls_record2).is_ok());
         assert!(elligator::extract_payloads(&privkey, &tls_record2).is_err());
         assert!(elligator::extract_payloads(&privkey2, &tls_record).is_err());
-        assert!(elligator::extract_payloads_multiple_keys(
-            &vec![
-                privkey.clone().try_into().expect("not 32 bytes"),
-                privkey2.clone().try_into().expect("not 32 bytes")
-            ],
-            &tls_record
-        )
-        .is_ok());
-        assert!(elligator::extract_payloads_multiple_keys(
-            &vec![
-                privkey.clone().try_into().expect("not 32 bytes"),
-                privkey2.clone().try_into().expect("not 32 bytes")
-            ],
-            &tls_record2
-        )
-        .is_ok());
+        let keys = &vec![
+            privkey.clone().try_into().expect("not 32 bytes"),
+            privkey2.clone().try_into().expect("not 32 bytes"),
+        ];
+        assert!(elligator::extract_payloads_multiple_keys(keys, &tls_record).is_ok());
+        assert!(elligator::extract_payloads_multiple_keys(keys, &tls_record2).is_ok());
     }
 
     // #[test]
