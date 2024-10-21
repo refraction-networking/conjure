@@ -281,10 +281,14 @@ func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst ne
 	return reg, transports.PrependToConn(c, data), nil
 }
 
-func (t Transport) tryReveal(obfuscatedID []byte) ([]byte, error) {
+func (t Transport) getReg(obfuscatedID []byte, rm transports.RegManager, originalDst net.IP) (transports.Registration, error) {
 	for _, privkey := range t.Privkeys {
-		if hmacID, err := t.TagObfuscator.TryReveal(obfuscatedID, privkey); err == nil && hmacID != nil {
-			return hmacID, nil
+		hmacID, err := t.TagObfuscator.TryReveal(obfuscatedID, privkey)
+		if err != nil || hmacID != nil {
+			continue
+		}
+		if reg, ok := rm.GetRegistrations(originalDst)[string(hmacID)]; ok {
+			return reg, nil
 		}
 	}
 	return nil, fmt.Errorf("no matching key")
@@ -333,13 +337,8 @@ func (t Transport) tryFindReg(data *bytes.Buffer, originalDst net.IP, regManager
 		obfuscatedID = data.Bytes()[prefix.Offset : prefix.Offset+minTagLength]
 		// }
 
-		hmacID, err := t.tryReveal(obfuscatedID)
+		reg, err := t.getReg(obfuscatedID, regManager, originalDst)
 		if err != nil {
-			continue
-		}
-
-		reg, ok := regManager.GetRegistrations(originalDst)[string(hmacID)]
-		if !ok {
 			continue
 		}
 
