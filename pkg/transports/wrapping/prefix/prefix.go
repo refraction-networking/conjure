@@ -284,7 +284,7 @@ func (t Transport) WrapConnection(data *bytes.Buffer, c net.Conn, originalDst ne
 func (t Transport) getReg(obfuscatedID []byte, rm transports.RegManager, originalDst net.IP) (transports.Registration, error) {
 	for _, privkey := range t.Privkeys {
 		hmacID, err := t.TagObfuscator.TryReveal(obfuscatedID, privkey)
-		if err != nil || hmacID != nil {
+		if err != nil || hmacID == nil {
 			continue
 		}
 		if reg, ok := rm.GetRegistrations(originalDst)[string(hmacID)]; ok {
