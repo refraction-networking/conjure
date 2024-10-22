@@ -238,14 +238,11 @@ impl PerCoreGlobal {
         }
 
         if is_tls_app_pkt(&tcp_pkt) {
-            match self.check_dark_decoy_tag(&flow, &tcp_pkt) {
-                true => {
-                    // debug!("New Conjure registration detected in {},", flow);
-                    // self.flow_tracker.mark_dark_decoy(&cj_flow);
-                    // not removing flow from stale_tracked_flows for optimization reasons:
-                    // it will be removed later
-                }
-                false => {}
+            if self.check_dark_decoy_tag(&flow, &tcp_pkt) {
+                // debug!("New Conjure registration detected in {},", flow);
+                // self.flow_tracker.mark_dark_decoy(&cj_flow);
+                // not removing flow from stale_tracked_flows for optimization reasons:
+                // it will be removed later
             };
             self.flow_tracker.stop_tracking_flow(&flow);
         } else {
