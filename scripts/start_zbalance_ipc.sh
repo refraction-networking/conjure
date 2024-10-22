@@ -20,7 +20,7 @@ fi
 
 check_ZC_driver() {
 	ifcname="$1"
-	if [[ $ifc = "zc:"* ]]; then
+	if [[ $ifcname = "zc:"* ]]; then
 	    ifcname="${ifcname#zc:}"
 	fi
 	if grep -q "ZC" "/proc/net/pf_ring/dev/${ifcname}/info"; then
