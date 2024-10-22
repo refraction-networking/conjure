@@ -279,12 +279,6 @@ impl PerCoreGlobal {
     }
 
     fn check_dark_decoy_tag(&mut self, flow: &Flow, tcp_pkt: &TcpPacket) -> bool {
-        // println!("rust parsed keys: ");
-        // for key in &self.priv_keys {
-        //     let hex_key = hex::encode(key);
-        //     println!("{}", hex_key);
-        // }
-
         self.stats.elligator_this_period += 1;
         match elligator::extract_payloads_multiple_keys(&self.priv_keys, tcp_pkt.payload()) {
             Ok(res) => {
