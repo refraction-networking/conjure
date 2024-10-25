@@ -1,12 +1,15 @@
 
 ## ------ Application General ------
 
-# Absolute path to private key to use when authenticating with servers.
+# Absolute path to private key to use when authenticating with clients.
 # Can be either privkey or privkey || pubkey; only first 32 bytes will
 # be used. If this is blank then the environment variable CJ_PRIVKEY
 # which is defined in conjure.conf will be used (if that fails to parse
 # the station will shutdown).
 privkey_path = ""
+
+# Same as privkey but used for zmq auth
+zmq_privkey_path = ""
 
 # Log level, one of the following: info, error, warn, debug, trace
 log_level = "error"
@@ -60,13 +63,13 @@ ingest_worker_count = 100
 # be othewise firewalled.
 covert_blocklist_domains = ["localhost"]
 covert_blocklist_subnets = [
-    "127.0.0.1/32",     # localhost ipv4
-    "10.0.0.0/8",       # reserved ipv4
-    "172.16.0.0/12",    # reserved ipv4
-    "192.168.0.0/16",   # reserved ipv4
-    "fc00::/7 ",        # private network ipv6
-    "fe80::0/16",       # link local ipv6
-    "::1/128",           # localhost ipv6
+    "127.0.0.1/32",   # localhost ipv4
+    "10.0.0.0/8",     # reserved ipv4
+    "172.16.0.0/12",  # reserved ipv4
+    "192.168.0.0/16", # reserved ipv4
+    "fc00::/7 ",      # private network ipv6
+    "fe80::0/16",     # link local ipv6
+    "::1/128",        # localhost ipv6
 ]
 
 # Automatically add all addresses and subnets associated with local devices to
@@ -81,16 +84,13 @@ covert_allowlist_subnets = []
 # If a registration is received and the phantom address is in one of these
 # subnets the registration will be dropped. This allows us to exclude subnets to
 # prevent stations from interfering.
-phantom_blocklist = [ ]
+phantom_blocklist = []
 
 # List of addresses to filter out traffic from the detector. The primary functionality
 # of this is to prevent liveness testing from other stations in a conjure cluster from
 # clogging up the logs with connection notifications. To accomplish this goal add all station
 # ip addresses to this list when configuring station detectors.
-detector_filter_list = [
-    "127.0.0.1",
-    "::1",
-]
+detector_filter_list = ["127.0.0.1", "::1"]
 
 ## ------ GeoIP Info ------
 

@@ -44,7 +44,7 @@ use flow_tracker::{Flow, FlowTracker};
 
 // Global program state for one instance of a TapDance station process.
 pub struct PerCoreGlobal {
-    priv_key: [u8; 32],
+    priv_keys: Vec<[u8; 32]>,
 
     lcore: i32,
     pub flow_tracker: FlowTracker,
@@ -106,7 +106,7 @@ struct StationConfig {
 const STATION_CONF_PATH: &str = "CJ_STATION_CONFIG";
 
 impl PerCoreGlobal {
-    fn new(priv_key: [u8; 32], the_lcore: i32, workers_socket_addr: &str) -> PerCoreGlobal {
+    fn new(priv_keys: Vec<[u8; 32]>, the_lcore: i32, workers_socket_addr: &str) -> PerCoreGlobal {
         let tun = TunTap::new(IFF_TUN, &format!("tun{the_lcore}")).unwrap();
         tun.set_up().unwrap();
 
@@ -146,7 +146,7 @@ impl PerCoreGlobal {
         debug!("gre_offset: {}", gre_offset);
 
         PerCoreGlobal {
-            priv_key,
+            priv_keys,
             lcore: the_lcore,
             // sessions: HashMap::new(),
             flow_tracker: FlowTracker::new(),
@@ -264,12 +264,21 @@ pub struct RustGlobalsStruct {
 #[no_mangle]
 pub unsafe extern "C" fn rust_detect_init(
     lcore_id: i32,
-    ckey: *const u8,
+    station_keys: *const u8,
+    numkeys: u8,
     workers_socket_addr: *const c_char,
 ) -> RustGlobalsStruct {
     logging::init(log::Level::Debug, lcore_id);
 
-    let key = *array_ref![std::slice::from_raw_parts(ckey, 32_usize), 0, 32];
+    // Create a slice of station keys from the pointer.
+    let keys_slice = std::slice::from_raw_parts(station_keys, (numkeys as usize) * 32);
+
+    // Collect all keys into a Vec of 32-byte arrays
+    let mut keys: Vec<[u8; 32]> = Vec::with_capacity(numkeys as usize);
+    for i in 0..(numkeys as usize) {
+        let key = *array_ref![keys_slice, i * 32, 32];
+        keys.push(key);
+    }
 
     let s = format!("/tmp/dark-decoy-reporter-{lcore_id}.fifo");
     c_api::c_open_reporter(s);
@@ -277,7 +286,7 @@ pub unsafe extern "C" fn rust_detect_init(
 
     let addr: &CStr = CStr::from_ptr(workers_socket_addr);
 
-    let global = PerCoreGlobal::new(key, lcore_id, addr.to_str().unwrap());
+    let global = PerCoreGlobal::new(keys, lcore_id, addr.to_str().unwrap());
 
     debug!("Initialized rust core {}", global.lcore);
 

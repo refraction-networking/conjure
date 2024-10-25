@@ -107,6 +107,11 @@ func main() {
 		logger.Fatalf("error parseing private key: %s", err)
 	}
 
+	zmqPrivKey, err := conf.ParseZMQPrivateKey()
+	if err != nil {
+		logger.Fatalf("error parseing private key: %s", err)
+	}
+
 	var prefixTransport cj.Transport
 	if conf.DisableDefaultPrefixes {
 		prefixTransport, err = prefix.New(privkey, conf.PrefixFilePath)
@@ -130,7 +135,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := new(sync.WaitGroup)
 	regChan := make(chan interface{}, 10000)
-	zmqIngester, err := cj.NewZMQIngest(zmqAddress, regChan, privkey, conf.ZMQConfig)
+	zmqIngester, err := cj.NewZMQIngest(zmqAddress, regChan, zmqPrivKey, conf.ZMQConfig)
 	if err != nil {
 		logger.Fatal("error creating ZMQ Ingest: %w", err)
 	}

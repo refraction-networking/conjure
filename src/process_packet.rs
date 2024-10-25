@@ -238,14 +238,11 @@ impl PerCoreGlobal {
         }
 
         if is_tls_app_pkt(&tcp_pkt) {
-            match self.check_dark_decoy_tag(&flow, &tcp_pkt) {
-                true => {
-                    // debug!("New Conjure registration detected in {},", flow);
-                    // self.flow_tracker.mark_dark_decoy(&cj_flow);
-                    // not removing flow from stale_tracked_flows for optimization reasons:
-                    // it will be removed later
-                }
-                false => {}
+            if self.check_dark_decoy_tag(&flow, &tcp_pkt) {
+                // debug!("New Conjure registration detected in {},", flow);
+                // self.flow_tracker.mark_dark_decoy(&cj_flow);
+                // not removing flow from stale_tracked_flows for optimization reasons:
+                // it will be removed later
             };
             self.flow_tracker.stop_tracking_flow(&flow);
         } else {
@@ -280,7 +277,7 @@ impl PerCoreGlobal {
 
     fn check_dark_decoy_tag(&mut self, flow: &Flow, tcp_pkt: &TcpPacket) -> bool {
         self.stats.elligator_this_period += 1;
-        match elligator::extract_payloads(&self.priv_key, tcp_pkt.payload()) {
+        match elligator::extract_payloads_multiple_keys(&self.priv_keys, tcp_pkt.payload()) {
             Ok(res) => {
                 // res.0 => shared secret
                 // res.1 => Fixed size payload

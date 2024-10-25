@@ -3,6 +3,7 @@ package lib
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 )
@@ -17,6 +18,9 @@ type Config struct {
 
 	// Path to private key file
 	PrivateKeyPath string `toml:"privkey_path"`
+
+	// Path to ZMQ private key file
+	ZMQPrivateKeyPath string `toml:"zmq_privkey_path"`
 
 	// PrefixFilePath provides a path to a file containing supported prefix specifications for the
 	// prefix transport.
@@ -43,27 +47,78 @@ func ParseConfig() (*Config, error) {
 // PrivateKeyLength is the expected length of the station (ed25519) private key in bytes.
 const PrivateKeyLength = 32
 
+func (c *Config) ParseZMQPrivateKey() ([PrivateKeyLength]byte, error) {
+	privkeyPath := c.ZMQPrivateKeyPath
+	if privkeyPath == "" {
+		privkeyPath = os.Getenv("ZMQ_PRIVKEY")
+	}
+	if privkeyPath == "" {
+		return [PrivateKeyLength]byte{}, fmt.Errorf("no path to ZMQ private key")
+	}
+
+	return loadPrivateKey(privkeyPath)
+}
+
 // ParsePrivateKey tries to use either the PrivateKeyPath (`privkey_path`) config variable or the
-// CJ_PRIVKEY environment variable to locate the file from which it can parse the station private key
-func (c *Config) ParsePrivateKey() ([32]byte, error) {
+// CJ_PRIVKEY environment variable to locate the file or directory containing the station private key(s).
+func (c *Config) ParsePrivateKey() ([][PrivateKeyLength]byte, error) {
 	privkeyPath := c.PrivateKeyPath
 	if privkeyPath == "" {
 		privkeyPath = os.Getenv("CJ_PRIVKEY")
 	}
 	if privkeyPath == "" {
-		return [32]byte{}, fmt.Errorf("no path to private key")
+		return nil, fmt.Errorf("no path to application private key")
 	}
 
-	privkey, err := os.ReadFile(privkeyPath)
+	fileInfo, err := os.Stat(privkeyPath)
 	if err != nil {
-		return [32]byte{}, fmt.Errorf("failed to load private key: %w", err)
+		return nil, fmt.Errorf("failed to access private key path: %w", err)
+	}
+
+	if fileInfo.IsDir() {
+		files, err := os.ReadDir(privkeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read directory: %w", err)
+		}
+
+		var keys [][PrivateKeyLength]byte
+
+		for _, file := range files {
+			if !file.IsDir() {
+				key, err := loadPrivateKey(filepath.Join(privkeyPath, file.Name()))
+				if err != nil {
+					return nil, err
+				}
+				keys = append(keys, key)
+			}
+		}
+
+		if len(keys) == 0 {
+			return nil, fmt.Errorf("no valid keys found in directory")
+		}
+
+		return keys, nil
+	}
+
+	key, err := loadPrivateKey(privkeyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return [][PrivateKeyLength]byte{key}, nil
+}
+
+func loadPrivateKey(path string) ([32]byte, error) {
+	privkey, err := os.ReadFile(path)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("failed to load private key from %s: %w", path, err)
 	}
 
 	if len(privkey) < PrivateKeyLength {
-		return [32]byte{}, fmt.Errorf("privkey error - not enough bytes")
+		return [32]byte{}, fmt.Errorf("privkey error - not enough bytes in %s", path)
 	}
 
-	var out [32]byte
+	var out [PrivateKeyLength]byte
 	copy(out[:], privkey[:])
 	return out, nil
 }

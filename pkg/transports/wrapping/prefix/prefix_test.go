@@ -39,7 +39,7 @@ func TestSuccessfulWrap(t *testing.T) {
 
 	var transport = Transport{
 		TagObfuscator:     transports.CTRObfuscator{},
-		Privkey:           curve25519Private,
+		Privkeys:          [][32]byte{curve25519Private},
 		SupportedPrefixes: defaultPrefixes,
 	}
 	message := []byte(`test message!`)
@@ -93,7 +93,7 @@ func TestSuccessfulWrap(t *testing.T) {
 func TestUnsuccessfulWrap(t *testing.T) {
 	var transport = Transport{
 		TagObfuscator:     transports.CTRObfuscator{},
-		Privkey:           [32]byte{},
+		Privkeys:          [][32]byte{},
 		SupportedPrefixes: defaultPrefixes,
 	}
 
@@ -126,7 +126,7 @@ func TestUnsuccessfulWrap(t *testing.T) {
 func TestTryAgain(t *testing.T) {
 	var transport = Transport{
 		TagObfuscator:     transports.CTRObfuscator{},
-		Privkey:           [32]byte{},
+		Privkeys:          [][32]byte{},
 		SupportedPrefixes: defaultPrefixes,
 	}
 
@@ -222,7 +222,7 @@ var _cases = []struct {
 func TestPrefixGetDstPortServer(t *testing.T) {
 	clv := randomizeDstPortMinVersion
 	seed, _ := hex.DecodeString("0000000000000000000000000000000000")
-	transport, err := Default([32]byte{})
+	transport, err := Default([][32]byte{})
 	require.Nil(t, err)
 
 	for _, testCase := range _cases {
@@ -427,7 +427,7 @@ func TestPrefixEndToEnd(t *testing.T) {
 
 	var transport = Transport{
 		TagObfuscator:     transports.CTRObfuscator{},
-		Privkey:           curve25519Private,
+		Privkeys:          [][32]byte{curve25519Private},
 		SupportedPrefixes: defaultPrefixes,
 	}
 	message := []byte(`test message!`)

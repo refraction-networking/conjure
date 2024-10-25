@@ -71,7 +71,7 @@ func getTestCases(t *testing.T) []struct {
 		},
 		{
 			func(privKey [32]byte) lib.WrappingTransport {
-				tr, err := prefix.Default(privKey)
+				tr, err := prefix.Default([][32]byte{privKey})
 				require.Nil(t, err)
 				return tr
 			},

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 
 	"github.com/libp2p/go-reuseport"
 	"github.com/refraction-networking/conjure/pkg/core"
@@ -175,12 +174,12 @@ func (t *Transport) Connect(ctx context.Context, reg transports.Registration) (n
 
 	// combine errors into a single error
 	var combinedErr error
-	if len(errs) > 0 {
-		errStrings := make([]string, len(errs))
-		for i, err := range errs {
-			errStrings[i] = err.Error()
+	for _, err := range errs {
+		if combinedErr == nil {
+			combinedErr = err
+		} else {
+			combinedErr = fmt.Errorf("%v, %v", combinedErr, err)
 		}
-		combinedErr = fmt.Errorf(strings.Join(errStrings, "; "))
 	}
 
 	return nil, combinedErr // if we reached here, both attempts failed

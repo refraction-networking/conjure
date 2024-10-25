@@ -5,6 +5,7 @@
 // https://github.com/rust-lang/rust-clippy/issues/702
 #![allow(unknown_lints)]
 #![allow(clippy::all)]
+#![allow(renamed_and_removed_lints)]
 
 #![allow(unused_attributes)]
 #![cfg_attr(rustfmt, rustfmt::skip)]
