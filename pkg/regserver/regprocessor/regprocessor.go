@@ -11,6 +11,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
+	"net"
 	"sync"
 
 	zmq "github.com/pebbe/zmq4"
@@ -20,8 +22,11 @@ import (
 	"github.com/refraction-networking/conjure/pkg/phantoms"
 	"github.com/refraction-networking/conjure/pkg/regserver/overrides"
 	"github.com/refraction-networking/conjure/pkg/station/lib"
+	"github.com/refraction-networking/conjure/pkg/transports/wrapping/prefix"
+
 	pb "github.com/refraction-networking/conjure/proto"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 var (
@@ -74,10 +79,26 @@ type RegProcessor struct {
 	regOverrides interfaces.Overrides
 
 	transports map[pb.TransportType]lib.Transport
+
+	enforceSubnetOverrides bool
+	overrideSubnets        []Subnet
+	exclusionsFromOverride []Subnet
+}
+
+type Subnet struct {
+	CIDR      ipnet   `toml:"cidr"`
+	Weight    float64 `toml:"weight"`
+	Port      int     `toml:"port"`
+	Transport string  `toml:"transport"`
+}
+
+// Custom type to handle CIDR notation in TOML
+type ipnet struct {
+	*net.IPNet
 }
 
 // NewRegProcessor initialize a new RegProcessor
-func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics) (*RegProcessor, error) {
+func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet) (*RegProcessor, error) {
 
 	if len(privkey) != ed25519.PrivateKeySize {
 		// We require the 64 byte [private_key][public_key] format to Sign using crypto/ed25519
@@ -89,7 +110,7 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		return nil, err
 	}
 
-	regProcessor, err := newRegProcessor(zmqBindAddr, zmqPort, privkey, authVerbose, stationPublicKeys)
+	regProcessor, err := newRegProcessor(zmqBindAddr, zmqPort, privkey, authVerbose, stationPublicKeys, enforceSubnetOverrides, overrideSubnets, exclusionsFromOverride)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +122,7 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 
 // initializes the registration processor without the phantom selector which can be added by a
 // wrapping function before it is returned. This function is required for testing.
-func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string) (*RegProcessor, error) {
+func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet) (*RegProcessor, error) {
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrZmqSocket, err)
@@ -137,19 +158,25 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		regOverrides = interfaces.Overrides([]interfaces.RegOverride{overrides.NewRandPrefixOverride()})
 	}
 
-	return &RegProcessor{
-		zmqMutex:      sync.Mutex{},
-		selectorMutex: sync.RWMutex{},
-		sock:          sock,
-		transports:    make(map[pb.TransportType]lib.Transport),
-		authenticated: true,
-		privkey:       privkey,
-		regOverrides:  regOverrides,
-	}, nil
+	rp := &RegProcessor{
+		zmqMutex:               sync.Mutex{},
+		selectorMutex:          sync.RWMutex{},
+		sock:                   sock,
+		transports:             make(map[pb.TransportType]lib.Transport),
+		authenticated:          true,
+		privkey:                privkey,
+		regOverrides:           regOverrides,
+		enforceSubnetOverrides: enforceSubnetOverrides,
+		overrideSubnets:        make([]Subnet, len(overrideSubnets)),
+		exclusionsFromOverride: make([]Subnet, len(exclusionsFromOverride)),
+	}
+	copy(rp.overrideSubnets, overrideSubnets)
+
+	return rp, nil
 }
 
 // NewRegProcessorNoAuth creates a regprocessor without authentication to zmq address
-func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.Metrics) (*RegProcessor, error) {
+func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.Metrics, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet) (*RegProcessor, error) {
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, ErrZmqSocket
@@ -165,15 +192,21 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 		return nil, err
 	}
 
-	return &RegProcessor{
-		zmqMutex:      sync.Mutex{},
-		selectorMutex: sync.RWMutex{},
-		ipSelector:    phantomSelector,
-		sock:          sock,
-		metrics:       metrics,
-		transports:    make(map[pb.TransportType]lib.Transport),
-		authenticated: false,
-	}, nil
+	rp := &RegProcessor{
+		zmqMutex:               sync.Mutex{},
+		selectorMutex:          sync.RWMutex{},
+		ipSelector:             phantomSelector,
+		sock:                   sock,
+		metrics:                metrics,
+		transports:             make(map[pb.TransportType]lib.Transport),
+		authenticated:          false,
+		enforceSubnetOverrides: enforceSubnetOverrides,
+		overrideSubnets:        make([]Subnet, len(overrideSubnets)),
+		exclusionsFromOverride: make([]Subnet, len(exclusionsFromOverride)),
+	}
+	copy(rp.overrideSubnets, overrideSubnets)
+
+	return rp, nil
 }
 
 // Close cleans up the (ZMQ) servers running in the background supporting registration.
@@ -356,7 +389,108 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		regResp.DstPort = proto.Uint32(443)
 	}
 
+	if p.enforceSubnetOverrides {
+		// ignore prior choices and begin experimental overrides for Min and Prefix transports only
+		if transportType == pb.TransportType_Min {
+
+			// TODO: process subnet overrides and pick one according to assigned weights
+
+			ipv4FromRegResponse := uint32ToIPv4(regResp.Ipv4Addr)
+			for _, subnet := range p.exclusionsFromOverride {
+				if subnet.CIDR.IPNet.Contains(ipv4FromRegResponse) && subnet.Transport == "Min_Transport" {
+					// the IPv4 originally chosen by the client exists in a subnet we exluded from overrides
+					// so do not apply overrides
+					return regResp, nil
+				}
+			}
+
+			// TODO: pick the first override subnet for testing purposes
+			ipNet := p.overrideSubnets[0].CIDR.IPNet
+
+			ipUint32, err := ipv4ToUint32(ipNet.IP)
+			if err != nil {
+				// failed to convert IPv4 to uint32. So do not apply overrides
+				// and return the original regResp
+				return regResp, nil
+			}
+
+			mask := ipNet.Mask
+			ones, bits := mask.Size()
+			hosts := uint32(1 << uint(bits-ones))
+
+			randIpUintFromRange, err := randomInt(ipUint32, ipUint32+hosts)
+			if err != nil {
+				// failed to get random IPv4 as uint32 from the given range.
+				// do not apply override and return the original regResp.
+				return regResp, nil
+			}
+			regResp.Ipv4Addr = proto.Uint32(randIpUintFromRange)
+		}
+	}
+
 	return regResp, nil
+}
+
+// Helper function to convert IPv4 to uint32
+func ipv4ToUint32(ip net.IP) (uint32, error) {
+	err := errors.New("Provided IP is not IPv4")
+	if ip == nil {
+		return 0, err
+	}
+
+	ip = ip.To4()
+	if ip == nil {
+		return 0, err
+	}
+
+	return binary.BigEndian.Uint32(ip), nil
+}
+
+// Helper function to cenvert uint32 to IPv4
+func uint32ToIPv4(ip *uint32) net.IP {
+	if ip == nil {
+		return nil
+	}
+
+	ipInt := *ip
+	return net.IPv4(
+		byte(ipInt>>24),
+		byte(ipInt>>16),
+		byte(ipInt>>8),
+		byte(ipInt),
+	)
+}
+
+// Helper function to get random integers within a range
+func randomInt(x, y uint32) (uint32, error) {
+	rangeSize := y - x + 1
+	// Generate a random number in the range [0, rangeSize)
+	randomNum, err := rand.Int(rand.Reader, big.NewInt(int64(rangeSize)))
+	if err != nil {
+		return 0, err
+	}
+	// Return the random number in the range [x, y]
+	return x + uint32(randomNum.Int64()), nil
+}
+
+// Helper function to override the prefix in the registration response
+func overridePrefix(newRegResp *pb.RegistrationResponse, prefixId prefix.PrefixID, dstPort uint32) error {
+	// Override Phantom dstPort
+	newRegResp.DstPort = proto.Uint32(dstPort)
+	// Override Prefix choice and PrefixParam
+	newPrefix, err := prefix.TryFromID(prefixId)
+	var fp = newPrefix.FlushPolicy()
+	var i int32 = int32(newPrefix.ID())
+	newparams := &pb.PrefixTransportParams{}
+	newparams.PrefixId = &i
+	newparams.CustomFlushPolicy = &fp
+	newparams.Prefix = newPrefix.Bytes()
+	anypbParams, err := anypb.New(newparams)
+	if err != nil {
+		return err
+	}
+	newRegResp.TransportParams = anypbParams
+	return nil
 }
 
 // processC2SWrapper adds missing variables to the input c2s and returns the payload in format ready to be published to zmq
