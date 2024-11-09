@@ -53,8 +53,11 @@ type config struct {
 	ExclusionsFromOverride []regprocessor.Subnet `toml:"excluded_subnets_from_overrides"`
 }
 
+// backing non-local type with local definition
+type ipnet regprocessor.Ipnet
+
 // UnmarshalText makes CIDR compatible with TOML decoding
-func (n *regprocessor.ipnet) UnmarshalText(text []byte) error {
+func (n *ipnet) UnmarshalText(text []byte) error {
 	_, cidr, err := net.ParseCIDR(string(text))
 	if err != nil {
 		return err

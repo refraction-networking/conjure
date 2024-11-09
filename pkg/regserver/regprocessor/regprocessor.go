@@ -86,14 +86,14 @@ type RegProcessor struct {
 }
 
 type Subnet struct {
-	CIDR      ipnet   `toml:"cidr"`
+	CIDR      Ipnet   `toml:"cidr"`
 	Weight    float64 `toml:"weight"`
 	Port      int     `toml:"port"`
 	Transport string  `toml:"transport"`
 }
 
 // Custom type to handle CIDR notation in TOML
-type ipnet struct {
+type Ipnet struct {
 	*net.IPNet
 }
 
