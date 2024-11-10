@@ -487,6 +487,10 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		// ignore prior choices and begin experimental overrides for Min and Prefix transports only
 		if transportType == pb.TransportType_Min {
 
+			if p.minOverrideSubnets == nil {
+				// reg_conf.toml does not contain subnet overrides for Min transport
+				return regResp, nil
+			}
 			// TODO: process subnet overrides and pick one according to assigned weights
 
 			ipv4FromRegResponse := uint32ToIPv4(regResp.Ipv4Addr)
