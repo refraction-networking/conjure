@@ -4,7 +4,6 @@ import (
 	"crypto/ed25519"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"os/signal"
 	"strconv"
@@ -51,19 +50,6 @@ type config struct {
 	EnforceSubnetOverrides bool                  `toml:"enforce_subnet_overrides"`
 	OverrideSubnets        []regprocessor.Subnet `toml:"override_subnets"`
 	ExclusionsFromOverride []regprocessor.Subnet `toml:"excluded_subnets_from_overrides"`
-}
-
-// backing non-local type with local definition
-type ipnet regprocessor.Ipnet
-
-// UnmarshalText makes CIDR compatible with TOML decoding
-func (n *ipnet) UnmarshalText(text []byte) error {
-	_, cidr, err := net.ParseCIDR(string(text))
-	if err != nil {
-		return err
-	}
-	n.IPNet = cidr
-	return nil
 }
 
 var defaultTransports = map[pb.TransportType]lib.Transport{

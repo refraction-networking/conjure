@@ -85,6 +85,16 @@ type RegProcessor struct {
 	exclusionsFromOverride []Subnet
 }
 
+// UnmarshalText makes CIDR compatible with TOML decoding
+func (n *Ipnet) UnmarshalText(text []byte) error {
+	_, cidr, err := net.ParseCIDR(string(text))
+	if err != nil {
+		return err
+	}
+	n.IPNet = cidr
+	return nil
+}
+
 type Subnet struct {
 	CIDR      Ipnet   `toml:"cidr"`
 	Weight    float64 `toml:"weight"`
@@ -92,7 +102,6 @@ type Subnet struct {
 	Transport string  `toml:"transport"`
 }
 
-// Custom type to handle CIDR notation in TOML
 type Ipnet struct {
 	*net.IPNet
 }
@@ -171,6 +180,7 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		exclusionsFromOverride: make([]Subnet, len(exclusionsFromOverride)),
 	}
 	copy(rp.overrideSubnets, overrideSubnets)
+	copy(rp.exclusionsFromOverride, exclusionsFromOverride)
 
 	return rp, nil
 }
@@ -205,6 +215,7 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 		exclusionsFromOverride: make([]Subnet, len(exclusionsFromOverride)),
 	}
 	copy(rp.overrideSubnets, overrideSubnets)
+	copy(rp.exclusionsFromOverride, exclusionsFromOverride)
 
 	return rp, nil
 }
@@ -388,7 +399,6 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	} else {
 		regResp.DstPort = proto.Uint32(443)
 	}
-
 	if p.enforceSubnetOverrides {
 		// ignore prior choices and begin experimental overrides for Min and Prefix transports only
 		if transportType == pb.TransportType_Min {
@@ -397,7 +407,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 
 			ipv4FromRegResponse := uint32ToIPv4(regResp.Ipv4Addr)
 			for _, subnet := range p.exclusionsFromOverride {
-				if subnet.CIDR.IPNet.Contains(ipv4FromRegResponse) && subnet.Transport == "Min_Transport" {
+				if subnet.CIDR.IPNet.Contains(ipv4FromRegResponse) {
 					// the IPv4 originally chosen by the client exists in a subnet we exluded from overrides
 					// so do not apply overrides
 					return regResp, nil
