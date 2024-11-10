@@ -81,7 +81,8 @@ type RegProcessor struct {
 	transports map[pb.TransportType]lib.Transport
 
 	enforceSubnetOverrides bool
-	overrideSubnets        []Subnet
+	minOverrideSubnets     []Subnet
+	prefixOverrideSubnets  []Subnet
 	exclusionsFromOverride []Subnet
 }
 
@@ -191,6 +192,22 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 	return regProcessor, nil
 }
 
+// shallow-copy the override subnets into different slices based on transport type.
+// could be improved to handle different transports
+func splitOverrideSubnets(overrideSubnets []Subnet) ([]Subnet, []Subnet) {
+
+	var minOverrideSubnets []Subnet
+	var prefixOverrideSubnets []Subnet
+	for _, subnet := range overrideSubnets {
+		if subnet.Transport == "Min_Transport" {
+			minOverrideSubnets = append(minOverrideSubnets, subnet)
+		} else if subnet.Transport == "Prefix_Transport" {
+			prefixOverrideSubnets = append(prefixOverrideSubnets, subnet)
+		}
+	}
+	return minOverrideSubnets, prefixOverrideSubnets
+}
+
 // initializes the registration processor without the phantom selector which can be added by a
 // wrapping function before it is returned. This function is required for testing.
 func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet) (*RegProcessor, error) {
@@ -229,6 +246,8 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		regOverrides = interfaces.Overrides([]interfaces.RegOverride{overrides.NewRandPrefixOverride()})
 	}
 
+	minOverrideSubnets, prefixOverrideSubnets := splitOverrideSubnets(overrideSubnets)
+
 	rp := &RegProcessor{
 		zmqMutex:               sync.Mutex{},
 		selectorMutex:          sync.RWMutex{},
@@ -238,10 +257,10 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		privkey:                privkey,
 		regOverrides:           regOverrides,
 		enforceSubnetOverrides: enforceSubnetOverrides,
-		overrideSubnets:        make([]Subnet, len(overrideSubnets)),
+		minOverrideSubnets:     minOverrideSubnets,
+		prefixOverrideSubnets:  prefixOverrideSubnets,
 		exclusionsFromOverride: make([]Subnet, len(exclusionsFromOverride)),
 	}
-	copy(rp.overrideSubnets, overrideSubnets)
 	copy(rp.exclusionsFromOverride, exclusionsFromOverride)
 
 	return rp, nil
@@ -264,6 +283,8 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 		return nil, err
 	}
 
+	minOverrideSubnets, prefixOverrideSubnets := splitOverrideSubnets(overrideSubnets)
+
 	rp := &RegProcessor{
 		zmqMutex:               sync.Mutex{},
 		selectorMutex:          sync.RWMutex{},
@@ -273,10 +294,10 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 		transports:             make(map[pb.TransportType]lib.Transport),
 		authenticated:          false,
 		enforceSubnetOverrides: enforceSubnetOverrides,
-		overrideSubnets:        make([]Subnet, len(overrideSubnets)),
+		minOverrideSubnets:     minOverrideSubnets,
+		prefixOverrideSubnets:  prefixOverrideSubnets,
 		exclusionsFromOverride: make([]Subnet, len(exclusionsFromOverride)),
 	}
-	copy(rp.overrideSubnets, overrideSubnets)
 	copy(rp.exclusionsFromOverride, exclusionsFromOverride)
 
 	return rp, nil
@@ -462,6 +483,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		regResp.DstPort = proto.Uint32(443)
 	}
 	if p.enforceSubnetOverrides {
+
 		// ignore prior choices and begin experimental overrides for Min and Prefix transports only
 		if transportType == pb.TransportType_Min {
 
@@ -477,7 +499,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 			}
 
 			// TODO: pick the first override subnet for testing purposes
-			ipNet := p.overrideSubnets[0].CIDR.IPNet
+			ipNet := p.minOverrideSubnets[0].CIDR.IPNet
 
 			ipUint32, err := ipv4ToUint32(ipNet.IP)
 			if err != nil {
@@ -488,7 +510,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 
 			mask := ipNet.Mask
 			ones, bits := mask.Size()
-			hosts := uint32(1 << uint(bits-ones))
+			hosts := uint32(1 << uint32(bits-ones))
 
 			randIpUintFromRange, err := randomInt(ipUint32, ipUint32+hosts)
 			if err != nil {
