@@ -85,6 +85,17 @@ type RegProcessor struct {
 	exclusionsFromOverride []Subnet
 }
 
+type Subnet struct {
+	CIDR      Ipnet   `toml:"cidr"`
+	Weight    float64 `toml:"weight"`
+	Port      int     `toml:"port"`
+	Transport string  `toml:"transport"`
+}
+
+type Ipnet struct {
+	*net.IPNet
+}
+
 // UnmarshalText makes CIDR compatible with TOML decoding
 func (n *Ipnet) UnmarshalText(text []byte) error {
 	_, cidr, err := net.ParseCIDR(string(text))
@@ -95,15 +106,66 @@ func (n *Ipnet) UnmarshalText(text []byte) error {
 	return nil
 }
 
-type Subnet struct {
-	CIDR      Ipnet   `toml:"cidr"`
-	Weight    float64 `toml:"weight"`
-	Port      int     `toml:"port"`
-	Transport string  `toml:"transport"`
+// Helper function to convert IPv4 to uint32
+func ipv4ToUint32(ip net.IP) (uint32, error) {
+	err := errors.New("Provided IP is not IPv4")
+	if ip == nil {
+		return 0, err
+	}
+
+	ip = ip.To4()
+	if ip == nil {
+		return 0, err
+	}
+
+	return binary.BigEndian.Uint32(ip), nil
 }
 
-type Ipnet struct {
-	*net.IPNet
+// Helper function to cenvert uint32 to IPv4
+func uint32ToIPv4(ip *uint32) net.IP {
+	if ip == nil {
+		return nil
+	}
+
+	ipInt := *ip
+	return net.IPv4(
+		byte(ipInt>>24),
+		byte(ipInt>>16),
+		byte(ipInt>>8),
+		byte(ipInt),
+	)
+}
+
+// Helper function to get random integers within a range
+func randomInt(x, y uint32) (uint32, error) {
+	rangeSize := y - x + 1
+	// Generate a random number in the range [0, rangeSize)
+	randomNum, err := rand.Int(rand.Reader, big.NewInt(int64(rangeSize)))
+	if err != nil {
+		return 0, err
+	}
+	// Return the random number in the range [x, y]
+	return x + uint32(randomNum.Int64()), nil
+}
+
+// Helper function to override the prefix in the registration response
+func overridePrefix(newRegResp *pb.RegistrationResponse, prefixId prefix.PrefixID, dstPort uint32) error {
+	// Override Phantom dstPort
+	newRegResp.DstPort = proto.Uint32(dstPort)
+	// Override Prefix choice and PrefixParam
+	newPrefix, err := prefix.TryFromID(prefixId)
+	var fp = newPrefix.FlushPolicy()
+	var i int32 = int32(newPrefix.ID())
+	newparams := &pb.PrefixTransportParams{}
+	newparams.PrefixId = &i
+	newparams.CustomFlushPolicy = &fp
+	newparams.Prefix = newPrefix.Bytes()
+	anypbParams, err := anypb.New(newparams)
+	if err != nil {
+		return err
+	}
+	newRegResp.TransportParams = anypbParams
+	return nil
 }
 
 // NewRegProcessor initialize a new RegProcessor
@@ -439,68 +501,6 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 	}
 
 	return regResp, nil
-}
-
-// Helper function to convert IPv4 to uint32
-func ipv4ToUint32(ip net.IP) (uint32, error) {
-	err := errors.New("Provided IP is not IPv4")
-	if ip == nil {
-		return 0, err
-	}
-
-	ip = ip.To4()
-	if ip == nil {
-		return 0, err
-	}
-
-	return binary.BigEndian.Uint32(ip), nil
-}
-
-// Helper function to cenvert uint32 to IPv4
-func uint32ToIPv4(ip *uint32) net.IP {
-	if ip == nil {
-		return nil
-	}
-
-	ipInt := *ip
-	return net.IPv4(
-		byte(ipInt>>24),
-		byte(ipInt>>16),
-		byte(ipInt>>8),
-		byte(ipInt),
-	)
-}
-
-// Helper function to get random integers within a range
-func randomInt(x, y uint32) (uint32, error) {
-	rangeSize := y - x + 1
-	// Generate a random number in the range [0, rangeSize)
-	randomNum, err := rand.Int(rand.Reader, big.NewInt(int64(rangeSize)))
-	if err != nil {
-		return 0, err
-	}
-	// Return the random number in the range [x, y]
-	return x + uint32(randomNum.Int64()), nil
-}
-
-// Helper function to override the prefix in the registration response
-func overridePrefix(newRegResp *pb.RegistrationResponse, prefixId prefix.PrefixID, dstPort uint32) error {
-	// Override Phantom dstPort
-	newRegResp.DstPort = proto.Uint32(dstPort)
-	// Override Prefix choice and PrefixParam
-	newPrefix, err := prefix.TryFromID(prefixId)
-	var fp = newPrefix.FlushPolicy()
-	var i int32 = int32(newPrefix.ID())
-	newparams := &pb.PrefixTransportParams{}
-	newparams.PrefixId = &i
-	newparams.CustomFlushPolicy = &fp
-	newparams.Prefix = newPrefix.Bytes()
-	anypbParams, err := anypb.New(newparams)
-	if err != nil {
-		return err
-	}
-	newRegResp.TransportParams = anypbParams
-	return nil
 }
 
 // processC2SWrapper adds missing variables to the input c2s and returns the payload in format ready to be published to zmq
