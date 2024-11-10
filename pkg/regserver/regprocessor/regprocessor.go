@@ -12,8 +12,10 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	mrand "math/rand"
 	"net"
 	"sync"
+	"time"
 
 	zmq "github.com/pebbe/zmq4"
 	"github.com/refraction-networking/conjure/pkg/core"
@@ -80,10 +82,14 @@ type RegProcessor struct {
 
 	transports map[pb.TransportType]lib.Transport
 
-	enforceSubnetOverrides bool
-	minOverrideSubnets     []Subnet
-	prefixOverrideSubnets  []Subnet
-	exclusionsFromOverride []Subnet
+	enforceSubnetOverrides                 bool
+	minOverrideSubnets                     []Subnet
+	minOverrideSubnetsTotalWeight          float64
+	minOverrideSubnetsCumulativeWeights    []float64
+	prefixOverrideSubnetsTotalWeight       float64
+	prefixOverrideSubnetsCumulativeWeights []float64
+	prefixOverrideSubnets                  []Subnet
+	exclusionsFromOverride                 []Subnet
 }
 
 type Subnet struct {
@@ -169,6 +175,45 @@ func overridePrefix(newRegResp *pb.RegistrationResponse, prefixId prefix.PrefixI
 	return nil
 }
 
+// shallow-copy the override subnets into different slices based on transport type.
+// could be improved to handle different transports
+func splitOverrideSubnets(overrideSubnets []Subnet) ([]Subnet, []Subnet) {
+
+	var minOverrideSubnets []Subnet
+	var prefixOverrideSubnets []Subnet
+	for _, subnet := range overrideSubnets {
+		if subnet.Transport == "Min_Transport" {
+			minOverrideSubnets = append(minOverrideSubnets, subnet)
+		} else if subnet.Transport == "Prefix_Transport" {
+			prefixOverrideSubnets = append(prefixOverrideSubnets, subnet)
+		}
+	}
+	return minOverrideSubnets, prefixOverrideSubnets
+}
+
+// calculate cumulative weights for a given subnets slice
+func processOverrideSubnetsWeights(subnets []Subnet) []float64 {
+
+	if len(subnets) == 0 {
+		return nil
+	}
+
+	var totalWeight float64
+	for _, subnet := range subnets {
+		totalWeight += subnet.Weight
+	}
+
+	cumulativeWeights := make([]float64, len(subnets))
+	for i, subnet := range subnets {
+		if i == 0 {
+			cumulativeWeights[i] = subnet.Weight / totalWeight
+		} else {
+			cumulativeWeights[i] = cumulativeWeights[i-1] + (subnet.Weight / totalWeight)
+		}
+	}
+	return cumulativeWeights
+}
+
 // NewRegProcessor initialize a new RegProcessor
 func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet) (*RegProcessor, error) {
 
@@ -190,22 +235,6 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 	regProcessor.metrics = metrics
 
 	return regProcessor, nil
-}
-
-// shallow-copy the override subnets into different slices based on transport type.
-// could be improved to handle different transports
-func splitOverrideSubnets(overrideSubnets []Subnet) ([]Subnet, []Subnet) {
-
-	var minOverrideSubnets []Subnet
-	var prefixOverrideSubnets []Subnet
-	for _, subnet := range overrideSubnets {
-		if subnet.Transport == "Min_Transport" {
-			minOverrideSubnets = append(minOverrideSubnets, subnet)
-		} else if subnet.Transport == "Prefix_Transport" {
-			prefixOverrideSubnets = append(prefixOverrideSubnets, subnet)
-		}
-	}
-	return minOverrideSubnets, prefixOverrideSubnets
 }
 
 // initializes the registration processor without the phantom selector which can be added by a
@@ -248,18 +277,23 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 
 	minOverrideSubnets, prefixOverrideSubnets := splitOverrideSubnets(overrideSubnets)
 
+	minOverrideSubnetsCumulativeWeights := processOverrideSubnetsWeights(minOverrideSubnets)
+	prefixOverrideSubnetsCumulativeWeights := processOverrideSubnetsWeights(minOverrideSubnets)
+
 	rp := &RegProcessor{
-		zmqMutex:               sync.Mutex{},
-		selectorMutex:          sync.RWMutex{},
-		sock:                   sock,
-		transports:             make(map[pb.TransportType]lib.Transport),
-		authenticated:          true,
-		privkey:                privkey,
-		regOverrides:           regOverrides,
-		enforceSubnetOverrides: enforceSubnetOverrides,
-		minOverrideSubnets:     minOverrideSubnets,
-		prefixOverrideSubnets:  prefixOverrideSubnets,
-		exclusionsFromOverride: make([]Subnet, len(exclusionsFromOverride)),
+		zmqMutex:                               sync.Mutex{},
+		selectorMutex:                          sync.RWMutex{},
+		sock:                                   sock,
+		transports:                             make(map[pb.TransportType]lib.Transport),
+		authenticated:                          true,
+		privkey:                                privkey,
+		regOverrides:                           regOverrides,
+		enforceSubnetOverrides:                 enforceSubnetOverrides,
+		minOverrideSubnets:                     minOverrideSubnets,
+		prefixOverrideSubnets:                  prefixOverrideSubnets,
+		minOverrideSubnetsCumulativeWeights:    minOverrideSubnetsCumulativeWeights,
+		prefixOverrideSubnetsCumulativeWeights: prefixOverrideSubnetsCumulativeWeights,
+		exclusionsFromOverride:                 make([]Subnet, len(exclusionsFromOverride)),
 	}
 	copy(rp.exclusionsFromOverride, exclusionsFromOverride)
 
@@ -285,18 +319,23 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 
 	minOverrideSubnets, prefixOverrideSubnets := splitOverrideSubnets(overrideSubnets)
 
+	minOverrideSubnetsCumulativeWeights := processOverrideSubnetsWeights(minOverrideSubnets)
+	prefixOverrideSubnetsCumulativeWeights := processOverrideSubnetsWeights(minOverrideSubnets)
+
 	rp := &RegProcessor{
-		zmqMutex:               sync.Mutex{},
-		selectorMutex:          sync.RWMutex{},
-		ipSelector:             phantomSelector,
-		sock:                   sock,
-		metrics:                metrics,
-		transports:             make(map[pb.TransportType]lib.Transport),
-		authenticated:          false,
-		enforceSubnetOverrides: enforceSubnetOverrides,
-		minOverrideSubnets:     minOverrideSubnets,
-		prefixOverrideSubnets:  prefixOverrideSubnets,
-		exclusionsFromOverride: make([]Subnet, len(exclusionsFromOverride)),
+		zmqMutex:                               sync.Mutex{},
+		selectorMutex:                          sync.RWMutex{},
+		ipSelector:                             phantomSelector,
+		sock:                                   sock,
+		metrics:                                metrics,
+		transports:                             make(map[pb.TransportType]lib.Transport),
+		authenticated:                          false,
+		enforceSubnetOverrides:                 enforceSubnetOverrides,
+		minOverrideSubnets:                     minOverrideSubnets,
+		prefixOverrideSubnets:                  prefixOverrideSubnets,
+		minOverrideSubnetsCumulativeWeights:    minOverrideSubnetsCumulativeWeights,
+		prefixOverrideSubnetsCumulativeWeights: prefixOverrideSubnetsCumulativeWeights,
+		exclusionsFromOverride:                 make([]Subnet, len(exclusionsFromOverride)),
 	}
 	copy(rp.exclusionsFromOverride, exclusionsFromOverride)
 
@@ -491,7 +530,6 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 				// reg_conf.toml does not contain subnet overrides for Min transport
 				return regResp, nil
 			}
-			// TODO: process subnet overrides and pick one according to assigned weights
 
 			ipv4FromRegResponse := uint32ToIPv4(regResp.Ipv4Addr)
 			for _, subnet := range p.exclusionsFromOverride {
@@ -502,8 +540,20 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 				}
 			}
 
-			// TODO: pick the first override subnet for testing purposes
-			ipNet := p.minOverrideSubnets[0].CIDR.IPNet
+			var ipNet *net.IPNet
+			mrand.Seed(time.Now().UnixNano())
+			randVal := mrand.Float64()
+
+			for i, cumulativeWeight := range p.minOverrideSubnetsCumulativeWeights {
+				if randVal < cumulativeWeight {
+					ipNet = p.minOverrideSubnets[i].CIDR.IPNet
+				}
+			}
+			if ipNet == nil {
+				// problem in choosing a weighted override subnet
+				// so do not apply overrides
+				return regResp, nil
+			}
 
 			ipUint32, err := ipv4ToUint32(ipNet.IP)
 			if err != nil {
