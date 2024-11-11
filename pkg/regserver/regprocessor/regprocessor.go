@@ -94,11 +94,11 @@ type RegProcessor struct {
 }
 
 type Subnet struct {
-	CIDR      Ipnet   `toml:"cidr"`
-	Weight    float64 `toml:"weight"`
-	Port      uint32  `toml:"port"`
-	Transport string  `toml:"transport"`
-	PrefixxID int     `toml:"prefix_id"`
+	CIDR      Ipnet           `toml:"cidr"`
+	Weight    float64         `toml:"weight"`
+	Port      uint32          `toml:"port"`
+	Transport string          `toml:"transport"`
+	PrefixId  prefix.PrefixID `toml:"prefix_id"`
 }
 
 type Ipnet struct {
@@ -623,12 +623,12 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 					}
 
 					//newRegResp := &pb.RegistrationResponse{}
-					var prefixid int
+					var prefixid prefix.PrefixID
 					for i, cumulativeWeight := range p.prefixOverrideSubnetsCumulativeWeights {
 						if randVal < cumulativeWeight {
 							ipNet = p.prefixOverrideSubnets[i].CIDR.IPNet
 							dstPortOverride = p.prefixOverrideSubnets[i].Port
-							prefixid = p.prefixOverrideSubnets[i].PrefixxID
+							prefixid = p.prefixOverrideSubnets[i].PrefixId
 						}
 					}
 
