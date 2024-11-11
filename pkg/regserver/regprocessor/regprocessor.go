@@ -115,7 +115,7 @@ func (n *Ipnet) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// Helper function to convert IPv4 to uint32
+// helper function to convert IPv4 to uint32
 func ipv4ToUint32(ip net.IP) (uint32, error) {
 	err := errors.New("Provided IP is not IPv4")
 	if ip == nil {
@@ -130,7 +130,7 @@ func ipv4ToUint32(ip net.IP) (uint32, error) {
 	return binary.BigEndian.Uint32(ip), nil
 }
 
-// Helper function to cenvert uint32 to IPv4
+// helper function to cenvert uint32 to IPv4
 func uint32ToIPv4(ip *uint32) net.IP {
 	if ip == nil {
 		return nil
@@ -145,7 +145,7 @@ func uint32ToIPv4(ip *uint32) net.IP {
 	)
 }
 
-// Helper function that wraps randomInt()
+// helper function that wraps randomInt()
 func getRandUint32IPv4(ipNet *net.IPNet) (uint32, error) {
 	ipUint32, err := ipv4ToUint32(ipNet.IP)
 	if err != nil {
@@ -163,7 +163,7 @@ func getRandUint32IPv4(ipNet *net.IPNet) (uint32, error) {
 	return ip, nil
 }
 
-// Helper function to get random integers within a range
+// helper function to get random integers within a range
 func randomInt(x, y uint32) (uint32, error) {
 	rangeSize := y - x + 1
 	// Generate a random number in the range [0, rangeSize)
@@ -175,7 +175,7 @@ func randomInt(x, y uint32) (uint32, error) {
 	return x + uint32(randomNum.Int64()), nil
 }
 
-// Helper function to override the prefix in the registration response
+// helper function to override the prefix in the registration response
 func overridePrefix(newRegResp *pb.RegistrationResponse, prefixId prefix.PrefixID, dstPort uint32) error {
 	// Override Phantom dstPort
 	newRegResp.DstPort = proto.Uint32(dstPort)
@@ -193,6 +193,23 @@ func overridePrefix(newRegResp *pb.RegistrationResponse, prefixId prefix.PrefixI
 	}
 	newRegResp.TransportParams = anypbParams
 	return nil
+}
+
+// helper function to validate override percentages for the Min and Prefix transports set by reg_config.toml
+func validateOverridePercentages(prcntMinConnsToOverride float64, prcntPrefixConnsToOverride float64) (float64, float64) {
+	if prcntMinConnsToOverride > 100.0 || prcntMinConnsToOverride < 0.0 {
+		fmt.Println("prcnt_min_conns_to_override value in reg_config.toml is out of range [0,100]. Resetting to 50%")
+		prcntMinConnsToOverride = 50 * 10
+	} else {
+		prcntMinConnsToOverride = math.Round(prcntMinConnsToOverride*100) / 10
+	}
+	if prcntPrefixConnsToOverride > 100.0 || prcntPrefixConnsToOverride < 0.0 {
+		fmt.Println("prcnt_prefix_conns_to_override value in reg_config.toml is out of range [0,100]. Resetting to 50%")
+		prcntPrefixConnsToOverride = 50 * 10
+	} else {
+		prcntPrefixConnsToOverride = math.Round(prcntPrefixConnsToOverride*100) / 10
+	}
+	return prcntMinConnsToOverride, prcntPrefixConnsToOverride
 }
 
 // shallow-copy the override subnets into different slices based on transport type.
@@ -295,23 +312,12 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		regOverrides = interfaces.Overrides([]interfaces.RegOverride{overrides.NewRandPrefixOverride()})
 	}
 
-	if prcntMinConnsToOverride > 100.0 || prcntMinConnsToOverride < 0.0 {
-		fmt.Println("prcnt_min_conns_to_override value in reg_config.toml is out of range [0,100]. Resetting to 50%")
-		prcntMinConnsToOverride = 50 * 10
-	} else {
-		prcntMinConnsToOverride = math.Round(prcntMinConnsToOverride*100) / 10
-	}
-	if prcntPrefixConnsToOverride > 100.0 || prcntPrefixConnsToOverride < 0.0 {
-		fmt.Println("prcnt_prefix_conns_to_override value in reg_config.toml is out of range [0,100]. Resetting to 50%")
-		prcntPrefixConnsToOverride = 50 * 10
-	} else {
-		prcntPrefixConnsToOverride = math.Round(prcntPrefixConnsToOverride*100) / 10
-	}
+	prcntMinConnsToOverride, prcntPrefixConnsToOverride = validateOverridePercentages(prcntMinConnsToOverride, prcntPrefixConnsToOverride)
 
 	minOverrideSubnets, prefixOverrideSubnets := splitOverrideSubnets(overrideSubnets)
 
 	minOverrideSubnetsCumulativeWeights := processOverrideSubnetsWeights(minOverrideSubnets)
-	prefixOverrideSubnetsCumulativeWeights := processOverrideSubnetsWeights(minOverrideSubnets)
+	prefixOverrideSubnetsCumulativeWeights := processOverrideSubnetsWeights(prefixOverrideSubnets)
 
 	rp := &RegProcessor{
 		zmqMutex:                               sync.Mutex{},
@@ -352,10 +358,12 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 		return nil, err
 	}
 
+	prcntMinConnsToOverride, prcntPrefixConnsToOverride = validateOverridePercentages(prcntMinConnsToOverride, prcntPrefixConnsToOverride)
+
 	minOverrideSubnets, prefixOverrideSubnets := splitOverrideSubnets(overrideSubnets)
 
 	minOverrideSubnetsCumulativeWeights := processOverrideSubnetsWeights(minOverrideSubnets)
-	prefixOverrideSubnetsCumulativeWeights := processOverrideSubnetsWeights(minOverrideSubnets)
+	prefixOverrideSubnetsCumulativeWeights := processOverrideSubnetsWeights(prefixOverrideSubnets)
 
 	rp := &RegProcessor{
 		zmqMutex:                               sync.Mutex{},
