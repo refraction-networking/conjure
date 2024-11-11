@@ -181,6 +181,9 @@ func overridePrefix(newRegResp *pb.RegistrationResponse, prefixId prefix.PrefixI
 	newRegResp.DstPort = proto.Uint32(dstPort)
 	// Override Prefix choice and PrefixParam
 	newPrefix, err := prefix.TryFromID(prefixId)
+	if err != nil {
+		return err
+	}
 	var fp = newPrefix.FlushPolicy()
 	var i int32 = int32(newPrefix.ID())
 	newparams := &pb.PrefixTransportParams{}
