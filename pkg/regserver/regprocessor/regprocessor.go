@@ -165,7 +165,7 @@ func getRandUint32IPv4(ipNet *net.IPNet) (uint32, error) {
 
 // helper function to get random integers within a range
 func randomInt(x, y uint32) (uint32, error) {
-	rangeSize := y - x + 1
+	rangeSize := y - x
 	// Generate a random number in the range [0, rangeSize)
 	randomNum, err := rand.Int(rand.Reader, big.NewInt(int64(rangeSize)))
 	if err != nil {
@@ -583,10 +583,14 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 			// do not apply overrides
 			return regResp, nil
 		}
+
+		// random float64 between 0 and 999
 		randNumFloat := float64(num) / 10.0
 
 		var ipNet *net.IPNet
 		var dstPortOverride uint32
+
+		// random float64 between 0 and 1
 		mrand.Seed(time.Now().UnixNano())
 		randVal := mrand.Float64()
 
