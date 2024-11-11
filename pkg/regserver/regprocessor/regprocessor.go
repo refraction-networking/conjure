@@ -89,8 +89,8 @@ type RegProcessor struct {
 	prefixOverrideSubnetsCumulativeWeights []float64
 	prefixOverrideSubnets                  []Subnet
 	exclusionsFromOverride                 []Subnet
-	prcntMinConnsToOverride                float64
-	prcntPrefixConnsToOverride             float64
+	prcntMinRegsToOverride                 float64
+	prcntPrefixRegsToOverride              float64
 }
 
 type Subnet struct {
@@ -255,7 +255,7 @@ func processOverrideSubnetsWeights(subnets []Subnet) []float64 {
 }
 
 // NewRegProcessor initialize a new RegProcessor
-func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet, prcntMinConnsToOverride float64, prcntPrefixConnsToOverride float64) (*RegProcessor, error) {
+func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet, prcntMinRegsToOverride float64, prcntPrefixRegsToOverride float64) (*RegProcessor, error) {
 
 	if len(privkey) != ed25519.PrivateKeySize {
 		// We require the 64 byte [private_key][public_key] format to Sign using crypto/ed25519
@@ -267,7 +267,7 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		return nil, err
 	}
 
-	regProcessor, err := newRegProcessor(zmqBindAddr, zmqPort, privkey, authVerbose, stationPublicKeys, enforceSubnetOverrides, overrideSubnets, exclusionsFromOverride, prcntMinConnsToOverride, prcntPrefixConnsToOverride)
+	regProcessor, err := newRegProcessor(zmqBindAddr, zmqPort, privkey, authVerbose, stationPublicKeys, enforceSubnetOverrides, overrideSubnets, exclusionsFromOverride, prcntMinRegsToOverride, prcntPrefixRegsToOverride)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +279,7 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 
 // initializes the registration processor without the phantom selector which can be added by a
 // wrapping function before it is returned. This function is required for testing.
-func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet, prcntMinConnsToOverride float64, prcntPrefixConnsToOverride float64) (*RegProcessor, error) {
+func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet, prcntMinRegsToOverride float64, prcntPrefixRegsToOverride float64) (*RegProcessor, error) {
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrZmqSocket, err)
@@ -315,7 +315,7 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		regOverrides = interfaces.Overrides([]interfaces.RegOverride{overrides.NewRandPrefixOverride()})
 	}
 
-	prcntMinConnsToOverride, prcntPrefixConnsToOverride = validateOverridePercentages(prcntMinConnsToOverride, prcntPrefixConnsToOverride)
+	prcntMinRegsToOverride, prcntPrefixRegsToOverride = validateOverridePercentages(prcntMinRegsToOverride, prcntPrefixRegsToOverride)
 
 	minOverrideSubnets, prefixOverrideSubnets := splitOverrideSubnets(overrideSubnets)
 
@@ -336,8 +336,8 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		minOverrideSubnetsCumulativeWeights:    minOverrideSubnetsCumulativeWeights,
 		prefixOverrideSubnetsCumulativeWeights: prefixOverrideSubnetsCumulativeWeights,
 		exclusionsFromOverride:                 make([]Subnet, len(exclusionsFromOverride)),
-		prcntMinConnsToOverride:                prcntMinConnsToOverride,
-		prcntPrefixConnsToOverride:             prcntPrefixConnsToOverride,
+		prcntMinRegsToOverride:                 prcntMinRegsToOverride,
+		prcntPrefixRegsToOverride:              prcntPrefixRegsToOverride,
 	}
 	copy(rp.exclusionsFromOverride, exclusionsFromOverride)
 
@@ -345,7 +345,7 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 }
 
 // NewRegProcessorNoAuth creates a regprocessor without authentication to zmq address
-func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.Metrics, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet, prcntMinConnsToOverride float64, prcntPrefixConnsToOverride float64) (*RegProcessor, error) {
+func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.Metrics, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet, prcntMinRegsToOverride float64, prcntPrefixRegsToOverride float64) (*RegProcessor, error) {
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, ErrZmqSocket
@@ -361,7 +361,7 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 		return nil, err
 	}
 
-	prcntMinConnsToOverride, prcntPrefixConnsToOverride = validateOverridePercentages(prcntMinConnsToOverride, prcntPrefixConnsToOverride)
+	prcntMinRegsToOverride, prcntPrefixRegsToOverride = validateOverridePercentages(prcntMinRegsToOverride, prcntPrefixRegsToOverride)
 
 	minOverrideSubnets, prefixOverrideSubnets := splitOverrideSubnets(overrideSubnets)
 
@@ -382,8 +382,8 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 		minOverrideSubnetsCumulativeWeights:    minOverrideSubnetsCumulativeWeights,
 		prefixOverrideSubnetsCumulativeWeights: prefixOverrideSubnetsCumulativeWeights,
 		exclusionsFromOverride:                 make([]Subnet, len(exclusionsFromOverride)),
-		prcntMinConnsToOverride:                prcntMinConnsToOverride,
-		prcntPrefixConnsToOverride:             prcntPrefixConnsToOverride,
+		prcntMinRegsToOverride:                 prcntMinRegsToOverride,
+		prcntPrefixRegsToOverride:              prcntPrefixRegsToOverride,
 	}
 	copy(rp.exclusionsFromOverride, exclusionsFromOverride)
 
@@ -599,7 +599,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 
 		// ignore prior choices and begin experimental overrides for Min and Prefix transports only
 		if transportType == pb.TransportType_Min {
-			if randNumFloat < p.prcntMinConnsToOverride {
+			if randNumFloat < p.prcntMinRegsToOverride {
 				if p.minOverrideSubnets == nil {
 					// reg_conf.toml does not contain subnet overrides for Min transport
 					return regResp, nil
@@ -631,7 +631,7 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 			// Override the Phantom IPv4 for clients with the Prefix transport
 			// and override the transport type only if c2s.GetDisableRegistrarOverrides() is false
 			if !c2s.GetDisableRegistrarOverrides() {
-				if randNumFloat < p.prcntPrefixConnsToOverride {
+				if randNumFloat < p.prcntPrefixRegsToOverride {
 					if p.prefixOverrideSubnets == nil {
 						// reg_conf.toml does not contain subnet overrides for Prefix transport
 						return regResp, nil
