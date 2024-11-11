@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	mrand "math/rand"
 	"net"
@@ -84,19 +85,20 @@ type RegProcessor struct {
 
 	enforceSubnetOverrides                 bool
 	minOverrideSubnets                     []Subnet
-	minOverrideSubnetsTotalWeight          float64
 	minOverrideSubnetsCumulativeWeights    []float64
-	prefixOverrideSubnetsTotalWeight       float64
 	prefixOverrideSubnetsCumulativeWeights []float64
 	prefixOverrideSubnets                  []Subnet
 	exclusionsFromOverride                 []Subnet
+	prcntMinConnsToOverride                float64
+	prcntPrefixConnsToOverride             float64
 }
 
 type Subnet struct {
 	CIDR      Ipnet   `toml:"cidr"`
 	Weight    float64 `toml:"weight"`
-	Port      int     `toml:"port"`
+	Port      uint32  `toml:"port"`
 	Transport string  `toml:"transport"`
+	PrefixxID int     `toml:"prefix_id"`
 }
 
 type Ipnet struct {
@@ -141,6 +143,24 @@ func uint32ToIPv4(ip *uint32) net.IP {
 		byte(ipInt>>8),
 		byte(ipInt),
 	)
+}
+
+// Helper function that wraps randomInt()
+func getRandUint32IPv4(ipNet *net.IPNet) (uint32, error) {
+	ipUint32, err := ipv4ToUint32(ipNet.IP)
+	if err != nil {
+		return 0, errors.New("Failed to convert IPv4 to uint32")
+	}
+
+	mask := ipNet.Mask
+	ones, bits := mask.Size()
+	hosts := uint32(1 << uint32(bits-ones))
+
+	ip, err := randomInt(ipUint32, ipUint32+hosts)
+	if err != nil {
+		return 0, errors.New("Failed to get random IPv4 as uint32 from the given range")
+	}
+	return ip, nil
 }
 
 // Helper function to get random integers within a range
@@ -215,7 +235,7 @@ func processOverrideSubnetsWeights(subnets []Subnet) []float64 {
 }
 
 // NewRegProcessor initialize a new RegProcessor
-func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet) (*RegProcessor, error) {
+func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, metrics *metrics.Metrics, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet, prcntMinConnsToOverride float64, prcntPrefixConnsToOverride float64) (*RegProcessor, error) {
 
 	if len(privkey) != ed25519.PrivateKeySize {
 		// We require the 64 byte [private_key][public_key] format to Sign using crypto/ed25519
@@ -227,7 +247,7 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		return nil, err
 	}
 
-	regProcessor, err := newRegProcessor(zmqBindAddr, zmqPort, privkey, authVerbose, stationPublicKeys, enforceSubnetOverrides, overrideSubnets, exclusionsFromOverride)
+	regProcessor, err := newRegProcessor(zmqBindAddr, zmqPort, privkey, authVerbose, stationPublicKeys, enforceSubnetOverrides, overrideSubnets, exclusionsFromOverride, prcntMinConnsToOverride, prcntPrefixConnsToOverride)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +259,7 @@ func NewRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 
 // initializes the registration processor without the phantom selector which can be added by a
 // wrapping function before it is returned. This function is required for testing.
-func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet) (*RegProcessor, error) {
+func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVerbose bool, stationPublicKeys []string, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet, prcntMinConnsToOverride float64, prcntPrefixConnsToOverride float64) (*RegProcessor, error) {
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrZmqSocket, err)
@@ -275,6 +295,19 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		regOverrides = interfaces.Overrides([]interfaces.RegOverride{overrides.NewRandPrefixOverride()})
 	}
 
+	if prcntMinConnsToOverride > 100.0 || prcntMinConnsToOverride < 0.0 {
+		fmt.Println("prcnt_min_conns_to_override value in reg_config.toml is out of range [0,100]. Resetting to 50%")
+		prcntMinConnsToOverride = 50 * 10
+	} else {
+		prcntMinConnsToOverride = math.Round(prcntMinConnsToOverride*100) / 10
+	}
+	if prcntPrefixConnsToOverride > 100.0 || prcntPrefixConnsToOverride < 0.0 {
+		fmt.Println("prcnt_prefix_conns_to_override value in reg_config.toml is out of range [0,100]. Resetting to 50%")
+		prcntPrefixConnsToOverride = 50 * 10
+	} else {
+		prcntPrefixConnsToOverride = math.Round(prcntPrefixConnsToOverride*100) / 10
+	}
+
 	minOverrideSubnets, prefixOverrideSubnets := splitOverrideSubnets(overrideSubnets)
 
 	minOverrideSubnetsCumulativeWeights := processOverrideSubnetsWeights(minOverrideSubnets)
@@ -294,6 +327,8 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 		minOverrideSubnetsCumulativeWeights:    minOverrideSubnetsCumulativeWeights,
 		prefixOverrideSubnetsCumulativeWeights: prefixOverrideSubnetsCumulativeWeights,
 		exclusionsFromOverride:                 make([]Subnet, len(exclusionsFromOverride)),
+		prcntMinConnsToOverride:                prcntMinConnsToOverride,
+		prcntPrefixConnsToOverride:             prcntPrefixConnsToOverride,
 	}
 	copy(rp.exclusionsFromOverride, exclusionsFromOverride)
 
@@ -301,7 +336,7 @@ func newRegProcessor(zmqBindAddr string, zmqPort uint16, privkey []byte, authVer
 }
 
 // NewRegProcessorNoAuth creates a regprocessor without authentication to zmq address
-func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.Metrics, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet) (*RegProcessor, error) {
+func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.Metrics, enforceSubnetOverrides bool, overrideSubnets []Subnet, exclusionsFromOverride []Subnet, prcntMinConnsToOverride float64, prcntPrefixConnsToOverride float64) (*RegProcessor, error) {
 	sock, err := zmq.NewSocket(zmq.PUB)
 	if err != nil {
 		return nil, ErrZmqSocket
@@ -336,6 +371,8 @@ func NewRegProcessorNoAuth(zmqBindAddr string, zmqPort uint16, metrics *metrics.
 		minOverrideSubnetsCumulativeWeights:    minOverrideSubnetsCumulativeWeights,
 		prefixOverrideSubnetsCumulativeWeights: prefixOverrideSubnetsCumulativeWeights,
 		exclusionsFromOverride:                 make([]Subnet, len(exclusionsFromOverride)),
+		prcntMinConnsToOverride:                prcntMinConnsToOverride,
+		prcntPrefixConnsToOverride:             prcntPrefixConnsToOverride,
 	}
 	copy(rp.exclusionsFromOverride, exclusionsFromOverride)
 
@@ -522,60 +559,106 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		regResp.DstPort = proto.Uint32(443)
 	}
 	if p.enforceSubnetOverrides {
-
-		// ignore prior choices and begin experimental overrides for Min and Prefix transports only
-		if transportType == pb.TransportType_Min {
-
-			if p.minOverrideSubnets == nil {
-				// reg_conf.toml does not contain subnet overrides for Min transport
-				return regResp, nil
-			}
-
-			ipv4FromRegResponse := uint32ToIPv4(regResp.Ipv4Addr)
-			for _, subnet := range p.exclusionsFromOverride {
-				if subnet.CIDR.IPNet.Contains(ipv4FromRegResponse) {
-					// the IPv4 originally chosen by the client exists in a subnet we exluded from overrides
-					// so do not apply overrides
-					return regResp, nil
-				}
-			}
-
-			var ipNet *net.IPNet
-			mrand.Seed(time.Now().UnixNano())
-			randVal := mrand.Float64()
-
-			for i, cumulativeWeight := range p.minOverrideSubnetsCumulativeWeights {
-				if randVal < cumulativeWeight {
-					ipNet = p.minOverrideSubnets[i].CIDR.IPNet
-				}
-			}
-			if ipNet == nil {
-				// problem in choosing a weighted override subnet
+		ipv4FromRegResponse := uint32ToIPv4(regResp.Ipv4Addr)
+		for _, subnet := range p.exclusionsFromOverride {
+			// TODO: apply exclusions based on both transport and subnet
+			if subnet.CIDR.IPNet.Contains(ipv4FromRegResponse) {
+				// the IPv4 originally chosen by the client exists in a subnet we excluded from overrides
 				// so do not apply overrides
 				return regResp, nil
 			}
+		}
 
-			ipUint32, err := ipv4ToUint32(ipNet.IP)
-			if err != nil {
-				// failed to convert IPv4 to uint32. So do not apply overrides
-				// and return the original regResp
-				return regResp, nil
+		num, err := randomInt(0, 10000)
+		if err != nil {
+			// In case of an error, return the original regResp and
+			// do not apply overrides
+			return regResp, nil
+		}
+		randNumFloat := float64(num) / 10.0
+
+		var ipNet *net.IPNet
+		var dstPortOverride uint32
+		mrand.Seed(time.Now().UnixNano())
+		randVal := mrand.Float64()
+
+		// ignore prior choices and begin experimental overrides for Min and Prefix transports only
+		if transportType == pb.TransportType_Min {
+			if randNumFloat < p.prcntMinConnsToOverride {
+				if p.minOverrideSubnets == nil {
+					// reg_conf.toml does not contain subnet overrides for Min transport
+					return regResp, nil
+				}
+
+				for i, cumulativeWeight := range p.minOverrideSubnetsCumulativeWeights {
+					if randVal < cumulativeWeight {
+						ipNet = p.minOverrideSubnets[i].CIDR.IPNet
+						//dstPortOverride = p.minOverrideSubnets[i].Port
+					}
+				}
+
+				if ipNet == nil {
+					// problem in choosing a weighted override subnet
+					// so do not apply overrides
+					return regResp, nil
+				}
+
+				ip, err := getRandUint32IPv4(ipNet)
+				if err != nil {
+					// failed to get random IPv4 as uint32 from the given range.
+					// do not apply override and return the original regResp.
+					return regResp, nil
+				}
+				regResp.Ipv4Addr = proto.Uint32(ip)
 			}
+		} else if transportType == pb.TransportType_Prefix {
 
-			mask := ipNet.Mask
-			ones, bits := mask.Size()
-			hosts := uint32(1 << uint32(bits-ones))
+			// Override the Phantom IPv4 for clients with the Prefix transport
+			// and override the transport type only if c2s.GetDisableRegistrarOverrides() is false
+			if !c2s.GetDisableRegistrarOverrides() {
+				if randNumFloat < p.prcntPrefixConnsToOverride {
+					if p.prefixOverrideSubnets == nil {
+						// reg_conf.toml does not contain subnet overrides for Prefix transport
+						return regResp, nil
+					}
 
-			randIpUintFromRange, err := randomInt(ipUint32, ipUint32+hosts)
-			if err != nil {
-				// failed to get random IPv4 as uint32 from the given range.
-				// do not apply override and return the original regResp.
-				return regResp, nil
+					//newRegResp := &pb.RegistrationResponse{}
+					var prefixid int
+					for i, cumulativeWeight := range p.prefixOverrideSubnetsCumulativeWeights {
+						if randVal < cumulativeWeight {
+							ipNet = p.prefixOverrideSubnets[i].CIDR.IPNet
+							dstPortOverride = p.prefixOverrideSubnets[i].Port
+							prefixid = p.prefixOverrideSubnets[i].PrefixxID
+						}
+					}
+
+					if ipNet == nil {
+						// problem in choosing a weighted override subnet
+						// so do not apply overrides
+						return regResp, nil
+					}
+
+					ip, err := getRandUint32IPv4(ipNet)
+					if err != nil {
+						// failed to get random IPv4 as uint32 from the given range.
+						// do not apply override and return the original regResp.
+						return regResp, nil
+					}
+
+					newRegResp := proto.Clone(regResp).(*pb.RegistrationResponse)
+
+					err = overridePrefix(newRegResp, prefixid, dstPortOverride)
+					if err != nil {
+						return regResp, nil
+					}
+					newRegResp.Ipv4Addr = proto.Uint32(ip)
+
+					regResp = newRegResp
+					c2sPayload.RegistrationResponse = regResp
+				}
 			}
-			regResp.Ipv4Addr = proto.Uint32(randIpUintFromRange)
 		}
 	}
-
 	return regResp, nil
 }
 
