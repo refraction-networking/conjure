@@ -16,7 +16,6 @@ import (
 	mrand "math/rand"
 	"net"
 	"sync"
-	"time"
 
 	zmq "github.com/pebbe/zmq4"
 	"github.com/refraction-networking/conjure/pkg/core"
@@ -594,7 +593,6 @@ func (p *RegProcessor) processBdReq(c2sPayload *pb.C2SWrapper) (*pb.Registration
 		var dstPortOverride uint32
 
 		// random float64 between 0 and 1
-		mrand.Seed(time.Now().UnixNano())
 		randVal := mrand.Float64()
 
 		// ignore prior choices and begin experimental overrides for Min and Prefix transports only
