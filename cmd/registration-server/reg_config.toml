@@ -45,3 +45,32 @@ bidirectional_api_generation = 957
 
 # Path on disk to the latest ClientConfig file that the station should use
 clientconf_path = "/var/lib/conjure/ClientConf"
+
+# Whether to apply the below subnet overrides to clients bidirectional api registrations
+enforce_subnet_overrides = true
+
+# Percentage of bidirectional api registrations to override per transport
+prcnt_min_regs_to_override = 100
+prcnt_prefix_regs_to_override = 100
+
+# Subnets to use when overriding clients bidirectional api registrations
+[[override_subnet]]
+cidr = "X.X.X.X/32"
+weight = 10.7
+port = 443
+transport = "Min_Transport"
+
+[[override_subnet]]
+cidr = "X.X.X.X/24"
+weight = 10
+port = 80
+transport = "Prefix_Transport"
+prefix_id = 1
+
+# Subnets to refrain from overriding when clients bidirectional api registrations pick a v4 phantom inside them
+[[excluded_subnet_from_overrides]]
+cidr = "X.X.X.X/25"
+# For future features that can exclude subnets according to weight, port, or transport
+weight = 28.7
+port = 80
+transport = "Min_Transport"

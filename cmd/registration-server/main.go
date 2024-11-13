@@ -33,20 +33,25 @@ type regServer interface {
 
 // config defines the variables and options from the toml config file
 type config struct {
-	DNSListenAddr      string   `toml:"dns_listen_addr"`
-	Domain             string   `toml:"domain"`
-	DNSPrivkeyPath     string   `toml:"dns_private_key_path"`
-	APIPort            uint16   `toml:"api_port"`
-	ZMQAuthVerbose     bool     `toml:"zmq_auth_verbose"`
-	ZMQAuthType        string   `toml:"zmq_auth_type"`
-	ZMQPort            uint16   `toml:"zmq_port"`
-	ZMQBindAddr        string   `toml:"zmq_bind_addr"`
-	ZMQPrivateKeyPath  string   `toml:"zmq_privkey_path"`
-	StationPublicKeys  []string `toml:"station_pubkeys"`
-	ClientConfPath     string   `toml:"clientconf_path"`
-	latestClientConf   *pb.ClientConf
-	LogLevel           string `toml:"log_level"`
-	LogMetricsInterval uint16 `toml:"log_metrics_interval"`
+	DNSListenAddr             string   `toml:"dns_listen_addr"`
+	Domain                    string   `toml:"domain"`
+	DNSPrivkeyPath            string   `toml:"dns_private_key_path"`
+	APIPort                   uint16   `toml:"api_port"`
+	ZMQAuthVerbose            bool     `toml:"zmq_auth_verbose"`
+	ZMQAuthType               string   `toml:"zmq_auth_type"`
+	ZMQPort                   uint16   `toml:"zmq_port"`
+	ZMQBindAddr               string   `toml:"zmq_bind_addr"`
+	ZMQPrivateKeyPath         string   `toml:"zmq_privkey_path"`
+	StationPublicKeys         []string `toml:"station_pubkeys"`
+	ClientConfPath            string   `toml:"clientconf_path"`
+	latestClientConf          *pb.ClientConf
+	LogLevel                  string                `toml:"log_level"`
+	LogMetricsInterval        uint16                `toml:"log_metrics_interval"`
+	EnforceSubnetOverrides    bool                  `toml:"enforce_subnet_overrides"`
+	PrcntMinRegsToOverride    float64               `toml:"prcnt_min_regs_to_override"`
+	PrcntPrefixRegsToOverride float64               `toml:"prcnt_prefix_regs_to_override"`
+	OverrideSubnets           []regprocessor.Subnet `toml:"override_subnet"`
+	ExclusionsFromOverride    []regprocessor.Subnet `toml:"excluded_subnet_from_overrides"`
 }
 
 var defaultTransports = map[pb.TransportType]lib.Transport{
@@ -192,9 +197,9 @@ func main() {
 
 	switch conf.ZMQAuthType {
 	case "CURVE":
-		processor, err = regprocessor.NewRegProcessor(conf.ZMQBindAddr, conf.ZMQPort, zmqPrivkey, conf.ZMQAuthVerbose, conf.StationPublicKeys, metrics)
+		processor, err = regprocessor.NewRegProcessor(conf.ZMQBindAddr, conf.ZMQPort, zmqPrivkey, conf.ZMQAuthVerbose, conf.StationPublicKeys, metrics, conf.EnforceSubnetOverrides, conf.OverrideSubnets, conf.ExclusionsFromOverride, conf.PrcntMinRegsToOverride, conf.PrcntPrefixRegsToOverride)
 	case "NULL":
-		processor, err = regprocessor.NewRegProcessorNoAuth(conf.ZMQBindAddr, conf.ZMQPort, metrics)
+		processor, err = regprocessor.NewRegProcessorNoAuth(conf.ZMQBindAddr, conf.ZMQPort, metrics, conf.EnforceSubnetOverrides, conf.OverrideSubnets, conf.ExclusionsFromOverride, conf.PrcntMinRegsToOverride, conf.PrcntPrefixRegsToOverride)
 	default:
 		log.Fatalf("Unknown ZMQ auth type: %s", conf.ZMQAuthType)
 	}

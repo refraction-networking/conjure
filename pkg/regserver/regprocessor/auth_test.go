@@ -134,7 +134,7 @@ func TestZMQAuth(t *testing.T) {
 	// messages that we expect the station to hear. in production this will be new registrations,
 	// here we don't care about the message contents.
 	go func() {
-		regProcessor, err := newRegProcessor(zmqBindAddr, zmqPort, []byte(zmq.Z85decode(serverPrivkeyZ85)), true, stationPublicKeys)
+		regProcessor, err := newRegProcessor(zmqBindAddr, zmqPort, []byte(zmq.Z85decode(serverPrivkeyZ85)), true, stationPublicKeys, false, nil, nil, 0.0, 0.0)
 		require.Nil(t, err)
 		defer regProcessor.Close()
 		errStation := regProcessor.AddTransport(pb.TransportType_Min, min.Transport{})
