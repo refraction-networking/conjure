@@ -19,7 +19,7 @@ toml = "0.7"
 serde = { version = "1.0", features = ["derive"] }
 libc = "0.2"
 aes-gcm = { version = "^0.10.3", features = ["aes"] }
-time = { version = "0.3.28", features = [
+time = { version = "0.3.35", features = [
     "macros",
     "formatting",
     "local-offset",

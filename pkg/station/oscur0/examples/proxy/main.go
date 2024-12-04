@@ -23,27 +23,6 @@ const (
 	station_privkey = "203963feed62ddda89b98857940f09866ae840f42e8c90160e411a0029b87e60"
 )
 
-// NewTransport creates a new dtls transport
-func ListenAndProxy(addr *net.UDPAddr, proxyFunc func(covert string, clientConn net.Conn), config oscur0.Config) error {
-
-	listener, err := oscur0.Listen(addr, config)
-	if err != nil {
-		return err
-	}
-
-	for {
-		// Wait for a connection.
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Printf("error accepting connection: %v", err)
-			continue
-		}
-
-		go proxyFunc(conn.Covert(), conn)
-
-	}
-}
-
 func main() {
 	var listenAddr = flag.String("laddr", "0.0.0.0:6666", "listen address")
 
@@ -60,7 +39,7 @@ func main() {
 
 	logger := log.New(os.Stdout, "[oscur0] ", golog.Ldate|golog.Lmicroseconds)
 
-	if err := ListenAndProxy(addr,
+	if err := oscur0.ListenAndProxy(addr,
 		func(covert string, clientConn net.Conn) {
 			fmt.Printf("got connection: %v -> %v, covert: %v\n", clientConn.LocalAddr(), clientConn.RemoteAddr(), covert)
 			cj.ProxyNewTunStates(clientConn, logger, "", covert, false)

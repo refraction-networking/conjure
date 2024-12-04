@@ -52,3 +52,24 @@ func (l *Listener) Close() error {
 func (l *Listener) Addr() net.Addr {
 	return l.parent.Addr()
 }
+
+// NewTransport creates a new dtls transport
+func ListenAndProxy(addr *net.UDPAddr, proxyFunc func(covert string, clientConn net.Conn), config Config) error {
+
+	listener, err := Listen(addr, config)
+	if err != nil {
+		return err
+	}
+
+	for {
+		// Wait for a connection.
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Printf("error accepting connection: %v", err)
+			continue
+		}
+
+		go proxyFunc(conn.Covert(), conn)
+
+	}
+}

@@ -142,10 +142,10 @@ func main() {
 		logger.Fatalf("failed decoding test privkey: %v", err)
 	}
 
-	if err := oscur0.ListenAndProxy(func(covert string, clientConn net.Conn) {
+	if err := oscur0.ListenAndProxy(&net.UDPAddr{IP: net.IPv4(0, 0, 0, 0), Port: 1234}, func(covert string, clientConn net.Conn) {
 		fmt.Printf("got connection: %v -> %v, covert: %v\n", clientConn.LocalAddr(), clientConn.RemoteAddr(), covert)
 		cj.ProxyWithTunStats(clientConn, logger, "", covert, nil, false)
-	}, [32]byte(testPrivkeyBytes)); err != nil {
+	}, oscur0.Config{PrivKey: testPrivkeyBytes}); err != nil {
 		logger.Fatalf("error listening one-shot dtls: %v", err)
 	}
 

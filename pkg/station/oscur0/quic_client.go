@@ -25,7 +25,3 @@ func dialQuic(addr *net.UDPAddr) (quic.EarlyConnection, error) {
 
 	return conn, nil
 }
-
-func listenQuic() (quic.EarlyListener, error) {
-
-}
