@@ -10,6 +10,12 @@ CFLAGS = -Wall -DENABLE_BPF -DHAVE_PF_RING -DHAVE_PF_RING_ZC -DTAPDANCE_USE_PF_R
 PROTO_RS_PATH=src/signalling.rs
 EXE_DIR=./bin
 
+# Set DPDK_PATH to the root of the DPDK installation
+DPDK_INCLUDE_DIR = ${DPDK_PATH}/include
+DPDK_LIB_DIR = ${DPDK_PATH}/build/lib
+# DPDK Libraries
+DPDK_LIBS = -I${DPDK_INCLUDE_DIR} -L${DPDK_LIB_DIR} -lrte_eal -lrte_mempool -lrte_ring -lrte_ethdev -lrte_mbuf
+
 all: rust libtd conjure app registration-server ${PROTO_RS_PATH}
 
 sim: rust libtd conjure-sim app registration-server ${PROTO_RS_PATH}
@@ -29,7 +35,7 @@ libtd:
 
 conjure: detect.c loadkey.c rust_util.c rust libtapdance
 	[ -d $(EXE_DIR) ] || mkdir -p $(EXE_DIR)
-	${CC} ${CFLAGS} -o ${EXE_DIR}/$@ detect.c loadkey.c rust_util.c ${LIBS}
+	${CC} ${CFLAGS} -o ${EXE_DIR}/$@ detect.c loadkey.c rust_util.c ${LIBS} ${DPDK_LIBS}
 
 
 conjure-sim: detect.c loadkey.c rust_util.c rust libtapdance
