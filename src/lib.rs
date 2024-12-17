@@ -15,9 +15,13 @@ extern crate time;
 extern crate toml;
 extern crate tuntap; // https://github.com/ewust/tuntap.rs
 extern crate webrtc_dtls;
+extern crate retina_core;
+extern crate tls_parser;
 extern crate zmq;
 
+use std::collections::HashMap;
 use std::mem::transmute;
+use retina_core::protocols::stream::quic::QuicConn;
 use util::precise_time_ns;
 
 use serde::Deserialize;
@@ -49,6 +53,8 @@ pub struct PerCoreGlobal {
 
     lcore: i32,
     pub flow_tracker: FlowTracker,
+
+    pub quic_conn_tracker: HashMap<Flow, QuicConn>,
 
     // Rc<RefCell<>> ??
     // pub sessions: HashMap<Flow, SessionState>,
@@ -157,6 +163,7 @@ impl PerCoreGlobal {
             lcore: the_lcore,
             // sessions: HashMap::new(),
             flow_tracker: FlowTracker::new(),
+            quic_conn_tracker: HashMap::new(),
             tun,
             dtls_cid_tun,
             stats: PerCoreStats::new(),
