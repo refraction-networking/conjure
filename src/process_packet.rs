@@ -239,6 +239,46 @@ fn check_dtls_cid(payload: &[u8], privkey: &[u8]) -> bool {
     return cipher.decrypt_cid(CID_SIZE, &payload_no_key).is_ok();
 }
 
+fn check_quic_cid(payload: &[u8], privkey: &[u8]) -> bool {
+    let cid_len = 8;
+    let representative_len = 32;
+
+    if len(pkt) <= 1 + cid_len + representative_len {
+        return false;
+    }
+
+    let cid_header = &pkt[..1 + cid_len];
+    let representative = &pkt[1 + cid_len..1 + cid_len + representative_len];
+    let data = &pkt[1 + cid_len + representative_len..];
+
+    representative[31] &= 0x3f;
+
+    let mut shared_secret = [0u8; 32];
+    c_api::c_get_shared_secret_from_representative(
+        &mut shared_secret,
+        &mut representative,
+        &privkey,
+    );
+
+    let rand = hkdf::Hkdf::<sha2::Sha256>::new(None, &shared_secret);
+    let mut client_cid = [0u8; 8];
+    let mut server_cid = [0u8; 8];
+    if rand.expand(&[], &mut client_cid).is_err() {
+        return false;
+    }
+    if rand.expand(&[], &mut server_cid).is_err() {
+        return false;
+    }
+
+    let cid = &cid_header[1..];
+
+    if cid != server_cid {
+        return false;
+    }
+
+    return true;
+}
+
 impl PerCoreGlobal {
     // // frame_len is supposed to be the length of the whole Ethernet frame. We're
     // // only passing it here for plumbing reasons, and just for stat reporting.
@@ -282,6 +322,7 @@ impl PerCoreGlobal {
             .flow_tracker
             .session_key_exists(&FlowNoSrcPort::from_flow(&flow).to_string())
             && !check_dtls_cid(udp_pkt.payload(), &self.priv_key)
+            && !check_quic_cid(udp_pkt.payload(), &self.priv_key)
         {
             return;
         }
@@ -499,6 +540,27 @@ mod tests {
         for net in nets.iter() {
             println!("{net}");
         }
+    }
+
+    #[test]
+    fn test_filter_quic_cid() {
+        let privkey =
+            hex::decode("203963feed62ddda89b98857940f09866ae840f42e8c90160e411a0029b87e60")
+                .expect("failed to decode privkey");
+        // QUIC IETF
+        // QUIC Connection information
+        //     [Expert Info (Note/Protocol): Unknown QUIC connection. Missing Initial Packet or migrated connection?]
+        //         [Unknown QUIC connection. Missing Initial Packet or migrated connection?]
+        //         [Severity level: Note]
+        //         [Group: Protocol]
+        // [Packet Length: 99]
+        // QUIC Short Header
+        //     0... .... = Header Form: Short Header (0)
+        //     .1.. .... = Fixed Bit: True
+        //     ..0. .... = Spin Bit: False
+        // Remaining Payload: c7abbe8e346cc930e183873bd0d05b358693ab6678c9b1f2d2c152112a9a3c06db9c86e6b7a7b667fcdc3e57455232da97cd81b64038ce9c92ae5ecaa2f865c5ab4cffa076a1f4521fde79392a1004f65de0269a1eb30d676c02ebec6360864a5c7c
+        let udp_payload = hex::decode("5fc7abbe8e346cc930e183873bd0d05b358693ab6678c9b1f2d2c152112a9a3c06db9c86e6b7a7b667fcdc3e57455232da97cd81b64038ce9c92ae5ecaa2f865c5ab4cffa076a1f4521fde79392a1004f65de0269a1eb30d676c02ebec6360864a5c7c").expect("failed to decode udp payload");
+        assert!(check_quic_cid(&udp_payload, &privkey))
     }
 
     #[test]
