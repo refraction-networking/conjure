@@ -243,13 +243,13 @@ fn check_quic_cid(payload: &[u8], privkey: &[u8]) -> bool {
     let cid_len = 8;
     let representative_len = 32;
 
-    if len(pkt) <= 1 + cid_len + representative_len {
+    if payload.len() <= 1 + cid_len + representative_len {
         return false;
     }
 
-    let cid_header = &pkt[..1 + cid_len];
-    let representative = &pkt[1 + cid_len..1 + cid_len + representative_len];
-    let data = &pkt[1 + cid_len + representative_len..];
+    let cid_header = &payload[..1 + cid_len];
+    let mut representative = payload[1 + cid_len..1 + cid_len + representative_len].to_vec();
+    // let data = &payload[1 + cid_len + representative_len..];
 
     representative[31] &= 0x3f;
 
@@ -261,14 +261,11 @@ fn check_quic_cid(payload: &[u8], privkey: &[u8]) -> bool {
     );
 
     let rand = hkdf::Hkdf::<sha2::Sha256>::new(None, &shared_secret);
-    let mut client_cid = [0u8; 8];
-    let mut server_cid = [0u8; 8];
-    if rand.expand(&[], &mut client_cid).is_err() {
+    let mut client_server_cid = [0u8; 16];
+    if rand.expand(&[], &mut client_server_cid).is_err() {
         return false;
     }
-    if rand.expand(&[], &mut server_cid).is_err() {
-        return false;
-    }
+    let server_cid = &client_server_cid[8..];
 
     let cid = &cid_header[1..];
 
@@ -522,6 +519,7 @@ mod tests {
     use StationConfig;
 
     use crate::process_packet::check_dtls_cid;
+    use crate::process_packet::check_quic_cid;
 
     #[test]
     fn test_filter_station_traffic() {
