@@ -93,6 +93,10 @@ func (s *AMPCacheRegServer) register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientAddr := payload.RegistrationAddress
+	if clientAddr == nil {
+		reqLogger.Errorf("No client IP address received")
+		return
+	}
 
 	if s.logClientIP {
 		logFields["ip_address"] = net.IP(clientAddr).String()
@@ -136,6 +140,10 @@ func (s *AMPCacheRegServer) registerBidirectional(w http.ResponseWriter, r *http
 	}
 
 	clientAddr := payload.RegistrationAddress
+	if clientAddr == nil {
+		reqLogger.Errorf("No client IP address received")
+		return
+	}
 
 	if s.logClientIP {
 		logFields["ip_address"] = net.IP(clientAddr).String()
@@ -148,8 +156,7 @@ func (s *AMPCacheRegServer) registerBidirectional(w http.ResponseWriter, r *http
 		// Replace the payload generation with correct generation from server's client config
 		payload.RegistrationPayload.DecoyListGeneration = serverClientConf.Generation
 	}
-	var clientAddrBytes = make([]byte, 16)
-	clientAddrBytes = []byte(net.IP(clientAddr).To16())
+	clientAddrBytes := []byte(net.IP(clientAddr).To16())
 	// Create registration response object
 	regResp, err := s.processor.RegisterBidirectional(payload, pb.RegistrationSource_BidirectionalAMP, clientAddrBytes)
 
