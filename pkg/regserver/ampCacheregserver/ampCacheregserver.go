@@ -14,6 +14,7 @@ import (
 	"github.com/refraction-networking/conjure/pkg/phantoms"
 	"github.com/refraction-networking/conjure/pkg/regserver/regprocessor"
 	pb "github.com/refraction-networking/conjure/proto"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2/common/amp"
 	"google.golang.org/protobuf/proto"
@@ -79,37 +80,13 @@ func (s *AMPCacheRegServer) getC2SFromReq(w http.ResponseWriter, r *http.Request
 
 func (s *AMPCacheRegServer) register(w http.ResponseWriter, r *http.Request) {
 	s.metrics.Add("ampcache_requests_total", 1)
-
 	logFields := log.Fields{"http_method": r.Method, "content_length": r.ContentLength, "registration_type": "unidirectional"}
-	reqLogger := s.logger.WithFields(logFields)
-
-	reqLogger.Debugf("received new ampcache request")
-
 	path := strings.TrimPrefix(r.URL.Path, "/amp/register/")
-	payload, err := s.getC2SFromReq(w, r, path)
-	if err != nil {
-		reqLogger.Errorf("registration failed: %v", err)
+	reqLogger, payload, clientAddrBytes := s.registerCommon(logFields, path, w, r)
+	if payload == nil || clientAddrBytes == nil {
 		return
 	}
-
-	clientAddr := payload.RegistrationAddress
-	if clientAddr == nil {
-		reqLogger.Errorf("No client IP address received")
-		return
-	}
-
-	if s.logClientIP {
-		logFields["ip_address"] = net.IP(clientAddr).String()
-	}
-
-	reqLogger = reqLogger.WithField("reg_id", hex.EncodeToString(payload.GetSharedSecret()))
-
-	var clientAddrBytes = make([]byte, 16)
-	if clientAddr != nil {
-		clientAddrBytes = []byte(net.IP(clientAddr).To16())
-	}
-
-	err = s.processor.RegisterUnidirectional(payload, pb.RegistrationSource_AMPCache, clientAddrBytes)
+	err := s.processor.RegisterUnidirectional(payload, pb.RegistrationSource_AMPCache, clientAddrBytes)
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -128,27 +105,11 @@ func (s *AMPCacheRegServer) registerBidirectional(w http.ResponseWriter, r *http
 	s.metrics.Add("bdampcache_requests_total", 1)
 
 	logFields := log.Fields{"http_method": r.Method, "content_length": r.ContentLength, "registration_type": "bidirectional"}
-	reqLogger := s.logger.WithFields(logFields)
-
-	reqLogger.Debugf("received new ampcache request")
-
 	path := strings.TrimPrefix(r.URL.Path, "/amp/register-bidirectional/")
-	payload, err := s.getC2SFromReq(w, r, path)
-	if err != nil {
-		s.logger.Printf("Error with getC2SFromReq %v", err)
+	reqLogger, payload, clientAddrBytes := s.registerCommon(logFields, path, w, r)
+	if payload == nil || clientAddrBytes == nil {
 		return
 	}
-
-	clientAddr := payload.RegistrationAddress
-	if clientAddr == nil {
-		reqLogger.Errorf("No client IP address received")
-		return
-	}
-
-	if s.logClientIP {
-		logFields["ip_address"] = net.IP(clientAddr).String()
-	}
-	reqLogger = reqLogger.WithField("reg_id", hex.EncodeToString(payload.GetSharedSecret()))
 
 	// Check server's client config -- add server's ClientConf if client is outdated
 	serverClientConf := s.compareClientConfGen(payload.GetRegistrationPayload().GetDecoyListGeneration())
@@ -156,7 +117,6 @@ func (s *AMPCacheRegServer) registerBidirectional(w http.ResponseWriter, r *http
 		// Replace the payload generation with correct generation from server's client config
 		payload.RegistrationPayload.DecoyListGeneration = serverClientConf.Generation
 	}
-	clientAddrBytes := []byte(net.IP(clientAddr).To16())
 	// Create registration response object
 	regResp, err := s.processor.RegisterBidirectional(payload, pb.RegistrationSource_BidirectionalAMP, clientAddrBytes)
 
@@ -211,6 +171,31 @@ func (s *AMPCacheRegServer) registerBidirectional(w http.ResponseWriter, r *http
 	reqLogger.Debugf("registration successful")
 
 } // registerBidirectional()
+
+func (s *AMPCacheRegServer) registerCommon(logFields log.Fields, path string, w http.ResponseWriter, r *http.Request) (*logrus.Entry, *pb.C2SWrapper, []byte) {
+	reqLogger := s.logger.WithFields(logFields)
+	reqLogger.Debugf("received new ampcache request")
+
+	payload, err := s.getC2SFromReq(w, r, path)
+	if err != nil {
+		s.logger.Printf("Error with getC2SFromReq %v", err)
+		return reqLogger, nil, nil
+	}
+
+	clientAddr := payload.RegistrationAddress
+	if clientAddr == nil {
+		reqLogger.Errorf("No client IP address received")
+		return reqLogger, payload, nil
+	}
+
+	if s.logClientIP {
+		logFields["ip_address"] = net.IP(clientAddr).String()
+	}
+	reqLogger = reqLogger.WithField("reg_id", hex.EncodeToString(payload.GetSharedSecret()))
+	clientAddrBytes := []byte(net.IP(clientAddr).To16())
+	return reqLogger, payload, clientAddrBytes
+
+}
 
 // Use this function in registerBidirectional, if the returned ClientConfig is
 // not nil add it to the RegistrationResponse.
