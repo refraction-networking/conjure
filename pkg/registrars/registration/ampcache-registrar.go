@@ -62,6 +62,37 @@ func NewAMPCacheRegistrar(config *Config) (*AMPCacheRegistrar, error) {
 	}, nil
 }
 
+// registerUnidirectional sends unidirectional registration data to the registration server
+func (r *AMPCacheRegistrar) registerUnidirectional(ctx context.Context, cjSession *tapdance.ConjureSession) (*tapdance.ConjureReg, error) {
+	logger := r.logger.WithFields(logrus.Fields{"type": "ampcache-unidirectional", "sessionID": cjSession.IDString()})
+
+	reg, protoPayload, err := cjSession.UnidirectionalRegData(ctx, pb.RegistrationSource_AMPCache.Enum())
+	if err != nil {
+		logger.Errorf("Failed to prepare registration data: %v", err)
+		return nil, lib.ErrRegFailed
+	}
+	payload, err := r.setupPayload(logger, reg, protoPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	for tries := 0; tries < r.maxRetries+1; tries++ {
+		logger := logger.WithField("attempt", strconv.Itoa(tries+1)+"/"+strconv.Itoa(r.maxRetries+1))
+		err = r.executeAMPCacheRequest(ctx, payload, logger)
+		if err != nil {
+			logger.Warnf("error sending request to Unidirectional AMPCache registration attempt: %v", err)
+			continue
+		}
+		logger.Debugf("registration succeeded")
+		return reg, nil
+	}
+
+	// If we make it here, we failed AMP registration
+	logger.WithField("attempts", r.maxRetries+1).Warnf("all registration attempt(s) failed")
+
+	return nil, lib.ErrRegFailed
+}
+
 // registerBidirectional sends bidirectional registration data to the registration server and reads the response
 func (r *AMPCacheRegistrar) registerBidirectional(ctx context.Context, cjSession *tapdance.ConjureSession) (*tapdance.ConjureReg, error) {
 	logger := r.logger.WithFields(logrus.Fields{"type": "ampcache-bidirectional", "sessionID": cjSession.IDString()})
@@ -71,27 +102,17 @@ func (r *AMPCacheRegistrar) registerBidirectional(ctx context.Context, cjSession
 		logger.Errorf("Failed to prepare registration data: %v", err)
 		return nil, lib.ErrRegFailed
 	}
-	logger.Printf("IP address %s", string(r.ip))
-
-	protoPayload.RegistrationAddress = r.ip
-
-	payload, err := proto.Marshal(protoPayload)
+	payload, err := r.setupPayload(logger, reg, protoPayload)
 	if err != nil {
-		logger.Errorf("failed to marshal ClientToStation payload: %v", err)
-		return nil, lib.ErrRegFailed
+		return nil, err
 	}
-
-	r.setAMPCacheHTTPClient(reg)
-
-	logger.Debugf("AMPCache payload length: %d", len(payload))
-
 	for i := 0; i < r.maxRetries+1; i++ {
 		logger := logger.WithField("attempt", strconv.Itoa(i+1)+"/"+strconv.Itoa(r.maxRetries))
 
 		regResp, err := r.executeAMPCacheRequestBidirectional(ctx, payload, logger)
 
 		if err != nil {
-			logger.Warnf("error sending request to AMPCache registrar: %v", err)
+			logger.Warnf("error sending request to Bidirectional AMPCache registrar: %v", err)
 			continue
 		}
 
@@ -108,6 +129,21 @@ func (r *AMPCacheRegistrar) registerBidirectional(ctx context.Context, cjSession
 	return nil, lib.ErrRegFailed
 }
 
+func (r *AMPCacheRegistrar) setupPayload(logger *logrus.Entry, reg *tapdance.ConjureReg, protoPayload *pb.C2SWrapper) ([]byte, error) {
+
+	protoPayload.RegistrationAddress = r.ip
+
+	payload, err := proto.Marshal(protoPayload)
+	if err != nil {
+		logger.Errorf("failed to marshal ClientToStation payload: %v", err)
+		return nil, lib.ErrRegFailed
+	}
+
+	r.setAMPCacheHTTPClient(reg)
+	logger.Debugf("AMPCache payload length: %d", len(payload))
+	return payload, nil
+}
+
 func (r *AMPCacheRegistrar) setAMPCacheHTTPClient(reg *tapdance.ConjureReg) {
 	if r.client == nil {
 		// Transports should ideally be re-used for TCP connection pooling,
@@ -121,9 +157,95 @@ func (r *AMPCacheRegistrar) setAMPCacheHTTPClient(reg *tapdance.ConjureReg) {
 
 }
 
+func (r AMPCacheRegistrar) executeAMPCacheRequest(ctx context.Context, payload []byte, logger logrus.FieldLogger) error {
+	req, err := r.executeRequestCommon(ctx, payload, logger)
+	if err != nil {
+		return err
+	}
+	resp, err := r.client.Do(req)
+	if err != nil {
+		logger.Warnf("%v failed to do HTTP request to registration endpoint %s: %v", r.endpoint, err)
+		return err
+	}
+	logger.Printf("Response: %v", resp)
+	defer resp.Body.Close()
+
+	logger.Printf("AMP cache rendezvous response: %s", resp.Status)
+
+	// Check that the HTTP request returned a success code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// logger.Warnf("got non-success response code %d from registration endpoint %v", resp.StatusCode, r.endpoint)
+		return fmt.Errorf("non-success response code %d on %s", resp.StatusCode, r.endpoint)
+	}
+
+	if _, err := resp.Location(); err == nil {
+		// The Google AMP Cache may return a "silent redirect" with
+		// status 200, a Location header set, and a JavaScript redirect
+		// in the body. The redirect points directly at the origin
+		// server for the request (bypassing the AMP cache). We do not
+		// follow redirects nor execute JavaScript, but in any case we
+		// cannot extract information from this response and can only
+		// treat it as an error.
+		return fmt.Errorf("non-success silent redirect %d on %s", resp.StatusCode, r.endpoint)
+	}
+	return nil
+}
+
 func (r AMPCacheRegistrar) executeAMPCacheRequestBidirectional(ctx context.Context, payload []byte, logger logrus.FieldLogger) (*pb.RegistrationResponse, error) {
 	// Create an instance of the ConjureReg struct to return; this will hold the updated phantom4 and phantom6 addresses received from registrar response
 	regResp := &pb.RegistrationResponse{}
+	req, err := r.executeRequestCommon(ctx, payload, logger)
+	if err != nil {
+		return regResp, err
+	}
+	resp, err := r.client.Do(req)
+	if err != nil {
+		logger.Warnf("%v failed to do HTTP request to registration endpoint %s: %v", r.endpoint, err)
+		return nil, err
+	}
+	logger.Printf("Response: %v", resp)
+	defer resp.Body.Close()
+
+	logger.Printf("AMP cache rendezvous response: %s", resp.Status)
+
+	// Check that the HTTP request returned a success code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// logger.Warnf("got non-success response code %d from registration endpoint %v", resp.StatusCode, r.endpoint)
+		return nil, fmt.Errorf("non-success response code %d on %s", resp.StatusCode, r.endpoint)
+	}
+
+	if _, err := resp.Location(); err == nil {
+		// The Google AMP Cache may return a "silent redirect" with
+		// status 200, a Location header set, and a JavaScript redirect
+		// in the body. The redirect points directly at the origin
+		// server for the request (bypassing the AMP cache). We do not
+		// follow redirects nor execute JavaScript, but in any case we
+		// cannot extract information from this response and can only
+		// treat it as an error.
+		return nil, fmt.Errorf("non-success silent redirect %d on %s", resp.StatusCode, r.endpoint)
+	}
+	lr := io.LimitReader(resp.Body, readLimit+1)
+	dec, err := amp.NewArmorDecoder(lr)
+	if err != nil {
+		return nil, fmt.Errorf("Armor Decoder failed with error: %d", err)
+	}
+	bodyBytes, err := io.ReadAll(dec)
+	if err != nil {
+		return nil, fmt.Errorf("ReadAll failed with error: %d", err)
+	}
+	if lr.(*io.LimitedReader).N == 0 {
+		// We hit readLimit while decoding AMP armor, that's an error.
+		return nil, fmt.Errorf("Hit readLimit while decoding AMP armor: %d", io.ErrUnexpectedEOF)
+	}
+	// Unmarshal response body into Registration Response protobuf
+	if err = proto.Unmarshal(bodyBytes, regResp); err != nil {
+
+		return regResp, fmt.Errorf("Error in storing Registration Response protobuf: %v", err)
+	}
+	return regResp, nil
+}
+
+func (r *AMPCacheRegistrar) executeRequestCommon(ctx context.Context, payload []byte, logger logrus.FieldLogger) (*http.Request, error) {
 	// Make new HTTP request with given context, registrar, and paylaod
 	logger.Println("Registering via AMP cache rendezvous...")
 	logger.Println("Station URL:", r.endpoint)
@@ -150,65 +272,19 @@ func (r AMPCacheRegistrar) executeAMPCacheRequestBidirectional(ctx context.Conte
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL.String(), nil)
 	if err != nil {
 		logger.Warnf("%v failed to create HTTP request to registration endpoint %s: %v", r.endpoint, err)
-		return regResp, err
+		return nil, err
 	}
-	logger.Printf("Request: %v", req)
-	resp, err := r.client.Do(req)
-	if err != nil {
-		logger.Warnf("%v failed to do HTTP request to registration endpoint %s: %v", r.endpoint, err)
-		return regResp, err
-	}
-	logger.Printf("Response: %v", resp)
-	defer resp.Body.Close()
-
-	logger.Printf("AMP cache rendezvous response: %s", resp.Status)
-
-	// Check that the HTTP request returned a success code
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		// logger.Warnf("got non-success response code %d from registration endpoint %v", resp.StatusCode, r.endpoint)
-		return regResp, fmt.Errorf("non-success response code %d on %s", resp.StatusCode, r.endpoint)
-	}
-
-	if _, err := resp.Location(); err == nil {
-		// The Google AMP Cache may return a "silent redirect" with
-		// status 200, a Location header set, and a JavaScript redirect
-		// in the body. The redirect points directly at the origin
-		// server for the request (bypassing the AMP cache). We do not
-		// follow redirects nor execute JavaScript, but in any case we
-		// cannot extract information from this response and can only
-		// treat it as an error.
-		return nil, fmt.Errorf("non-success silent redirect %d on %s", resp.StatusCode, r.endpoint)
-	}
-
-	lr := io.LimitReader(resp.Body, readLimit+1)
-	dec, err := amp.NewArmorDecoder(lr)
-	if err != nil {
-		return nil, fmt.Errorf("Armor Decoder failed with error: %d", err)
-	}
-	bodyBytes, err := io.ReadAll(dec)
-	if err != nil {
-		return nil, fmt.Errorf("ReadAll failed with error: %d", err)
-	}
-	if lr.(*io.LimitedReader).N == 0 {
-		// We hit readLimit while decoding AMP armor, that's an error.
-		return nil, fmt.Errorf("Hit readLimit while decoding AMP armor: %d", io.ErrUnexpectedEOF)
-	}
-	// Unmarshal response body into Registration Response protobuf
-	if err = proto.Unmarshal(bodyBytes, regResp); err != nil {
-
-		return regResp, fmt.Errorf("Error in storing Registration Response protobuf: %v", err)
-	}
-	return regResp, nil
+	return req, nil
 }
 
 // Register prepares and sends the registration request.
 func (r *AMPCacheRegistrar) Register(cjSession *tapdance.ConjureSession, ctx context.Context) (*tapdance.ConjureReg, error) {
 	defer lib.SleepWithContext(ctx, r.connectionDelay)
 
-	//	if r.bidirectional {
-	return r.registerBidirectional(ctx, cjSession)
-	//	}
-	//	return r.registerUnidirectional(ctx, cjSession)
+	if r.bidirectional {
+		return r.registerBidirectional(ctx, cjSession)
+	}
+	return r.registerUnidirectional(ctx, cjSession)
 }
 
 // PrepareRegKeys prepares key materials specific to the registrar
