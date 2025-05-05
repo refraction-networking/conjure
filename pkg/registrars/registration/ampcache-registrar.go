@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	readLimit = 2000000 //Maximum number of bytes to be read from an HTTP response
+	readLimit = 200000 //Maximum number of bytes to be read from an HTTP response
 )
 
 type AMPCacheRegistrar struct {
