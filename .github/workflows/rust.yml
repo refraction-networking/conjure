@@ -2,9 +2,9 @@ name: rust
 
 on:
   push:
-    branches: [ master]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,9 +19,8 @@ jobs:
       matrix:
         include:
           # ubuntu-latest is another name for ubuntu-22.04
-          - { rust: stable,           os: ubuntu-20.04 }
-          - { rust: stable,           os: ubuntu-22.04 }
-          - { rust: nightly,          os: ubuntu-latest }
+          - { rust: stable, os: ubuntu-22.04 }
+          - { rust: nightly, os: ubuntu-latest }
     steps:
       - uses: actions/checkout@v3
 
