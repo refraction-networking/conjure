@@ -6,16 +6,15 @@ name: CI-build
 # events but only for the master branch
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 jobs:
-
   # This workflow contains a single job called "build"
   build:
     name: Build Station pieces
@@ -57,7 +56,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 'stable'
+          go-version: "stable"
 
       - name: Build app
         run: |
@@ -77,9 +76,8 @@ jobs:
           cd $GITHUB_WORKSPACE && tar -czf conjure-station.tar.gz bin
 
       - name: Save build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: conjure-station.tar.gz
           path: |
             conjure-station.tar.gz
-
