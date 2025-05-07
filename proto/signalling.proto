@@ -334,6 +334,8 @@ enum RegistrationSource {
   BidirectionalAPI = 4;
   DNS = 5;
   BidirectionalDNS = 6;
+  AMPCache = 7;
+  BidirectionalAMP = 8;
 }
 
 message C2SWrapper {

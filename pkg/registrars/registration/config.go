@@ -18,6 +18,10 @@ type Config struct {
 	// BaseDomain is the base domain for the DNS request that the responder is authoritative for in the DNS registrar
 	BaseDomain string
 
+	// AMPCacheURL is the full URL of a valid AMP cache. A nonzero value indicates
+	// that AMP cache will be used as the registration method
+	AMPCacheURL string
+
 	// Pubkey is the public key for the listening DNS registration server
 	Pubkey []byte
 

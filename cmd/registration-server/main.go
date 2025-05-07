@@ -14,6 +14,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/refraction-networking/conjure/pkg/metrics"
+	"github.com/refraction-networking/conjure/pkg/regserver/ampCacheregserver"
 	"github.com/refraction-networking/conjure/pkg/regserver/apiregserver"
 	"github.com/refraction-networking/conjure/pkg/regserver/dnsregserver"
 	"github.com/refraction-networking/conjure/pkg/regserver/regprocessor"
@@ -37,6 +38,7 @@ type config struct {
 	Domain                    string   `toml:"domain"`
 	DNSPrivkeyPath            string   `toml:"dns_private_key_path"`
 	APIPort                   uint16   `toml:"api_port"`
+	AMPCacheURL               string   `toml:"ampcache_url"`
 	ZMQAuthVerbose            bool     `toml:"zmq_auth_verbose"`
 	ZMQAuthType               string   `toml:"zmq_auth_type"`
 	ZMQPort                   uint16   `toml:"zmq_port"`
@@ -146,10 +148,11 @@ func loadConfig(configPath string) (*config, error) {
 
 func main() {
 	var configPath string
-	var apiOnly, dnsOnly bool
+	var apiOnly, ampCacheOnly, dnsOnly bool
 
 	flag.StringVar(&configPath, "config", "", "configuration file path, alternative to CJ_REGISTRAR_CONFIG env var")
 	flag.BoolVar(&apiOnly, "api-only", false, "run only the API registrar")
+	flag.BoolVar(&ampCacheOnly, "ampcache-only", false, "run only the AMPCache registrar")
 	flag.BoolVar(&dnsOnly, "dns-only", false, "run only the DNS registrar")
 	flag.Parse()
 
@@ -217,9 +220,10 @@ func main() {
 
 	regServers := []regServer{}
 	var dnsRegServer *dnsregserver.DNSRegServer
+	var ampCacheRegServer *ampCacheregserver.AMPCacheRegServer
 	var apiRegServer *apiregserver.APIRegServer
 
-	if !apiOnly {
+	if !apiOnly && !ampCacheOnly {
 		dnsPrivKey, err := readKey(conf.DNSPrivkeyPath)
 		if err != nil {
 			log.Fatal(err)
@@ -233,13 +237,20 @@ func main() {
 		regServers = append(regServers, dnsRegServer)
 	}
 
-	if !dnsOnly {
+	if !dnsOnly && !ampCacheOnly {
 		apiRegServer, err = apiregserver.NewAPIRegServer(conf.APIPort, processor, conf.latestClientConf, log.WithField("registrar", "API"), logClientIP, metrics)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		regServers = append(regServers, apiRegServer)
+	}
+	if !dnsOnly && !apiOnly {
+		ampCacheRegServer, err = ampCacheregserver.NewAMPCacheRegServer(conf.APIPort, conf.AMPCacheURL, processor, conf.latestClientConf, log.WithField("registrar", "AMPCache"), logClientIP, metrics)
+		if err != nil {
+			log.Fatal(err)
+		}
+		regServers = append(regServers, ampCacheRegServer)
 	}
 
 	signalChan := make(chan os.Signal, 1)
@@ -263,12 +274,15 @@ func main() {
 					if err != nil {
 						log.Errorf("failed to reload phantom subnets - aborting reload: %v", err)
 					}
-					if !dnsOnly && apiRegServer != nil {
+					if apiRegServer != nil {
 						apiRegServer.NewClientConf(conf.latestClientConf)
 					}
 
-					if !apiOnly && dnsRegServer != nil {
+					if dnsRegServer != nil {
 						dnsRegServer.UpdateLatestCCGen(conf.latestClientConf.GetGeneration())
+					}
+					if ampCacheRegServer != nil {
+						ampCacheRegServer.NewClientConf(conf.latestClientConf)
 					}
 				}
 			}
