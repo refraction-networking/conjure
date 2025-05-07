@@ -9,6 +9,10 @@ import (
 	"github.com/refraction-networking/conjure/pkg/station/liveness"
 )
 
+type ipResolver interface {
+	ResolveIP(host string) (*net.IPAddr, error)
+}
+
 // RegConfig contains all configuration options directly related to processing
 // registrations lifecycle (ingest, validity, and eviction).
 type RegConfig struct {
@@ -48,6 +52,9 @@ type RegConfig struct {
 
 	// ConnectingStats records stats related to connecting transports
 	ConnectingStats ConnectingTpStats
+
+	// Custom resolver used solely for testing
+	testingResolver ipResolver
 }
 
 // ParseBlocklists converts string arrays of blocklisted domains, addresses and
@@ -152,7 +159,12 @@ func (c *RegConfig) ParseOrResolveBlocklisted(provided string) (string, bool) {
 		lookup = true
 	}
 
-	addr, err := net.ResolveIPAddr("ip", host)
+	var addr *net.IPAddr
+	if c.testingResolver != nil {
+		addr, err = c.testingResolver.ResolveIP(host)
+	} else {
+		addr, err = net.ResolveIPAddr("ip", host)
+	}
 	if err != nil {
 		return "", lookup
 	}

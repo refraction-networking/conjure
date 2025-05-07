@@ -8,6 +8,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type mockResolver struct {
+	lookup map[string]*net.IPAddr
+}
+
+func (m *mockResolver) ResolveIP(host string) (*net.IPAddr, error) {
+	if ip, ok := m.lookup[host]; ok {
+		return ip, nil
+	}
+	return net.ResolveIPAddr("ip", host)
+}
+
 func TestConjureLibConfigResolveBlocklisted(t *testing.T) {
 
 	conf := &RegConfig{
@@ -20,6 +31,11 @@ func TestConjureLibConfigResolveBlocklisted(t *testing.T) {
 			".*blocked\\.com$",
 			"blocked1\\.com",
 			"localhost",
+		},
+		testingResolver: &mockResolver{
+			lookup: map[string]*net.IPAddr{
+				"example.com": {IP: net.ParseIP("93.184.216.34")},
+			},
 		},
 	}
 
