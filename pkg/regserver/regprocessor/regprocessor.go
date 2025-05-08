@@ -701,8 +701,7 @@ func (p *RegProcessor) processC2SWrapper(c2sPayload *pb.C2SWrapper, clientAddr [
 
 	// If the address that the registration was received from was NOT set in the
 	// C2SWrapper set it here to the source address of the request.
-	if (c2sPayload.GetRegistrationAddress() == nil ||
-		c2sPayload.GetRegistrationSource() == regMethod) && clientAddr != nil {
+	if c2sPayload.GetRegistrationAddress() == nil && clientAddr != nil {
 		payload.RegistrationAddress = clientAddr
 	} else {
 		payload.RegistrationAddress = c2sPayload.GetRegistrationAddress()
