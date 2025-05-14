@@ -51,9 +51,19 @@ type APIRegistrar struct {
 
 	// Logger to use.
 	logger logrus.FieldLogger
+
+	// Optional STUN address
+	ip []byte
 }
 
 func NewAPIRegistrar(config *Config) (*APIRegistrar, error) {
+
+	ip, err := getPublicIp(config.STUNAddr)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public IP: %v", err)
+	}
+
 	return &APIRegistrar{
 		endpoint:           config.Target,
 		bidirectional:      config.Bidirectional,
@@ -62,6 +72,7 @@ func NewAPIRegistrar(config *Config) (*APIRegistrar, error) {
 		secondaryRegistrar: config.SecondaryRegistrar,
 		client:             config.HTTPClient,
 		logger:             tapdance.Logger().WithField("registrar", "API"),
+		ip:                 ip,
 	}, nil
 }
 
@@ -80,6 +91,8 @@ func (r *APIRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession
 		logger.Errorf("Failed to prepare registration data: %v", err)
 		return nil, lib.ErrRegFailed
 	}
+
+	protoPayload.RegistrationAddress = r.ip
 
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
@@ -120,6 +133,8 @@ func (r *APIRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession,
 		logger.Errorf("Failed to prepare registration data: %v", err)
 		return nil, lib.ErrRegFailed
 	}
+
+	protoPayload.RegistrationAddress = r.ip
 
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
