@@ -44,9 +44,8 @@ pub fn extract_payloads_multiple_keys(
             return Ok(payload_elements);
         }
     }
-    Err(Box::new(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        "No secret keys worked",
+    Err(Box::new(std::io::Error::other(
+        "No secret keys worked".to_string(),
     )))
 }
 
