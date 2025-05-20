@@ -32,28 +32,22 @@ type AMPCacheRegistrar struct {
 	maxRetries       int
 	connectionDelay  time.Duration
 	bidirectional    bool
-	ip               []byte
+	stun             string
 	Pubkey           []byte
 	logger           logrus.FieldLogger
 }
 
 func NewAMPCacheRegistrar(config *Config) (*AMPCacheRegistrar, error) {
 
-	var err error
 	if config.AMPCacheURL == "" {
 		return nil, fmt.Errorf("AMPCacheURL not set")
-	}
-
-	ip, err := getPublicIp(config.STUNAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get public IP: %v", err)
 	}
 
 	return &AMPCacheRegistrar{
 		endpoint:         config.Target,
 		client:           config.HTTPClient,
 		ampCacheURL:      config.AMPCacheURL,
-		ip:               ip,
+		stun:             config.STUNAddr,
 		utlsDistribution: config.UTLSDistribution,
 		maxRetries:       config.MaxRetries,
 		bidirectional:    config.Bidirectional,
@@ -131,7 +125,12 @@ func (r *AMPCacheRegistrar) registerBidirectional(ctx context.Context, cjSession
 
 func (r *AMPCacheRegistrar) setupPayload(logger *logrus.Entry, reg *tapdance.ConjureReg, protoPayload *pb.C2SWrapper) ([]byte, error) {
 
-	protoPayload.RegistrationAddress = r.ip
+	ip, err := getPublicIp(r.stun)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public IP: %v", err)
+	}
+
+	protoPayload.RegistrationAddress = ip
 
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
