@@ -53,16 +53,10 @@ type APIRegistrar struct {
 	logger logrus.FieldLogger
 
 	// Optional STUN address
-	ip []byte
+	stun string
 }
 
 func NewAPIRegistrar(config *Config) (*APIRegistrar, error) {
-
-	ip, err := getPublicIp(config.STUNAddr)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get public IP: %v", err)
-	}
 
 	return &APIRegistrar{
 		endpoint:           config.Target,
@@ -72,7 +66,7 @@ func NewAPIRegistrar(config *Config) (*APIRegistrar, error) {
 		secondaryRegistrar: config.SecondaryRegistrar,
 		client:             config.HTTPClient,
 		logger:             tapdance.Logger().WithField("registrar", "API"),
-		ip:                 ip,
+		stun:               config.STUNAddr,
 	}, nil
 }
 
@@ -92,7 +86,14 @@ func (r *APIRegistrar) registerUnidirectional(cjSession *tapdance.ConjureSession
 		return nil, lib.ErrRegFailed
 	}
 
-	protoPayload.RegistrationAddress = r.ip
+	if r.stun != "" {
+		ip, err := getPublicIp(r.stun)
+		if err != nil {
+			logger.Warnf("failed to get public IP: %v", err)
+		} else {
+			protoPayload.RegistrationAddress = ip
+		}
+	}
 
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
@@ -134,7 +135,14 @@ func (r *APIRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession,
 		return nil, lib.ErrRegFailed
 	}
 
-	protoPayload.RegistrationAddress = r.ip
+	if r.stun != "" {
+		ip, err := getPublicIp(r.stun)
+		if err != nil {
+			logger.Warnf("failed to get public IP: %v", err)
+		} else {
+			protoPayload.RegistrationAddress = ip
+		}
+	}
 
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
