@@ -88,6 +88,7 @@ void the_program(uint8_t core_id, unsigned int log_interval,
     printf("Zero-copy TapDance child proc started on core %d!\n", core_id);
 #else
     printf("NON-zero-copy TapDance child proc started on core %d!\n", core_id);
+    fflush(stdout);
     // For pfring_recv()s
     struct pfring_pkthdr hdr = {0};
     uint8_t *pkt_buf_ptr;
@@ -197,6 +198,7 @@ void the_program(uint8_t core_id, unsigned int log_interval,
 void ignore_sigpipe(int sig)
 {
     printf("received a SIGPIPE, ignoring\n");
+    fflush(stdout);
 }
 
 static void notify_cli_conf_file_update(int sig, siginfo_t *si, void *junk)
@@ -340,6 +342,7 @@ pid_t start_tapdance_process(int core_affinity, unsigned int cluster_id,
     if (the_pid == 0)
     {
         printf(">>> Child proc %d created\n", core_affinity);
+	fflush(stdout);
         startup_pfring_maybezc(cluster_id, proc_ind);
 
         set_affinity(core_affinity);
@@ -349,6 +352,7 @@ pid_t start_tapdance_process(int core_affinity, unsigned int cluster_id,
         the_program(proc_ind, log_interval, station_keys, numkeys, workers_socket_addr);
     }
     printf("Core %d: PID %d, lcore %d\n", proc_ind, the_pid, core_affinity);
+    fflush(stdout);
     return the_pid;
 }
 
@@ -487,13 +491,13 @@ void parse_cmd_args(int argc, char *argv[], struct cmd_options *options)
                 printf("\n");
             }
             printf("\n");
-            fflush(stdout);
         }
     }
     else
     {
         printf("Using default key\n");
     }
+    fflush(stdout);
 
     int last_core_id_requested = (options->core_affinity_offset +
                                   cpu_procs_i32) -
@@ -621,12 +625,14 @@ int main(int argc, char *argv[])
     sigaction(SIGUSR2, &sa2, NULL);
 
     handle_zmq_proxy(options.zmq_address, options.zmq_worker_address);
+    fflush(stdout);
 
     int i;
     int core_num = options.core_affinity_offset;
     for (i = 0; i < g_num_worker_procs; i++)
     {
         printf("Starting process %d...\n", i);
+	fflush(stdout);
         if (core_num == options.skip_core)
             core_num++;
         g_forked_pids[i] =
@@ -634,6 +640,7 @@ int main(int argc, char *argv[])
                                    options.cluster_id, i + pfring_offset, options.log_interval,
                                    options.station_key, options.numkeys, options.zmq_worker_address);
         core_num++;
+	fflush(stdout);
     }
     signal(SIGINT, sigproc_parent);
     signal(SIGTERM, sigproc_parent);
@@ -663,6 +670,7 @@ int main(int argc, char *argv[])
             printf("continued\n");
         else
             printf("...not sure what happened!\n");
+	fflush(stdout);
     }
     sigproc_parent(SIGTERM);
     return 0;
