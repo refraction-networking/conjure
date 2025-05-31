@@ -19,4 +19,4 @@ if [ ! -e $CJ_PRIVKEY ]; then
     exit 1
 fi
 
-/opt/conjure/bin/conjure -c ${CJ_CLUSTER_ID} -o ${CJ_COREBASE} -n ${CJ_CORECOUNT} -l ${CJ_LOG_INTERVAL} -K ${CJ_PRIVKEY} -s ${SKIP_CORE} -z ${CJ_QUEUE_OFFSET}
+/opt/conjure/bin/conjure -c ${CJ_CLUSTER_ID} -o ${CJ_COREBASE} -n ${CJ_CORECOUNT} -l ${CJ_LOG_INTERVAL} -K ${CJ_PRIVKEY} -s ${CJ_SKIP_CORE} -z ${CJ_QUEUE_OFFSET}
