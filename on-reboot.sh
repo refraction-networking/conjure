@@ -101,6 +101,9 @@ elif [ "x$PF_DRIVER" = "xi40e" ]; then
 elif [ "x$PF_DRIVER" = "xixgbe" ]; then
     pf_ringcfg --configure-driver ixgbe --rss-queues 1
     pf_ringcfg --list-interfaces
+elif [ "x$PF_DRIVER" = "xice" ]; then
+    pf_ringcfg --configure-driver ice --rss-queues 1
+    pf_ringcfg --list-interfaces
 else
     exit_msg "Unknown driver $PF_DRIVER"
 fi
