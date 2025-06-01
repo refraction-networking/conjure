@@ -122,8 +122,7 @@ do_or_die "sysctl -w net.ipv4.conf.default.rp_filter=0"
 do_or_die "sysctl -w net.ipv4.conf.all.rp_filter=0"
 
 rule_table_name="custom"
-rule_table_check=$(ip route show table "$rule_table_name" >/dev/null 2>&1)
-if [[ -z "$rule_table_check" ]]; then
+if grep -q "^200[[:blank:]]+${rule_table_name}" /etc/iproute2/rt_tables; then :; else
   echo "adding routing table ${rule_table_name}"
   echo "200 ${rule_table_name}" >> /etc/iproute2/rt_tables
 fi
