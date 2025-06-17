@@ -12,6 +12,8 @@ import (
 
 var interval = 30 * time.Second
 
+const maxChunks = 10
+
 type oneresponder interface {
 	RecvAndRespond(getResponse func([]byte) ([]byte, error)) error
 	Close() error
@@ -69,6 +71,10 @@ func (r *Responder) RecvAndRespond(parentGetResponse func([]byte) ([]byte, error
 		}
 
 		partId := (*[idLen]byte)(partIn.GetId())
+
+		if *partIn.TotalParts > maxChunks {
+			return nil, fmt.Errorf("request over max chunk limit")
+		}
 
 		r.mutex.Lock()
 		regData, ok := r.parts[*partId]
