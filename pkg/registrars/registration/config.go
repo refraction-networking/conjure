@@ -47,6 +47,9 @@ type Config struct {
 
 	// HTTPClient is the HTTP client to use for the API registrar
 	HTTPClient *http.Client
+
+	// DNSRegistrarMTU is the maximum amount of data to be encoded in a single DNS request for the DNS registrar
+	DNSRegistrarMTU uint
 }
 
 // DNSTransportMethodType declares the DNS transport method to be used

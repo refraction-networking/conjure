@@ -98,6 +98,7 @@ message DnsRegConf {
     optional bytes pubkey = 4;
     optional string utls_distribution = 5;
     optional string stun_server = 6;
+    optional uint32 mtu = 7;
 }
 
 enum DnsRegMethod {

@@ -901,6 +901,7 @@ type DnsRegConf struct {
 	Pubkey           []byte                 `protobuf:"bytes,4,opt,name=pubkey" json:"pubkey,omitempty"`
 	UtlsDistribution *string                `protobuf:"bytes,5,opt,name=utls_distribution,json=utlsDistribution" json:"utls_distribution,omitempty"`
 	StunServer       *string                `protobuf:"bytes,6,opt,name=stun_server,json=stunServer" json:"stun_server,omitempty"`
+	Mtu              *uint32                `protobuf:"varint,7,opt,name=mtu" json:"mtu,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -975,6 +976,13 @@ func (x *DnsRegConf) GetStunServer() string {
 		return *x.StunServer
 	}
 	return ""
+}
+
+func (x *DnsRegConf) GetMtu() uint32 {
+	if x != nil && x.Mtu != nil {
+		return *x.Mtu
+	}
+	return 0
 }
 
 type DecoyList struct {
@@ -2509,7 +2517,7 @@ const file_signalling_proto_rawDesc = "" +
 	"\x14phantom_subnets_list\x18\x04 \x01(\v2\x19.proto.PhantomSubnetsListR\x12phantomSubnetsList\x124\n" +
 	"\x0econjure_pubkey\x18\x05 \x01(\v2\r.proto.PubKeyR\rconjurePubkey\x123\n" +
 	"\fdns_reg_conf\x18\x06 \x01(\v2\x11.proto.DnsRegConfR\n" +
-	"dnsRegConf\"\xdd\x01\n" +
+	"dnsRegConf\"\xef\x01\n" +
 	"\n" +
 	"DnsRegConf\x129\n" +
 	"\x0edns_reg_method\x18\x01 \x02(\x0e2\x13.proto.DnsRegMethodR\fdnsRegMethod\x12\x16\n" +
@@ -2518,7 +2526,8 @@ const file_signalling_proto_rawDesc = "" +
 	"\x06pubkey\x18\x04 \x01(\fR\x06pubkey\x12+\n" +
 	"\x11utls_distribution\x18\x05 \x01(\tR\x10utlsDistribution\x12\x1f\n" +
 	"\vstun_server\x18\x06 \x01(\tR\n" +
-	"stunServer\"?\n" +
+	"stunServer\x12\x10\n" +
+	"\x03mtu\x18\a \x01(\rR\x03mtu\"?\n" +
 	"\tDecoyList\x122\n" +
 	"\n" +
 	"tls_decoys\x18\x01 \x03(\v2\x13.proto.TLSDecoySpecR\ttlsDecoys\"V\n" +

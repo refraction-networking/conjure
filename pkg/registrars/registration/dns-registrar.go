@@ -18,6 +18,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const defaultMTU = 75
+
 type DNSRegistrar struct {
 	req             *tworeqresp.Requester
 	maxRetries      int
@@ -64,7 +66,11 @@ func NewDNSRegistrar(config *Config) (*DNSRegistrar, error) {
 		return nil, fmt.Errorf("error creating requester: %v", err)
 	}
 
-	tworeq, err := tworeqresp.NewRequester(req, 80)
+	mtu := config.DNSRegistrarMTU
+	if mtu == 0 {
+		mtu = defaultMTU
+	}
+	tworeq, err := tworeqresp.NewRequester(req, mtu)
 	if err != nil {
 		return nil, fmt.Errorf("error adding fragmentation layer: %v", err)
 	}
