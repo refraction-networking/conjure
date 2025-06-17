@@ -3,6 +3,7 @@ package tworeqresp
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"time"
 
 	pb "github.com/refraction-networking/conjure/proto"
@@ -19,33 +20,44 @@ type oneresponder interface {
 type Responder struct {
 	parent oneresponder
 	parts  map[[idLen]byte]*timedData
+	mutex  sync.Mutex
 }
 
 func NewResponder(parent oneresponder) (*Responder, error) {
-	return &Responder{
+	r := &Responder{
 		parent: parent,
 		parts:  make(map[[idLen]byte]*timedData),
-	}, nil
+		mutex:  sync.Mutex{},
+	}
+	go r.gc()
+	return r, nil
 }
 
-type timedData struct {
-	data   [][]byte
-	expiry time.Time
-}
-
-func (r *Responder) RecvAndRespond(parentGetResponse func([]byte) ([]byte, error)) error {
+func (r *Responder) gc() {
 	ticker := time.NewTicker(interval)
-	getResponse := func(data []byte) ([]byte, error) {
-		select {
-		case <-ticker.C:
+
+	for range ticker.C {
+		func() {
+			r.mutex.Lock()
+			defer r.mutex.Unlock()
 			for key, data := range r.parts {
 				if time.Now().After(data.expiry) {
 					delete(r.parts, key)
 				}
 			}
-		default:
-		}
+		}()
+	}
 
+}
+
+type timedData struct {
+	data   [][]byte
+	expiry time.Time
+	mutex  sync.Mutex
+}
+
+func (r *Responder) RecvAndRespond(parentGetResponse func([]byte) ([]byte, error)) error {
+	getResponse := func(data []byte) ([]byte, error) {
 		partIn := &pb.DnsPartReq{}
 		err := proto.Unmarshal(data, partIn)
 		if err != nil {
@@ -58,29 +70,53 @@ func (r *Responder) RecvAndRespond(parentGetResponse func([]byte) ([]byte, error
 
 		partId := (*[idLen]byte)(partIn.GetId())
 
-		if _, ok := r.parts[*partId]; !ok {
+		r.mutex.Lock()
+		regData, ok := r.parts[*partId]
+
+		if !ok {
 			r.parts[*partId] = &timedData{
 				data:   make([][]byte, partIn.GetTotalParts()),
 				expiry: time.Now().Add(interval),
+				mutex:  sync.Mutex{},
 			}
+			regData = r.parts[*partId]
 		}
+		r.mutex.Unlock()
 
-		if int(partIn.GetTotalParts()) != len(r.parts[*partId].data) {
-			return nil, fmt.Errorf("invalid total parts")
-		}
-
-		if int(partIn.GetPartNum()) >= len(r.parts[*partId].data) {
-			return nil, fmt.Errorf("part number out of bound")
-		}
-
-		r.parts[*partId].data[partIn.GetPartNum()] = partIn.GetData()
-
-		waiting := false
-		for _, part := range r.parts[*partId].data {
-			if part == nil {
-				waiting = true
-				break
+		buf, waiting, err := func() ([]byte, bool, error) {
+			regData.mutex.Lock()
+			defer regData.mutex.Unlock()
+			if int(partIn.GetTotalParts()) != len(regData.data) {
+				return nil, false, fmt.Errorf("invalid total parts")
 			}
+
+			if int(partIn.GetPartNum()) >= len(regData.data) {
+				return nil, false, fmt.Errorf("part number out of bound")
+			}
+
+			regData.data[partIn.GetPartNum()] = partIn.GetData()
+
+			waiting := false
+			for _, part := range regData.data {
+				if part == nil {
+					waiting = true
+					break
+				}
+			}
+			if waiting {
+				return nil, true, nil
+			}
+
+			var buffer bytes.Buffer
+			for _, part := range regData.data {
+				buffer.Write(part)
+			}
+
+			return buffer.Bytes(), false, nil
+		}()
+
+		if err != nil {
+			return nil, err
 		}
 
 		if waiting {
@@ -93,11 +129,7 @@ func (r *Responder) RecvAndRespond(parentGetResponse func([]byte) ([]byte, error
 			return respBytes, nil
 		}
 
-		var buffer bytes.Buffer
-		for _, part := range r.parts[*partId].data {
-			buffer.Write(part)
-		}
-		res, err := parentGetResponse(buffer.Bytes())
+		res, err := parentGetResponse(buf)
 		if err != nil {
 			return nil, fmt.Errorf("error from parent getResponse: %v", err)
 		}

@@ -51,7 +51,7 @@ func TestSpliting(t *testing.T) {
 			if err != nil {
 				t.Fatalf("error creating requester: %v", err)
 			}
-			requester.RequestAndRecv(testCase.data)
+			_, _ = requester.RequestAndRecv(testCase.data)
 			if parent.calls != testCase.chunksExpected {
 				t.Fatalf("calls: %v, expected: %v", parent.calls, testCase.chunksExpected)
 			}

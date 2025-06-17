@@ -71,11 +71,7 @@ func splitIntoChunks(data []byte, mtu int) [][]byte {
 	var chunks [][]byte
 
 	for i := 0; i < len(data); i += mtu {
-		end := i + mtu
-
-		if end > len(data) {
-			end = len(data)
-		}
+		end := min(i+mtu, len(data))
 
 		chunks = append(chunks, data[i:end])
 	}
