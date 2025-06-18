@@ -25,7 +25,7 @@ type DNSRegistrar struct {
 	maxRetries      int
 	connectionDelay time.Duration
 	bidirectional   bool
-	ip              []byte
+	stun            string
 	logger          logrus.FieldLogger
 }
 
@@ -73,14 +73,13 @@ func NewDNSRegistrar(config *Config) (*DNSRegistrar, error) {
 		return nil, fmt.Errorf("error adding fragmentation layer: %v", err)
 	}
 
-	ip, err := getPublicIp(config.STUNAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get public IP: %v", err)
+	if config.STUNAddr == "" {
+		return nil, fmt.Errorf("STUN address not set")
 	}
 
 	return &DNSRegistrar{
 		req:             tworeq,
-		ip:              ip,
+		stun:            config.STUNAddr,
 		maxRetries:      config.MaxRetries,
 		bidirectional:   config.Bidirectional,
 		connectionDelay: config.Delay,
@@ -105,7 +104,12 @@ func (r *DNSRegistrar) registerUnidirectional(ctx context.Context, cjSession *ta
 		}
 	}
 
-	protoPayload.RegistrationAddress = r.ip
+	ip, err := getPublicIp(r.stun)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public IP: %v", err)
+	}
+
+	protoPayload.RegistrationAddress = ip
 
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
@@ -151,7 +155,12 @@ func (r *DNSRegistrar) registerBidirectional(ctx context.Context, cjSession *tap
 		}
 	}
 
-	protoPayload.RegistrationAddress = r.ip
+	ip, err := getPublicIp(r.stun)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public IP: %v", err)
+	}
+
+	protoPayload.RegistrationAddress = ip
 
 	payload, err := proto.Marshal(protoPayload)
 	if err != nil {
