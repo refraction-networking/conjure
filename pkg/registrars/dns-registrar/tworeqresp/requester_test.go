@@ -1,6 +1,7 @@
 package tworeqresp
 
 import (
+	"sync/atomic"
 	"testing"
 
 	pb "github.com/refraction-networking/conjure/proto"
@@ -8,11 +9,11 @@ import (
 )
 
 type mockRequester struct {
-	calls int
+	calls atomic.Uint32
 }
 
 func (r *mockRequester) RequestAndRecv([]byte) ([]byte, error) {
-	r.calls += 1
+	r.calls.Add(1)
 	return proto.Marshal(&pb.DnsPartResp{Waiting: proto.Bool(true)})
 }
 
@@ -47,13 +48,13 @@ func TestSpliting(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			parent := &mockRequester{}
-			requester, err := NewRequester(parent, mtu)
+			requester, err := NewRequester(func() (Onerequester, error) { return parent, nil }, mtu)
 			if err != nil {
 				t.Fatalf("error creating requester: %v", err)
 			}
 			_, _ = requester.RequestAndRecv(testCase.data)
-			if parent.calls != testCase.chunksExpected {
-				t.Fatalf("calls: %v, expected: %v", parent.calls, testCase.chunksExpected)
+			if int(parent.calls.Load()) != testCase.chunksExpected {
+				t.Fatalf("calls: %v, expected: %v", parent.calls.Load(), testCase.chunksExpected)
 			}
 		})
 

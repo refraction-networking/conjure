@@ -61,16 +61,14 @@ func createRequester(config *Config) (*requester.Requester, error) {
 
 // NewDNSRegistrar creates a DNSRegistrar from config
 func NewDNSRegistrar(config *Config) (*DNSRegistrar, error) {
-	req, err := createRequester(config)
-	if err != nil {
-		return nil, fmt.Errorf("error creating requester: %v", err)
-	}
 
 	mtu := config.DNSRegistrarMTU
 	if mtu == 0 {
 		mtu = defaultMTU
 	}
-	tworeq, err := tworeqresp.NewRequester(req, mtu)
+	tworeq, err := tworeqresp.NewRequester(func() (tworeqresp.Onerequester, error) {
+		return createRequester(config)
+	}, mtu)
 	if err != nil {
 		return nil, fmt.Errorf("error adding fragmentation layer: %v", err)
 	}

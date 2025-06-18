@@ -27,16 +27,14 @@ func main() {
 	pubKey, err := hex.DecodeString(key)
 	util.Check(err)
 
-	req, err := requester.NewRequester(&requester.Config{
-		TransportMethod: requester.UDP,
-		Target:          addr.String(),
-		BaseDomain:      *baseDomain,
-		Pubkey:          pubKey,
-	})
-
-	util.Check(err)
-
-	tworeq, err := tworeqresp.NewRequester(req, 80)
+	tworeq, err := tworeqresp.NewRequester(func() (tworeqresp.Onerequester, error) {
+		return requester.NewRequester(&requester.Config{
+			TransportMethod: requester.UDP,
+			Target:          addr.String(),
+			BaseDomain:      *baseDomain,
+			Pubkey:          pubKey,
+		})
+	}, 80)
 	util.Check(err)
 
 	reader := bufio.NewReader(os.Stdin)
