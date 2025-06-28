@@ -155,7 +155,7 @@ func (r *APIRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession,
 	for tries := 0; tries < r.maxRetries+1; tries++ {
 		logger := logger.WithField("attempt", strconv.Itoa(tries+1)+"/"+strconv.Itoa(r.maxRetries+1))
 
-		regResp, err := r.executeHTTPRequestBidirectional(ctx, payload, logger)
+		regResp, err := r.executeHTTPRequestBidirectional(ctx, payload, logger, cjSession)
 		if err != nil {
 			logger.Warnf("error in registration attempt: %v", err)
 			continue
@@ -173,8 +173,12 @@ func (r *APIRegistrar) registerBidirectional(cjSession *tapdance.ConjureSession,
 	logger.WithField("attempts", r.maxRetries+1).Warnf("all registration attempt(s) failed")
 
 	if r.secondaryRegistrar != nil {
-		logger.Debugf("trying secondary registration method")
-		return r.secondaryRegistrar.Register(cjSession, ctx)
+		if cjSession.RegisterOnBehalfOf {
+			logger.Debugf("Do not switch to secondary registration method if bdapi failed")
+		} else {
+			logger.Debugf("trying secondary registration method")
+			return r.secondaryRegistrar.Register(cjSession, ctx)
+		}
 	}
 
 	return nil, lib.ErrRegFailed
@@ -224,7 +228,7 @@ func (r APIRegistrar) executeHTTPRequest(ctx context.Context, payload []byte, lo
 	return nil
 }
 
-func (r APIRegistrar) executeHTTPRequestBidirectional(ctx context.Context, payload []byte, logger logrus.FieldLogger) (*pb.RegistrationResponse, error) {
+func (r APIRegistrar) executeHTTPRequestBidirectional(ctx context.Context, payload []byte, logger logrus.FieldLogger, cjSession *tapdance.ConjureSession) (*pb.RegistrationResponse, error) {
 	// Create an instance of the ConjureReg struct to return; this will hold the updated phantom4 and phantom6 addresses received from registrar response
 	regResp := &pb.RegistrationResponse{}
 	// Make new HTTP request with given context, registrar, and paylaod
@@ -233,7 +237,11 @@ func (r APIRegistrar) executeHTTPRequestBidirectional(ctx context.Context, paylo
 		logger.Warnf("%v failed to create HTTP request to registration endpoint %s: %v", r.endpoint, err)
 		return regResp, err
 	}
-
+	if cjSession.RegisterOnBehalfOf {
+		clientIP := cjSession.RegisterFor.String()
+		clientIP2 := clientIP + ", " + clientIP
+		req.Header.Set("X-Forwarded-For", clientIP2)
+	}
 	resp, err := r.client.Do(req)
 	if err != nil {
 		logger.Warnf("%v failed to do HTTP request to registration endpoint %s: %v", r.endpoint, err)
