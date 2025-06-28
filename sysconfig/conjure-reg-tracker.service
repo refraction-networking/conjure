@@ -1,0 +1,20 @@
+[Unit]
+Description=Conjure Registration Tracker
+
+[Service]
+Type=simple
+
+WorkingDirectory=/opt/conjure/
+
+SyslogIdentifier=conjure
+
+ExecStart=/bin/bash /opt/conjure/scripts/start_registration-tracker.sh
+
+# send SIGHUP to the station process
+ExecReload=/bin/kill -HUP $MAINPID
+
+# on stop processes will get SIGTERM, and after 10 secs - SIGKILL (default 90)
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
