@@ -60,12 +60,13 @@ build_or_rebuild_iptables() {
 }
 
 tun_setup_fn () {
-    if [[ $# -lt 2 ]]; then
-        exit_msg "script broken, tun_setup requires tun id and ip table name"
+    if [[ $# -lt 3 ]]; then
+        exit_msg "script broken, tun_setup requires tun id, ip table name, and port"
     fi
 
     local N=$1
     local table=$2
+    local port=$3
     ip tuntap del mode tun tun${N}
     do_or_die "ip tuntap add mode tun tun${N}"
     do_or_die "sysctl -w net.ipv4.conf.tun${N}.rp_filter=0"
@@ -83,10 +84,10 @@ tun_setup_fn () {
     ip route add local 0.0.0.0/0 dev tun${N} table ${table}
 
 
-    do_or_die "iptables -t nat -I CJ_PREROUTING 1 -p tcp -i tun${N} -j DNAT --to ${IP4_ADDR}:41245"
-    do_or_die "iptables -t nat -I CJ_PREROUTING 1 -p udp -i tun${N} -j DNAT --to ${IP4_ADDR}:41245"
-    do_or_die "ip6tables -t nat -I CJ_PREROUTING 1 -p tcp -i tun${N} -j DNAT --to ${IP6_ADDR}:41245"
-    do_or_die "ip6tables -t nat -I CJ_PREROUTING 1 -p udp -i tun${N} -j DNAT --to ${IP6_ADDR}:41245"
+    do_or_die "iptables -t nat -I CJ_PREROUTING 1 -p tcp -i tun${N} -j DNAT --to ${IP4_ADDR}:${port}"
+    do_or_die "iptables -t nat -I CJ_PREROUTING 1 -p udp -i tun${N} -j DNAT --to ${IP4_ADDR}:${port}"
+    do_or_die "ip6tables -t nat -I CJ_PREROUTING 1 -p tcp -i tun${N} -j DNAT --to ${IP6_ADDR}:${port}"
+    do_or_die "ip6tables -t nat -I CJ_PREROUTING 1 -p udp -i tun${N} -j DNAT --to ${IP6_ADDR}:${port}"
     do_or_die "iptables -I CJ_INPUT 1 -i tun${N} -j ACCEPT"
     do_or_die "ip6tables -I CJ_INPUT 1 -i tun${N} -j ACCEPT"
 }
@@ -101,12 +102,13 @@ elif [ "x$PF_DRIVER" = "xi40e" ]; then
 elif [ "x$PF_DRIVER" = "xixgbe" ]; then
     pf_ringcfg --configure-driver ixgbe --rss-queues 1
     pf_ringcfg --list-interfaces
-elif [ "x$PF_DRIVER" = "xice" ]; then
-    pf_ringcfg --configure-driver ice --rss-queues 1
+elif [ "x$PF_DRIVER" = "xice_zc" ]; then
+    pf_ringcfg --configure-driver ice_zc --rss-queues 1
     pf_ringcfg --list-interfaces
 else
     exit_msg "Unknown driver $PF_DRIVER"
 fi
+
 
 # this allows the conntrack table to keep track of connections where the client dissapears and
 # the station retransmits fins longer than the kernel will keep track of the connection. This
@@ -136,7 +138,8 @@ build_or_rebuild_iptables filter CJ_INPUT INPUT
 echo "Setting up devices tun{${OFFSET}..$((OFFSET + CORE_COUNT -1 ))}, adding rules for them, and turning off RP filters."
 for CORE in `seq $OFFSET $((OFFSET + CORE_COUNT -1 +1 ))` # +1 for connecting UDP transport DNAT injection
 do
-    tun_setup_fn ${CORE} ${rule_table_name}
+    tun_setup_fn ${CORE} ${rule_table_name} 41245
+    tun_setup_fn "oscur0${CORE}" ${rule_table_name} 41246
 done
 
 echo "Setting up hugepages"
