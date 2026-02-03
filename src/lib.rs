@@ -4,8 +4,10 @@ extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate aes_gcm;
+extern crate base64;
 extern crate errno;
 extern crate hex;
+extern crate oscur0_detector;
 extern crate pnet;
 extern crate protobuf;
 extern crate rand;
@@ -17,12 +19,19 @@ extern crate tuntap; // https://github.com/ewust/tuntap.rs
 extern crate zmq;
 
 use std::mem::transmute;
+use std::time::Duration;
 use util::precise_time_ns;
 
 use serde::Deserialize;
 use std::env;
 use std::fs;
 
+use base64::{engine::general_purpose, Engine as _};
+use oscur0_detector::transports::dtls_cid::DtlsCidTransport;
+use oscur0_detector::transports::ech::EchTransport;
+use oscur0_detector::transports::quic_cid::QuicCidTransport;
+use oscur0_detector::transports::quic_kyber::QuicKyberTransport;
+use oscur0_detector::Oscuro;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 
@@ -48,12 +57,14 @@ pub struct PerCoreGlobal {
 
     lcore: i32,
     pub flow_tracker: FlowTracker,
+    oscuro: Oscuro,
 
     // Rc<RefCell<>> ??
     // pub sessions: HashMap<Flow, SessionState>,
     // Just some scratch space for mio.
     //events_buf: Events,
     pub tun: TunTap,
+    pub tun_oscur0: TunTap,
 
     pub stats: PerCoreStats,
 
@@ -110,6 +121,9 @@ impl PerCoreGlobal {
         let tun = TunTap::new(IFF_TUN, &format!("tun{the_lcore}")).unwrap();
         tun.set_up().unwrap();
 
+        let tun_oscur0 = TunTap::new(IFF_TUN, &format!("tunoscur0{the_lcore}")).unwrap();
+        tun_oscur0.set_up().unwrap();
+
         // Setup ZMQ
         let zmq_ctx = zmq::Context::new();
         let zmq_sock = zmq_ctx.socket(zmq::PUB).unwrap();
@@ -143,6 +157,26 @@ impl PerCoreGlobal {
             }
         };
 
+        let mut oscuro_transports: Vec<Box<dyn oscur0_detector::Transport + Send + Sync>> =
+            Vec::new();
+        for key in &priv_keys {
+            let key_vec = key.to_vec();
+            // debug!("key_vec: {}", hex::encode(&key_vec));
+            oscuro_transports.push(Box::new(DtlsCidTransport::new(key_vec.clone())));
+            oscuro_transports.push(Box::new(QuicCidTransport::new(key_vec.clone())));
+            oscuro_transports.push(Box::new(QuicKyberTransport::new(key_vec.clone())));
+
+            let ech_config_b64 = "/g0ARAIAIAAghmMovj5uDrPRgwdJ83AyhPdx5D/UTFI5C5oqMtKryTQADAABAAMAAQACAAEAAR0NY3Vib3VsZGVyLmVkdQAA";
+            let ech_priv_key_b64 = "RSdOXP1PUGYRtc/kvk+ZPvt54zStY1kkvZ0uHFa6hAc=";
+
+            let ech_config = general_purpose::STANDARD.decode(ech_config_b64).unwrap();
+            let ech_priv_key = general_purpose::STANDARD.decode(ech_priv_key_b64).unwrap();
+
+            oscuro_transports.push(Box::new(EchTransport::new(ech_config, ech_priv_key)));
+        }
+
+        let oscuro = Oscuro::new(oscuro_transports);
+
         debug!("gre_offset: {}", gre_offset);
 
         PerCoreGlobal {
@@ -150,7 +184,9 @@ impl PerCoreGlobal {
             lcore: the_lcore,
             // sessions: HashMap::new(),
             flow_tracker: FlowTracker::new(),
+            oscuro,
             tun,
+            tun_oscur0,
             stats: PerCoreStats::new(),
             zmq_sock,
             filter_list: value.detector_filter_list,
@@ -312,6 +348,7 @@ pub unsafe extern "C" fn rust_periodic_cleanup(ptr: *mut PerCoreGlobal) {
     #[allow(unused_mut)]
     let mut global = &mut *ptr;
     global.flow_tracker.drop_all_stale_flows();
+    global.oscuro.cleanup_timeouts(Duration::from_secs(30));
 
     /*
     // Any session that hangs around for 30 seconds with a None cli stream

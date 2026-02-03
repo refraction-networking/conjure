@@ -4,12 +4,12 @@ use std::panic;
 use std::slice;
 use std::str;
 
-use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
+use pnet::packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use pnet::packet::ip::IpNextHeaderProtocols;
-use pnet::packet::ipv4::Ipv4Packet;
-use pnet::packet::ipv6::Ipv6Packet;
+use pnet::packet::ipv4::{Ipv4Packet, MutableIpv4Packet};
+use pnet::packet::ipv6::{Ipv6Packet, MutableIpv6Packet};
 use pnet::packet::tcp::{TcpFlags, TcpPacket};
-use pnet::packet::udp::UdpPacket;
+use pnet::packet::udp::{ipv4_checksum, ipv6_checksum, MutableUdpPacket, UdpPacket};
 use pnet::packet::Packet;
 // use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
@@ -19,6 +19,7 @@ use flow_tracker::{Flow, FlowNoSrcPort};
 use elligator;
 use protobuf::Message;
 use signalling::{C2SWrapper, RegistrationSource};
+use tuntap::TunTap;
 use util::IpPacket;
 use PerCoreGlobal;
 
@@ -30,6 +31,10 @@ const SPECIAL_UDP_PAYLOAD: &[u8] = b"\x38xCKe9ECO5lNwXgd5Q25w0C2qUR7whltkA8BbyNo
 //const SQUID_PROXY_PORT: u16 = 1234;
 
 //const STREAM_TIMEOUT_NS: u64 = 120*1000*1000*1000; // 120 seconds
+
+// Set TRACE_IP_FILTER at compile time (e.g. `TRACE_IP_FILTER=1.2.3.4 cargo build`) to
+// enable packet-path debug logging for matching src/dst IPs only.
+const TRACE_IP_FILTER: Option<&str> = option_env!("TRACE_IP_FILTER");
 
 fn get_ip_packet<'p>(eth_pkt: &'p EthernetPacket) -> Option<IpPacket<'p>> {
     let payload = eth_pkt.payload();
@@ -57,6 +62,22 @@ fn get_ip_packet<'p>(eth_pkt: &'p EthernetPacket) -> Option<IpPacket<'p>> {
         EtherTypes::Ipv4 => parse_v4(&payload[0..]),
         EtherTypes::Ipv6 => parse_v6(&payload[0..]),
         _ => None,
+    }
+}
+
+fn trace_enabled_flow(flow: &Flow) -> bool {
+    match TRACE_IP_FILTER {
+        Some(ip) => flow.src_ip.to_string() == ip || flow.dst_ip.to_string() == ip,
+        None => false,
+    }
+}
+
+fn trace_flow(flow: &Flow, stage: &str) {
+    if trace_enabled_flow(flow) {
+        debug!(
+            "[trace {stage}] {}:{} -> {}:{} proto {:?}",
+            flow.src_ip, flow.src_port, flow.dst_ip, flow.dst_port, flow.proto
+        );
     }
 }
 
@@ -131,11 +152,14 @@ impl PerCoreGlobal {
         self.stats.tcp_packets_this_period += 1;
 
         let flow = Flow::new(ip_pkt, &tcp_pkt);
+        trace_flow(&flow, "tcp:received");
         if self.check_for_tagged_flow(&flow, ip_pkt).is_some() {
+            trace_flow(&flow, "tcp:phantom-forward");
             return;
         }
 
         if tcp_pkt.get_destination() == 443 {
+            trace_flow(&flow, "tcp:dst443");
             self.stats.tls_packets_this_period += 1;
             self.stats.tls_bytes_this_period += frame_len as u64;
 
@@ -153,12 +177,24 @@ impl PerCoreGlobal {
         }
 
         let flow = Flow::new_udp(ip_pkt, &udp_pkt);
+        trace_flow(&flow, "udp:received");
         if self.check_for_tagged_flow(&flow, ip_pkt).is_some() {
+            trace_flow(&flow, "udp:phantom-forward");
             return;
         }
 
+        let flow_id = format!(
+            "udp-{}:{}-{}:{}",
+            flow.src_ip, flow.src_port, flow.dst_ip, flow.dst_port
+        );
+
+        let forwarded_payloads = self.oscuro.process_packet(&flow_id, udp_pkt.payload());
+        for payload in forwarded_payloads {
+            trace_flow(&flow, "udp:forwarding-oscuro");
+            self.forward_udp_payload(&flow, ip_pkt, &udp_pkt, &payload);
+        }
+
         if udp_pkt.get_destination() == 53 {
-            let flow = Flow::new_udp(ip_pkt, &udp_pkt);
             self.check_udp_test_str(&flow, &udp_pkt);
         }
     }
@@ -176,7 +212,7 @@ impl PerCoreGlobal {
                     // Update expire time if necessary
                     self.flow_tracker.update_phantom_flow(&cj_flow);
                     // Forward packet...
-                    self.forward_pkt(ip_pkt);
+                    self.forward_pkt(flow, ip_pkt);
                     // TODO: if it was RST or FIN, close things
                     return Some(());
                 }
@@ -196,6 +232,7 @@ impl PerCoreGlobal {
 
         let flow = Flow::new(ip_pkt, &tcp_pkt);
         let tcp_flags = tcp_pkt.get_flags();
+        trace_flow(&flow, "tcp:process-tls");
 
         if panic::catch_unwind(|| tcp_pkt.payload()).is_err() {
             return;
@@ -216,7 +253,7 @@ impl PerCoreGlobal {
                     // Update expire time if necessary
                     self.flow_tracker.update_phantom_flow(&cj_flow);
                     // Forward packet...
-                    self.forward_pkt(ip_pkt);
+                    self.forward_pkt(&flow, ip_pkt);
                     // TODO: if it was RST or FIN, close things
                     return;
                 }
@@ -250,26 +287,147 @@ impl PerCoreGlobal {
         }
     }
 
-    fn forward_pkt(&mut self, ip_pkt: &IpPacket) {
+    fn forward_pkt(&mut self, flow: &Flow, ip_pkt: &IpPacket) {
         let data = match ip_pkt {
             IpPacket::V4(p) => p.packet(),
             IpPacket::V6(p) => p.packet(),
         };
 
-        let mut tun_pkt = Vec::with_capacity(data.len() + 4);
+        Self::forward_ip_bytes(&mut self.tun, ip_pkt.ethertype(), data, Some(flow));
+    }
+
+    fn forward_udp_payload(
+        &mut self,
+        flow: &Flow,
+        ip_pkt: &IpPacket,
+        udp_pkt: &UdpPacket,
+        payload: &[u8],
+    ) {
+        trace_flow(flow, "udp:forward-payload");
+        match Self::build_udp_packet(flow, ip_pkt, udp_pkt, payload) {
+            Some(packet) => Self::forward_ip_bytes(
+                &mut self.tun_oscur0,
+                ip_pkt.ethertype(),
+                &packet,
+                Some(flow),
+            ),
+            None => warn!("failed to rebuild UDP packet for forwarding"),
+        }
+    }
+
+    fn build_udp_packet(
+        flow: &Flow,
+        ip_pkt: &IpPacket,
+        udp_pkt: &UdpPacket,
+        payload: &[u8],
+    ) -> Option<Vec<u8>> {
+        trace_flow(flow, "udp:rebuild-packet");
+        match ip_pkt {
+            IpPacket::V4(v4) => {
+                let header_len = (v4.get_header_length() as usize) * 4;
+                if header_len < 20 || v4.packet().len() < header_len {
+                    return None;
+                }
+
+                let udp_len = 8 + payload.len();
+                let total_len = header_len + udp_len;
+
+                let mut buffer = Vec::with_capacity(total_len);
+                buffer.extend_from_slice(&v4.packet()[..header_len]);
+                buffer.resize(total_len, 0);
+
+                {
+                    let mut udp_out = MutableUdpPacket::new(&mut buffer[header_len..])?;
+                    udp_out.set_source(udp_pkt.get_source());
+                    udp_out.set_destination(udp_pkt.get_destination());
+                    udp_out.set_length(udp_len as u16);
+                    udp_out.set_payload(payload);
+                    let checksum = ipv4_checksum(
+                        &udp_out.to_immutable(),
+                        &v4.get_source(),
+                        &v4.get_destination(),
+                    );
+                    udp_out.set_checksum(checksum);
+                }
+
+                {
+                    let mut ip_out = MutableIpv4Packet::new(&mut buffer[..])?;
+                    ip_out.set_total_length(total_len as u16);
+                    ip_out.set_next_level_protocol(IpNextHeaderProtocols::Udp);
+                    ip_out.set_header_length(v4.get_header_length());
+                    ip_out.set_dscp(v4.get_dscp());
+                    ip_out.set_ecn(v4.get_ecn());
+                    ip_out.set_identification(v4.get_identification());
+                    ip_out.set_flags(v4.get_flags());
+                    ip_out.set_fragment_offset(v4.get_fragment_offset());
+                    ip_out.set_ttl(v4.get_ttl());
+                    ip_out.set_checksum(0);
+                    let checksum = pnet::packet::ipv4::checksum(&ip_out.to_immutable());
+                    ip_out.set_checksum(checksum);
+                }
+
+                Some(buffer)
+            }
+            IpPacket::V6(v6) => {
+                let header_len = 40;
+                if v6.packet().len() < header_len {
+                    return None;
+                }
+
+                let udp_len = 8 + payload.len();
+                let total_len = header_len + udp_len;
+
+                let mut buffer = Vec::with_capacity(total_len);
+                buffer.extend_from_slice(&v6.packet()[..header_len]);
+                buffer.resize(total_len, 0);
+
+                {
+                    let mut udp_out = MutableUdpPacket::new(&mut buffer[header_len..])?;
+                    udp_out.set_source(udp_pkt.get_source());
+                    udp_out.set_destination(udp_pkt.get_destination());
+                    udp_out.set_length(udp_len as u16);
+                    udp_out.set_payload(payload);
+                    let checksum = ipv6_checksum(
+                        &udp_out.to_immutable(),
+                        &v6.get_source(),
+                        &v6.get_destination(),
+                    );
+                    udp_out.set_checksum(checksum);
+                }
+
+                {
+                    let mut ip_out = MutableIpv6Packet::new(&mut buffer[..])?;
+                    ip_out.set_payload_length(udp_len as u16);
+                    ip_out.set_next_header(IpNextHeaderProtocols::Udp);
+                    ip_out.set_hop_limit(v6.get_hop_limit());
+                }
+
+                Some(buffer)
+            }
+        }
+    }
+
+    fn forward_ip_bytes(tun: &mut TunTap, ethertype: EtherType, data: &[u8], flow: Option<&Flow>) {
         // These mystery bytes are a link-layer header; the kernel "receives"
-        // tun packets as if they were really physically "received". Since they
-        // weren't physically received, they do not have an Ethernet header. It
-        // looks like the tun setup has its own type of header, rather than just
-        // making up a fake Ethernet header.
-        let raw_hdr = match ip_pkt {
-            IpPacket::V4(_p) => [0x00, 0x01, 0x08, 0x00],
-            IpPacket::V6(_p) => [0x00, 0x01, 0x86, 0xdd],
+        // tun packets as if they were really physically "received".
+        if let Some(flow) = flow {
+            trace_flow(flow, "tun:send-build");
+        }
+        let raw_hdr = match ethertype {
+            EtherTypes::Ipv4 => [0x00, 0x01, 0x08, 0x00],
+            EtherTypes::Ipv6 => [0x00, 0x01, 0x86, 0xdd],
+            _ => return,
         };
+
+        let mut tun_pkt = Vec::with_capacity(data.len() + raw_hdr.len());
         tun_pkt.extend_from_slice(&raw_hdr);
         tun_pkt.extend_from_slice(data);
 
-        self.tun.send(tun_pkt).unwrap_or_else(|e| {
+        if let Some(flow) = flow {
+            trace_flow(flow, "tun:send-send");
+        }
+
+        tun.send(tun_pkt).unwrap_or_else(|e| {
             warn!("failed to send packet into tun: {}", e);
             0
         });

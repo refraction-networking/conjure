@@ -34,3 +34,5 @@ hex = "0.4"
 digest = "0.10"
 zmq = "0.9"
 redis = "0.23"
+oscur0-detector = { path = "../oscur0/detector" }
+base64 = "0.22.1"
